@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <title>Audi A6 C4 - Telemetrie Live IoT</title>
+    <!-- Încărcăm biblioteca oficială Socket.IO direct din CDN -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --card-bg: #161b22;
+            --text-color: #c9d1d9;
+            --accent-green: #238636;
+            --accent-red: #da3633;
+            --accent-blue: #58a6ff;
+            --border-color: #30363d;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+        header {
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 { margin: 0; color: #fff; font-size: 24px; }
+        .status-badge {
+            background-color: #3b2322;
+            color: #ff7b72;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: bold;
+            border: 1px solid var(--accent-red);
+        }
+        .status-badge.active {
+            background-color: #122d1e;
+            color: #3fb950;
+            border-color: var(--accent-green);
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .card-title { font-size: 14px; text-transform: uppercase; color: #8b949e; margin-bottom: 10px; }
+        .value { font-size: 38px; font-weight: 800; color: #fff; margin: 10px 0; }
+        .unit { font-size: 16px; color: var(--accent-blue); font-weight: normal; }
+        .alerts-panel {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .alert-item {
+            background-color: rgba(218, 54, 51, 0.15);
+            border-left: 4px solid var(--accent-red);
+            padding: 12px 15px;
+            margin-top: 10px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<header>
+    <div>
+        <h1>Dashboard Telemetrie Auto - Audi A6 C4 2.5 TDI</h1>
+        <small style="color: #8b949e;">Conexiune WebSockets în timp real (Port 3000)</small>
+    </div>
+    <div id="connection-status" class="status-badge">AȘTEPTARE CONEXIUNE...</div>
+</header>
+
+<div class="grid">
+    <div class="card">
+        <div class="card-title">Viteză Curentă</div>
+        <div class="value" id="val-viteza">0 <span class="unit">km/h</span></div>
+    </div>
+    <div class="card">
+        <div class="card-title">Turație Motor</div>
+        <div class="value" id="val-rpm">0 <span class="unit">RPM</span></div>
+    </div>
+    <div class="card">
+        <div class="card-title">Scor Eco-Driving</div>
+        <div class="value" id="val-eco" style="color: #3fb950;">100 <span class="unit">pct</span></div>
+    </div>
+    <div class="card">
+        <div class="card-title">Consum Instantaneu</div>
+        <div class="value" id="val-consum">0.0 <span class="unit">L/h</span></div>
+    </div>
+    <div class="card">
+        <div class="card-title">Distanță Sesiune</div>
+        <div class="value" id="val-distanta">0.00 <span class="unit">km</span></div>
+    </div>
+    <div class="card">
+        <div class="card-title">Temp. Motor / Voltaj</div>
+        <div class="value" style="font-size: 28px;" id="val-aux">0°C | 0V</div>
+    </div>
+</div>
+
+<div class="alerts-panel">
+    <h3 style="margin-top: 0; color: #fff; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">
+        🚨 Centru Live de Notificări și Alerte
+    </h3>
+    <div id="alerts-container">
+        <p style="color: #8b949e; font-style: italic;" id="no-alerts">Nicio alertă înregistrată în această sesiune.</p>
+    </div>
+</div>
+
+<script>
+    // Conectare automată la serverul Node.js local
+    const socket = io('http://localhost:3000');
+    const statusBadge = document.getElementById('connection-status');
+    const alertsContainer = document.getElementById('alerts-container');
+    const noAlertsMsg = document.getElementById('no-alerts');
+
+    // 1. Evenimente de conexiune
+    socket.on('connect', () => {
+        statusBadge.textContent = "● ONLINE (SERVER CONECTAT)";
+        statusBadge.classList.add('active');
+    });
+
+    socket.on('disconnect', () => {
+        statusBadge.textContent = "○ OFFLINE (DECONECTAT)";
+        statusBadge.classList.remove('active');
+    });
+
+    // 2. Ascultăm fluxul de date live (împins la fiecare secundă de server)
+    socket.on('telemetrie_live', (data) => {
+        document.getElementById('val-viteza').innerHTML = `${data.viteza} <span class="unit">km/h</span>`;
+        document.getElementById('val-rpm').innerHTML = `${data.rpm} <span class="unit">RPM</span>`;
+        document.getElementById('val-consum').innerHTML = `${data.consum_curent_lh} <span class="unit">${data.viteza > 3 ? 'L/100km' : 'L/h'}</span>`;
+        document.getElementById('val-distanta').innerHTML = `${data.km_parcursi} <span class="unit">km</span>`;
+        document.getElementById('val-aux').textContent = `${data.temp_apa}°C | ${data.voltaj}V`;
+        
+        // Colorăm dinamic scorul Eco-Driving în funcție de performanță
+        const ecoEl = document.getElementById('val-eco');
+        ecoEl.innerHTML = `${data.scor_eco} <span class="unit">pct</span>`;
+        if (data.scor_eco >= 90) ecoEl.style.color = "#3fb950";       // Verde
+        else if (data.scor_eco >= 70) ecoEl.style.color = "#d29922";  // Galben/Portocaliu
+        else ecoEl.style.color = "#da3633";                           // Roșu
+    });
+
+    // 3. Ascultăm alertele live (declanșate la frânări agresive)
+    socket.on('alerta_live', (alerta) => {
+        if (noAlertsMsg) noAlertsMsg.style.display = 'none';
+
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert-item';
+        
+        const ora = new Date().toLocaleTimeString();
+        alertDiv.innerHTML = `
+            <div>
+                <strong style="color: #ff7b72;">⚠️ FRÂNTARE BRUSCĂ DETECTATĂ!</strong>
+                <div style="font-size: 13px; color: #c9d1d9; margin-top: 4px;">
+                    Decelerare violentă de <b>${alerta.g}G</b>. Scorul Eco-Driving a fost penalizat la <b>${alerta.scor_curent}/100</b>.
+                </div>
+            </div>
+            <span style="font-size: 12px; color: #8b949e;">${ora}</span>
+        `;
+        
+        // Adăugăm noua alertă în partea de sus a listei
+        alertsContainer.prepend(alertDiv);
+    });
+
+    // 4. Resetare interfață la pornirea sau oprirea călătoriei
+    socket.on('status_trip', (info) => {
+        if (info.status === 'START') {
+            alertsContainer.innerHTML = '<p style="color: #8b949e; font-style: italic;" id="no-alerts">Nicio alertă înregistrată în această sesiune.</p>';
+        }
+    });
+</script>
+
+</body>
+</html>
