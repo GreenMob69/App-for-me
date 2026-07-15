@@ -1,0 +1,59 @@
+{
+    "id": "MAF_DEGRADATION",
+    "version": "1.0.0",
+    "title": "Degradare senzor MAF (debitmetru aer)",
+    "category": "ADMISIE",
+    "affectedSystems": ["ENGINE", "EMISSIONS"],
+    "requiredCapabilities": [],
+    "requiredSensors": ["maf"],
+    "severity": {
+        "default": "MEDIUM",
+        "whenIgnored": "MEDIUM"
+    },
+    "symptoms": [
+        { "id": "low_maf",         "description": "Debit aer scăzut față de normal la aceeași turație și sarcină", "sensorKey": "maf" },
+        { "id": "idle_instability","description": "Instabilitate ralanti — amestec aer-combustibil necontrolat", "observable": true },
+        { "id": "black_smoke",     "description": "Fum negru la accelerație — amestec bogat din cauza MAF defect", "observable": true },
+        { "id": "dtc_maf",         "description": "Cod DTC activ pentru circuit MAF (P0100-P0104)", "sensorKey": "dtc" }
+    ],
+    "possibleCauses": [
+        { "id": "contamination",    "description": "Senzor MAF contaminat — ulei filtru aer, praf, insecte" },
+        { "id": "wire_damage",      "description": "Fir hot-wire deteriorat mecanic sau termic" },
+        { "id": "connector_fault",  "description": "Conector sau circuit senzor corodat/defect" },
+        { "id": "air_filter_bypass","description": "Filtru aer montat incorect — aer nefiltrat degradează MAF" }
+    ],
+    "confidenceModifiers": [
+        { "condition": "maf_vs_baseline > 10pct", "delta": 25, "description": "Debit sub normalul vehiculului" },
+        { "condition": "maf_trend == DECREASING", "delta": 20, "description": "Trend descrescător debit aer" },
+        { "condition": "dtc_maf_active",          "delta": 35, "description": "Cod DTC MAF activ" }
+    ],
+    "investigationSteps": [
+        { "step": 1, "signal": "maf_g_s",     "action": "check_vs_baseline",  "message": "Comparare debit aer cu baseline — scădere > 10% sugerează degradare MAF" },
+        { "step": 2, "signal": "maf_g_s",     "action": "check_idle",         "message": "MAF la relanti — normal: 2-4 g/s la diesel 2.0L; 1.5-3 g/s la 1.6L" },
+        { "step": 3, "component": "AIR_FILTER","action": "inspect",            "message": "Verificare filtru aer — colmatat sau montat incorect" },
+        { "step": 4, "component": "MAF",       "action": "clean",              "message": "Curățare senzor MAF cu spray dedicat (MAF cleaner) — fir hot-wire" },
+        { "step": 5, "component": "MAF",       "action": "measure",            "message": "Dacă curățarea nu ajută: testare cu MAF de schimb sau citire date live VCDS/OBD" }
+    ],
+    "recommendedActions": {
+        "LOW":    "Verificare filtru aer; curățare MAF cu spray dedicat la revizie",
+        "MEDIUM": "Curățare MAF și test cu MAF de schimb pentru confirmare",
+        "HIGH":   "Înlocuire senzor MAF; verificare etanșeitate circuit admisie"
+    },
+    "estimatedRepairDifficulty": "LOW",
+    "estimatedRepairCostRange": {
+        "currency": "RON",
+        "min": 40,
+        "max": 500,
+        "notes": "Curățare (40-80 RON spray) vs înlocuire senzor (150-500 RON funcție de marcă)"
+    },
+    "driveRecommendation": {
+        "LOW":    "NORMAL",
+        "MEDIUM": "CAUTION",
+        "HIGH":   "CAUTION"
+    },
+    "inspectionInterval": {
+        "km": 30000,
+        "notes": "Curățare preventivă MAF la fiecare schimb filtru aer"
+    },
+    "references": []
+}

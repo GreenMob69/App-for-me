@@ -1,0 +1,62 @@
+{
+    "id": "EGR_CARBON",
+    "version": "1.0.0",
+    "title": "Depuneri carbon EGR și galerie admisie",
+    "category": "EMISII",
+    "affectedSystems": ["EMISSIONS", "EGR", "ENGINE"],
+    "requiredCapabilities": ["hasEGR"],
+    "requiredSensors": ["maf"],
+    "severity": {
+        "default": "MEDIUM",
+        "whenIgnored": "HIGH"
+    },
+    "symptoms": [
+        { "id": "low_maf",           "description": "Debit aer scăzut față de normal — galerie admisie parțial obstruată", "sensorKey": "maf" },
+        { "id": "rough_idle",        "description": "Ralanti neregulat — depuneri EGR perturbă amestecul la sarcini mici", "observable": true },
+        { "id": "black_smoke",       "description": "Fum negru la accelerații rapide — injecție bogată compensatorie", "observable": true },
+        { "id": "power_loss_low_rpm","description": "Pierdere putere la RPM mici și sarcini medii", "observable": true }
+    ],
+    "possibleCauses": [
+        { "id": "egr_carbon",        "description": "Depuneri carbon pe supapa EGR — supapă lipită parțial deschisă sau închisă" },
+        { "id": "intake_carbon",     "description": "Galerie admisie obstruată cu funingine din recirculare gaze" },
+        { "id": "egr_cooler",        "description": "Răcitor EGR colmatat — reduce eficiența recirculării" },
+        { "id": "swirl_flaps",       "description": "Clapete admisie (swirl flaps) blocate — specific TDI V6/V8" },
+        { "id": "urban_driving",     "description": "Curse exclusiv urbane, scurte, la temperaturi mici — nu se arde carbonul" }
+    ],
+    "confidenceModifiers": [
+        { "condition": "maf_vs_baseline > 15pct", "delta": 30, "description": "Debit aer semnificativ sub normal" },
+        { "condition": "maf_trend == DECREASING", "delta": 20, "description": "Debit aer în scădere continuă" },
+        { "condition": "idle_pct > 40",           "delta": 15, "description": "Mult ralanti — accelerator carbon acumulare" },
+        { "condition": "short_trips_pattern",     "delta": 15, "description": "Pattern curse scurte — carbon nu se arde" }
+    ],
+    "investigationSteps": [
+        { "step": 1, "signal": "maf_g_s",             "action": "vs_baseline",       "message": "Comparare MAF cu baseline — scădere > 15% confirmă obstrucție admisie" },
+        { "step": 2, "signal": "maf_g_s",             "action": "trend",             "message": "Verificare trend MAF pe ultimele 10 curse" },
+        { "step": 3, "component": "EGR_VALVE",        "action": "inspect_clean",     "message": "Inspecție și curățare supapă EGR — carbon acumulat pe membrana supapei" },
+        { "step": 4, "component": "EGR_COOLER",       "action": "inspect",           "message": "Inspecție răcitor EGR — colmatare sau scurgere lichid răcire în gaze" },
+        { "step": 5, "component": "INTAKE_MANIFOLD",  "action": "walnut_blast",      "message": "Curățare galerie admisie — metoda walnut blasting sau chimică" },
+        { "step": 6, "component": "SWIRL_FLAPS",      "action": "check_if_exists",   "message": "Verificare clapete admisie (swirl flaps) dacă model V6/V8 TDI" }
+    ],
+    "recommendedActions": {
+        "LOW":    "Curse periodice pe autostradă (30+ min) pentru ardere carbon; monitorizare MAF",
+        "MEDIUM": "Curățare supapă EGR și galerie admisie la revizie; aditivare diesel",
+        "HIGH":   "Curățare urgentă galerie admisie (walnut blasting) — obstrucție semnificativă confirmată"
+    },
+    "estimatedRepairDifficulty": "MEDIUM",
+    "estimatedRepairCostRange": {
+        "currency": "RON",
+        "min": 200,
+        "max": 1800,
+        "notes": "Curățare supapă EGR (200-400 RON) vs curățare walnut blasting galerie (600-1800 RON)"
+    },
+    "driveRecommendation": {
+        "LOW":    "NORMAL",
+        "MEDIUM": "CAUTION",
+        "HIGH":   "CAUTION"
+    },
+    "inspectionInterval": {
+        "km": 60000,
+        "notes": "Verificare și curățare preventivă EGR la 60.000 km pentru utilizare urbană intensă"
+    },
+    "references": []
+}

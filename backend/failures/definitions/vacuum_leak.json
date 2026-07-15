@@ -1,0 +1,59 @@
+{
+    "id": "VACUUM_LEAK",
+    "version": "1.0.0",
+    "title": "Scurgere vacuum / furtun boost",
+    "category": "TURBO",
+    "affectedSystems": ["TURBO", "ENGINE"],
+    "requiredCapabilities": ["hasTurbo"],
+    "requiredSensors": ["boost", "map"],
+    "severity": {
+        "default": "MEDIUM",
+        "whenIgnored": "MEDIUM"
+    },
+    "symptoms": [
+        { "id": "boost_drop",        "description": "Cădere bruscă de boost la accelerație", "sensorKey": "boost" },
+        { "id": "map_anomaly",       "description": "MAP inconsistent față de boost — pierdere presiune", "sensorKey": "map" },
+        { "id": "whistling_sound",   "description": "Fluier sau șuierat la accelerație rapidă", "observable": true },
+        { "id": "intermittent_power","description": "Pierdere intermitentă de putere — boost nu ține constant", "observable": true }
+    ],
+    "possibleCauses": [
+        { "id": "hose_crack",         "description": "Furtun boost / inter-cooler crăpat sau perforat" },
+        { "id": "hose_clamp_loose",   "description": "Colierul furtunului slăbit sau rupt — desfacere sub presiune" },
+        { "id": "intercooler_leak",   "description": "Scurgere inter-cooler — sudură sau lipire defectă" },
+        { "id": "intake_manifold",    "description": "Garnitură galerie admisie deteriorată — pierdere vacuum" }
+    ],
+    "confidenceModifiers": [
+        { "condition": "boost_avg < 0.9",                "delta": 20, "description": "Presiune boost sub valoarea așteptată" },
+        { "condition": "boost_variance_high",             "delta": 20, "description": "Variații mari boost — scurgere intermitentă" },
+        { "condition": "map_boost_discrepancy > 10pct",  "delta": 25, "description": "Discrepanță MAP vs boost — circuit presiune compromis" }
+    ],
+    "investigationSteps": [
+        { "step": 1, "signal": "boost_bar",          "action": "check_consistency", "message": "Verificare consistență boost la accelerații repetate — variații mari sugerează scurgere" },
+        { "step": 2, "signal": "map_kpa",             "action": "compare_boost",     "message": "Comparare MAP și boost — discrepanță > 10% → scurgere în circuit" },
+        { "step": 3, "component": "HOSES",            "action": "visual_inspect",    "message": "Inspecție vizuală toate furtunurile: inter-cooler, turbo-corp admisie, by-pass" },
+        { "step": 4, "component": "CLAMPS",           "action": "tighten_check",     "message": "Verificare coliere furtunuri — retighten la 2.5 Nm" },
+        { "step": 5, "component": "INTERCOOLER",      "action": "pressure_test",     "message": "Test presiune inter-cooler (8-10 psi) — bule de săpun pentru detectare scurgere" }
+    ],
+    "recommendedActions": {
+        "LOW":    "Verificare vizuală furtunuri la revizie",
+        "MEDIUM": "Inspecție detaliată furtunuri și coliere; test presiune inter-cooler",
+        "HIGH":   "Identificare și remediere urgentă scurgere — boost pierdut = stres turbosuflantă"
+    },
+    "estimatedRepairDifficulty": "LOW",
+    "estimatedRepairCostRange": {
+        "currency": "RON",
+        "min": 50,
+        "max": 600,
+        "notes": "Înlocuire furtun sau colier (50-150 RON) vs înlocuire inter-cooler (300-600 RON)"
+    },
+    "driveRecommendation": {
+        "LOW":    "NORMAL",
+        "MEDIUM": "CAUTION",
+        "HIGH":   "CAUTION"
+    },
+    "inspectionInterval": {
+        "km": 30000,
+        "notes": "Inspecție vizuală furtunuri și coliere la fiecare revizie"
+    },
+    "references": []
+}

@@ -16,6 +16,7 @@ const { THRESHOLDS } = require('./backend/analyzers/config');
 const { analyzeTrends } = require('./backend/analyzers/TrendEngine');
 const { initVehicleProfileTable } = require('./backend/intelligence/BaselineEngine');
 const { loadRules } = require('./backend/knowledge/KnowledgeBase');
+const { initVehicleProfile } = require('./backend/vehicle-profile');
 
 const app = express();
 app.use(cors());
@@ -135,6 +136,9 @@ const db = new sqlite3.Database('./telemetrie_industriala.db', (err) => {
         // Inițializare tabele auxiliare + Knowledge Base
         initVehicleProfileTable(db);
         loadRules();
+
+        // Vehicle Profile — schema + routes
+        initVehicleProfile(app, db);
     });
 });
 
@@ -203,7 +207,19 @@ client.on('connect', () => {
 });
 
 client.on('message', async (topic, message) => {
-    const pachet = JSON.parse(message.toString());
+    let pachet;
+    try {
+        pachet = JSON.parse(message.toString());
+    } catch (e) {
+        console.error('[MQTT] Pachet invalid (nu este JSON valid):', e.message);
+        return;
+    }
+
+    if (!pachet || typeof pachet !== 'object' || !pachet.timestamp) {
+        console.warn('[MQTT] Pachet ignorat — structura invalida (lipseste timestamp).');
+        return;
+    }
+
     const vin = pachet.ecu?.vin || "WAUZZZ4A1RN000000";
     const eveniment_motor = pachet.stare_motor;
 
@@ -403,6 +419,40 @@ client.on('message', async (topic, message) => {
                 health_score: rezultatAnaliza ? rezultatAnaliza.health.overallHealth : null,
                 report: tripReport
             });
+
+            // Vehicle Timeline — emit trip event
+            const { vehicleEventBus } = require('./backend/vehicle-profile');
+            db.get(`SELECT id FROM vehicles WHERE vin = ?`, [vin], (err, vehicle) => {
+                if (vehicle) {
+                    const distKm = Number(trip.km.toFixed(1));
+                    vehicleEventBus.emit(distKm > 300 ? 'LONG_TRIP' : 'TRIP_COMPLETED', {
+                        vehicle_id: vehicle.id,
+                        source: 'OBD',
+                        distance_km: distKm,
+                        mileage_km: null,
+                        reference_type: 'TRIP',
+                        reference_id: trip.id_calatorie,
+                        health_score: rezultatAnaliza ? rezultatAnaliza.health.overallHealth : null,
+                    });
+
+                    // Emit AI predictions as timeline events
+                    const predictions = (rezultatAnaliza?.ai?.intelligence?.predictions || [])
+                        .filter(p => p.severity === 'HIGH');
+                    predictions.forEach(p => {
+                        vehicleEventBus.emit('AI_PREDICTION', {
+                            vehicle_id: vehicle.id,
+                            source: 'AI',
+                            title: `AI: ${p.component} — ${p.recommendation?.substring(0, 80) || 'Necesita atentie'}`,
+                            prediction: p.component,
+                            severity_level: p.severity,
+                            probability: p.probability,
+                            reference_type: 'TRIP',
+                            reference_id: trip.id_calatorie,
+                        });
+                    });
+                }
+            });
+
             delete calatoriiActive[vin];
         });
     }
@@ -410,6 +460,52 @@ client.on('message', async (topic, message) => {
 
 app.get('/api/calatorii', (req, res) => {
     db.all(`SELECT * FROM calatorii ORDER BY id_calatorie DESC`, [], (err, rows) => res.json(rows || []));
+});
+
+// IMPORTANT: literal routes BEFORE parameterized :id to avoid Express matching "filtrate" as an id
+app.get('/api/calatorii/filtrate', (req, res) => {
+    const { startDate, endDate, hasAlerts, hasDTC, tempOver, tag } = req.query;
+
+    let query = `
+        SELECT c.*, ts.health_score, ts.hard_brakes, ts.hard_accelerations, ts.nr_alerte, ts.nr_dtc,
+               ts.coolant_max, ts.trip_tag
+        FROM calatorii c
+        LEFT JOIN trip_summary ts ON ts.id_calatorie = c.id_calatorie
+        WHERE c.timestamp_end IS NOT NULL
+    `;
+    const params = [];
+
+    if (startDate) {
+        query += ` AND c.timestamp_start >= ?`;
+        params.push(new Date(startDate).getTime());
+    }
+    if (endDate) {
+        const endTs = new Date(endDate);
+        endTs.setHours(23, 59, 59, 999);
+        query += ` AND c.timestamp_start <= ?`;
+        params.push(endTs.getTime());
+    }
+    if (hasAlerts === 'true') {
+        query += ` AND (ts.hard_brakes > 0 OR ts.hard_accelerations > 0 OR ts.nr_alerte > 0)`;
+    }
+    if (hasDTC === 'true') {
+        query += ` AND ts.nr_dtc > 0`;
+    }
+    if (tempOver) {
+        query += ` AND ts.coolant_max > ?`;
+        params.push(parseFloat(tempOver));
+    }
+    if (tag && tag !== 'ALL') {
+        query += ` AND ts.trip_tag = ?`;
+        params.push(tag);
+    }
+
+    query += ` ORDER BY c.id_calatorie DESC`;
+
+    db.all(query, params, (err, rows) => {
+        if (err) return res.status(500).json({ eroare: err.message });
+        res.json(rows || []);
+    });
 });
 
 app.get('/api/calatorii/:id', (req, res) => {
@@ -795,54 +891,6 @@ app.get('/api/vehicul/:vin/tendinte', async (req, res) => {
         res.status(500).json({ eroare: "Nu s-a putut calcula raportul de tendințe.", detalii: error.message });
     }
 });
-// ===============================================================
-// ENDPOINT FILTRARE AVANSATĂ CĂLĂTORII
-// ===============================================================
-app.get('/api/calatorii/filtrate', (req, res) => {
-    const { startDate, endDate, hasAlerts, hasDTC, tempOver, tag } = req.query;
-
-    let query = `
-        SELECT c.*, ts.health_score, ts.hard_brakes, ts.hard_accelerations, ts.nr_alerte, ts.nr_dtc,
-               ts.coolant_max, ts.trip_tag
-        FROM calatorii c
-        LEFT JOIN trip_summary ts ON ts.id_calatorie = c.id_calatorie
-        WHERE c.timestamp_end IS NOT NULL
-    `;
-    const params = [];
-
-    if (startDate) {
-        query += ` AND c.timestamp_start >= ?`;
-        params.push(new Date(startDate).getTime());
-    }
-    if (endDate) {
-        const endTs = new Date(endDate);
-        endTs.setHours(23, 59, 59, 999);
-        query += ` AND c.timestamp_start <= ?`;
-        params.push(endTs.getTime());
-    }
-    if (hasAlerts === 'true') {
-        query += ` AND (ts.hard_brakes > 0 OR ts.hard_accelerations > 0 OR ts.nr_alerte > 0)`;
-    }
-    if (hasDTC === 'true') {
-        query += ` AND ts.nr_dtc > 0`;
-    }
-    if (tempOver) {
-        query += ` AND ts.coolant_max > ?`;
-        params.push(parseFloat(tempOver));
-    }
-    if (tag && tag !== 'ALL') {
-        query += ` AND ts.trip_tag = ?`;
-        params.push(tag);
-    }
-
-    query += ` ORDER BY c.id_calatorie DESC`;
-
-    db.all(query, params, (err, rows) => {
-        if (err) return res.status(500).json({ eroare: err.message });
-        res.json(rows || []);
-    });
-});
-
 // ===============================================================
 // ENDPOINT RAPORT LUNAR AGREGAT
 // ===============================================================

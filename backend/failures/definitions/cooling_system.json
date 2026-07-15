@@ -1,0 +1,63 @@
+{
+    "id": "COOLING_SYSTEM_FAILURE",
+    "version": "1.0.0",
+    "title": "Defecțiune sistem răcire motor",
+    "category": "TERMIC",
+    "affectedSystems": ["COOLING", "RACIRE", "ENGINE"],
+    "requiredCapabilities": [],
+    "requiredSensors": ["coolant"],
+    "severity": {
+        "default": "HIGH",
+        "whenIgnored": "CRITICAL"
+    },
+    "symptoms": [
+        { "id": "overheating",    "description": "Temperatură lichid răcire peste 100°C", "sensorKey": "coolant", "threshold": "> 100°C" },
+        { "id": "slow_warmup",    "description": "Motor se încălzește lent — termostat blocat deschis", "observable": true },
+        { "id": "coolant_loss",   "description": "Consum de lichid răcire — scurgere sau ardere", "observable": true },
+        { "id": "steam",          "description": "Abur din compartiment motor sau evacuare", "observable": true }
+    ],
+    "possibleCauses": [
+        { "id": "thermostat",      "description": "Termostat blocat în poziție deschisă sau închisă" },
+        { "id": "water_pump",      "description": "Pompă apă uzată — palete corodate, rulment defect, etanșare defectă" },
+        { "id": "radiator",        "description": "Radiator colmatat sau avariat — schimb termic redus" },
+        { "id": "fan",             "description": "Electroventilator nefuncțional sau senzor termic defect" },
+        { "id": "coolant_hose",    "description": "Furtun lichid răcire crăpat sau decuplat" },
+        { "id": "head_gasket",     "description": "Garnitură chiulasă deteriorată — gaze de ardere în circuit răcire" }
+    ],
+    "confidenceModifiers": [
+        { "condition": "coolant_max > 100",              "delta": 30, "description": "Depășire prag critic 100°C" },
+        { "condition": "time_over_95 > 120s",            "delta": 20, "description": "Peste 2 minute la temperaturi ridicate" },
+        { "condition": "coolant_trend == INCREASING",    "delta": 20, "description": "Tendință crescătoare temperatură" },
+        { "condition": "coolant_oil_correlation < 0.6",  "delta": 15, "description": "Desincronizare termică — termostat sau circuit" }
+    ],
+    "investigationSteps": [
+        { "step": 1, "signal": "coolant",          "action": "monitor_trend",     "message": "Monitorizare temperatură pe curse consecutive — trend crescător confirmă problema" },
+        { "step": 2, "component": "COOLANT_LEVEL", "action": "check",             "message": "Verificare nivel și culoare lichid răcire (la rece!) — caramel = contaminare cu ulei" },
+        { "step": 3, "component": "THERMOSTAT",    "action": "function_check",    "message": "Verificare funcționare termostat — atingeți furtunul superior radiator; trebuie să se încălzească după 3-5 min" },
+        { "step": 4, "component": "FAN",           "action": "activation_test",   "message": "Verificare pornire electroventilator la atingerea temperaturii setate (~ 92-95°C)" },
+        { "step": 5, "component": "WATER_PUMP",    "action": "flow_check",        "message": "Verificare debit pompă apă — furtunul superior radiator trebuie să vibreze ușor la 2000 RPM" },
+        { "step": 6, "component": "RADIATOR",      "action": "inspect_flush",     "message": "Inspecție și spălare radiator — colmatare reduce eficiența cu 30-50%" }
+    ],
+    "recommendedActions": {
+        "LOW":    "Verificare nivel lichid răcire; inspecție vizuală furtunuri",
+        "MEDIUM": "Verificare termostat și electroventilator; monitorizare temperatură",
+        "HIGH":   "Diagnosticare urgentă; oprire motor la semn de supraîncălzire"
+    },
+    "estimatedRepairDifficulty": "MEDIUM",
+    "estimatedRepairCostRange": {
+        "currency": "RON",
+        "min": 80,
+        "max": 3000,
+        "notes": "Termostat (80-200 RON) vs pompă apă (200-600 RON) vs radiator (400-1200 RON) vs garnitură chiulasă (1000-3000 RON)"
+    },
+    "driveRecommendation": {
+        "LOW":    "CAUTION",
+        "MEDIUM": "AVOID_HIGHWAY",
+        "HIGH":   "DO_NOT_DRIVE"
+    },
+    "inspectionInterval": {
+        "km": 40000,
+        "notes": "Verificare nivel, culoare și densitate antigel; inspecție furtunuri și termostat"
+    },
+    "references": []
+}

@@ -1,0 +1,10 @@
+{
+    "id": "VAG_TDI",
+    "version": "1.1.0",
+    "description": "Pack specific pentru motoare VAG TDI diesel (Audi, VW, Seat, Skoda)",
+    "applies_to": {
+        "fuel_types": ["diesel"],
+        "makes": ["Audi", "Volkswagen", "Volkswagen Commercial", "SEAT", "Skoda"],
+        "year_range": [1990, 2020]
+    }
+}

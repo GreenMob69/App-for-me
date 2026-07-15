@@ -1,0 +1,31 @@
+[
+    { "id": "VACUUM_LEAK",             "type": "FAILURE",      "label": "Scurgere vacuum / furtun boost",          "requiredCapabilities": ["hasTurbo"] },
+    { "id": "TURBO_WEAR",              "type": "FAILURE",      "label": "Uzură turbosuflantă",                     "requiredCapabilities": ["hasTurbo"] },
+    { "id": "EGR_CARBON",              "type": "FAILURE",      "label": "Depuneri carbon EGR / admisie",           "requiredCapabilities": ["hasEGR"] },
+    { "id": "MAF_DEGRADATION",         "type": "FAILURE",      "label": "Degradare senzor MAF",                    "requiredCapabilities": [] },
+    { "id": "INJECTOR_WEAR",           "type": "FAILURE",      "label": "Uzură injectoare",                        "requiredCapabilities": [] },
+    { "id": "FUEL_PUMP_DEGRADATION",   "type": "FAILURE",      "label": "Degradare pompă combustibil",             "requiredCapabilities": [] },
+    { "id": "COOLING_SYSTEM_FAILURE",  "type": "FAILURE",      "label": "Defecțiune sistem răcire",                "requiredCapabilities": [] },
+    { "id": "ALTERNATOR_FAILURE",      "type": "FAILURE",      "label": "Defecțiune alternator",                   "requiredCapabilities": [] },
+    { "id": "BATTERY_DEGRADATION",     "type": "FAILURE",      "label": "Degradare baterie",                       "requiredCapabilities": [] },
+    { "id": "DPF_CLOGGING",            "type": "FAILURE",      "label": "Colmatare filtru particule (DPF)",        "requiredCapabilities": ["hasDPF"] },
+    { "id": "TIMING_BELT_WEAR",        "type": "FAILURE",      "label": "Uzură curea distribuție",                 "requiredCapabilities": [] },
+
+    { "id": "BOOST_LOW",               "type": "SENSOR_STATE", "label": "Presiune turbo sub normal",               "sensor": "boost",    "threshold": "avg < 0.8 bar" },
+    { "id": "MAF_LOW",                 "type": "SENSOR_STATE", "label": "Debit aer sub normal",                    "sensor": "maf",      "threshold": "avg < 18 g/s @ rpm > 1800" },
+    { "id": "VOLTAGE_LOW",             "type": "SENSOR_STATE", "label": "Tensiune sistem sub 12V",                 "sensor": "voltage",  "threshold": "min < 12.0V" },
+    { "id": "COOLANT_TEMP_HIGH",       "type": "SENSOR_STATE", "label": "Temperatură lichid răcire ridicată",      "sensor": "coolant",  "threshold": "max > 98°C" },
+    { "id": "FUEL_RATE_HIGH",          "type": "SENSOR_STATE", "label": "Consum combustibil ridicat",              "sensor": "fuelRate", "threshold": "avg > 8.5 L/h" },
+    { "id": "DPF_SOOT_HIGH",           "type": "SENSOR_STATE", "label": "Încărcare DPF ridicată",                  "sensor": "dpfSoot",  "threshold": "avg > 40%" },
+    { "id": "RPM_UNSTABLE",            "type": "SENSOR_STATE", "label": "RPM instabil la ralanti",                 "sensor": "rpm",      "threshold": "range > 200 RPM at idle" },
+    { "id": "OIL_TEMP_HIGH",           "type": "SENSOR_STATE", "label": "Temperatură ulei ridicată",               "sensor": "oilTemp",  "threshold": "max > 115°C" },
+
+    { "id": "TURBO_UNDERBOOST",        "type": "SYSTEM_STATE", "label": "Turbo nu produce boost suficient",        "requiredCapabilities": ["hasTurbo"] },
+    { "id": "ENGINE_OVERLOAD",         "type": "SYSTEM_STATE", "label": "Motor suprasolicitat",                    "requiredCapabilities": [] },
+    { "id": "COMBUSTION_INCOMPLETE",   "type": "SYSTEM_STATE", "label": "Combustie incompletă",                    "requiredCapabilities": [] },
+    { "id": "FUEL_COMPENSATION_ACTIVE","type": "SYSTEM_STATE", "label": "ECU compensează activ amestecul",         "requiredCapabilities": [] },
+    { "id": "ELECTRICAL_INSTABILITY",  "type": "SYSTEM_STATE", "label": "Instabilitate electrică sistem",          "requiredCapabilities": [] },
+    { "id": "ENGINE_TIMING_DRIFT",     "type": "SYSTEM_STATE", "label": "Distribuție cu fază deviantă",            "requiredCapabilities": [] },
+    { "id": "DPF_REGENERATION_FORCED", "type": "SYSTEM_STATE", "label": "Regenerare DPF forțată activ",            "requiredCapabilities": ["hasDPF"] },
+    { "id": "ENGINE_WEAR_ACCELERATED", "type": "SYSTEM_STATE", "label": "Uzură motor accelerată",                  "requiredCapabilities": [] }
+]

@@ -2,13 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Platform, StatusBar, Dimensions, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+import { getVin } from '../utils/config';
 import HealthGauge from '../components/HealthGauge';
 import SubsystemCard from '../components/SubsystemCard';
 import PredictionCard from '../components/PredictionCard';
 import HealthTimeline from '../components/HealthTimeline';
 
 const { width } = Dimensions.get('window');
-const VIN = 'WAUZZZ4A1RN000000';
 const CACHE_KEY = '@health_cache';
 
 const VehicleHealthScreen = ({ navigation }) => {
@@ -30,7 +30,7 @@ const VehicleHealthScreen = ({ navigation }) => {
 
     const fetchHealth = async (isRefresh = false) => {
         try {
-            const response = await api.get(`/vehicul/${VIN}/health`);
+            const response = await api.get(`/vehicul/${getVin()}/health`);
             const data = response.data;
             setHealthData(data);
             setError(null);
@@ -54,7 +54,7 @@ const VehicleHealthScreen = ({ navigation }) => {
 
     const handleSubsystemPress = (systemKey) => {
         if (navigation) {
-            navigation.navigate('SubsystemDetail', { system: systemKey, vin: VIN });
+            navigation.navigate('SubsystemDetail', { system: systemKey, vin: getVin() });
         }
     };
 
@@ -69,7 +69,7 @@ const VehicleHealthScreen = ({ navigation }) => {
         };
         const system = categoryToSystem[prediction.category] || 'motor';
         if (navigation) {
-            navigation.navigate('SubsystemDetail', { system, vin: VIN });
+            navigation.navigate('SubsystemDetail', { system, vin: getVin() });
         }
     };
 

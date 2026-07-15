@@ -1,0 +1,61 @@
+{
+    "id": "TIMING_BELT_WEAR",
+    "version": "1.0.0",
+    "title": "Uzură curea distribuție",
+    "category": "DISTRIBUTIE",
+    "affectedSystems": ["ENGINE", "DISTRIBUTIE"],
+    "requiredCapabilities": [],
+    "requiredSensors": [],
+    "severity": {
+        "default": "HIGH",
+        "whenIgnored": "CRITICAL"
+    },
+    "symptoms": [
+        { "id": "engine_noise",      "description": "Zgomot ticăit sau fluierat din zona distribuției — curea uzată sau tensionerul slăbit", "observable": true },
+        { "id": "rough_running",     "description": "Motor merge neregulat — sincronizare distribuție pierdută parțial", "observable": true },
+        { "id": "hard_start",        "description": "Pornire dificilă — compresie redusă prin timing incorect", "observable": true },
+        { "id": "check_engine",      "description": "Martor motor aprins — coduri DTC legate de faza arbore cu came", "observable": true }
+    ],
+    "possibleCauses": [
+        { "id": "age_km",             "description": "Interval de schimb depășit — degradare chimică și mecanică normală" },
+        { "id": "tensioner_worn",     "description": "Tensionerul curelei uzat sau defect — curea fâșâie sau sare un dinte" },
+        { "id": "idler_worn",         "description": "Rolă ghidaj defectă — supraîncărcă curea lateral" },
+        { "id": "oil_contamination",  "description": "Ulei pe curea de la etanșare arbore cu came defectă — degradare accelerată" },
+        { "id": "water_pump",         "description": "Pompă apă integrată curea distribuție defectă — blochează curea" }
+    ],
+    "confidenceModifiers": [
+        { "condition": "km_since_timing > 150000",  "delta": 40, "description": "Interval recomandat depășit (150.000 km VAG TDI)" },
+        { "condition": "km_since_timing > 120000",  "delta": 25, "description": "Interval se apropie de limita recomandată" },
+        { "condition": "age_years > 6",             "delta": 20, "description": "Curea > 6 ani — degradare chimică indiferent de km" },
+        { "condition": "engine_noise_timing_area",  "delta": 30, "description": "Zgomot confirmat din zona distribuției" }
+    ],
+    "investigationSteps": [
+        { "step": 1, "check": "maintenance_history", "action": "query",           "message": "Verificare istoric schimb curea distribuție — data și km ultimei intervenții" },
+        { "step": 2, "check": "km_interval",          "action": "calculate",       "message": "Calculare km de la ultima schimbare — TDI VAG: interval 150.000 km sau 5 ani" },
+        { "step": 3, "component": "TIMING_BELT",      "action": "visual_inspect",  "message": "Inspecție vizuală curea (dacă accesibilă): fisuri, uzură dinți, franjurare margini" },
+        { "step": 4, "component": "TENSIONER",        "action": "check",           "message": "Verificare tensionerul și rolele de ghidaj: joc axial, zgomot la rotire" },
+        { "step": 5, "component": "TIMING_BELT",      "action": "replace_kit",     "message": "Schimbare kit distribuție complet (curea + tensionerul + role + pompă apă dacă e inclusă)" }
+    ],
+    "recommendedActions": {
+        "LOW":    "Planificare schimb curea dacă > 100.000 km sau > 4 ani de la ultima intervenție",
+        "MEDIUM": "Schimb curea distribuție planificat urgent — interval aproape depășit",
+        "HIGH":   "Schimb curea distribuție imediat — risc de rupere și avarie majoră motor"
+    },
+    "estimatedRepairDifficulty": "HIGH",
+    "estimatedRepairCostRange": {
+        "currency": "RON",
+        "min": 600,
+        "max": 2500,
+        "notes": "Kit curea distribuție + manoperă (600-1500 RON) vs kit + pompă apă + termostat (900-2500 RON)"
+    },
+    "driveRecommendation": {
+        "LOW":    "NORMAL",
+        "MEDIUM": "CAUTION",
+        "HIGH":   "DO_NOT_DRIVE"
+    },
+    "inspectionInterval": {
+        "km": 150000,
+        "notes": "Schimb la 150.000 km sau 5 ani — oricare survine primul. VAG TDI cu pompă apă inclusă în kit"
+    },
+    "references": []
+}

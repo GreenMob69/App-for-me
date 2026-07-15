@@ -5,29 +5,35 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { TelemetryProvider, TelemetryContext } from './src/context/TelemetryContext';
+import { TelemetryProvider } from './src/context/TelemetryContext';
+import { AppContext } from './src/context/AppContext';
 import { setCustomServerUrl } from './src/utils/config';
 import api from './src/services/api';
 import socketService from './src/services/socket';
 
+import StatusScreen from './src/screens/StatusScreen';
 import VehicleHealthScreen from './src/screens/VehicleHealthScreen';
 import SubsystemDetailScreen from './src/screens/SubsystemDetailScreen';
 import TripReportScreen from './src/screens/TripReportScreen';
 import LiveDashboardScreen from './src/screens/LiveDashboardScreen';
 import TripHistoryScreen from './src/screens/TripHistoryScreen';
-import DiagnosticsScreen from './src/screens/DiagnosticsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import VehicleOnboardingScreen from './src/screens/VehicleOnboardingScreen';
+import ErrorBoundary from './src/components/ErrorBoundary';
 
 const Tab = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
-const HealthStack = createNativeStackNavigator();
+const StatusStack = createNativeStackNavigator();
 
-function HealthStackScreen() {
+function StatusStackScreen() {
     return (
-        <HealthStack.Navigator screenOptions={{ headerShown: false }}>
-            <HealthStack.Screen name="HealthMain" component={VehicleHealthScreen} />
-            <HealthStack.Screen name="SubsystemDetail" component={SubsystemDetailScreen} />
-        </HealthStack.Navigator>
+        <ErrorBoundary>
+            <StatusStack.Navigator screenOptions={{ headerShown: false }}>
+                <StatusStack.Screen name="StatusMain" component={StatusScreen} />
+                <StatusStack.Screen name="HealthDetail" component={VehicleHealthScreen} />
+                <StatusStack.Screen name="SubsystemDetail" component={SubsystemDetailScreen} />
+            </StatusStack.Navigator>
+        </ErrorBoundary>
     );
 }
 
@@ -51,36 +57,34 @@ function TabNavigator() {
             }}
         >
             <Tab.Screen
-                name="Health"
-                component={HealthStackScreen}
-                options={{ tabBarLabel: 'HEALTH' }}
+                name="Stare"
+                component={StatusStackScreen}
+                options={{ tabBarLabel: 'STARE' }}
             />
             <Tab.Screen
                 name="Live"
-                component={LiveDashboardScreen}
                 options={{ tabBarLabel: 'LIVE' }}
-            />
+            >
+                {() => <ErrorBoundary><LiveDashboardScreen /></ErrorBoundary>}
+            </Tab.Screen>
             <Tab.Screen
                 name="Istoric"
-                component={TripHistoryScreen}
                 options={{ tabBarLabel: 'CURSE' }}
-            />
-            <Tab.Screen
-                name="Diagnoza"
-                component={DiagnosticsScreen}
-                options={{ tabBarLabel: 'DIAG' }}
-            />
+            >
+                {() => <ErrorBoundary><TripHistoryScreen /></ErrorBoundary>}
+            </Tab.Screen>
             <Tab.Screen
                 name="Setari"
-                component={SettingsScreen}
                 options={{ tabBarLabel: 'SETARI' }}
-            />
+            >
+                {() => <ErrorBoundary><SettingsScreen /></ErrorBoundary>}
+            </Tab.Screen>
         </Tab.Navigator>
     );
 }
 
 function AppNavigator() {
-    const { setNavigationRef } = useContext(TelemetryContext);
+    const { setNavigationRef } = useContext(AppContext);
     const navigationRef = useRef(null);
 
     return (
@@ -104,9 +108,10 @@ function AppNavigator() {
 
 export default function App() {
     const [ready, setReady] = useState(false);
+    const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
     useEffect(() => {
-        const initCustomIp = async () => {
+        const init = async () => {
             try {
                 const savedUrl = await AsyncStorage.getItem('@custom_server_url');
                 if (savedUrl) {
@@ -116,15 +121,38 @@ export default function App() {
                     socketService.socket = null;
                 }
             } catch (e) {}
+
+            // Check if vehicle profile exists
+            const vehicleId = await AsyncStorage.getItem('@vehicle_id');
+            if (!vehicleId) {
+                setNeedsOnboarding(true);
+            }
+
             setReady(true);
         };
-        initCustomIp();
+        init();
     }, []);
+
+    const handleOnboardingComplete = async (vehicle) => {
+        if (vehicle?.id) {
+            await AsyncStorage.setItem('@vehicle_id', String(vehicle.id));
+        }
+        setNeedsOnboarding(false);
+    };
 
     if (!ready) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
                 <ActivityIndicator size="large" color="#58a6ff" />
+            </View>
+        );
+    }
+
+    if (needsOnboarding) {
+        return (
+            <View style={styles.container}>
+                <StatusBar style="light" backgroundColor="#0d1117" />
+                <VehicleOnboardingScreen onComplete={handleOnboardingComplete} />
             </View>
         );
     }

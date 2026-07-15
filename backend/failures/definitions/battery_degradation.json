@@ -1,0 +1,59 @@
+{
+    "id": "BATTERY_DEGRADATION",
+    "version": "1.0.0",
+    "title": "Degradare baterie auto",
+    "category": "ELECTRIC",
+    "affectedSystems": ["ELECTRICAL", "ELECTRIC"],
+    "requiredCapabilities": [],
+    "requiredSensors": ["voltage"],
+    "severity": {
+        "default": "MEDIUM",
+        "whenIgnored": "HIGH"
+    },
+    "symptoms": [
+        { "id": "low_cranking",   "description": "Pornire lentă sau dificilă la rece — baterie cu CCA redus", "observable": true },
+        { "id": "voltage_drop",   "description": "Tensiune minimă sub 11.8V la pornire", "sensorKey": "voltage", "threshold": "< 11.8V" },
+        { "id": "voltage_range",  "description": "Oscilații mari tensiune > 2V — rezistență internă crescută", "sensorKey": "voltage" },
+        { "id": "battery_light",  "description": "Martor baterie intermitent — sistem de încărcare suprasolicitat", "observable": true }
+    ],
+    "possibleCauses": [
+        { "id": "age",            "description": "Vârstă > 4-5 ani — degradare naturală (sulfatare, pierdere electrolizt)" },
+        { "id": "deep_discharge", "description": "Descărcare profundă repetată — consumatori electrici cu motorul oprit" },
+        { "id": "overcharging",   "description": "Supraîncărcare de la alternator cu regulator defect" },
+        { "id": "vibration",      "description": "Vibrații — prindere slăbită, electrolit turburat" }
+    ],
+    "confidenceModifiers": [
+        { "condition": "voltage_min < 11.8",           "delta": 35, "description": "Tensiune minimă critică la pornire" },
+        { "condition": "voltage_range > 2.0",          "delta": 20, "description": "Oscilații mari — rezistență internă crescută" },
+        { "condition": "voltage_min_trend == DECREASING","delta": 25, "description": "Minimul de tensiune scade progresiv" }
+    ],
+    "investigationSteps": [
+        { "step": 1, "signal": "voltage",    "action": "check_min",           "message": "Tensiune minimă în log — valori sub 11.8V indică baterie slabă" },
+        { "step": 2, "component": "BATTERY", "action": "visual_inspect",      "message": "Inspecție fizică: terminale corodate, carcasă umflată, electrolizt scurs" },
+        { "step": 3, "component": "BATTERY", "action": "load_test",           "message": "Test de sarcină (CCA test) la atelier — capacitate reală vs nominală" },
+        { "step": 4, "component": "BATTERY", "action": "conductance_test",    "message": "Test conductanță (SOH) cu tester digital — starea sănătății bateriei %" },
+        { "step": 5, "component": "BATTERY", "action": "check_parasitic",     "message": "Verificare curent de repaus (dark current) — max 50 mA; valori mari = consumator defect" }
+    ],
+    "recommendedActions": {
+        "LOW":    "Monitorizare porniri la rece; test baterie la revizie dacă > 3 ani",
+        "MEDIUM": "Test CCA și SOH la atelier; curățare terminale corodate",
+        "HIGH":   "Înlocuire baterie — risc de imobilizare"
+    },
+    "estimatedRepairDifficulty": "LOW",
+    "estimatedRepairCostRange": {
+        "currency": "RON",
+        "min": 200,
+        "max": 600,
+        "notes": "Baterie standard ICE (200-400 RON) vs baterie AGM pentru vehicule cu Start-Stop (350-600 RON)"
+    },
+    "driveRecommendation": {
+        "LOW":    "NORMAL",
+        "MEDIUM": "CAUTION",
+        "HIGH":   "WORKSHOP"
+    },
+    "inspectionInterval": {
+        "km": 20000,
+        "notes": "Test baterie anual dacă > 3 ani vechime sau porniri dificile la temperaturi < 0°C"
+    },
+    "references": []
+}

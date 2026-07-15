@@ -12,7 +12,9 @@
       "Bash(npx -y acorn --ecma2020 --module src/utils/config.js)",
       "Bash(npx -y acorn --ecma2020 --module src/services/socket.js)",
       "Bash(npx -y acorn --ecma2020 --module --allow-hash-bang App.js)",
-      "Bash(npx -y acorn --ecma2020 --module src/screens/SettingsScreen.js)"
+      "Bash(npx -y acorn --ecma2020 --module src/screens/SettingsScreen.js)",
+      "Bash(curl *)",
+      "Bash(npx expo *)"
     ]
   }
 }

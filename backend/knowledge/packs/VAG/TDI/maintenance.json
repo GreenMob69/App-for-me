@@ -1,0 +1,8 @@
+{
+    "oil_change_km": 15000,
+    "oil_change_months": 12,
+    "timing_belt_km": 120000,
+    "fuel_filter_km": 60000,
+    "air_filter_km": 30000,
+    "glow_plugs_km": 80000
+}

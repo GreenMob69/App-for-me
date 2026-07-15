@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Platform, StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getActiveServerUrl, setCustomServerUrl } from '../utils/config';
+import { getActiveServerUrl, setCustomServerUrl, getVin } from '../utils/config';
 import api from '../services/api';
 import socketService from '../services/socket';
 
@@ -16,7 +16,7 @@ const SettingsScreen = () => {
             try {
                 const savedPrice = await AsyncStorage.getItem('@fuel_price');
                 if (savedPrice) setFuelPrice(savedPrice);
-                const res = await api.get('/vehicul/WAUZZZ4A1RN000000/statistici');
+                const res = await api.get(`/vehicul/${getVin()}/statistici`);
                 if (res.data) setStats(res.data);
             } catch (error) {}
         };
@@ -86,7 +86,7 @@ const SettingsScreen = () => {
                 </View>
                 <View style={styles.row}>
                     <Text style={styles.label}>VIN</Text>
-                    <Text style={[styles.value, { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: '#58a6ff' }]}>WAUZZZ4A1RN000000</Text>
+                    <Text style={[styles.value, { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: '#58a6ff' }]}>{getVin()}</Text>
                 </View>
                 <View style={styles.row}>
                     <Text style={styles.label}>Rezervor</Text>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, Platform, StatusBar, TextInput, Modal, Alert, Share } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, ActivityIndicator, Platform, StatusBar, TextInput, Modal, Alert, Share } from 'react-native';
 import { BarChart } from 'react-native-gifted-charts';
 import api from '../services/api';
+import { getVin } from '../utils/config';
 import TripDetailScreen from './TripDetailScreen';
 
 const { width } = Dimensions.get('window');
@@ -62,7 +63,7 @@ const TripHistoryScreen = () => {
                 hasFilter
                     ? api.get('/calatorii/filtrate', { params })
                     : api.get('/calatorii'),
-                api.get('/vehicul/WAUZZZ4A1RN000000/statistici')
+                api.get(`/vehicul/${getVin()}/statistici`)
             ]);
             setTrips(tripsRes.data || []);
             setStats(statsRes.data || {});
@@ -91,12 +92,14 @@ const TripHistoryScreen = () => {
 
     const fetchMonthlyReport = async () => {
         const [year, month] = reportMonth.split('-');
+        if (!year || !month) return;
+        setMonthlyData(null);
         try {
             const res = await api.get(`/rapoarte/lunar/${year}/${month}`);
             setMonthlyData(res.data);
-            setShowMonthlyReport(true);
         } catch (err) {
-            Alert.alert('Eroare', 'Nu s-a putut genera raportul lunar.');
+            console.error('[API EROARE] Raport lunar:', err.message);
+            Alert.alert('Eroare', 'Nu s-a putut genera raportul lunar. Verifică conexiunea la server.');
         }
     };
 
@@ -165,14 +168,19 @@ const TripHistoryScreen = () => {
                     <TouchableOpacity style={styles.refreshBtn} onPress={fetchData}>
                         <Text style={styles.refreshBtnText}>Refresh</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.reportBtn} onPress={fetchMonthlyReport}>
+                    <TouchableOpacity style={styles.reportBtn} onPress={() => setShowMonthlyReport(true)}>
                         <Text style={styles.reportBtnText}>Raport</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            <ScrollView style={styles.scrollContainer} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-
+            <FlatList
+                style={styles.scrollContainer}
+                contentContainerStyle={{ paddingBottom: 40 }}
+                showsVerticalScrollIndicator={false}
+                data={viewMode === 'LIST' ? trips : []}
+                keyExtractor={(item) => String(item.id_calatorie)}
+                ListHeaderComponent={<>
                 {/* STATS BANNER */}
                 <View style={styles.statsBanner}>
                     <View style={styles.statItem}>
@@ -320,87 +328,82 @@ const TripHistoryScreen = () => {
                     </View>
                 )}
 
-                {/* LIST VIEW */}
-                {viewMode === 'LIST' && (
-                    <View>
-                        {trips.length === 0 ? (
-                            <View style={styles.emptyState}>
-                                <Text style={styles.emptyText}>Nicio cursă găsită cu filtrele selectate.</Text>
-                                <TouchableOpacity onPress={() => { setActiveFilter('ALL'); setActiveTag('ALL'); setDateFrom(''); setDateTo(''); }}>
-                                    <Text style={styles.emptyReset}>Resetează filtrele</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            trips.map((trip) => {
-                                const tagInfo = getTagInfo(trip.trip_tag || 'PERSONAL');
-                                return (
-                                    <TouchableOpacity
-                                        key={trip.id_calatorie}
-                                        style={styles.tripCard}
-                                        onPress={() => setSelectedTripId(trip.id_calatorie)}
-                                        onLongPress={() => setTagModalTrip(trip.id_calatorie)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <View style={styles.tripHeader}>
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                                <Text style={styles.tripId}>#{trip.id_calatorie}</Text>
-                                                <View style={[styles.tagBadge, { borderColor: tagInfo.color }]}>
-                                                    <Text style={[styles.tagBadgeText, { color: tagInfo.color }]}>{tagInfo.icon} {tagInfo.label}</Text>
-                                                </View>
-                                            </View>
-                                            <Text style={styles.tripDate}>{formatDate(trip.timestamp_start)}</Text>
-                                        </View>
-
-                                        <View style={styles.tripDetailsGrid}>
-                                            <View style={styles.tripDetail}>
-                                                <Text style={styles.detailLabel}>KM</Text>
-                                                <Text style={styles.detailValue}>{(trip.km_parcursi || 0).toFixed(1)}</Text>
-                                            </View>
-                                            <View style={styles.tripDetail}>
-                                                <Text style={styles.detailLabel}>LITRI</Text>
-                                                <Text style={styles.detailValue}>{(trip.consum_total_l || 0).toFixed(1)}</Text>
-                                            </View>
-                                            <View style={styles.tripDetail}>
-                                                <Text style={styles.detailLabel}>L/100</Text>
-                                                <Text style={styles.detailValue}>{trip.consum_mediu_100km || 0}</Text>
-                                            </View>
-                                            <View style={styles.tripDetail}>
-                                                <Text style={styles.detailLabel}>ECO</Text>
-                                                <Text style={[styles.detailValue, { color: (trip.scor_eco || 100) >= 80 ? '#3fb950' : '#f85149' }]}>
-                                                    {trip.scor_eco || 100}
-                                                </Text>
-                                            </View>
-                                        </View>
-
-                                        {/* Indicators row */}
-                                        {(trip.nr_alerte > 0 || trip.nr_dtc > 0 || trip.health_score) && (
-                                            <View style={styles.indicatorsRow}>
-                                                {trip.health_score && (
-                                                    <Text style={[styles.indicator, { color: trip.health_score >= 80 ? '#3fb950' : '#d29922' }]}>
-                                                        Health: {trip.health_score}%
-                                                    </Text>
-                                                )}
-                                                {trip.nr_alerte > 0 && (
-                                                    <Text style={[styles.indicator, { color: '#f85149' }]}>
-                                                        {trip.nr_alerte} alerte
-                                                    </Text>
-                                                )}
-                                                {trip.nr_dtc > 0 && (
-                                                    <Text style={[styles.indicator, { color: '#f85149' }]}>
-                                                        {trip.nr_dtc} DTC
-                                                    </Text>
-                                                )}
-                                            </View>
-                                        )}
-
-                                        <Text style={styles.tapHint}>Apasă lung pentru tag</Text>
-                                    </TouchableOpacity>
-                                );
-                            })
-                        )}
+                {/* LIST VIEW — empty state shown in header */}
+                {viewMode === 'LIST' && trips.length === 0 && (
+                    <View style={styles.emptyState}>
+                        <Text style={styles.emptyText}>Nicio cursă găsită cu filtrele selectate.</Text>
+                        <TouchableOpacity onPress={() => { setActiveFilter('ALL'); setActiveTag('ALL'); setDateFrom(''); setDateTo(''); }}>
+                            <Text style={styles.emptyReset}>Resetează filtrele</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
-            </ScrollView>
+                </>}
+                renderItem={({ item: trip }) => {
+                    const tagInfo = getTagInfo(trip.trip_tag || 'PERSONAL');
+                    return (
+                        <TouchableOpacity
+                            style={styles.tripCard}
+                            onPress={() => setSelectedTripId(trip.id_calatorie)}
+                            onLongPress={() => setTagModalTrip(trip.id_calatorie)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={styles.tripHeader}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <Text style={styles.tripId}>#{trip.id_calatorie}</Text>
+                                    <View style={[styles.tagBadge, { borderColor: tagInfo.color }]}>
+                                        <Text style={[styles.tagBadgeText, { color: tagInfo.color }]}>{tagInfo.icon} {tagInfo.label}</Text>
+                                    </View>
+                                </View>
+                                <Text style={styles.tripDate}>{formatDate(trip.timestamp_start)}</Text>
+                            </View>
+
+                            <View style={styles.tripDetailsGrid}>
+                                <View style={styles.tripDetail}>
+                                    <Text style={styles.detailLabel}>KM</Text>
+                                    <Text style={styles.detailValue}>{(trip.km_parcursi || 0).toFixed(1)}</Text>
+                                </View>
+                                <View style={styles.tripDetail}>
+                                    <Text style={styles.detailLabel}>LITRI</Text>
+                                    <Text style={styles.detailValue}>{(trip.consum_total_l || 0).toFixed(1)}</Text>
+                                </View>
+                                <View style={styles.tripDetail}>
+                                    <Text style={styles.detailLabel}>L/100</Text>
+                                    <Text style={styles.detailValue}>{trip.consum_mediu_100km || 0}</Text>
+                                </View>
+                                <View style={styles.tripDetail}>
+                                    <Text style={styles.detailLabel}>ECO</Text>
+                                    <Text style={[styles.detailValue, { color: (trip.scor_eco || 100) >= 80 ? '#3fb950' : '#f85149' }]}>
+                                        {trip.scor_eco || 100}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            {(trip.nr_alerte > 0 || trip.nr_dtc > 0 || trip.health_score) && (
+                                <View style={styles.indicatorsRow}>
+                                    {trip.health_score && (
+                                        <Text style={[styles.indicator, { color: trip.health_score >= 80 ? '#3fb950' : '#d29922' }]}>
+                                            Health: {trip.health_score}%
+                                        </Text>
+                                    )}
+                                    {trip.nr_alerte > 0 && (
+                                        <Text style={[styles.indicator, { color: '#f85149' }]}>
+                                            {trip.nr_alerte} alerte
+                                        </Text>
+                                    )}
+                                    {trip.nr_dtc > 0 && (
+                                        <Text style={[styles.indicator, { color: '#f85149' }]}>
+                                            {trip.nr_dtc} DTC
+                                        </Text>
+                                    )}
+                                </View>
+                            )}
+
+                            <Text style={styles.tapHint}>Apasă lung pentru tag</Text>
+                        </TouchableOpacity>
+                    );
+                }}
+                ListEmptyComponent={null}
+            />
 
             {/* TAG MODAL */}
             <Modal visible={tagModalTrip !== null} transparent animationType="fade" onRequestClose={() => setTagModalTrip(null)}>
@@ -448,7 +451,15 @@ const TripHistoryScreen = () => {
                             </TouchableOpacity>
                         </View>
 
-                        {monthlyData && (
+                        {monthlyData && monthlyData.totalTrips === 0 && (
+                            <View style={{ padding: 20, alignItems: 'center' }}>
+                                <Text style={{ color: '#8b949e', fontSize: 14, textAlign: 'center' }}>
+                                    Nu există curse înregistrate în luna {monthlyData.month}/{monthlyData.year}.
+                                </Text>
+                            </View>
+                        )}
+
+                        {monthlyData && monthlyData.totalTrips > 0 && (
                             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
                                 <Text style={styles.reportSubtitle}>
                                     {monthlyData.month}/{monthlyData.year} — {monthlyData.totalTrips} curse

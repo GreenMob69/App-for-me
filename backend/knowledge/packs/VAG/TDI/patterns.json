@@ -1,0 +1,18 @@
+[
+    {
+        "id": "VAG_TDI_EGR_CARBON_BUILDUP",
+        "component": "Depuneri carbon EGR / admisie",
+        "category": "EMISII",
+        "requiredCapability": "hasEGR",
+        "strategyId": "EGR_CARBON_INVESTIGATION",
+        "failureId": "EGR_CARBON"
+    },
+    {
+        "id": "VAG_TDI_BOOST_HOSE",
+        "component": "Circuit boost / furtunuri turbo",
+        "category": "TURBO",
+        "requiredCapability": "hasTurbo",
+        "strategyId": "TURBO_PRESSURE_INVESTIGATION",
+        "failureId": "VACUUM_LEAK"
+    }
+]

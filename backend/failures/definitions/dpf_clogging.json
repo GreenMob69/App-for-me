@@ -1,0 +1,60 @@
+{
+    "id": "DPF_CLOGGING",
+    "version": "1.0.0",
+    "title": "Colmatare filtru particule (DPF)",
+    "category": "EMISII",
+    "affectedSystems": ["DPF", "DPF (DIESEL)"],
+    "requiredCapabilities": ["hasDPF"],
+    "requiredSensors": [],
+    "severity": {
+        "default": "MEDIUM",
+        "whenIgnored": "HIGH"
+    },
+    "symptoms": [
+        { "id": "dpf_light",      "description": "Martor DPF aprins pe bord", "observable": true },
+        { "id": "power_loss",     "description": "Pierdere putere — ECU reduce puterea pentru protecție DPF", "observable": true },
+        { "id": "high_idle",      "description": "Relanti ridicat neobișnuit — ECU în modul regenerare activă", "observable": true },
+        { "id": "fuel_smell",     "description": "Miros de combustibil în evacuare — injecție post-combustie pentru regenerare", "observable": true }
+    ],
+    "possibleCauses": [
+        { "id": "short_trips",     "description": "Curse exclusiv urbane și scurte — DPF nu atinge 550°C pentru regenerare" },
+        { "id": "ash_content",     "description": "Conținut mare de cenușă (necomburentă) — necesită curățare profesională" },
+        { "id": "pressure_sensor", "description": "Senzor presiune diferențială defect — regenerarea nu pornește" },
+        { "id": "post_injection",  "description": "Injecție post-combustie defectă — regenerarea activă nu funcționează" }
+    ],
+    "confidenceModifiers": [
+        { "condition": "dpf_soot > 50",          "delta": 30, "description": "Nivel funingine ridicat (dacǎ PID disponibil)" },
+        { "condition": "idle_pct > 40",          "delta": 15, "description": "Timp excesiv la ralanti — împiedică regenerarea" },
+        { "condition": "short_trips_pattern",    "delta": 20, "description": "Pattern curse scurte < 10 km" },
+        { "condition": "dtc_dpf_active",         "delta": 35, "description": "Cod DTC DPF activ" }
+    ],
+    "investigationSteps": [
+        { "step": 1, "signal": "dpf_soot_pct",     "action": "read_obd",        "message": "Citire nivel funingine DPF prin OBD (Mode 01 PID 4F sau OBD proprietar)" },
+        { "step": 2, "check": "trip_pattern",       "action": "analyze",         "message": "Analiza pattern curse — curse scurte < 10 km împiedică regenerarea pasivă" },
+        { "step": 3, "component": "DPF",            "action": "forced_regen",    "message": "Regenerare forțată prin diagnoză sau cursă autostradă 30+ min la > 2500 RPM" },
+        { "step": 4, "component": "DPF",            "action": "pressure_diff",   "message": "Verificare senzor presiune diferențială față/spate DPF (diferentǎ normalǎ: 10-30 mbar)" },
+        { "step": 5, "component": "DPF",            "action": "ash_estimate",    "message": "Dacă regenerarea nu reușește: estimare conținut cenușă (km total / 200.000 km)" }
+    ],
+    "recommendedActions": {
+        "LOW":    "Efectuare cursă de regenerare (20+ min pe drum deschis)",
+        "MEDIUM": "Regenerare forțată la atelier; evitare curse exclusiv urbane",
+        "HIGH":   "Curățare profesională DPF sau înlocuire dacă cenușa > limita"
+    },
+    "estimatedRepairDifficulty": "MEDIUM",
+    "estimatedRepairCostRange": {
+        "currency": "RON",
+        "min": 200,
+        "max": 3500,
+        "notes": "Curățare chimicǎ DPF (200-400 RON) vs curǎțare profesionalǎ (500-900 RON) vs înlocuire (1500-3500 RON)"
+    },
+    "driveRecommendation": {
+        "LOW":    "NORMAL",
+        "MEDIUM": "CAUTION",
+        "HIGH":   "WORKSHOP"
+    },
+    "inspectionInterval": {
+        "km": 50000,
+        "notes": "Verificare stare DPF la 50.000 km sau la aprinderea martorului"
+    },
+    "references": []
+}

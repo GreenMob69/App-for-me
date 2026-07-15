@@ -1,0 +1,47 @@
+[
+    { "from": "VACUUM_LEAK",             "to": "BOOST_LOW",               "relation": "CAUSES",         "weight": 0.90, "chain": "vacuum_leak", "description": "Scurgere în circuitul boost reduce direct presiunea" },
+    { "from": "VACUUM_LEAK",             "to": "TURBO_UNDERBOOST",        "relation": "CAUSES",         "weight": 0.85, "chain": "vacuum_leak", "description": "Scurgere vacuum face turbosuflanta ineficientă" },
+    { "from": "BOOST_LOW",               "to": "TURBO_UNDERBOOST",        "relation": "CAUSES",         "weight": 0.92, "chain": "vacuum_leak", "description": "Presiune sub normal — turbo nu lucrează în parametri" },
+    { "from": "TURBO_UNDERBOOST",        "to": "ENGINE_OVERLOAD",         "relation": "CAUSES",         "weight": 0.70, "chain": "vacuum_leak", "description": "Aer insuficient — motor compensează prin sarcină mai mare" },
+    { "from": "TURBO_UNDERBOOST",        "to": "FUEL_COMPENSATION_ACTIVE","relation": "CAUSES",         "weight": 0.75, "chain": "vacuum_leak", "description": "ECU injectează mai mult combustibil pentru a compensa lipsa aerului" },
+    { "from": "ENGINE_OVERLOAD",         "to": "FUEL_RATE_HIGH",          "relation": "CONTRIBUTES_TO", "weight": 0.65, "chain": "shared",      "description": "Motor suprasolicitat — consum crescut" },
+    { "from": "FUEL_COMPENSATION_ACTIVE","to": "FUEL_RATE_HIGH",          "relation": "CAUSES",         "weight": 0.80, "chain": "shared",      "description": "Injecție suplimentară — consum real mai mare" },
+    { "from": "FUEL_RATE_HIGH",          "to": "DPF_SOOT_HIGH",           "relation": "CONTRIBUTES_TO", "weight": 0.60, "chain": "shared",      "description": "Consum mare — ardere bogată — mai multă funingine în DPF" },
+    { "from": "DPF_SOOT_HIGH",           "to": "DPF_CLOGGING",            "relation": "CAUSES",         "weight": 0.75, "chain": "dpf",         "description": "Încărcare crescută neregenerată — colmatare DPF" },
+    { "from": "DPF_CLOGGING",            "to": "DPF_REGENERATION_FORCED", "relation": "CAUSES",         "weight": 0.80, "chain": "dpf",         "description": "DPF colmatat — ECU inițiază regenerare activă" },
+
+    { "from": "TURBO_WEAR",              "to": "BOOST_LOW",               "relation": "CAUSES",         "weight": 0.85, "chain": "turbo_wear",  "description": "Uzură turbină — joc axial — pierdere presiune" },
+    { "from": "TURBO_WEAR",              "to": "TURBO_UNDERBOOST",        "relation": "CAUSES",         "weight": 0.80, "chain": "turbo_wear",  "description": "Turbo uzat nu poate atinge presiunea nominală" },
+
+    { "from": "EGR_CARBON",              "to": "MAF_LOW",                 "relation": "CAUSES",         "weight": 0.80, "chain": "egr_carbon",  "description": "Galerie admisie obstruată cu carbon — debit aer redus" },
+    { "from": "MAF_LOW",                 "to": "ENGINE_OVERLOAD",         "relation": "CAUSES",         "weight": 0.70, "chain": "egr_carbon",  "description": "Aer insuficient — motor compensează prin sarcini mai mari" },
+    { "from": "MAF_LOW",                 "to": "FUEL_COMPENSATION_ACTIVE","relation": "CAUSES",         "weight": 0.65, "chain": "egr_carbon",  "description": "ECU citește debit mic — injectează mai mult combustibil" },
+
+    { "from": "MAF_DEGRADATION",         "to": "MAF_LOW",                 "relation": "CAUSES",         "weight": 0.85, "chain": "maf_sensor",  "description": "Senzor MAF degradat — citire sub valoarea reală" },
+
+    { "from": "INJECTOR_WEAR",           "to": "COMBUSTION_INCOMPLETE",   "relation": "CAUSES",         "weight": 0.80, "chain": "injector",    "description": "Injectoare uzate — pulverizare neuniformă — ardere incompletă" },
+    { "from": "INJECTOR_WEAR",           "to": "RPM_UNSTABLE",            "relation": "CAUSES",         "weight": 0.60, "chain": "injector",    "description": "Debit neuniform pe cilindri — instabilitate ralanti" },
+    { "from": "COMBUSTION_INCOMPLETE",   "to": "DPF_SOOT_HIGH",           "relation": "CAUSES",         "weight": 0.75, "chain": "injector",    "description": "Combustie incompletă — funingine nearsă ajunge în DPF" },
+    { "from": "COMBUSTION_INCOMPLETE",   "to": "FUEL_RATE_HIGH",          "relation": "CONTRIBUTES_TO", "weight": 0.55, "chain": "injector",    "description": "Eficiență termică scăzută — consum ridicat pentru aceeași putere" },
+    { "from": "COMBUSTION_INCOMPLETE",   "to": "ENGINE_OVERLOAD",         "relation": "CONTRIBUTES_TO", "weight": 0.45, "chain": "injector",    "description": "Combustie slabă — motor compensează cu mai multă injecție" },
+
+    { "from": "COOLING_SYSTEM_FAILURE",  "to": "COOLANT_TEMP_HIGH",       "relation": "CAUSES",         "weight": 0.90, "chain": "cooling",     "description": "Sistem răcire defect — temperatura lichidului depășește pragul" },
+    { "from": "COOLANT_TEMP_HIGH",       "to": "OIL_TEMP_HIGH",           "relation": "CONTRIBUTES_TO", "weight": 0.60, "chain": "cooling",     "description": "Lichid răcire fierbinte — uleiul motor se supraîncălzește" },
+    { "from": "COOLANT_TEMP_HIGH",       "to": "ENGINE_OVERLOAD",         "relation": "CONTRIBUTES_TO", "weight": 0.40, "chain": "cooling",     "description": "Temperaturi ridicate — ECU reduce puterea pentru protecție" },
+    { "from": "OIL_TEMP_HIGH",           "to": "ENGINE_WEAR_ACCELERATED", "relation": "CAUSES",         "weight": 0.70, "chain": "cooling",     "description": "Ulei supraîncălzit — vâscozitate scăzută — uzură metalică" },
+    { "from": "ENGINE_OVERLOAD",         "to": "OIL_TEMP_HIGH",           "relation": "CONTRIBUTES_TO", "weight": 0.35, "chain": "shared",      "description": "Motor suprasolicitat — căldură suplimentară în ulei" },
+
+    { "from": "ALTERNATOR_FAILURE",      "to": "VOLTAGE_LOW",             "relation": "CAUSES",         "weight": 0.85, "chain": "electrical",  "description": "Alternator defect nu reîncarcă bateria — tensiune scade" },
+    { "from": "ALTERNATOR_FAILURE",      "to": "BATTERY_DEGRADATION",     "relation": "ACCELERATES",    "weight": 0.55, "chain": "electrical",  "description": "Fără încărcare — baterie descărcată repetat — sulfatare accelerată" },
+    { "from": "BATTERY_DEGRADATION",     "to": "VOLTAGE_LOW",             "relation": "CAUSES",         "weight": 0.80, "chain": "electrical",  "description": "Baterie cu rezistență internă mare — tensiune scade sub sarcini" },
+    { "from": "VOLTAGE_LOW",             "to": "ELECTRICAL_INSTABILITY",  "relation": "CAUSES",         "weight": 0.75, "chain": "electrical",  "description": "Tensiune instabilă — senzori și ECU primesc alimentare neregulată" },
+
+    { "from": "FUEL_PUMP_DEGRADATION",   "to": "FUEL_COMPENSATION_ACTIVE","relation": "CONTRIBUTES_TO", "weight": 0.50, "chain": "fuel_pump",   "description": "Presiune rampă scăzută — ECU injectează mai mult timp" },
+    { "from": "FUEL_PUMP_DEGRADATION",   "to": "RPM_UNSTABLE",            "relation": "CAUSES",         "weight": 0.55, "chain": "fuel_pump",   "description": "Presiune combustibil fluctuantă — instabilitate ralanti" },
+
+    { "from": "TIMING_BELT_WEAR",        "to": "ENGINE_TIMING_DRIFT",     "relation": "CAUSES",         "weight": 0.70, "chain": "timing_belt", "description": "Curea uzată — dinte sărit — faza distribuției se schimbă" },
+    { "from": "ENGINE_TIMING_DRIFT",     "to": "COMBUSTION_INCOMPLETE",   "relation": "CONTRIBUTES_TO", "weight": 0.60, "chain": "timing_belt", "description": "Timing incorect — fereastră injecție greșită — ardere incompletă" },
+    { "from": "ENGINE_TIMING_DRIFT",     "to": "RPM_UNSTABLE",            "relation": "CONTRIBUTES_TO", "weight": 0.50, "chain": "timing_belt", "description": "Faze greșite — compresie inegală pe cilindri — RPM instabil" },
+
+    { "from": "DPF_CLOGGING",            "to": "ENGINE_OVERLOAD",         "relation": "CONTRIBUTES_TO", "weight": 0.40, "chain": "dpf",         "description": "DPF colmatat — contrapresiune evacuare — motor lucrează mai greu" }
+]

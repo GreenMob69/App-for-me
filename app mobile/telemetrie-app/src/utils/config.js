@@ -1,7 +1,17 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+// Setează URL-ul manual când WiFi-ul universitar blochează conexiunile directe
+// (AP Isolation). Lasă null pentru detecție automată (acasă / hotspot).
+// Exemplu: 'https://abc123.ngrok-free.app'  ← din comanda: npx ngrok http 3000
+const MANUAL_BACKEND_URL = null;
+
 const getServerUrl = () => {
+    if (MANUAL_BACKEND_URL) {
+        console.log(`[NETWORK] URL manual: ${MANUAL_BACKEND_URL}`);
+        return MANUAL_BACKEND_URL;
+    }
+
     if (Platform.OS === 'web') {
         return 'http://localhost:3000';
     }
@@ -32,3 +42,9 @@ export const setCustomServerUrl = (url) => {
 
 export const getActiveServerUrl = () => _serverUrl;
 export const getActiveApiUrl = () => `${_serverUrl}/api`;
+
+// --- Vehicle identity (single source of truth) ---
+let _vin = 'WAUZZZ4A1RN000000';
+
+export const getVin = () => _vin;
+export const setVin = (vin) => { _vin = vin; };

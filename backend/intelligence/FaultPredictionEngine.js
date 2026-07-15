@@ -22,11 +22,15 @@
  * -----------------------------------------------------------------------
  */
 
+const DiagnosticStrategyRegistry = require('../diagnostics/DiagnosticStrategyRegistry');
+const FailureLibrary = require('../failures/FailureLibrary');
+
 const PREDICTION_MODELS = [
     {
         id: 'ALTERNATOR_DEGRADATION',
         component: 'Alternator',
         category: 'ELECTRIC',
+        failureId: 'ALTERNATOR_FAILURE',
         evaluate: (ctx) => {
             const factors = [];
             let score = 0;
@@ -68,6 +72,7 @@ const PREDICTION_MODELS = [
         id: 'BATTERY_AGING',
         component: 'Baterie',
         category: 'ELECTRIC',
+        failureId: 'BATTERY_DEGRADATION',
         evaluate: (ctx) => {
             const factors = [];
             let score = 0;
@@ -105,6 +110,8 @@ const PREDICTION_MODELS = [
         id: 'TURBO_WEAR',
         component: 'Turbosuflantă',
         category: 'TURBO',
+        requiredCapability: 'hasTurbo',
+        failureId: 'TURBO_WEAR',
         evaluate: (ctx) => {
             const factors = [];
             let score = 0;
@@ -142,6 +149,7 @@ const PREDICTION_MODELS = [
         id: 'INJECTOR_WEAR',
         component: 'Injectoare',
         category: 'COMBUSTIBIL',
+        failureId: 'INJECTOR_WEAR',
         evaluate: (ctx) => {
             const factors = [];
             let score = 0;
@@ -181,6 +189,7 @@ const PREDICTION_MODELS = [
         id: 'COOLING_DETERIORATION',
         component: 'Sistem răcire',
         category: 'TERMIC',
+        failureId: 'COOLING_SYSTEM_FAILURE',
         evaluate: (ctx) => {
             const factors = [];
             let score = 0;
@@ -225,6 +234,7 @@ const PREDICTION_MODELS = [
         id: 'AIR_INTAKE_RESTRICTION',
         component: 'Admisie aer',
         category: 'ADMISIE',
+        failureId: 'MAF_DEGRADATION',
         evaluate: (ctx) => {
             const factors = [];
             let score = 0;
@@ -265,6 +275,7 @@ const PREDICTION_MODELS = [
         id: 'FUEL_SYSTEM_DEGRADATION',
         component: 'Sistem alimentare',
         category: 'COMBUSTIBIL',
+        failureId: 'FUEL_PUMP_DEGRADATION',
         evaluate: (ctx) => {
             const factors = [];
             let score = 0;
@@ -301,6 +312,8 @@ const PREDICTION_MODELS = [
         id: 'DPF_CLOGGING',
         component: 'Filtru particule (DPF)',
         category: 'EMISII',
+        requiredCapability: 'hasDPF',
+        failureId: 'DPF_CLOGGING',
         evaluate: (ctx) => {
             const factors = [];
             let score = 0;
@@ -341,6 +354,8 @@ const PREDICTION_MODELS = [
         id: 'EGR_DETERIORATION',
         component: 'Supapă EGR',
         category: 'EMISII',
+        requiredCapability: 'hasEGR',
+        failureId: 'EGR_CARBON',
         evaluate: (ctx) => {
             const factors = [];
             let score = 0;
@@ -394,14 +409,48 @@ function estimateRemainingDays(severity, score) {
 }
 
 function generatePredictions(context) {
-    const { summary, baseline, trends, correlations, confidence, dna } = context;
+    const { summary, baseline, trends, correlations, confidence, dna, capabilities, knowledgePack } = context;
 
     if (!summary) return [];
 
+    // Modelele standard + modelele suplimentare din KnowledgePack (dacă există)
+    const packPatterns = Array.isArray(knowledgePack?.known_failure_patterns)
+        ? knowledgePack.known_failure_patterns
+        : [];
+    const activeModels = packPatterns.length > 0
+        ? [...PREDICTION_MODELS, ...packPatterns]
+        : PREDICTION_MODELS;
+
     const predictions = [];
 
-    for (const model of PREDICTION_MODELS) {
-        const result = model.evaluate(context);
+    for (const model of activeModels) {
+        // Dacă modelul necesită o capability specifică și vehiculul nu o are,
+        // sărim modelul complet. Dacă capabilities lipsesc (null), rulăm totul
+        // pentru backward compat.
+        if (model.requiredCapability && capabilities && !capabilities[model.requiredCapability]) {
+            continue;
+        }
+
+        // Pattern-urile din KnowledgePack (JSON pur) nu au evaluate().
+        // Delegăm evaluarea la DiagnosticStrategyRegistry prin strategyId.
+        let result;
+        let recommendation;
+
+        if (typeof model.evaluate === 'function') {
+            result = model.evaluate(context);
+            recommendation = typeof model.getRecommendation === 'function'
+                ? model.getRecommendation(result.severity)
+                : model.component;
+        } else if (model.strategyId) {
+            const strategy = DiagnosticStrategyRegistry.getById(model.strategyId);
+            if (!strategy || typeof strategy.evaluate !== 'function') continue;
+            result = strategy.evaluate(context);
+            recommendation = typeof strategy.getRecommendation === 'function'
+                ? strategy.getRecommendation(result.severity)
+                : model.component;
+        } else {
+            continue;
+        }
 
         if (result.score < 10) continue;
 
@@ -409,6 +458,9 @@ function generatePredictions(context) {
         const confidenceScore = Math.min(95, Math.round(
             50 + (result.factors.length * 10) + (trends ? 5 : 0) + (baseline ? 5 : 0)
         ));
+
+        const failureId = model.failureId || null;
+        const failureDef = failureId ? FailureLibrary.getById(failureId) : null;
 
         predictions.push({
             component: model.component,
@@ -418,8 +470,11 @@ function generatePredictions(context) {
             severity: result.severity,
             estimatedRemainingKm: estimateRemainingDistance(result.severity, result.score),
             estimatedRemainingDays: estimateRemainingDays(result.severity, result.score),
-            recommendation: model.getRecommendation(result.severity),
-            factors: result.factors
+            recommendation,
+            factors: result.factors,
+            failureId,
+            driveRecommendation: failureDef?.driveRecommendation?.[result.severity] || null,
+            estimatedRepairCostRange: failureDef?.estimatedRepairCostRange || null
         });
     }
 

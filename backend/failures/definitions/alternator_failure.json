@@ -1,0 +1,60 @@
+{
+    "id": "ALTERNATOR_FAILURE",
+    "version": "1.0.0",
+    "title": "Defecțiune alternator",
+    "category": "ELECTRIC",
+    "affectedSystems": ["ELECTRICAL", "ELECTRIC"],
+    "requiredCapabilities": [],
+    "requiredSensors": ["voltage"],
+    "severity": {
+        "default": "MEDIUM",
+        "whenIgnored": "HIGH"
+    },
+    "symptoms": [
+        { "id": "low_voltage",    "description": "Tensiune medie sub 13.4V la mersul normal (motor pornit)", "sensorKey": "voltage", "threshold": "< 13.4V" },
+        { "id": "voltage_ripple", "description": "Oscilații tensiune (ripple AC) — diode alternator defecte", "observable": false },
+        { "id": "battery_light",  "description": "Martor baterie aprins pe bord", "observable": true },
+        { "id": "dim_lights",     "description": "Faruri sau lumini slabe la relanti", "observable": true }
+    ],
+    "possibleCauses": [
+        { "id": "diode_failure",   "description": "Diode redresoare defecte — alternator produce curent alternativ" },
+        { "id": "regulator",       "description": "Regulator de tensiune defect — supraîncărcare sau subîncărcare" },
+        { "id": "brush_wear",      "description": "Perii alternator uzate — contact intermitent" },
+        { "id": "belt_slip",       "description": "Curea alternator slăbită sau uzată — turație insuficientă" },
+        { "id": "winding_fault",   "description": "Înfășurare stator sau rotor defectă — producție insuficientă" }
+    ],
+    "confidenceModifiers": [
+        { "condition": "voltage_avg < 13.4",       "delta": 20, "description": "Tensiune medie sub normal" },
+        { "condition": "voltage_min < 12.5",       "delta": 30, "description": "Tensiune minimă critică" },
+        { "condition": "voltage_trend == DECREASING", "delta": 25, "description": "Tendință descrescătoare tensiune" }
+    ],
+    "investigationSteps": [
+        { "step": 1, "signal": "voltage",       "action": "check_idle",     "message": "Tensiune la relanti — normal: 13.8V-14.4V; sub 13.5V → problemă alternator" },
+        { "step": 2, "signal": "voltage",       "action": "check_load",     "message": "Test sub sarcină: pornire AC, faruri, ventilator — tensiunea nu trebuie să scadă sub 13V" },
+        { "step": 3, "component": "ALTERNATOR", "action": "output_test",    "message": "Test curent ieșire cu clampmetru — normal: 60-80% din curentul nominal la 2000 RPM" },
+        { "step": 4, "component": "BELT",       "action": "tension_check",  "message": "Verificare tensiune și uzură curea alternator" },
+        { "step": 5, "component": "BATTERY",    "action": "load_test",      "message": "Test separat baterie (CCA + SOH) pentru a exclude problema bateriei" }
+    ],
+    "recommendedActions": {
+        "LOW":    "Monitorizare tensiune; verificare vizuală curea alternator la revizie",
+        "MEDIUM": "Test alternator la atelier — curent de ieșire și ripple AC",
+        "HIGH":   "Înlocuire urgentă alternator sau curea; risc imobilizare"
+    },
+    "estimatedRepairDifficulty": "MEDIUM",
+    "estimatedRepairCostRange": {
+        "currency": "RON",
+        "min": 300,
+        "max": 1500,
+        "notes": "Schimbare perii/diode (200-400 RON) vs înlocuire alternator complet (600-1500 RON)"
+    },
+    "driveRecommendation": {
+        "LOW":    "NORMAL",
+        "MEDIUM": "CAUTION",
+        "HIGH":   "WORKSHOP"
+    },
+    "inspectionInterval": {
+        "km": 60000,
+        "notes": "Verificare curea și tensioner la fiecare revizie majoră"
+    },
+    "references": []
+}

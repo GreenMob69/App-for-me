@@ -1,7 +1,10 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Modal, Platform, StatusBar } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
-import { TelemetryContext } from '../context/TelemetryContext';
+import { LiveContext } from '../context/LiveContext';
+import { AlertContext } from '../context/AlertContext';
+import { AppContext } from '../context/AppContext';
+import { getVin } from '../utils/config';
 import CircularGauge from '../components/CircularGauge';
 
 const { width } = Dimensions.get('window');
@@ -40,12 +43,9 @@ const OSCILLOSCOPE_METRICS = [
 ];
 
 const LiveDashboardScreen = () => {
-    const {
-        isConnected, viewMode, setViewMode,
-        selectedMetric, setSelectedMetric,
-        liveData, chartHistory, latestAlert, alertsList, unreadCount, markAlertsAsRead,
-        activeTemplate, setActiveTemplate
-    } = useContext(TelemetryContext);
+    const { isConnected, liveData, chartVersion, getChartHistory } = useContext(LiveContext);
+    const { latestAlert, alertsList, unreadCount, markAlertsAsRead } = useContext(AlertContext);
+    const { viewMode, setViewMode, selectedMetric, setSelectedMetric, activeTemplate, setActiveTemplate } = useContext(AppContext);
 
     const [showNotificationsModal, setShowNotificationsModal] = useState(false);
     const [expertMode, setExpertMode] = useState(false);
@@ -60,7 +60,7 @@ const LiveDashboardScreen = () => {
     const vvt = liveData.vvt || {}; const tr = liveData.transmisie || {}; const pr = liveData.presiuni || {};
     const tim = liveData.timp || {}; const meta = liveData.consum_meta || {}; const ecu = liveData.ecu || {};
 
-    const renderCard = (label, val, unit, color = "#ffffff", isLarge = false) => {
+    const renderCard = useCallback((label, val, unit, color = "#ffffff", isLarge = false) => {
         if (activeTemplate === 'CLASSIC') {
             let min = 0; let max = 100;
             if (unit === 'RPM') max = 5000;
@@ -83,7 +83,7 @@ const LiveDashboardScreen = () => {
                 <Text style={[styles.val, isLarge && styles.valLarge, { color }]}>{val !== undefined ? val : 0} <Text style={styles.unit}>{unit}</Text></Text>
             </View>
         );
-    };
+    }, [activeTemplate]);
 
     // =========================================================================
     // DEFAULT VIEW — 6 KPI-uri esențiale
@@ -203,7 +203,7 @@ const LiveDashboardScreen = () => {
                     renderCard("Warmups", tim.warmups || 0, "cicluri", "#3fb950"),
                     renderCard("Dist. de la DTC Clear", meta.dist_dtc || 0, "km", "#58a6ff"),
                     renderCard("Ore Motor", meta.engine_hours || 0, "ore"),
-                    renderCard("VIN", ecu.vin || "WAUZZZ4A1RN000000", "-", "#58a6ff", true),
+                    renderCard("VIN", ecu.vin || getVin(), "-", "#58a6ff", true),
                 ]}
             </View>
         </View>
@@ -212,6 +212,8 @@ const LiveDashboardScreen = () => {
     // =========================================================================
     // OSCILOSCOP — limitat la ultimele 60 puncte (1 minut vizibil)
     // =========================================================================
+    const chartHistory = useMemo(() => getChartHistory(), [chartVersion]);
+
     const renderChartView = () => {
         const config = OSCILLOSCOPE_METRICS.find(m => m.id === selectedMetric) || OSCILLOSCOPE_METRICS[0];
         const maxPoints = Math.floor((width - 80) / zoomX);

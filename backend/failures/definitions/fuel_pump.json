@@ -1,0 +1,59 @@
+{
+    "id": "FUEL_PUMP_DEGRADATION",
+    "version": "1.0.0",
+    "title": "Degradare pompă combustibil",
+    "category": "COMBUSTIBIL",
+    "affectedSystems": ["FUEL"],
+    "requiredCapabilities": [],
+    "requiredSensors": ["fuelRate"],
+    "severity": {
+        "default": "MEDIUM",
+        "whenIgnored": "HIGH"
+    },
+    "symptoms": [
+        { "id": "hard_start",       "description": "Pornire dificilă — pompa nu mai pre-presurizeazǎ rapid rampa", "observable": true },
+        { "id": "power_cut",        "description": "Tǎieri de putere sub sarcini mari — pompǎ nu asigurǎ debitul cerut", "observable": true },
+        { "id": "consumption_peaks","description": "Vârfuri exagerate de consum necorelate cu conduita", "sensorKey": "fuelRate" },
+        { "id": "engine_stall",     "description": "Oprire motor spontanǎ la ralanti sau mers lent", "observable": true }
+    ],
+    "possibleCauses": [
+        { "id": "motor_wear",       "description": "Uzurǎ motor electric pompǎ — curent crescut, debit scǎzut" },
+        { "id": "filter_clogged",   "description": "Filtru combustibil înfundat — pompǎ supraasolicitatǎ" },
+        { "id": "check_valve",      "description": "Supapǎ de reținere defectǎ — nu menține presiunea în rampǎ la oprire" },
+        { "id": "fuel_contamination","description": "Combustibil contaminat cu apǎ sau impuritǎți — deterioreazǎ pompa" }
+    ],
+    "confidenceModifiers": [
+        { "condition": "fuel_consumption_peaks",       "delta": 20, "description": "Vârfuri consum la sarcini mari" },
+        { "condition": "fuel_trend == INCREASING",     "delta": 15, "description": "Consum în creștere progresivǎ" },
+        { "condition": "fuel_pressure_drop_at_idle",   "delta": 30, "description": "Presiune rampǎ scade la relanti" }
+    ],
+    "investigationSteps": [
+        { "step": 1, "signal": "fuelRate",           "action": "check_peaks",       "message": "Identificare vârfuri consum corelate cu accelerații — debit insuficient" },
+        { "step": 2, "component": "FUEL_FILTER",     "action": "inspect_replace",   "message": "Verificare/înlocuire filtru combustibil — dacǎ > 60.000 km, înlocuire preventivǎ" },
+        { "step": 3, "component": "FUEL_PRESSURE",   "action": "static_test",       "message": "Test presiune staticǎ rampǎ (motor oprit, cheie pe contact) — trebuie sǎ menținǎ > 3 bar" },
+        { "step": 4, "component": "FUEL_PRESSURE",   "action": "dynamic_test",      "message": "Test presiune dinamicǎ la sarcini diferite — scǎdere la sarcina maximǎ sugerează pompǎ slǎbitǎ" },
+        { "step": 5, "component": "FUEL_PUMP",       "action": "current_draw",      "message": "Mǎsurare curent pompǎ cu clampmetru — consum > nominal = pompǎ deterioratǎ" }
+    ],
+    "recommendedActions": {
+        "LOW":    "Înlocuire filtru combustibil dacǎ > 60.000 km; monitorizare porniri",
+        "MEDIUM": "Test presiune rampǎ; înlocuire filtru; planificare verificare pompǎ",
+        "HIGH":   "Înlocuire pompǎ combustibil; risc de imobilizare"
+    },
+    "estimatedRepairDifficulty": "MEDIUM",
+    "estimatedRepairCostRange": {
+        "currency": "RON",
+        "min": 100,
+        "max": 1800,
+        "notes": "Filtru combustibil (100-200 RON) vs pompǎ combustibil completǎ (400-1800 RON funcție de model)"
+    },
+    "driveRecommendation": {
+        "LOW":    "NORMAL",
+        "MEDIUM": "CAUTION",
+        "HIGH":   "WORKSHOP"
+    },
+    "inspectionInterval": {
+        "km": 60000,
+        "notes": "Înlocuire filtru combustibil la 60.000 km sau la simptome de pornire dificilǎ"
+    },
+    "references": []
+}

@@ -1,0 +1,62 @@
+{
+    "id": "TURBO_WEAR",
+    "version": "1.0.0",
+    "title": "Uzură turbosuflantă",
+    "category": "TURBO",
+    "affectedSystems": ["TURBO"],
+    "requiredCapabilities": ["hasTurbo"],
+    "requiredSensors": ["boost"],
+    "severity": {
+        "default": "MEDIUM",
+        "whenIgnored": "HIGH"
+    },
+    "symptoms": [
+        { "id": "low_boost",   "description": "Presiune boost scăzută sau inconsistentă la accelerații", "sensorKey": "boost", "threshold": "< 0.8 bar" },
+        { "id": "blue_smoke",  "description": "Fum albastru la evacuare — ardere ulei prin simerngul turbinei", "observable": true },
+        { "id": "turbo_noise", "description": "Zgomot neobișnuit turbinei: fluier, zdrăngănit axial, sunet metalic", "observable": true },
+        { "id": "power_loss",  "description": "Pierdere vizibilă de putere la depășiri sau urcări", "observable": true }
+    ],
+    "possibleCauses": [
+        { "id": "oil_starvation", "description": "Lubrifiere insuficientă — porniri la rece fără precălzire, nivel ulei scăzut" },
+        { "id": "bearing_wear",   "description": "Uzură rulmenți arbore turbină — joc axial excesiv" },
+        { "id": "seal_failure",   "description": "Simering arbore deteriorat — scurgere ulei în galeria de admisie sau evacuare" },
+        { "id": "foreign_object", "description": "Corp străin aspirat prin filtru aer defect sau incomplet etanșat" },
+        { "id": "coking",         "description": "Depuneri carbonice în carcasa turbo — motor oprit imediat după sarcină mare, ulei degradat" }
+    ],
+    "confidenceModifiers": [
+        { "condition": "boost_avg < 0.8",              "delta": 25, "description": "Boost sub minimul absolut" },
+        { "condition": "boost_vs_baseline > 15pct",    "delta": 25, "description": "Deviație semnificativă față de normalul vehiculului" },
+        { "condition": "boost_trend == DECREASING",    "delta": 20, "description": "Trend descrescător confirmat pe mai multe curse" },
+        { "condition": "maf_boost_correlation < 0.7",  "delta": 15, "description": "Corelație slabă MAF-boost — pierderi de presiune" }
+    ],
+    "investigationSteps": [
+        { "step": 1, "signal": "boost_bar",       "action": "check_avg",      "message": "Verificare presiune boost la regim de cruise (2000+ RPM, sarcină 40%+)" },
+        { "step": 2, "signal": "map_kpa",          "action": "pattern_drop",   "message": "Verificare MAP pentru pierdere vacuum admisie" },
+        { "step": 3, "component": "HOSES",         "action": "visual_inspect", "message": "Inspecție vizuală furtunuri inter-cooler și boost — crăpături, decuplări" },
+        { "step": 4, "component": "N75_SOLENOID",  "action": "test",           "message": "Test solenoid N75 (VAG) — rezistență 22Ω, funcționare sub 12V" },
+        { "step": 5, "component": "WASTEGATE",     "action": "actuator_test",  "message": "Test actuator wastegate — presiune de deschidere vs deplasare tijă" },
+        { "step": 6, "component": "TURBINE",       "action": "axial_play",     "message": "Măsurare joc axial arbore turbinei (maxim acceptat: 0.1 mm)" }
+    ],
+    "recommendedActions": {
+        "LOW":    "Monitorizare boost la următoarele 5 curse; verificare vizuală furtunuri și nivel ulei",
+        "MEDIUM": "Inspecție furtunuri boost, actuator wastegate și test solenoid N75",
+        "HIGH":   "Verificare urgentă turbosuflantă — joc axial, garnituri, ungere; evitare autostradă"
+    },
+    "estimatedRepairDifficulty": "HIGH",
+    "estimatedRepairCostRange": {
+        "currency": "RON",
+        "min": 800,
+        "max": 5500,
+        "notes": "Reparare (revizie rulmenți + garnituri) vs schimbare turbinei; piesă originală vs aftermarket"
+    },
+    "driveRecommendation": {
+        "LOW":    "NORMAL",
+        "MEDIUM": "CAUTION",
+        "HIGH":   "AVOID_HIGHWAY"
+    },
+    "inspectionInterval": {
+        "km": 15000,
+        "notes": "Verificare nivel și calitate ulei, filtru aer, furtunuri boost la fiecare revizie"
+    },
+    "references": []
+}

@@ -1,0 +1,59 @@
+{
+    "id": "INJECTOR_WEAR",
+    "version": "1.0.0",
+    "title": "Uzură injectoare",
+    "category": "COMBUSTIBIL",
+    "affectedSystems": ["FUEL"],
+    "requiredCapabilities": [],
+    "requiredSensors": ["fuelRate", "rpm"],
+    "severity": {
+        "default": "MEDIUM",
+        "whenIgnored": "HIGH"
+    },
+    "symptoms": [
+        { "id": "idle_roughness",   "description": "Ralanti instabil, vibrații, RPM oscilant", "sensorKey": "rpm", "threshold": "oscillation > 150 RPM" },
+        { "id": "high_consumption", "description": "Consum combustibil crescut fără modificări de condus", "sensorKey": "fuelRate" },
+        { "id": "hard_start",       "description": "Pornire dificilă la rece — injectoare care picură nu mențin presiunea", "observable": true },
+        { "id": "misfires",         "description": "Rateu aprindere / mers neregulat la sarcini mici", "observable": true }
+    ],
+    "possibleCauses": [
+        { "id": "nozzle_wear",       "description": "Uzură acul injectorului — pulverizare slabă, picurare" },
+        { "id": "deposit_buildup",   "description": "Depuneri pe vârful injectorului — debit neuniform" },
+        { "id": "needle_sticking",   "description": "Ac injector blocat parțial — injecție permanentă mică (picurare)" },
+        { "id": "high_pressure_leak","description": "Scurgere la garnitura injectorului — presiune rampă scăzută" }
+    ],
+    "confidenceModifiers": [
+        { "condition": "fuel_consumption_high_low_load", "delta": 25, "description": "Consum ridicat la sarcini mici — injectoare picurând" },
+        { "condition": "rpm_oscillation > 150",           "delta": 20, "description": "Instabilitate ralanti" },
+        { "condition": "fuel_trend == INCREASING",        "delta": 20, "description": "Consum în creștere progresivă" }
+    ],
+    "investigationSteps": [
+        { "step": 1, "signal": "rpm",          "action": "check_idle_stability", "message": "Monitorizare stabilitate ralanti — oscilații > 150 RPM indică cilindru cu probleme" },
+        { "step": 2, "signal": "fuelRate",     "action": "check_per_load",       "message": "Consum la sarcini mici (< 30%) — valori mari sugerează picurare injectoare" },
+        { "step": 3, "component": "INJECTORS", "action": "cylinder_balance",     "message": "Test echilibru cilindri cu diagnoză — deconectare individuală sau VCDS" },
+        { "step": 4, "component": "INJECTORS", "action": "flow_test",            "message": "Test debit injectoare pe bancă de injectoare" },
+        { "step": 5, "component": "FUEL_RAIL", "action": "pressure_check",       "message": "Verificare presiune rampă combustibil — scădere rapidă la oprire → picurare" }
+    ],
+    "recommendedActions": {
+        "LOW":    "Aditivare combustibil cu agent de curățare injectoare; monitorizare consum 5 curse",
+        "MEDIUM": "Test echilibru cilindri; considerare curățare profesională injectoare",
+        "HIGH":   "Test debit pe bancă; înlocuire injectoare uzate"
+    },
+    "estimatedRepairDifficulty": "HIGH",
+    "estimatedRepairCostRange": {
+        "currency": "RON",
+        "min": 150,
+        "max": 3500,
+        "notes": "Curățare ultrasonic (150-400 RON) vs înlocuire set injectoare (800-3500 RON funcție de tip)"
+    },
+    "driveRecommendation": {
+        "LOW":    "NORMAL",
+        "MEDIUM": "CAUTION",
+        "HIGH":   "CAUTION"
+    },
+    "inspectionInterval": {
+        "km": 60000,
+        "notes": "Verificare și curățare preventivă injectoare la 60.000 km sau la simptome"
+    },
+    "references": []
+}
