@@ -6,57 +6,66 @@ import CircularGauge from '../components/CircularGauge';
 
 const { width } = Dimensions.get('window');
 
-// LISTA COMPLETĂ DE SENZORI PENTRU OSCILOSCOP
+const ESSENTIAL_KPIS = [
+    { id: 'speed', label: 'Viteză', unit: 'km/h', color: '#3fb950', max: 220, extract: (d) => d.motor?.speed || 0 },
+    { id: 'rpm', label: 'Turație', unit: 'RPM', color: '#ffffff', max: 5000, extract: (d) => d.motor?.rpm || 0 },
+    { id: 'inst_cons', label: 'Consum', unit: 'L/h', color: '#d29922', max: 20, extract: (d) => d.combustibil?.inst_cons || 0 },
+    { id: 'coolant', label: 'Temp. Apă', unit: '°C', color: '#58a6ff', max: 120, extract: (d) => d.temperaturi?.coolant || 0 },
+    { id: 'boost_actual', label: 'Boost', unit: 'bar', color: '#3fb950', max: 2.5, extract: (d) => d.aer?.boost_actual || 0 },
+    { id: 'ecu_volt', label: 'Voltaj', unit: 'V', color: '#7ee787', max: 16, extract: (d) => d.baterie?.ecu_volt || 0 },
+];
+
+const EXPERT_TABS = [
+    { id: 'MOTOR', label: 'Motor' },
+    { id: 'TEMP', label: 'Temperaturi' },
+    { id: 'AER', label: 'Aer & Turbo' },
+    { id: 'COMB', label: 'Combustibil' },
+    { id: 'LAMBDA', label: 'Lambda' },
+    { id: 'EMISII', label: 'Emisii & DPF' },
+    { id: 'TRANS', label: 'Transmisie' },
+    { id: 'ECU', label: 'ECU & Timp' },
+];
+
 const OSCILLOSCOPE_METRICS = [
-    { id: 'rpm', label: 'RPM Motor', color: '#ffffff', unit: 'RPM', defaultMax: 5000 },
+    { id: 'rpm', label: 'RPM', color: '#ffffff', unit: 'RPM', defaultMax: 5000 },
     { id: 'speed', label: 'Viteză', color: '#3fb950', unit: 'km/h', defaultMax: 220 },
-    { id: 'map', label: 'Turbo (MAP)', color: '#58a6ff', unit: 'kPa', defaultMax: 250 },
-    { id: 'maf', label: 'Aer (MAF)', color: '#d29922', unit: 'g/s', defaultMax: 150 },
-    { id: 'inst_cons', label: 'Consum L/h', color: '#f85149', unit: 'L/h', defaultMax: 20 },
-    { id: 'rail_press', label: 'Presiune Rampă', color: '#8b949e', unit: 'kPa', defaultMax: 40000 },
+    { id: 'map', label: 'MAP', color: '#58a6ff', unit: 'kPa', defaultMax: 250 },
+    { id: 'maf', label: 'MAF', color: '#d29922', unit: 'g/s', defaultMax: 150 },
+    { id: 'inst_cons', label: 'Consum', color: '#f85149', unit: 'L/h', defaultMax: 20 },
     { id: 'coolant', label: 'Temp Apă', color: '#da3633', unit: '°C', defaultMax: 110 },
     { id: 'oil', label: 'Temp Ulei', color: '#d29922', unit: '°C', defaultMax: 130 },
-    { id: 'ecu_volt', label: 'Voltaj ECU', color: '#3fb950', unit: 'V', defaultMax: 16 },
-    { id: 'accel_g', label: 'Forță G', color: '#f85149', unit: 'G', defaultMax: 1.5 },
+    { id: 'ecu_volt', label: 'Voltaj', color: '#3fb950', unit: 'V', defaultMax: 16 },
+    { id: 'rail_press', label: 'Rail Press', color: '#8b949e', unit: 'kPa', defaultMax: 40000 },
+    { id: 'accel_g', label: 'G-Force', color: '#f85149', unit: 'G', defaultMax: 1.5 },
 ];
 
 const LiveDashboardScreen = () => {
     const {
-        isConnected, viewMode, setViewMode, 
+        isConnected, viewMode, setViewMode,
         selectedMetric, setSelectedMetric,
         liveData, chartHistory, latestAlert, alertsList, unreadCount, markAlertsAsRead,
-        activeTemplate, setActiveTemplate 
+        activeTemplate, setActiveTemplate
     } = useContext(TelemetryContext);
 
     const [showNotificationsModal, setShowNotificationsModal] = useState(false);
-    const [activeTab, setActiveTab] = useState('REZUMAT'); 
-
-    // CONTROALE DE ZOOM (X și Y) PENTRU OSCILOSCOP
-    const [zoomX, setZoomX] = useState(10); 
-    const [zoomYMult, setZoomYMult] = useState(1); 
+    const [expertMode, setExpertMode] = useState(false);
+    const [activeTab, setActiveTab] = useState('MOTOR');
+    const [zoomX, setZoomX] = useState(10);
     const [autoScaleY, setAutoScaleY] = useState(true);
+    const [zoomYMult, setZoomYMult] = useState(1);
 
-    const handleZoomInX = () => setZoomX(prev => Math.min(prev + 5, 40));
-    const handleZoomOutX = () => setZoomX(prev => Math.max(prev - 5, 2));
-    const handleZoomInY = () => { setAutoScaleY(false); setZoomYMult(prev => Math.max(prev - 0.2, 0.2)); };
-    const handleZoomOutY = () => { setAutoScaleY(false); setZoomYMult(prev => Math.min(prev + 0.2, 3)); };
-
-    const handleOpenNotifications = () => { markAlertsAsRead(); setShowNotificationsModal(true); };
-
-    // Extragere completă din obiectul complex JSON
     const m = liveData.motor || {}; const t = liveData.temperaturi || {}; const a = liveData.aer || {};
     const c = liveData.combustibil || {}; const lam = liveData.lambda || {}; const ign = liveData.aprindere || {};
     const em = liveData.emisii || {}; const bat = liveData.baterie || {}; const dpf = liveData.dpf || {};
     const vvt = liveData.vvt || {}; const tr = liveData.transmisie || {}; const pr = liveData.presiuni || {};
-    const tim = liveData.timp || {}; const meta = liveData.consum_meta || {}; const ext = liveData.senzori_extra || {};
-    const dtc = liveData.dtc || {}; const ecu = liveData.ecu || {};
+    const tim = liveData.timp || {}; const meta = liveData.consum_meta || {}; const ecu = liveData.ecu || {};
 
-    const renderCard = (label, val, unit, color = "#ffffff", sub = null, isLarge = false) => {
+    const renderCard = (label, val, unit, color = "#ffffff", isLarge = false) => {
         if (activeTemplate === 'CLASSIC') {
             let min = 0; let max = 100;
             if (unit === 'RPM') max = 5000;
             else if (unit === 'km/h') max = 220;
-            else if (unit === '°C') max = (label.includes('CAT') || label.includes('EXHAUST')) ? 800 : 130;
+            else if (unit === '°C') max = (label.includes('CAT') || label.includes('EGT')) ? 800 : 130;
             else if (unit === 'kPa') max = label.includes('RAIL') ? 40000 : 300;
             else if (unit === 'bar') max = 2.5;
             else if (unit === 'V') max = 16;
@@ -65,193 +74,149 @@ const LiveDashboardScreen = () => {
             else if (unit === 'Nm') max = 400;
             else if (unit === 'mg' || unit === 'mg/crs') max = 60;
             else if (unit === '°') { min = -10; max = 30; }
-            else if (unit === 'λ') max = 2;
-            else if (unit === 'km') max = 500000;
-            else if (unit === 'sec' || unit === 'ore') max = 10000;
-            
             const gaugeColor = color === "#ffffff" ? "#58a6ff" : color;
             return <CircularGauge key={label} label={label} value={val !== undefined ? val : 0} unit={unit} color={gaugeColor} min={min} max={max} size={width * 0.42} />;
         }
         return (
             <View key={label} style={[styles.card, isLarge && styles.cardLarge, { borderColor: color === "#ffffff" ? "#30363d" : color }]}>
                 <Text style={styles.cardLabel}>{label}</Text>
-                <Text style={[styles.val, isLarge && styles.valLarge, { color: color }]}>{val !== undefined ? val : 0} <Text style={styles.unit}>{unit}</Text></Text>
-                {sub && <Text style={styles.cardSub}>{sub}</Text>}
+                <Text style={[styles.val, isLarge && styles.valLarge, { color }]}>{val !== undefined ? val : 0} <Text style={styles.unit}>{unit}</Text></Text>
             </View>
         );
     };
 
     // =========================================================================
-    // MODUL COCKPIT (CU TOATE CELE 9 CATEGORII ȘI 90+ PARAMETRI)
+    // DEFAULT VIEW — 6 KPI-uri esențiale
     // =========================================================================
-    const renderCockpitView = () => (
-        <View style={{ flex: 1 }}>
-            <View style={styles.filterSection}>
-                <Text style={styles.filterTitle}>⚙️ SELECTEAZĂ GRUPUL DE PARAMETRI SAE J1979 & UDS:</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-                    {[
-                        { id: 'REZUMAT', label: '🌐 REZUMAT ECU (KPI)' },
-                        { id: 'MOTOR', label: '🏎️ MOTOR & CUPLU (19 PID)' },
-                        { id: 'TEMP', label: '🌡️ TEMPERATURI (8 PID)' },
-                        { id: 'AER', label: '🌀 AER & TURBO (8 PID)' },
-                        { id: 'COMB', label: '⛽ COMBUSTIBIL & INJECȚIE (14 PID)' },
-                        { id: 'LAMBDA', label: '⚡ LAMBDA & APRINDERE (12 PID)' },
-                        { id: 'EMISII', label: '🛡️ EMISII & DPF (15 PID)' },
-                        { id: 'TRANS', label: '⚙️ TRANSMISIE, VVT & PRESIUNI (10 PID)' },
-                        { id: 'ECU', label: '⏱️ TIMP, ORE & HARDWARE ECU (12 PID)' }
-                    ].map((tab) => (
-                        <TouchableOpacity key={tab.id} style={[styles.chip, activeTab === tab.id && styles.chipActive]} onPress={() => setActiveTab(tab.id)}>
-                            <Text style={[styles.chipText, activeTab === tab.id && { color: '#fff' }]}>{tab.label}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
+    const renderEssentialView = () => (
+        <View style={styles.essentialGrid}>
+            {ESSENTIAL_KPIS.map(kpi => (
+                <CircularGauge
+                    key={kpi.id}
+                    label={kpi.label}
+                    value={kpi.extract(liveData)}
+                    unit={kpi.unit}
+                    color={kpi.color}
+                    min={0}
+                    max={kpi.max}
+                    size={width * 0.42}
+                />
+            ))}
+            <View style={styles.ecoCard}>
+                <Text style={styles.ecoLabel}>Eco Score</Text>
+                <Text style={[styles.ecoValue, { color: (liveData.scor_eco || 100) >= 80 ? '#3fb950' : '#d29922' }]}>
+                    {liveData.scor_eco || 100}
+                </Text>
+                <Text style={styles.ecoUnit}>/ 100</Text>
             </View>
+            <View style={styles.ecoCard}>
+                <Text style={styles.ecoLabel}>Treaptă</Text>
+                <Text style={[styles.ecoValue, { color: '#58a6ff' }]}>{tr.gear || 'N'}</Text>
+                <Text style={styles.ecoUnit}>gear</Text>
+            </View>
+        </View>
+    );
+
+    // =========================================================================
+    // EXPERT MODE — toate categoriile
+    // =========================================================================
+    const renderExpertView = () => (
+        <View style={{ flex: 1 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                {EXPERT_TABS.map(tab => (
+                    <TouchableOpacity
+                        key={tab.id}
+                        style={[styles.chip, activeTab === tab.id && styles.chipActive]}
+                        onPress={() => setActiveTab(tab.id)}
+                    >
+                        <Text style={[styles.chipText, activeTab === tab.id && { color: '#fff' }]}>{tab.label}</Text>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
 
             <View style={styles.grid}>
-                {activeTab === 'REZUMAT' && [
-                    renderCard("VITEZĂ VEHICUL (0x0D)", m.speed || 0, "km/h", "#3fb950", `Treaptă curentă: Tr. ${tr.gear || 1}`, true),
-                    renderCard("TURAȚIE MOTOR (0x0C)", m.rpm || 0, "RPM", "#fff", "Plajă optimă Diesel"),
-                    renderCard("SARCINĂ MOTOR (0x04)", m.load || 0, "%", "#fff", "Efort de tracțiune"),
-                    renderCard("PRESIUNE TURBO (MAP)", a.map || 101, "kPa", "#58a6ff", `Boost efectiv: ${a.boost_actual || 0} bar`),
-                    renderCard("DEBIT AER ADMISIE (MAF)", a.maf || 0, "g/s", "#d29922", "SAE J1979 PID 0x10"),
-                    renderCard("CONSUM COMBUSTIBIL", c.inst_cons || 0, (m.speed || 0) > 3 ? "L/100km" : "L/h", "#d29922", "Calcul stoechiometric"),
-                    renderCard("TEMP. LICHID RĂCIRE", t.coolant || 35, "°C", (t.coolant || 35) > 95 ? "#da3633" : "#fff", "PID 0x05"),
-                    renderCard("SCOR ECO-DRIVING", liveData.scor_eco || 100, "pct", "#3fb950", "Algoritm G-Force"),
-                    renderCard("VOLTAJ ECU & ALTERNATOR", bat.ecu_volt || 14.1, "V", "#3fb950", "Terminal 30 / 15", true)
-                ]}
-
                 {activeTab === 'MOTOR' && [
-                    renderCard("TURAȚIE MOTOR (RPM)", m.rpm || 0, "RPM", "#fff", "0x0C"),
-                    renderCard("VITEZĂ VEHICUL", m.speed || 0, "km/h", "#3fb950", "0x0D"),
-                    renderCard("SARCINĂ MOTOR (LOAD)", m.load || 0, "%", "#fff", "0x04"),
-                    renderCard("SARCINĂ CALCULATĂ", m.calc_load || 0, "%", "#8b949e"),
-                    renderCard("SARCINĂ ABSOLUTĂ", m.abs_load || 0, "%", "#8b949e", "0x43"),
-                    renderCard("POZIȚIE CLAPETĂ (THR)", m.throttle_pos || 0, "%", "#58a6ff", "0x11"),
-                    renderCard("THR POS ABSOLUTE B", m.abs_throttle_b || 0, "%", "#8b949e"),
-                    renderCard("THR POS ABSOLUTE C", m.abs_throttle_c || 0, "%", "#8b949e"),
-                    renderCard("PEDAL POSITION D", m.pedal_d || 0, "%", "#d29922"),
-                    renderCard("PEDAL POSITION E", m.pedal_e || 0, "%", "#8b949e"),
-                    renderCard("PEDAL POSITION F", m.pedal_f || 0, "%", "#8b949e"),
-                    renderCard("RELATIVE THROTTLE POS", m.rel_throttle || 0, "%", "#8b949e"),
-                    renderCard("COMMANDED THROTTLE ACT", m.commanded_throttle || 0, "%", "#58a6ff"),
-                    renderCard("IDLE CONTROL POSITION", m.idle_pos || 0, "%", "#8b949e"),
-                    renderCard("ENGINE TORQUE", m.torque_engine || 0, "Nm", "#3fb950"),
-                    renderCard("DRIVER DEMAND TORQUE", m.torque_driver || 0, "Nm", "#d29922"),
-                    renderCard("ACTUAL ENGINE TORQUE", m.torque_actual || 0, "Nm", "#3fb950", "VAG OEM"),
-                    renderCard("ENGINE FRICTION TORQUE", m.torque_friction || 0, "Nm", "#f85149")
+                    renderCard("RPM", m.rpm || 0, "RPM"),
+                    renderCard("Viteză", m.speed || 0, "km/h", "#3fb950"),
+                    renderCard("Sarcină", m.load || 0, "%"),
+                    renderCard("Clapetă", m.throttle_pos || 0, "%", "#58a6ff"),
+                    renderCard("Pedală D", m.pedal_d || 0, "%", "#d29922"),
+                    renderCard("Cuplu Motor", m.torque_engine || 0, "Nm", "#3fb950"),
+                    renderCard("Cuplu Cerut", m.torque_driver || 0, "Nm", "#d29922"),
+                    renderCard("Cuplu Fricțiune", m.torque_friction || 0, "Nm", "#f85149"),
                 ]}
-
                 {activeTab === 'TEMP' && [
-                    renderCard("COOLANT TEMP (G62)", t.coolant || 35, "°C", "#fff", "0x05"),
-                    renderCard("INTAKE AIR TEMP (IAT)", t.iat || 25, "°C", "#58a6ff", "0x0F"),
-                    renderCard("AMBIENT AIR TEMP", t.ambient || 18, "°C", "#8b949e", "0x46"),
-                    renderCard("ENGINE OIL TEMP", t.oil || 20, "°C", "#d29922", "0x5C / VAG"),
-                    renderCard("CATALYST TEMP B1S1", t.cat_b1s1 || 150, "°C", "#f85149", "0x3C"),
-                    renderCard("CATALYST TEMP B1S2", t.cat_b1s2 || 140, "°C", "#f85149", "0x3E"),
-                    renderCard("CATALYST TEMP B2S1", t.cat_b2s1 || 145, "°C", "#8b949e"),
-                    renderCard("CATALYST TEMP B2S2", t.cat_b2s2 || 135, "°C", "#8b949e")
+                    renderCard("Lichid Răcire", t.coolant || 0, "°C", (t.coolant || 0) > 95 ? "#f85149" : "#58a6ff"),
+                    renderCard("Aer Admisie (IAT)", t.iat || 0, "°C", "#58a6ff"),
+                    renderCard("Ambient", t.ambient || 0, "°C", "#8b949e"),
+                    renderCard("Ulei Motor", t.oil || 0, "°C", "#d29922"),
+                    renderCard("Catalizator B1S1", t.cat_b1s1 || 0, "°C", "#f85149"),
+                    renderCard("Catalizator B1S2", t.cat_b1s2 || 0, "°C", "#f85149"),
                 ]}
-
                 {activeTab === 'AER' && [
-                    renderCard("MAF AIR FLOW", a.maf || 0, "g/s", "#d29922", "0x10"),
-                    renderCard("MAP PRESSURE", a.map || 101, "kPa", "#58a6ff", "0x0B"),
-                    renderCard("BAROMETRIC PRESSURE", a.baro || 101, "kPa", "#8b949e", "0x33"),
-                    renderCard("INTAKE MANIFOLD PRESS", a.intake_press || 101, "kPa", "#8b949e"),
-                    renderCard("INTAKE VACUUM", a.vacuum || 15, "kPa", "#58a6ff"),
-                    renderCard("TURBO BOOST PRESSURE", a.boost_turbo || 0, "bar", "#3fb950"),
-                    renderCard("COMMANDED BOOST", a.boost_cmd || 0, "bar", "#d29922", "VAG Target"),
-                    renderCard("ACTUAL BOOST DELIVERED", a.boost_actual || 0, "bar", "#3fb950", "VAG Actual", true)
+                    renderCard("MAF (Debit Aer)", a.maf || 0, "g/s", "#d29922"),
+                    renderCard("MAP (Presiune)", a.map || 101, "kPa", "#58a6ff"),
+                    renderCard("Barometric", a.baro || 101, "kPa", "#8b949e"),
+                    renderCard("Boost Turbo", a.boost_turbo || 0, "bar", "#3fb950"),
+                    renderCard("Boost Comandat", a.boost_cmd || 0, "bar", "#d29922"),
+                    renderCard("Boost Efectiv", a.boost_actual || 0, "bar", "#3fb950", true),
                 ]}
-
                 {activeTab === 'COMB' && [
-                    renderCard("FUEL LEVEL", c.level || 75, "%", "#3fb950", "0x2F"),
-                    renderCard("FUEL PRESSURE", c.press || 350, "kPa", "#8b949e", "0x0A"),
-                    renderCard("FUEL RAIL PRESSURE", c.rail_press || 35000, "kPa", "#d29922", "0x23 / Diesel"),
-                    renderCard("FUEL RAIL GAUGE PRESS", c.rail_gauge || 34900, "kPa", "#8b949e"),
-                    renderCard("COMMANDED FUEL PRESS", c.cmd_press || 35000, "kPa", "#58a6ff"),
-                    renderCard("FUEL INJECTION TIMING", c.inj_timing || 2.5, "°", "#f85149", "0x5D Avans"),
-                    renderCard("INJECTION QUANTITY", c.inj_qty || 6.5, "mg/crs", "#3fb950", "VP37 Bosch"),
-                    renderCard("ENGINE FUEL RATE", c.fuel_rate || 0.8, "L/h", "#d29922", "0x5E"),
-                    renderCard("INSTANT CONSUMPTION", c.inst_cons || 0.8, "L/h", "#fff"),
-                    renderCard("AVERAGE CONSUMPTION", c.avg_cons || 6.8, "L/100km", "#3fb950"),
-                    renderCard("FUEL TRIM SFT B1", c.sft_b1 || 0, "%", "#8b949e", "0x06"),
-                    renderCard("FUEL TRIM LFT B1", c.lft_b1 || 1.2, "%", "#8b949e", "0x07"),
-                    renderCard("FUEL TRIM SFT B2", c.sft_b2 || 0, "%", "#8b949e", "0x08"),
-                    renderCard("FUEL TRIM LFT B2", c.lft_b2 || 1.1, "%", "#8b949e", "0x09")
+                    renderCard("Nivel Combustibil", c.level || 0, "%", "#3fb950"),
+                    renderCard("Presiune Rail", c.rail_press || 0, "kPa", "#d29922"),
+                    renderCard("Timing Injecție", c.inj_timing || 0, "°", "#f85149"),
+                    renderCard("Cantitate Inj.", c.inj_qty || 0, "mg/crs", "#3fb950"),
+                    renderCard("Consum Instant", c.inst_cons || 0, "L/h"),
+                    renderCard("Consum Mediu", c.avg_cons || 0, "L/100km", "#3fb950"),
+                    renderCard("Fuel Trim SFT", c.sft_b1 || 0, "%", "#8b949e"),
+                    renderCard("Fuel Trim LFT", c.lft_b1 || 0, "%", "#8b949e"),
                 ]}
-
                 {activeTab === 'LAMBDA' && [
-                    renderCard("O2 SENSOR B1S1", lam.o2_b1s1 || 0.85, "V", "#58a6ff", "0x14"),
-                    renderCard("O2 SENSOR B1S2", lam.o2_b1s2 || 0.75, "V", "#8b949e", "0x15"),
-                    renderCard("O2 SENSOR B2S1", lam.o2_b2s1 || 0.84, "V", "#8b949e"),
-                    renderCard("O2 SENSOR B2S2", lam.o2_b2s2 || 0.74, "V", "#8b949e"),
-                    renderCard("WIDEBAND LAMBDA B1S1", lam.wb_b1s1 || 1.01, "λ", "#3fb950", "0x24"),
-                    renderCard("WIDEBAND LAMBDA B1S2", lam.wb_b1s2 || 1.00, "λ", "#8b949e"),
-                    renderCard("WIDEBAND LAMBDA B2S1", lam.wb_b2s1 || 1.01, "λ", "#8b949e"),
-                    renderCard("WIDEBAND LAMBDA B2S2", lam.wb_b2s2 || 1.00, "λ", "#8b949e"),
-                    renderCard("COMMANDED LAMBDA", lam.cmd_lambda || 1.00, "λ", "#fff"),
-                    renderCard("TIMING ADVANCE", ign.timing_adv || 6.5, "°", "#d29922", "0x0E"),
-                    renderCard("IGNITION TIMING", ign.ign_timing || 6.0, "°", "#8b949e"),
-                    renderCard("KNOCK RETARD", ign.knock_retard || 0.0, "°", "#3fb950", "Detonație zero")
+                    renderCard("O2 B1S1", lam.o2_b1s1 || 0, "V", "#58a6ff"),
+                    renderCard("O2 B1S2", lam.o2_b1s2 || 0, "V", "#8b949e"),
+                    renderCard("Wideband B1S1", lam.wb_b1s1 || 0, "λ", "#3fb950"),
+                    renderCard("Lambda Comandat", lam.cmd_lambda || 0, "λ"),
+                    renderCard("Avans Aprindere", ign.timing_adv || 0, "°", "#d29922"),
+                    renderCard("Knock Retard", ign.knock_retard || 0, "°", "#3fb950"),
                 ]}
-
                 {activeTab === 'EMISII' && [
-                    renderCard("EGR COMMANDED", em.egr_cmd || 15, "%", "#58a6ff", "0x2C"),
-                    renderCard("EGR ERROR", em.egr_error || 0.5, "%", "#3fb950", "0x2D"),
-                    renderCard("EVAP VAPOR PRESS", em.evap_press || -1.2, "Pa", "#8b949e", "0x32"),
-                    renderCard("EVAP PURGE", em.evap_purge || 12.0, "%", "#8b949e"),
-                    renderCard("SECONDARY AIR STATUS", em.sec_air || "OFF", "-", "#8b949e", "0x12"),
-                    renderCard("CATALYST MONITOR", em.cat_mon || "PASSED", "-", "#3fb950"),
-                    renderCard("MISFIRE MONITOR", em.misfire_mon || "PASSED", "-", "#3fb950"),
-                    renderCard("OBD READINESS", em.readiness || "READY", "-", "#3fb950", "Mod $01"),
-                    renderCard("DPF DIFF PRESSURE", dpf.diff_press || 4.2, "kPa", "#d29922", "Senzor presiune filtru"),
-                    renderCard("DPF SOOT LOAD", dpf.soot_load || 12.4, "g", "#f85149", "Încărcare funingine"),
-                    renderCard("DPF REGENERATION", dpf.regen_status || "OFF", "-", "#3fb950", "Status activare"),
-                    renderCard("EXHAUST GAS TEMP 1", dpf.egt1 || 150, "°C", "#f85149", "EGT Sensor 1"),
-                    renderCard("EXHAUST GAS TEMP 2", dpf.egt2 || 135, "°C", "#8b949e", "EGT Sensor 2"),
-                    renderCard("EXHAUST GAS TEMP 3", dpf.egt3 || 120, "°C", "#8b949e"),
-                    renderCard("EXHAUST GAS TEMP 4", dpf.egt4 || 105, "°C", "#8b949e")
+                    renderCard("EGR Comandat", em.egr_cmd || 0, "%", "#58a6ff"),
+                    renderCard("EGR Eroare", em.egr_error || 0, "%", "#3fb950"),
+                    renderCard("DPF Presiune Dif.", dpf.diff_press || 0, "kPa", "#d29922"),
+                    renderCard("DPF Funingine", dpf.soot_load || 0, "g", "#f85149"),
+                    renderCard("DPF Regenerare", dpf.regen_status || "OFF", "-", "#3fb950"),
+                    renderCard("EGT Sensor 1", dpf.egt1 || 0, "°C", "#f85149"),
+                    renderCard("EGT Sensor 2", dpf.egt2 || 0, "°C", "#8b949e"),
                 ]}
-
                 {activeTab === 'TRANS' && [
-                    renderCard("TRANSMISSION TEMP", tr.trans_temp || 45, "°C", "#d29922", "ATF Temp VAG"),
-                    renderCard("CURRENT GEAR", tr.gear || 1, "Tr.", "#3fb950", "TCU / Algoritmic"),
-                    renderCard("TORQUE CONV SLIP", tr.slip || 15, "RPM", "#8b949e", "Alunecare convertizor"),
-                    renderCard("INTAKE CAMSHAFT POS", vvt.cam_intake || 12.0, "°", "#58a6ff", "VVT Bank 1"),
-                    renderCard("EXHAUST CAMSHAFT POS", vvt.cam_exhaust || -8.0, "°", "#8b949e", "VVT Bank 2"),
-                    renderCard("COMMANDED VVT", vvt.cmd_vvt || 12.0, "°", "#fff"),
-                    renderCard("ABSOLUTE FUEL PRESS", pr.abs_fuel || 450, "kPa", "#8b949e"),
-                    renderCard("ENGINE OIL PRESSURE", pr.oil_press || 2.5, "bar", "#3fb950", "Senzor presiune ulei"),
-                    renderCard("EXHAUST PRESSURE", pr.exhaust_press || 115, "kPa", "#8b949e"),
-                    renderCard("INTAKE PRESS (ALT)", pr.intake_press_alt || 101, "kPa", "#8b949e")
+                    renderCard("Temp. Transmisie", tr.trans_temp || 0, "°C", "#d29922"),
+                    renderCard("Treaptă Curentă", tr.gear || 0, "Tr.", "#3fb950"),
+                    renderCard("Alunecare Conv.", tr.slip || 0, "RPM", "#8b949e"),
+                    renderCard("Camshaft Intake", vvt.cam_intake || 0, "°", "#58a6ff"),
+                    renderCard("Presiune Ulei", pr.oil_press || 0, "bar", "#3fb950"),
+                    renderCard("Presiune Evacuare", pr.exhaust_press || 0, "kPa", "#8b949e"),
                 ]}
-
                 {activeTab === 'ECU' && [
-                    renderCard("CONTROL MODULE VOLT", bat.ecu_volt || 14.1, "V", "#3fb950", "0x42 / Terminal 30"),
-                    renderCard("BATTERY VOLTAGE", bat.bat_volt || 12.6, "V", "#fff", "Tensiune pură"),
-                    renderCard("ENGINE RUN TIME", tim.run_time || 0, "sec", "#58a6ff", "0x1F"),
-                    renderCard("TIME SINCE START", tim.time_start || 0, "sec", "#8b949e"),
-                    renderCard("TIME SINCE DTC CLEAR", tim.time_dtc_cleared || 142000, "sec", "#8b949e"),
-                    renderCard("WARM-UPS SINCE CLEAR", tim.warmups || 42, "cicluri", "#3fb950", "0x30"),
-                    renderCard("DIST SINCE MIL ON", meta.dist_mil || 0, "km", "#3fb950", "0x21"),
-                    renderCard("DIST SINCE DTC CLEAR", meta.dist_dtc || 1420, "km", "#58a6ff", "0x31"),
-                    renderCard("TOTAL FUEL USED", meta.fuel_used || 1.2, "L", "#d29922", "Acumulat sesiune"),
-                    renderCard("TOTAL ENGINE HOURS", meta.engine_hours || 4120.5, "ore", "#fff", "Contor ore motor"),
-                    renderCard("TOTAL IDLE HOURS", meta.idle_hours || 412.0, "ore", "#8b949e", "Gestație la relanti"),
-                    renderCard("VIN (SERIE ȘASIU)", ecu.vin || "WAUZZZ4A1RN000000", "-", "#58a6ff", `Cal ID: ${ecu.cal_id || 'EDC15'}`, true),
-                    renderCard("METADATE SOFTWARE ECU", ecu.name || "BOSCH EDC15M+", "-", "#fff", `Soft: ${ecu.soft_ver || 'v1.0'} | Proto: ${ecu.protocol || 'K-Line'}`, true)
+                    renderCard("Voltaj ECU", bat.ecu_volt || 0, "V", "#3fb950"),
+                    renderCard("Voltaj Baterie", bat.bat_volt || 0, "V"),
+                    renderCard("Timp Funcționare", tim.run_time || 0, "sec", "#58a6ff"),
+                    renderCard("Warmups", tim.warmups || 0, "cicluri", "#3fb950"),
+                    renderCard("Dist. de la DTC Clear", meta.dist_dtc || 0, "km", "#58a6ff"),
+                    renderCard("Ore Motor", meta.engine_hours || 0, "ore"),
+                    renderCard("VIN", ecu.vin || "WAUZZZ4A1RN000000", "-", "#58a6ff", true),
                 ]}
             </View>
         </View>
     );
 
     // =========================================================================
-    // OSCILOSCOP AVANSAT CU REGLAJ X/Y ȘI ISTORIC
+    // OSCILOSCOP — limitat la ultimele 60 puncte (1 minut vizibil)
     // =========================================================================
-    const getChartConfiguration = () => {
+    const renderChartView = () => {
         const config = OSCILLOSCOPE_METRICS.find(m => m.id === selectedMetric) || OSCILLOSCOPE_METRICS[0];
-        
-        const visibleData = chartHistory.map(item => ({
+        const maxPoints = Math.floor((width - 80) / zoomX);
+        const slicedHistory = chartHistory.slice(-maxPoints);
+        const visibleData = slicedHistory.map(item => ({
             value: Number(item[config.id]) || 0,
             label: item.label || '',
             secunda: item.secunda || 0
@@ -259,27 +224,19 @@ const LiveDashboardScreen = () => {
 
         let maxValue = config.defaultMax * zoomYMult;
         let stepValue = Math.round(maxValue / 4);
-
         if (autoScaleY && visibleData.length > 0) {
-            const maxInSlice = Math.max(...visibleData.map(item => item.value), 5);
+            const maxInSlice = Math.max(...visibleData.map(i => i.value), 5);
             maxValue = Math.ceil(maxInSlice * 1.15);
             stepValue = Math.ceil(maxValue / 4);
         }
 
-        return { ...config, visibleData, spacing: zoomX, maxValue, stepValue };
-    };
-
-    const renderChartView = () => {
-        const config = getChartConfiguration();
-
         return (
             <View style={styles.chartContainer}>
-                <Text style={styles.filterTitle}>1. SELECTEAZĂ SENZORUL DE INPSECȚIE:</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8, marginBottom: 15, paddingBottom: 5}}>
-                    {OSCILLOSCOPE_METRICS.map((metric) => (
-                        <TouchableOpacity 
-                            key={metric.id} 
-                            style={[styles.chip, selectedMetric === metric.id && { backgroundColor: metric.color, borderColor: metric.color }]} 
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                    {OSCILLOSCOPE_METRICS.map(metric => (
+                        <TouchableOpacity
+                            key={metric.id}
+                            style={[styles.chip, selectedMetric === metric.id && { backgroundColor: metric.color, borderColor: metric.color }]}
                             onPress={() => setSelectedMetric(metric.id)}
                         >
                             <Text style={[styles.chipText, selectedMetric === metric.id && { color: '#000' }]}>{metric.label}</Text>
@@ -287,126 +244,145 @@ const LiveDashboardScreen = () => {
                     ))}
                 </ScrollView>
 
-                <Text style={styles.filterTitle}>2. CONTROALE OSCILOSCOP (ZOOM X/Y):</Text>
-                <View style={styles.zoomPanelRow}>
-                    <View style={styles.zoomControlGroup}>
-                        <Text style={styles.zoomLabel}>ZOOM X (TIMP)</Text>
-                        <View style={styles.zoomButtons}>
-                            <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomOutX}><Text style={styles.zoomBtnText}>-</Text></TouchableOpacity>
-                            <Text style={styles.zoomValue}>{zoomX}px</Text>
-                            <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomInX}><Text style={styles.zoomBtnText}>+</Text></TouchableOpacity>
-                        </View>
-                    </View>
-
-                    <View style={styles.zoomControlGroup}>
-                        <Text style={styles.zoomLabel}>ZOOM Y (AMPLITUDINE)</Text>
-                        <View style={styles.zoomButtons}>
-                            <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomOutY}><Text style={styles.zoomBtnText}>-</Text></TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.zoomAutoBtn, autoScaleY && {backgroundColor: '#3fb950', borderColor: '#3fb950'}]} 
-                                onPress={() => setAutoScaleY(true)}
-                            >
-                                <Text style={{fontSize: 9, color: autoScaleY ? '#000' : '#8b949e', fontWeight: 'bold'}}>AUTO</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.zoomBtn} onPress={handleZoomInY}><Text style={styles.zoomBtnText}>+</Text></TouchableOpacity>
-                        </View>
-                    </View>
+                <View style={styles.zoomRow}>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomX(prev => Math.max(prev - 3, 2))}>
+                        <Text style={styles.zoomBtnText}>X-</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.zoomLabel}>{zoomX}px</Text>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomX(prev => Math.min(prev + 3, 40))}>
+                        <Text style={styles.zoomBtnText}>X+</Text>
+                    </TouchableOpacity>
+                    <View style={{ width: 20 }} />
+                    <TouchableOpacity style={[styles.zoomBtn, autoScaleY && { backgroundColor: '#238636', borderColor: '#238636' }]} onPress={() => setAutoScaleY(true)}>
+                        <Text style={[styles.zoomBtnText, autoScaleY && { color: '#fff' }]}>Auto</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={() => { setAutoScaleY(false); setZoomYMult(p => Math.min(p + 0.2, 3)); }}>
+                        <Text style={styles.zoomBtnText}>Y-</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={() => { setAutoScaleY(false); setZoomYMult(p => Math.max(p - 0.2, 0.2)); }}>
+                        <Text style={styles.zoomBtnText}>Y+</Text>
+                    </TouchableOpacity>
                 </View>
 
                 <View style={styles.chartWrapper}>
-                    <Text style={styles.chartTitle}>{config.label} ({config.unit})</Text>
+                    <Text style={styles.chartTitle}>{config.label} ({config.unit}) — ultim. {visibleData.length}s</Text>
                     <LineChart
-                        data={config.visibleData} width={width - 80} height={200} color={config.color} thickness={2.5}
-                        dataPointsColor={config.color} dataPointsRadius={1} maxValue={config.maxValue} stepValue={config.stepValue}
-                        noOfSections={4} spacing={config.spacing} yAxisTextStyle={{ color: '#8b949e', fontSize: 10 }} xAxisLabelTextStyle={{ color: '#8b949e', fontSize: 9 }}
-                        rulesColor="#21262d" rulesType="solid" initialSpacing={10} endSpacing={10} isAnimated={false} 
-                        scrollable={true} showScrollIndicator={true}
+                        data={visibleData} width={width - 80} height={200} color={config.color} thickness={2.5}
+                        dataPointsColor={config.color} dataPointsRadius={1} maxValue={maxValue} stepValue={stepValue}
+                        noOfSections={4} spacing={zoomX} yAxisTextStyle={{ color: '#8b949e', fontSize: 10 }}
+                        xAxisLabelTextStyle={{ color: '#8b949e', fontSize: 9 }} rulesColor="#21262d" rulesType="solid"
+                        initialSpacing={10} endSpacing={10} isAnimated={false}
                         pointerConfig={{
-                            pointerStripHeight: 200, pointerStripColor: 'rgba(139, 148, 158, 0.4)', pointerStripWidth: 2, pointerColor: config.color, radius: 4,
-                            pointerLabelWidth: 100, pointerLabelHeight: 40, activatePointersOnLongPress: false, autoAdjustPointerLabelPosition: true,
+                            pointerStripHeight: 200, pointerStripColor: 'rgba(139, 148, 158, 0.4)', pointerStripWidth: 2,
+                            pointerColor: config.color, radius: 4, pointerLabelWidth: 100, pointerLabelHeight: 40,
+                            activatePointersOnLongPress: false, autoAdjustPointerLabelPosition: true,
                             pointerLabelComponent: items => {
                                 if (!items || !items[0]) return null;
                                 return (
                                     <View style={styles.crosshairBadge}>
-                                        <Text style={styles.crosshairValue}>{items[0].value} <Text style={{fontSize: 9, color: config.color}}>{config.unit}</Text></Text>
-                                        <Text style={styles.crosshairTime}>Timp: {items[0].secunda || '0'}s</Text>
+                                        <Text style={styles.crosshairValue}>{items[0].value} <Text style={{ fontSize: 9, color: config.color }}>{config.unit}</Text></Text>
+                                        <Text style={styles.crosshairTime}>{items[0].secunda || '0'}s</Text>
                                     </View>
                                 );
                             },
                         }}
                     />
                 </View>
-                <Text style={styles.chartHint}>💡 Glisează stânga-dreapta pe grafic pentru a explora întregul istoric al călătoriei.</Text>
             </View>
         );
     };
 
     return (
         <View style={styles.mainContainer}>
+            {/* Alert toast */}
             {latestAlert && (
                 <View style={styles.floatingToast}>
-                    <Text style={styles.toastIcon}>⚠️</Text>
-                    <View style={{flex: 1}}>
-                        <Text style={styles.toastTitle}>FRÂNARE BRUSCĂ ({latestAlert.g}G)</Text>
-                        <Text style={styles.toastDesc}>Scor Eco: {latestAlert.scor_curent}/100 pct</Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.toastTitle}>Frânare bruscă ({latestAlert.g}G)</Text>
+                        <Text style={styles.toastDesc}>Eco Score: {latestAlert.scor_curent}/100</Text>
                     </View>
                 </View>
             )}
 
+            {/* Header */}
             <View style={styles.header}>
-                <View style={styles.headerTitleContainer}>
-                    <Text style={styles.title} numberOfLines={1}>A6 2.5 TDI</Text>
-                    <Text style={styles.subtitle} numberOfLines={1}>Terminal Diagnoză & Osciloscop</Text>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.title}>Live</Text>
+                    <Text style={styles.subtitle}>Audi A6 C4 · 2.5 TDI</Text>
                 </View>
 
                 <View style={styles.headerActions}>
-                    <TouchableOpacity style={styles.bellBtn} onPress={() => setActiveTemplate(activeTemplate === 'DIGITAL' ? 'CLASSIC' : 'DIGITAL')}>
-                        <Text style={{fontSize: 16}}>{activeTemplate === 'DIGITAL' ? '⏱️' : '🔢'}</Text>
+                    <TouchableOpacity style={styles.iconBtn} onPress={() => setActiveTemplate(activeTemplate === 'DIGITAL' ? 'CLASSIC' : 'DIGITAL')}>
+                        <Text style={styles.iconBtnText}>{activeTemplate === 'DIGITAL' ? 'G' : 'D'}</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.bellBtn} onPress={handleOpenNotifications}>
-                        <Text style={{fontSize: 16}}>🔔</Text>
+                    <TouchableOpacity style={styles.iconBtn} onPress={() => { markAlertsAsRead(); setShowNotificationsModal(true); }}>
+                        <Text style={styles.iconBtnText}>N</Text>
                         {unreadCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{unreadCount}</Text></View>}
                     </TouchableOpacity>
 
-                    <View style={[styles.statusBadge, isConnected ? styles.statusOnline : styles.statusOffline]}>
-                        <Text style={[styles.statusText, isConnected ? {color: '#3fb950'} : {color: '#f85149'}]}>
-                            {isConnected ? '● ONLINE' : '○ OFFLINE'}
+                    <View style={[styles.statusDot, isConnected ? styles.statusOnline : styles.statusOffline]}>
+                        <Text style={[styles.statusText, { color: isConnected ? '#3fb950' : '#f85149' }]}>
+                            {isConnected ? 'ON' : 'OFF'}
                         </Text>
                     </View>
                 </View>
             </View>
 
-            <View style={styles.viewToggleContainer}>
-                <TouchableOpacity style={[styles.toggleBtn, viewMode === 'COCKPIT' && styles.toggleBtnActive]} onPress={() => setViewMode('COCKPIT')}>
-                    <Text style={[styles.toggleText, viewMode === 'COCKPIT' && styles.toggleTextActive]}>🏁 MOD COCKPIT</Text>
+            {/* View toggle */}
+            <View style={styles.viewToggle}>
+                <TouchableOpacity
+                    style={[styles.toggleBtn, viewMode === 'COCKPIT' && styles.toggleBtnActive]}
+                    onPress={() => setViewMode('COCKPIT')}
+                >
+                    <Text style={[styles.toggleText, viewMode === 'COCKPIT' && styles.toggleTextActive]}>
+                        {expertMode ? 'Expert' : 'Esențial'}
+                    </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.toggleBtn, viewMode === 'CHART' && styles.toggleBtnActive]} onPress={() => setViewMode('CHART')}>
-                    <Text style={[styles.toggleText, viewMode === 'CHART' && styles.toggleTextActive]}>📈 MOD OSCILOSCOP</Text>
+                <TouchableOpacity
+                    style={[styles.toggleBtn, viewMode === 'CHART' && styles.toggleBtnActive]}
+                    onPress={() => setViewMode('CHART')}
+                >
+                    <Text style={[styles.toggleText, viewMode === 'CHART' && styles.toggleTextActive]}>Osciloscop</Text>
                 </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.scrollContainer} contentContainerStyle={{ paddingBottom: 50 }}>
-                {viewMode === 'COCKPIT' ? renderCockpitView() : renderChartView()}
+            <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 50 }}>
+                {/* Expert mode toggle (inside scroll, only in COCKPIT) */}
+                {viewMode === 'COCKPIT' && (
+                    <TouchableOpacity
+                        style={[styles.expertToggle, expertMode && styles.expertToggleActive]}
+                        onPress={() => setExpertMode(!expertMode)}
+                    >
+                        <Text style={[styles.expertToggleText, expertMode && { color: '#ffffff' }]}>
+                            {expertMode ? 'Mod Simplu' : 'Mod Expert (90+ PID)'}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+                {viewMode === 'COCKPIT'
+                    ? (expertMode ? renderExpertView() : renderEssentialView())
+                    : renderChartView()
+                }
             </ScrollView>
 
-            <Modal visible={showNotificationsModal} transparent={true} animationType="slide" onRequestClose={() => setShowNotificationsModal(false)}>
+            {/* Notifications modal */}
+            <Modal visible={showNotificationsModal} transparent animationType="slide" onRequestClose={() => setShowNotificationsModal(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>🔔 Istoric Alerte Sesiune</Text>
+                            <Text style={styles.modalTitle}>Alerte Sesiune</Text>
                             <TouchableOpacity onPress={() => setShowNotificationsModal(false)} style={styles.closeBtn}>
-                                <Text style={{color: '#fff', fontWeight: 'bold'}}>✕</Text>
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>X</Text>
                             </TouchableOpacity>
                         </View>
-                        <ScrollView style={{maxHeight: 400}}>
+                        <ScrollView style={{ maxHeight: 400 }}>
                             {alertsList.length === 0 ? (
-                                <Text style={{color: '#3fb950', textAlign: 'center'}}>Nicio alertă înregistrată.</Text>
+                                <Text style={{ color: '#3fb950', textAlign: 'center', padding: 20 }}>Nicio alertă.</Text>
                             ) : (
                                 alertsList.map((alt) => (
-                                    <View key={alt.id} style={styles.modalAlertItem}>
-                                        <Text style={{color: '#ff7b72', fontWeight: 'bold'}}>{alt.tip}</Text>
-                                        <Text style={{color: '#c9d1d9', fontSize: 12}}>Scor afectat: {alt.scor_curent}</Text>
+                                    <View key={alt.id} style={styles.alertItem}>
+                                        <Text style={{ color: '#ff7b72', fontWeight: '700' }}>{alt.tip}</Text>
+                                        <Text style={{ color: '#c9d1d9', fontSize: 12 }}>Scor: {alt.scor_curent}</Text>
                                     </View>
                                 ))
                             )}
@@ -419,39 +395,78 @@ const LiveDashboardScreen = () => {
 };
 
 const styles = StyleSheet.create({
-    mainContainer: { flex: 1, backgroundColor: '#0d1117', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 40) + 10 : 30 },
-    scrollContainer: { flex: 1, paddingHorizontal: 16 },
-    floatingToast: { position: 'absolute', top: 55, left: 20, right: 20, backgroundColor: '#3b2322', borderWidth: 1, borderColor: '#f85149', borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', zIndex: 1000 },
-    toastIcon: { fontSize: 24 }, toastTitle: { color: '#ff7b72', fontWeight: '900', fontSize: 13 }, toastDesc: { color: '#c9d1d9', fontSize: 11, marginTop: 2 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#21262d' },
-    headerTitleContainer: { flex: 1, paddingRight: 10 }, title: { fontSize: 18, fontWeight: 'bold', color: '#ffffff' }, subtitle: { fontSize: 10, color: '#8b949e', marginTop: 2 },
+    mainContainer: { flex: 1, backgroundColor: '#0d1117', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 40) + 10 : 44 },
+    scroll: { flex: 1, paddingHorizontal: 16 },
+    floatingToast: {
+        position: 'absolute', top: Platform.OS === 'android' ? (StatusBar.currentHeight || 40) + 12 : 48,
+        left: 16, right: 16, backgroundColor: '#3b2322', borderWidth: 1, borderColor: '#f85149',
+        borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', zIndex: 1000,
+    },
+    toastTitle: { color: '#ff7b72', fontWeight: '800', fontSize: 13 },
+    toastDesc: { color: '#c9d1d9', fontSize: 11, marginTop: 2 },
+    header: {
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+        paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#21262d',
+    },
+    title: { fontSize: 18, fontWeight: '700', color: '#ffffff' },
+    subtitle: { fontSize: 11, color: '#8b949e', marginTop: 2 },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    bellBtn: { padding: 6, backgroundColor: '#161b22', borderRadius: 20, borderWidth: 1, borderColor: '#30363d', position: 'relative' },
+    iconBtn: { width: 32, height: 32, backgroundColor: '#161b22', borderRadius: 16, borderWidth: 1, borderColor: '#30363d', justifyContent: 'center', alignItems: 'center' },
+    iconBtnText: { color: '#8b949e', fontSize: 12, fontWeight: '700' },
     badge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#da3633', width: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
     badgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
-    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, borderWidth: 1 }, statusOnline: { backgroundColor: '#122d1e', borderColor: '#238636' }, statusOffline: { backgroundColor: '#3b2322', borderColor: '#da3633' }, statusText: { fontSize: 10, fontWeight: 'bold' },
-    viewToggleContainer: { flexDirection: 'row', backgroundColor: '#161b22', borderRadius: 8, marginHorizontal: 16, marginVertical: 12, p: 4, borderWidth: 1, borderColor: '#30363d' },
-    toggleBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 6 }, toggleBtnActive: { backgroundColor: '#21262d', borderColor: '#8b949e', borderWidth: 1 }, toggleText: { color: '#8b949e', fontWeight: 'bold', fontSize: 12 }, toggleTextActive: { color: '#ffffff' },
-    filterSection: { marginBottom: 15 }, filterTitle: { fontSize: 10, color: '#8b949e', fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase' },
-    filterScroll: { gap: 8, paddingBottom: 4 }, chip: { backgroundColor: '#161b22', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#30363d' }, chipActive: { backgroundColor: '#1f6feb', borderColor: '#58a6ff' }, chipText: { color: '#8b949e', fontSize: 11, fontWeight: '900' },
+    statusDot: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
+    statusOnline: { backgroundColor: '#122d1e', borderColor: '#238636' },
+    statusOffline: { backgroundColor: '#3b2322', borderColor: '#da3633' },
+    statusText: { fontSize: 10, fontWeight: '700' },
+    viewToggle: {
+        flexDirection: 'row', backgroundColor: '#161b22', borderRadius: 8,
+        marginHorizontal: 16, marginTop: 10, borderWidth: 1, borderColor: '#30363d',
+    },
+    toggleBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 6 },
+    toggleBtnActive: { backgroundColor: '#21262d', borderColor: '#30363d', borderWidth: 1 },
+    toggleText: { color: '#8b949e', fontWeight: '700', fontSize: 12 },
+    toggleTextActive: { color: '#ffffff' },
+    expertToggle: {
+        marginBottom: 12, paddingVertical: 8, alignItems: 'center',
+        backgroundColor: '#161b22', borderRadius: 6, borderWidth: 1, borderColor: '#30363d',
+    },
+    expertToggleActive: { backgroundColor: '#1f6feb', borderColor: '#1f6feb' },
+    expertToggleText: { color: '#8b949e', fontSize: 11, fontWeight: '700' },
+    essentialGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingTop: 10 },
+    ecoCard: {
+        width: '48%', backgroundColor: '#161b22', borderRadius: 10, padding: 16,
+        marginBottom: 12, borderWidth: 1, borderColor: '#30363d', alignItems: 'center', justifyContent: 'center',
+    },
+    ecoLabel: { fontSize: 10, color: '#8b949e', fontWeight: '700', marginBottom: 4 },
+    ecoValue: { fontSize: 32, fontWeight: '900' },
+    ecoUnit: { fontSize: 11, color: '#8b949e' },
+    chip: { backgroundColor: '#161b22', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#30363d', marginRight: 8 },
+    chipActive: { backgroundColor: '#1f6feb', borderColor: '#58a6ff' },
+    chipText: { color: '#8b949e', fontSize: 11, fontWeight: '700' },
     grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
     card: { backgroundColor: '#161b22', width: '48%', padding: 14, borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: '#30363d', alignItems: 'center', justifyContent: 'center' },
-    cardLarge: { width: '100%', paddingVertical: 18 }, cardLabel: { fontSize: 9, color: '#8b949e', fontWeight: 'bold', marginBottom: 6, textAlign: 'center' }, val: { fontSize: 22, fontWeight: '800', color: '#ffffff' }, valLarge: { fontSize: 36, fontWeight: '900', color: '#ffffff' }, unit: { fontSize: 12, color: '#8b949e', fontWeight: 'normal' }, cardSub: { fontSize: 9, color: '#8b949e', marginTop: 4, textAlign: 'center', fontStyle: 'italic' },
-    
-    chartContainer: { backgroundColor: '#161b22', padding: 16, borderRadius: 10, borderWidth: 1, borderColor: '#30363d', marginBottom: 20 },
-    zoomPanelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, backgroundColor: '#0d1117', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#21262d' },
-    zoomControlGroup: { flex: 1, alignItems: 'center' },
-    zoomLabel: { fontSize: 9, color: '#8b949e', fontWeight: 'bold', marginBottom: 6 },
-    zoomButtons: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    zoomBtn: { width: 30, height: 30, backgroundColor: '#21262d', borderRadius: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#30363d' },
-    zoomBtnText: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: -2 },
-    zoomValue: { color: '#58a6ff', fontSize: 11, fontWeight: 'bold', width: 30, textAlign: 'center' },
-    zoomAutoBtn: { paddingHorizontal: 8, height: 30, backgroundColor: '#21262d', borderRadius: 6, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#30363d' },
-    chartWrapper: { alignItems: 'center', marginTop: 5 },
-    chartTitle: { color: '#fff', fontSize: 12, fontWeight: 'bold', alignSelf: 'flex-start', marginBottom: 10 },
-    chartHint: { fontSize: 10, color: '#8b949e', fontStyle: 'italic', textAlign: 'center', marginTop: 15 },
-    crosshairBadge: { height: 40, width: 100, backgroundColor: '#21262d', borderRadius: 6, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#58a6ff' }, crosshairValue: { color: '#fff', fontSize: 13, fontWeight: '900' }, crosshairTime: { color: '#8b949e', fontSize: 9, marginTop: 2 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 }, modalContent: { backgroundColor: '#161b22', borderRadius: 10, borderWidth: 1, borderColor: '#30363d', padding: 16 }, modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#21262d', paddingBottom: 12, marginBottom: 12 }, modalTitle: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' }, closeBtn: { backgroundColor: '#21262d', width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' }, modalAlertItem: { backgroundColor: '#21262d', borderLeftWidth: 4, borderLeftColor: '#f85149', padding: 12, borderRadius: 6, marginBottom: 10 }
+    cardLarge: { width: '100%', paddingVertical: 18 },
+    cardLabel: { fontSize: 9, color: '#8b949e', fontWeight: '700', marginBottom: 6, textAlign: 'center', textTransform: 'uppercase' },
+    val: { fontSize: 22, fontWeight: '800', color: '#ffffff' },
+    valLarge: { fontSize: 32, fontWeight: '900' },
+    unit: { fontSize: 12, color: '#8b949e', fontWeight: 'normal' },
+    chartContainer: { backgroundColor: '#161b22', padding: 16, borderRadius: 10, borderWidth: 1, borderColor: '#30363d' },
+    zoomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 },
+    zoomBtn: { width: 36, height: 28, backgroundColor: '#21262d', borderRadius: 6, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#30363d' },
+    zoomBtnText: { color: '#8b949e', fontSize: 10, fontWeight: '700' },
+    zoomLabel: { color: '#58a6ff', fontSize: 11, fontWeight: '700', width: 30, textAlign: 'center' },
+    chartWrapper: { alignItems: 'center' },
+    chartTitle: { color: '#fff', fontSize: 12, fontWeight: '700', alignSelf: 'flex-start', marginBottom: 8 },
+    crosshairBadge: { height: 40, width: 100, backgroundColor: '#21262d', borderRadius: 6, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#58a6ff' },
+    crosshairValue: { color: '#fff', fontSize: 13, fontWeight: '900' },
+    crosshairTime: { color: '#8b949e', fontSize: 9, marginTop: 2 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 },
+    modalContent: { backgroundColor: '#161b22', borderRadius: 10, borderWidth: 1, borderColor: '#30363d', padding: 16 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#21262d', paddingBottom: 12, marginBottom: 12 },
+    modalTitle: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+    closeBtn: { backgroundColor: '#21262d', width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+    alertItem: { backgroundColor: '#21262d', borderLeftWidth: 4, borderLeftColor: '#f85149', padding: 12, borderRadius: 6, marginBottom: 10 },
 });
 
 export default LiveDashboardScreen;

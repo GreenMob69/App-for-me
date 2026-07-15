@@ -1,0 +1,511 @@
+[
+    {
+        "id": "TURBO_LOW_BOOST_HIGH_RPM",
+        "category": "TURBO",
+        "description": "Presiune Boost scăzută la turații mari — indică pierderi mecanice sau pneumatice",
+        "conditions": {
+            "rpm": { "operator": ">", "value": 3000, "source": "live.rpm || summary.pid.rpm.max" },
+            "boost": { "operator": "<", "value": 0.6, "source": "live.boost_actual || summary.turbo.averageBar" }
+        },
+        "thresholds": { "rpm_min": 3000, "boost_max": 0.6 },
+        "causes": [
+            { "name": "Pierdere pe linia de Vacuum / Furtun spart", "points": 40, "severity": "HIGH" },
+            { "name": "Electrovalvă N75 defectă / blocată", "points": 35, "severity": "HIGH" },
+            { "name": "Geometrie variabilă (VNT) blocată", "points": 30, "severity": "MEDIUM" },
+            { "name": "Turbosuflantă uzată mecanic", "points": 25, "severity": "HIGH" }
+        ],
+        "recommendations": [
+            "Verificare vizuală furtunuri vacuum și intercooler",
+            "Testare actuator N75 cu VCDS / tester",
+            "Măsurare presiune boost real vs. comandat"
+        ],
+        "severity": "HIGH",
+        "confidence": 75,
+        "references": ["SAE J1979 PID 0x0B (MAP)", "VAG Measuring Block 115"]
+    },
+    {
+        "id": "TURBO_DTC_P0299",
+        "category": "TURBO",
+        "description": "Cod eroare P0299 (Underboost) prezent — confirmare electronică a subpresiunii turbo",
+        "conditions": {
+            "dtc": { "operator": "includes", "value": ["P0299", "16683"] }
+        },
+        "thresholds": {},
+        "causes": [
+            { "name": "Pierdere pe linia de Vacuum / Furtun spart", "points": 50, "severity": "HIGH" },
+            { "name": "Turbosuflantă uzată mecanic", "points": 45, "severity": "HIGH" },
+            { "name": "Electrovalvă N75 defectă / blocată", "points": 40, "severity": "HIGH" }
+        ],
+        "recommendations": [
+            "Verificare presiune boost sub sarcină (VCDS logging)",
+            "Inspecție turbosuflantă — joc axial și radial",
+            "Test actuator electronic / vacuum"
+        ],
+        "severity": "HIGH",
+        "confidence": 90,
+        "references": ["OBD-II DTC P0299", "VAG DTC 16683"]
+    },
+    {
+        "id": "TURBO_MAP_HIGH_MAF_LOW",
+        "category": "TURBO",
+        "description": "Discrepanță MAP/MAF — presiune mare dar debit mic, indică senzor defect sau blocaj",
+        "conditions": {
+            "map": { "operator": ">", "value": 180, "source": "live.map || summary.pid.map.average" },
+            "maf": { "operator": "<", "value": 20, "source": "live.maf || summary.pid.maf.average" }
+        },
+        "thresholds": { "map_min": 180, "maf_max": 20 },
+        "causes": [
+            { "name": "Senzor MAP decalibrat / defect", "points": 60, "severity": "MEDIUM" },
+            { "name": "Senzor MAF murdar sau defect", "points": 40, "severity": "MEDIUM" }
+        ],
+        "recommendations": [
+            "Comparare valori MAP și MAF cu specificații OEM",
+            "Curățare senzor MAF cu spray dedicat",
+            "Verificare conductă vacuum la MAP"
+        ],
+        "severity": "MEDIUM",
+        "confidence": 70,
+        "references": ["SAE J1979 PID 0x0B (MAP)", "SAE J1979 PID 0x10 (MAF)"]
+    },
+    {
+        "id": "ENG_HIGH_RPM_LOW_SPEED",
+        "category": "MOTOR / TRANSMISIE",
+        "description": "Turație mare la viteză mică — indică patinare ambreiaj sau treaptă incorectă",
+        "conditions": {
+            "rpm": { "operator": ">", "value": 3000, "source": "live.rpm || summary.pid.rpm.max" },
+            "speed": { "operator": "<", "value": 25, "source": "live.speed || summary.pid.speed.average" },
+            "speed_min": { "operator": ">", "value": 2, "source": "live.speed || summary.pid.speed.average" }
+        },
+        "thresholds": { "rpm_min": 3000, "speed_max": 25, "speed_min": 2 },
+        "causes": [
+            { "name": "Ambreiaj uzat (patinează în sarcină)", "points": 60, "severity": "HIGH" },
+            { "name": "Treaptă de viteză incorect selectată", "points": 30, "severity": "LOW" }
+        ],
+        "recommendations": [
+            "Test ambreiaj pe rampa: motor pornit, frână trasă, treapta 3, eliberare lentă ambreiaj",
+            "Verificare curs ambreiaj și stare disc/placa presiune"
+        ],
+        "severity": "HIGH",
+        "confidence": 65,
+        "references": ["Diagnoza mecanică ambreiaj — VW/Audi Service Manual"]
+    },
+    {
+        "id": "ENG_HIGH_LOAD_LOW_MAF",
+        "category": "MOTOR",
+        "description": "Sarcină mare cu debit aer scăzut — filtru înfundat sau MAF defect",
+        "conditions": {
+            "load": { "operator": ">", "value": 75, "source": "live.load || summary.pid.load.max" },
+            "maf": { "operator": "<", "value": 25, "source": "live.maf || summary.pid.maf.average" }
+        },
+        "thresholds": { "load_min": 75, "maf_max": 25 },
+        "causes": [
+            { "name": "Filtru de aer extrem de înfundat / murdar", "points": 50, "severity": "MEDIUM" },
+            { "name": "Senzor MAF defect sau murdar", "points": 45, "severity": "MEDIUM" },
+            { "name": "Admisie de aer obturată mecanic", "points": 30, "severity": "HIGH" }
+        ],
+        "recommendations": [
+            "Înlocuire filtru aer",
+            "Curățare MAF cu spray izopropanol",
+            "Inspecție vizuală galerie admisie"
+        ],
+        "severity": "MEDIUM",
+        "confidence": 70,
+        "references": ["SAE J1979 PID 0x04 (Load)", "SAE J1979 PID 0x10 (MAF)"]
+    },
+    {
+        "id": "ENG_IDLE_RPM_FLUCTUATION",
+        "category": "MOTOR",
+        "description": "Oscilații de turație la ralanti — multiple cauze posibile",
+        "conditions": {
+            "speed_avg": { "operator": "<", "value": 5, "source": "summary.pid.speed.average" },
+            "rpm_range": { "operator": ">", "value": 120, "source": "summary.pid.rpm.max - summary.pid.rpm.min" },
+            "rpm_min": { "operator": "<", "value": 800, "source": "summary.pid.rpm.min" },
+            "rpm_min_positive": { "operator": ">", "value": 0, "source": "summary.pid.rpm.min" }
+        },
+        "thresholds": { "speed_avg_max": 5, "rpm_range_min": 120, "rpm_min_max": 800 },
+        "causes": [
+            { "name": "Supapă EGR blocată pe deschis / murdară", "points": 45, "severity": "MEDIUM" },
+            { "name": "Injectoare cu debit neuniform / uzate", "points": 40, "severity": "MEDIUM" },
+            { "name": "Priză falsă de aer pe galerie (Vacuum leak)", "points": 35, "severity": "MEDIUM" },
+            { "name": "Senzor MAF instabil", "points": 20, "severity": "LOW" }
+        ],
+        "recommendations": [
+            "Verificare și curățare EGR",
+            "Test echilibrare cilindri (VCDS)",
+            "Test fum pentru priză falsă de aer"
+        ],
+        "severity": "MEDIUM",
+        "confidence": 60,
+        "references": ["VAG Measuring Block 001", "Idle Speed Control — Bosch EDC"]
+    },
+    {
+        "id": "FUEL_HIGH_CONS_LOW_LOAD",
+        "category": "COMBUSTIBIL",
+        "description": "Consum instant ridicat în regim de sarcină scăzută",
+        "conditions": {
+            "speed": { "operator": ">", "value": 30, "source": "live.speed || summary.pid.speed.average" },
+            "load": { "operator": "<", "value": 35, "source": "live.load || summary.pid.load.average" },
+            "fuel_rate": { "operator": ">", "value": 7.5, "source": "live.consum_lh || summary.fuel.averageInstant" }
+        },
+        "thresholds": { "speed_min": 30, "load_max": 35, "fuel_min": 7.5 },
+        "causes": [
+            { "name": "Injectoare uzate / care picură (pulverizare defectuoasă)", "points": 55, "severity": "MEDIUM" },
+            { "name": "Presiune de injecție incorectă (Regulator presiune)", "points": 40, "severity": "MEDIUM" },
+            { "name": "Filtru de combustibil parțial înfundat", "points": 25, "severity": "LOW" }
+        ],
+        "recommendations": [
+            "Test debit injectoare",
+            "Verificare presiune rampă (Rail Pressure)",
+            "Înlocuire filtru combustibil"
+        ],
+        "severity": "MEDIUM",
+        "confidence": 65,
+        "references": ["Bosch VP37 Service Manual", "Common Rail Diagnostics"]
+    },
+    {
+        "id": "FUEL_LOW_RAIL_PRESSURE",
+        "category": "COMBUSTIBIL",
+        "description": "Presiune în rampă sub valoarea comandată (>15% deviație)",
+        "conditions": {
+            "rail_cmd": { "operator": ">", "value": 10000, "source": "live.cmd_press" },
+            "rail_deviation": { "operator": ">", "value": 15, "source": "calculated" }
+        },
+        "thresholds": { "rail_cmd_min": 10000, "deviation_pct": 15 },
+        "causes": [
+            { "name": "Pompa de înaltă presiune uzată mecanic", "points": 60, "severity": "HIGH" },
+            { "name": "Regulator de presiune pe rampă (DRV) defect / lent", "points": 50, "severity": "HIGH" },
+            { "name": "Filtru de combustibil îmbâcsit / restricție pe alimentare", "points": 40, "severity": "MEDIUM" }
+        ],
+        "recommendations": [
+            "Verificare presiune în rampă (actual vs. cerut) cu VCDS",
+            "Test pompa HP cu manometru",
+            "Înlocuire filtru combustibil"
+        ],
+        "severity": "HIGH",
+        "confidence": 80,
+        "references": ["Bosch Common Rail CP1/CP3", "SAE J1979 PID 0x23 (Rail Pressure)"]
+    },
+    {
+        "id": "FUEL_HIGH_TRIMS",
+        "category": "COMBUSTIBIL / ADMISIE",
+        "description": "Corecții mari pe injecție (Fuel Trims > 15%)",
+        "conditions": {
+            "fuel_trim": { "operator": ">", "value": 15, "source": "abs(live.lft_b1) || abs(live.sft_b1)" }
+        },
+        "thresholds": { "trim_max_pct": 15 },
+        "causes": [
+            { "name": "Priză falsă de aer necontorizată de MAF (Vacuum leak)", "points": 50, "severity": "MEDIUM" },
+            { "name": "Injectoare decalibrate sau înfundate", "points": 45, "severity": "MEDIUM" },
+            { "name": "Senzor MAF subraportează debitul de aer", "points": 35, "severity": "MEDIUM" }
+        ],
+        "recommendations": [
+            "Test fum pe galeria de admisie",
+            "Verificare și curățare MAF",
+            "Test debit individual injectoare"
+        ],
+        "severity": "MEDIUM",
+        "confidence": 70,
+        "references": ["SAE J1979 PID 0x06-0x09 (O2 Trims)", "Long Term Fuel Trim Diagnostics"]
+    },
+    {
+        "id": "ELEC_LOW_VOLTAGE_RUNNING",
+        "category": "BATERIE & ELECTRIC",
+        "description": "Tensiune scăzută (<13.4V) la turație de lucru — alternator degradat",
+        "conditions": {
+            "rpm": { "operator": ">", "value": 2000, "source": "live.rpm || summary.pid.rpm.average" },
+            "voltage": { "operator": "<", "value": 13.4, "source": "live.ecu_volt || summary.pid.voltage.min" }
+        },
+        "thresholds": { "rpm_min": 2000, "voltage_max": 13.4 },
+        "causes": [
+            { "name": "Alternator uzat (punte diode sau cărbuni degradați)", "points": 70, "severity": "HIGH" },
+            { "name": "Curea de accesorii (transmisie) slabă sau care patinează", "points": 45, "severity": "MEDIUM" },
+            { "name": "Conexiuni de masă oxidate (cădere de tensiune pe cabluri)", "points": 30, "severity": "LOW" }
+        ],
+        "recommendations": [
+            "Testare alternator cu sarcină (multimetru pe baterie, motor pornit)",
+            "Verificare tensiune curea",
+            "Inspecție borne, cabluri masă"
+        ],
+        "severity": "HIGH",
+        "confidence": 80,
+        "references": ["Bosch Alternator Diagnostics", "VW/Audi Electrical Systems"]
+    },
+    {
+        "id": "ELEC_OVERVOLTAGE",
+        "category": "BATERIE & ELECTRIC",
+        "description": "Supra-tensiune periculoasă în rețeaua ECU (>14.8V)",
+        "conditions": {
+            "voltage": { "operator": ">", "value": 14.8, "source": "live.ecu_volt || summary.pid.voltage.max" }
+        },
+        "thresholds": { "voltage_min": 14.8 },
+        "causes": [
+            { "name": "Regulator de tensiune al alternatorului defect", "points": 85, "severity": "HIGH" },
+            { "name": "Baterie cu sulfatare severă (rezistență internă uriașă)", "points": 30, "severity": "MEDIUM" }
+        ],
+        "recommendations": [
+            "Verificare regulator tensiune (Valeo/Bosch) — înlocuire dacă > 14.8V constant",
+            "Testare baterie — CCA și rezistență internă"
+        ],
+        "severity": "HIGH",
+        "confidence": 85,
+        "references": ["Voltage Regulator IC — Bosch Spec", "SAE J1979 PID 0x42 (Control Module Voltage)"]
+    },
+    {
+        "id": "ELEC_CONTINUOUS_DROP",
+        "category": "BATERIE",
+        "description": "Scădere continuă de tensiune în timpul sesiunii (baterie end-of-life)",
+        "conditions": {
+            "voltage_range": { "operator": ">", "value": 1.5, "source": "summary.pid.voltage.max - summary.pid.voltage.min" },
+            "voltage_min": { "operator": "<", "value": 12.2, "source": "summary.pid.voltage.min" }
+        },
+        "thresholds": { "voltage_range_min": 1.5, "voltage_min_max": 12.2 },
+        "causes": [
+            { "name": "Baterie auto ajunsă la sfârșitul duratei de viață (SOH scăzut)", "points": 60, "severity": "HIGH" },
+            { "name": "Consumator parazit major sau alternator nefuncțional", "points": 50, "severity": "HIGH" }
+        ],
+        "recommendations": [
+            "Testare baterie — SOH, CCA, rezistență internă",
+            "Măsurare curent de repaus (< 50mA normal)",
+            "Verificare alternator sub sarcină"
+        ],
+        "severity": "HIGH",
+        "confidence": 75,
+        "references": ["Battery SOH Testing — EN 50342", "Parasitic Draw Test Procedure"]
+    },
+    {
+        "id": "DPF_HIGH_SOOT_LOW_TEMP",
+        "category": "DPF (DIESEL)",
+        "description": "Încărcare mare de funingine fără inițiere regenerare",
+        "conditions": {
+            "dpf_soot": { "operator": ">", "value": 35, "source": "live.dpf_soot" },
+            "egt": { "operator": "<", "value": 250, "source": "live.egt1" }
+        },
+        "thresholds": { "soot_min": 35, "egt_max": 250 },
+        "causes": [
+            { "name": "DPF sever înfundat — condițiile de regim de drum nu permit regenerarea", "points": 60, "severity": "HIGH" },
+            { "name": "Termostat defect (motorul nu atinge temperatura de regim pt regenerare)", "points": 50, "severity": "MEDIUM" },
+            { "name": "Senzor presiune diferențială DPF decalibrat", "points": 35, "severity": "LOW" }
+        ],
+        "recommendations": [
+            "Efectuare cursă regenerare (30+ min autostradă)",
+            "Verificare termostat — timp de atingere 80°C",
+            "Verificare senzor ΔP DPF"
+        ],
+        "severity": "HIGH",
+        "confidence": 75,
+        "references": ["DPF Regeneration — Bosch EDC16/17", "VW/Audi DPF Service"]
+    },
+    {
+        "id": "DPF_ACTIVE_REGEN",
+        "category": "DPF (DIESEL)",
+        "description": "Temperaturi extreme EGT — regenerare activă în curs",
+        "conditions": {
+            "egt": { "operator": ">", "value": 550, "source": "live.egt1 || live.egt2" }
+        },
+        "thresholds": { "egt_min": 550 },
+        "causes": [
+            { "name": "Regenerare activă DPF în curs de desfășurare (Regim normal de curățare)", "points": 90, "severity": "INFO" }
+        ],
+        "recommendations": [
+            "Nu întrerupe cursa — lasă regenerarea să se finalizeze",
+            "Monitorizare temperatură evacuare până scade sub 300°C"
+        ],
+        "severity": "INFO",
+        "confidence": 95,
+        "references": ["DPF Active Regeneration Cycle — Bosch"]
+    },
+    {
+        "id": "LAMBDA_RICH_MIXTURE",
+        "category": "LAMBDA / STOICHIOMETRIE",
+        "description": "Amestec bogat persistent (Lambda < 0.95)",
+        "conditions": {
+            "lambda": { "operator": "<", "value": 0.95, "source": "live.lambda || summary.pid.lambda.average" }
+        },
+        "thresholds": { "lambda_max": 0.95 },
+        "causes": [
+            { "name": "Injectoare cu debit excesiv (picurare/blocate deschis)", "points": 55, "severity": "MEDIUM" },
+            { "name": "Senzor MAF suprareportează debitul de aer", "points": 40, "severity": "MEDIUM" },
+            { "name": "Presiune combustibil prea mare (regulator defect)", "points": 35, "severity": "MEDIUM" }
+        ],
+        "recommendations": [
+            "Verificare debit injectoare pe bancă",
+            "Comparare MAF actual vs. specificat",
+            "Verificare presiune rampă"
+        ],
+        "severity": "MEDIUM",
+        "confidence": 65,
+        "references": ["Lambda Control — Bosch LSU 4.9", "SAE J1979 PID 0x24"]
+    },
+    {
+        "id": "LAMBDA_LEAN_MIXTURE",
+        "category": "LAMBDA / STOICHIOMETRIE",
+        "description": "Amestec sărac persistent (Lambda > 1.10)",
+        "conditions": {
+            "lambda": { "operator": ">", "value": 1.10, "source": "live.lambda || summary.pid.lambda.average" }
+        },
+        "thresholds": { "lambda_min": 1.10 },
+        "causes": [
+            { "name": "Priză falsă de aer (aer necontorizat după MAF)", "points": 60, "severity": "MEDIUM" },
+            { "name": "Presiune combustibil insuficientă", "points": 45, "severity": "HIGH" },
+            { "name": "Injectoare parțial blocate (debit insuficient)", "points": 40, "severity": "MEDIUM" }
+        ],
+        "recommendations": [
+            "Test fum pe galerie admisie",
+            "Verificare presiune rampă sub sarcină",
+            "Test debit injectoare"
+        ],
+        "severity": "MEDIUM",
+        "confidence": 70,
+        "references": ["Lean Mixture Diagnostics", "SAE J1979 PID 0x24"]
+    },
+    {
+        "id": "TRANS_CLUTCH_SLIP",
+        "category": "TRANSMISIE",
+        "description": "Patinare ambreiaj — RPM crește dar viteza nu urmează proporțional",
+        "conditions": {
+            "rpm_high": { "operator": ">", "value": 2500, "source": "summary.pid.rpm.average" },
+            "speed_low": { "operator": "<", "value": 40, "source": "summary.pid.speed.average" },
+            "load_high": { "operator": ">", "value": 60, "source": "summary.pid.load.average" }
+        },
+        "thresholds": { "rpm_min": 2500, "speed_max": 40, "load_min": 60 },
+        "causes": [
+            { "name": "Disc ambreiaj uzat / glazurat", "points": 65, "severity": "HIGH" },
+            { "name": "Placa de presiune slăbită (arcuri obosite)", "points": 45, "severity": "HIGH" }
+        ],
+        "recommendations": [
+            "Test ambreiaj: frână + treapta 3 + accelerare — motorul trebuie să se oprească",
+            "Dacă nu se oprește → ambreiaj uzat, necesită înlocuire kit"
+        ],
+        "severity": "HIGH",
+        "confidence": 70,
+        "references": ["VW/Audi Clutch Diagnostics", "LUK RepSet Installation Guide"]
+    },
+    {
+        "id": "TRANS_HARD_SHIFT",
+        "category": "TRANSMISIE",
+        "description": "Schimbări de viteză bruște / nesincronizate",
+        "conditions": {
+            "rpm_fluctuation": { "operator": ">", "value": 800, "source": "summary.pid.rpm.max - summary.pid.rpm.min" },
+            "hard_events": { "operator": ">", "value": 3, "source": "summary.events.hardAccelerations + summary.events.hardBrakes" }
+        },
+        "thresholds": { "rpm_fluctuation_min": 800, "hard_events_min": 3 },
+        "causes": [
+            { "name": "Sincronizatoare uzate (cutie manuală)", "points": 40, "severity": "MEDIUM" },
+            { "name": "Ulei de cutie degradat / nivel scăzut", "points": 35, "severity": "LOW" }
+        ],
+        "recommendations": [
+            "Verificare nivel și calitate ulei cutie",
+            "Test sincronizatoare pe treptele afectate",
+            "Dacă dificultate pe rece → ulei + sincronizatoare"
+        ],
+        "severity": "MEDIUM",
+        "confidence": 55,
+        "references": ["VW 01E Gearbox Service", "Manual Transmission Diagnostics"]
+    },
+    {
+        "id": "DTC_PERSISTENT_ENGINE",
+        "category": "MOTOR",
+        "description": "Cod DTC persistent pe modulul motor — defecțiune confirmată electronic",
+        "conditions": {
+            "dtc_engine": { "operator": "has_prefix", "value": "P0", "source": "dtcList" }
+        },
+        "thresholds": {},
+        "causes": [
+            { "name": "Defecțiune electronică confirmată de ECU (citire cod + freeze frame)", "points": 70, "severity": "HIGH" },
+            { "name": "Senzor sau actuator în afara limitelor admisibile", "points": 50, "severity": "MEDIUM" }
+        ],
+        "recommendations": [
+            "Citire DTC + freeze frame cu VCDS/OBD-II scanner",
+            "Verificare senzor/actuator conform codului specific",
+            "Nu șterge eroarea fără diagnoză — monitorizare dacă revine"
+        ],
+        "severity": "HIGH",
+        "confidence": 85,
+        "references": ["SAE J2012 DTC Definitions", "OBD-II P0xxx Powertrain Codes"]
+    },
+    {
+        "id": "DTC_MULTIPLE_SYSTEMS",
+        "category": "MOTOR",
+        "description": "DTC-uri din sisteme multiple — problemă electrică sau masă comună",
+        "conditions": {
+            "dtc_count": { "operator": ">", "value": 2, "source": "dtcList.length" }
+        },
+        "thresholds": { "dtc_count_min": 2 },
+        "causes": [
+            { "name": "Problemă generală de alimentare (masă oxidată, cablaj)", "points": 50, "severity": "HIGH" },
+            { "name": "ECU cu probleme interne (memorie, procesor)", "points": 30, "severity": "HIGH" }
+        ],
+        "recommendations": [
+            "Verificare toate punctele de masă (motor, caroserie, ECU)",
+            "Inspecție cablaj principal motor",
+            "Dacă erori intermitente → posibil conector ECU oxidat"
+        ],
+        "severity": "HIGH",
+        "confidence": 60,
+        "references": ["VW/Audi Wiring Diagrams", "ECU Ground Points — Audi A6 C4"]
+    },
+    {
+        "id": "BEHAVIOR_AGGRESSIVE_DRIVING",
+        "category": "COMPORTAMENT",
+        "description": "Stil de condus agresiv — uzură prematură componente mecanice",
+        "conditions": {
+            "aggressive_pct": { "operator": ">", "value": 30, "source": "summary.drivingStyle.aggressivePct" },
+            "hard_events": { "operator": ">", "value": 5, "source": "summary.events.hardBrakes + summary.events.hardAccelerations" }
+        },
+        "thresholds": { "aggressive_min_pct": 30, "hard_events_min": 5 },
+        "causes": [
+            { "name": "Stil de condus agresiv — impact direct pe uzura mecanică", "points": 40, "severity": "MEDIUM" },
+            { "name": "Consum de combustibil excesiv cauzat de comportament", "points": 30, "severity": "LOW" }
+        ],
+        "recommendations": [
+            "Recomandare: condus anticipativ, accelerări lente",
+            "Verificare frâne și plăcuțe mai frecvent",
+            "Monitorizare consum pe curse similare"
+        ],
+        "severity": "MEDIUM",
+        "confidence": 90,
+        "references": ["Eco-Driving Guidelines — EU", "Fuel Economy Best Practices"]
+    },
+    {
+        "id": "BEHAVIOR_HIGH_RPM_SUSTAINED",
+        "category": "COMPORTAMENT",
+        "description": "Timp excesiv la turații mari (>3500 RPM peste 15% din cursă)",
+        "conditions": {
+            "high_rpm_pct": { "operator": ">", "value": 15, "source": "summary.rpmZones.over3500Pct" }
+        },
+        "thresholds": { "high_rpm_pct_min": 15 },
+        "causes": [
+            { "name": "Uzură prematură motor și turbo din cauza regimului de funcționare", "points": 35, "severity": "MEDIUM" },
+            { "name": "Consum crescut și temperaturi excesive", "points": 25, "severity": "LOW" }
+        ],
+        "recommendations": [
+            "Schimbare trepte la 2000-2500 RPM (diesel)",
+            "Verificare ulei motor mai frecvent (consum la turații mari)",
+            "Monitorizare temperaturi sub solicitare"
+        ],
+        "severity": "MEDIUM",
+        "confidence": 85,
+        "references": ["Engine Longevity vs. RPM — SAE Paper", "VW TDI Operating Guidelines"]
+    },
+    {
+        "id": "BEHAVIOR_EXCESSIVE_IDLE",
+        "category": "COMPORTAMENT",
+        "description": "Timp excesiv la ralanti — impact negativ pe DPF, consum, și motor",
+        "conditions": {
+            "idle_pct": { "operator": ">", "value": 40, "source": "(summary.duration.idleSeconds / summary.duration.totalSeconds) * 100" }
+        },
+        "thresholds": { "idle_pct_max": 40 },
+        "causes": [
+            { "name": "Funcționare prelungită la ralanti — depuneri carbon, DPF, diluție ulei", "points": 30, "severity": "LOW" },
+            { "name": "Risipă de combustibil și emisii inutile", "points": 20, "severity": "LOW" }
+        ],
+        "recommendations": [
+            "Oprire motor dacă stai pe loc > 60s",
+            "Curse mai lungi periodic pentru regenerare DPF",
+            "Verificare depuneri carbon pe EGR/galerie"
+        ],
+        "severity": "LOW",
+        "confidence": 90,
+        "references": ["Idle Impact on Diesel Engines", "DPF Regeneration Requirements"]
+    }
+]

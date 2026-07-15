@@ -1,15 +1,15 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect, useRef } from 'react';
 import socketService from '../services/socket';
 
 export const TelemetryContext = createContext();
 
 export const TelemetryProvider = ({ children }) => {
     const [isConnected, setIsConnected] = useState(false);
-    const [viewMode, setViewMode] = useState('COCKPIT'); 
-    const [selectedMetric, setSelectedMetric] = useState('RPM'); 
+    const [viewMode, setViewMode] = useState('COCKPIT');
+    const [selectedMetric, setSelectedMetric] = useState('RPM');
 
     // Tema vizuală
-    const [activeTemplate, setActiveTemplate] = useState('DIGITAL'); 
+    const [activeTemplate, setActiveTemplate] = useState('DIGITAL');
 
     // Starea curentă live
     const [liveData, setLiveData] = useState({});
@@ -17,9 +17,21 @@ export const TelemetryProvider = ({ children }) => {
     // Istoric grafice: ACUM VA STOCA TOT OBIECTUL DE DATE, NU DOAR 3 PARAMETRI
     const [chartHistory, setChartHistory] = useState([]);
 
-    const [latestAlert, setLatestAlert] = useState(null); 
-    const [alertsList, setAlertsList] = useState([]);     
-    const [unreadCount, setUnreadCount] = useState(0);    
+    const [latestAlert, setLatestAlert] = useState(null);
+    const [alertsList, setAlertsList] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    // Trip Report — populated on trip STOP
+    const [tripReport, setTripReport] = useState(null);
+    const navigationRef = useRef(null);
+
+    const setNavigationRef = (ref) => {
+        navigationRef.current = ref;
+    };
+
+    const dismissTripReport = () => {
+        setTripReport(null);
+    };
 
     const markAlertsAsRead = () => {
         setUnreadCount(0);
@@ -34,11 +46,9 @@ export const TelemetryProvider = ({ children }) => {
         socket.on('telemetrie_live', (data) => {
             setLiveData(data);
 
-            // AICI ESTE MAGIA: Salvăm o "fotografie" completă a tuturor senzorilor în fiecare secundă
             setChartHistory(prevHistory => {
                 const nextSec = prevHistory.length;
-                
-                // Creăm un obiect plat (flat) cu toți parametrii din toate categoriile
+
                 const flatData = {
                     secunda: nextSec,
                     label: nextSec % 10 === 0 ? `${nextSec}s` : '',
@@ -57,10 +67,19 @@ export const TelemetryProvider = ({ children }) => {
                 };
 
                 const nouIstoric = [...prevHistory, flatData];
-                // Păstrăm ultimele 600 de secunde (10 minute) în RAM pentru fluiditate maximă
                 if (nouIstoric.length > 600) return nouIstoric.slice(-600);
                 return nouIstoric;
             });
+        });
+
+        socket.on('status_trip', (data) => {
+            if (data.status === 'STOP' && data.report) {
+                setTripReport(data.report);
+                setChartHistory([]);
+                if (navigationRef.current) {
+                    navigationRef.current.navigate('TripReport', { report: data.report });
+                }
+            }
         });
 
         socket.on('alerta_live', (alerta) => {
@@ -78,6 +97,7 @@ export const TelemetryProvider = ({ children }) => {
 
         return () => {
             socket.off('telemetrie_live');
+            socket.off('status_trip');
             socket.off('alerta_live');
         };
     }, []);
@@ -85,8 +105,9 @@ export const TelemetryProvider = ({ children }) => {
     return (
         <TelemetryContext.Provider value={{
             isConnected, viewMode, setViewMode, selectedMetric, setSelectedMetric,
-            activeTemplate, setActiveTemplate, 
-            liveData, chartHistory, latestAlert, alertsList, unreadCount, markAlertsAsRead
+            activeTemplate, setActiveTemplate,
+            liveData, chartHistory, latestAlert, alertsList, unreadCount, markAlertsAsRead,
+            tripReport, dismissTripReport, setNavigationRef
         }}>
             {children}
         </TelemetryContext.Provider>

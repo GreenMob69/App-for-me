@@ -14,6 +14,8 @@ const { Server } = require('socket.io');
 const { createAnalysis, updateAnalyzer, finalizeTripAnalysis } = require('./backend/analyzers');
 const { THRESHOLDS } = require('./backend/analyzers/config');
 const { analyzeTrends } = require('./backend/analyzers/TrendEngine');
+const { initVehicleProfileTable } = require('./backend/intelligence/BaselineEngine');
+const { loadRules } = require('./backend/knowledge/KnowledgeBase');
 
 const app = express();
 app.use(cors());
@@ -121,6 +123,7 @@ const db = new sqlite3.Database('./telemetrie_industriala.db', (err) => {
         // coloana și pe cale de migrare. E OK dacă dă eroare "duplicate column" —
         // înseamnă că există deja.
         db.run(`ALTER TABLE trip_summary ADD COLUMN raport_ai_json TEXT`, () => {});
+        db.run(`ALTER TABLE trip_summary ADD COLUMN trip_tag TEXT DEFAULT 'PERSONAL'`, () => {});
 
         db.run(`CREATE INDEX IF NOT EXISTS idx_flux_calatorie ON telemetrie_flux(id_calatorie, timestamp);`);
         db.run(`
@@ -128,8 +131,67 @@ const db = new sqlite3.Database('./telemetrie_industriala.db', (err) => {
         ON trip_summary(id_calatorie);
         `);
         db.run(`CREATE INDEX IF NOT EXISTS idx_evenimente_calatorie ON evenimente_alerte(id_calatorie);`);
+
+        // Inițializare tabele auxiliare + Knowledge Base
+        initVehicleProfileTable(db);
+        loadRules();
     });
 });
+
+// ===============================================================
+// HELPER: Generare insights inteligente la finalul cursei
+// ===============================================================
+function buildTripInsights(rezultat) {
+    if (!rezultat) return [];
+    const insights = [];
+    const { summary, health, ai } = rezultat;
+
+    // Insight 1: Comparație cu scorul anterior (din baseline dacă există)
+    if (health.overallHealth >= 90) {
+        insights.push({ type: 'POSITIVE', icon: '✓', text: 'Cursă excelentă — toate sistemele în parametri optimi' });
+    } else if (health.overallHealth < 60) {
+        insights.push({ type: 'NEGATIVE', icon: '!', text: 'Sănătatea vehiculului a scăzut sub 60% în această cursă' });
+    }
+
+    // Insight 2: Stil de condus
+    const aggressivePct = summary.drivingStyle?.aggressivePct || 0;
+    const economicPct = summary.drivingStyle?.economicPct || 0;
+    if (aggressivePct > 25) {
+        insights.push({ type: 'WARNING', icon: '⚡', text: `Condus agresiv ${Math.round(aggressivePct)}% din cursă — impact pe consum și uzură` });
+    } else if (economicPct > 60) {
+        insights.push({ type: 'POSITIVE', icon: '✓', text: `Condus economic ${Math.round(economicPct)}% din cursă — excelent!` });
+    }
+
+    // Insight 3: Evenimente
+    const hardBrakes = summary.events?.hardBrakes || 0;
+    const hardAccels = summary.events?.hardAccelerations || 0;
+    if (hardBrakes + hardAccels > 3) {
+        insights.push({ type: 'WARNING', icon: '⚠', text: `${hardBrakes + hardAccels} evenimente bruște — frânări și accelerări agresive` });
+    } else if (hardBrakes === 0 && hardAccels === 0) {
+        insights.push({ type: 'POSITIVE', icon: '✓', text: 'Zero evenimente bruște — condus fluent și anticipativ' });
+    }
+
+    // Insight 4: Temperatură
+    const coolantMax = summary.pid?.coolant?.max || 0;
+    if (coolantMax > 100) {
+        insights.push({ type: 'NEGATIVE', icon: '!', text: `Temperatura antigel a atins ${coolantMax}°C — supraîncălzire!` });
+    }
+
+    // Insight 5: Tensiune
+    const voltMin = summary.pid?.voltage?.min || 14;
+    if (voltMin < 13.2) {
+        insights.push({ type: 'WARNING', icon: '⚡', text: `Tensiune minimă ${voltMin}V — posibilă problemă alternator` });
+    }
+
+    // Insight 6: Predicții active (din intelligence)
+    const predictions = ai?.intelligence?.predictions || [];
+    const highPred = predictions.find(p => p.severity === 'HIGH');
+    if (highPred) {
+        insights.push({ type: 'NEGATIVE', icon: '!', text: `${highPred.component}: probabilitate ${highPred.probability}% defecțiune — verificare recomandată` });
+    }
+
+    return insights.slice(0, 4);
+}
 
 const calatoriiActive = {};
 const client = mqtt.connect('mqtt://broker.emqx.io');
@@ -140,7 +202,7 @@ client.on('connect', () => {
     client.subscribe(TOPIC_TELEMETRIE);
 });
 
-client.on('message', (topic, message) => {
+client.on('message', async (topic, message) => {
     const pachet = JSON.parse(message.toString());
     const vin = pachet.ecu?.vin || "WAUZZZ4A1RN000000";
     const eveniment_motor = pachet.stare_motor;
@@ -247,12 +309,28 @@ client.on('message', (topic, message) => {
         const consum_mediu = trip.km > 0.01 ? (trip.consum_l / trip.km) * 100 : 0;
 
         // =======================================================
-        // TRIP ANALYZER — Nivel 4 + 5 (o singură dată, la final)
-        // summary  = statisticile complete (cerințele 1-6, 8-9)
-        // health   = Driving/Engine/Fuel/Safety Score + Overall Health (cerința 7)
-        // ai       = obiectul pregătit pentru GPT (cerința 10) — nefolosit încă
+        // TRIP ANALYZER — Nivel 4 + 5 + 6 (pipeline complet, o singură dată)
+        // Recuperăm pachetele brute din DB pentru analize avansate
+        // (corelații, calitate senzori, integritate date)
         // =======================================================
-        const rezultatAnaliza = finalizeTripAnalysis(trip);
+        const rezultatAnalizaPromise = new Promise((resolve) => {
+            db.all(`SELECT matrice_completa_json FROM telemetrie_flux WHERE id_calatorie = ? ORDER BY timestamp ASC`,
+                [trip.id_calatorie], async (err, rows) => {
+                    const rawPackets = (rows || []).map(r => {
+                        try { return JSON.parse(r.matrice_completa_json); }
+                        catch(e) { return null; }
+                    }).filter(Boolean);
+
+                    const result = await finalizeTripAnalysis(trip, {
+                        db,
+                        vin,
+                        dtcList: eroriActiveDTC,
+                        rawPackets
+                    });
+                    resolve(result);
+                });
+        });
+        const rezultatAnaliza = await rezultatAnalizaPromise;
 
         db.run(`UPDATE calatorii SET timestamp_end = ?, km_parcursi = ?, consum_total_l = ?, consum_mediu_100km = ?, scor_eco = ? WHERE id_calatorie = ?`, 
             [pachet.timestamp, trip.km.toFixed(2), trip.consum_l.toFixed(2), consum_mediu.toFixed(1), scor_final, trip.id_calatorie], () => {
@@ -287,10 +365,43 @@ client.on('message', (topic, message) => {
             }
 
             console.log(`[TRIP STOP] Sesiunea #${trip.id_calatorie} s-a închis! Total: ${trip.km.toFixed(2)} km`);
+
+            // Construim raportul complet pentru Trip Report Screen
+            const tripReport = rezultatAnaliza ? {
+                tripId: trip.id_calatorie,
+                healthScore: rezultatAnaliza.health.overallHealth,
+                scores: {
+                    engine: rezultatAnaliza.health.engineScore,
+                    fuel: rezultatAnaliza.health.fuelScore,
+                    driving: rezultatAnaliza.health.drivingScore,
+                    safety: rezultatAnaliza.health.safetyScore
+                },
+                stats: {
+                    distanceKm: Number(trip.km.toFixed(2)),
+                    durationMin: Math.round((rezultatAnaliza.summary.duration.totalSeconds || 0) / 60),
+                    fuelLiters: Number(litriTotali.toFixed(2)),
+                    consumptionPer100: trip.km > 0.1 ? Number((litriTotali / trip.km * 100).toFixed(1)) : 0,
+                    costRON: Number(cost.toFixed(2)),
+                    co2Kg: Number(co2.toFixed(2)),
+                    ecoScore: scor_final
+                },
+                driving: {
+                    smoothPct: rezultatAnaliza.summary.drivingStyle?.smoothPct || 0,
+                    economicPct: rezultatAnaliza.summary.drivingStyle?.economicPct || 0,
+                    aggressivePct: rezultatAnaliza.summary.drivingStyle?.aggressivePct || 0,
+                    hardBrakes: rezultatAnaliza.summary.events?.hardBrakes || 0,
+                    hardAccelerations: rezultatAnaliza.summary.events?.hardAccelerations || 0,
+                    overspeeds: rezultatAnaliza.summary.events?.overspeeds || 0
+                },
+                insights: buildTripInsights(rezultatAnaliza),
+                predictions: (rezultatAnaliza.ai?.intelligence?.predictions || []).filter(p => p.severity === 'HIGH' || p.severity === 'MEDIUM').slice(0, 2)
+            } : null;
+
             io.emit('status_trip', {
                 status: 'STOP',
                 id_calatorie: trip.id_calatorie,
-                health_score: rezultatAnaliza ? rezultatAnaliza.health.overallHealth : null
+                health_score: rezultatAnaliza ? rezultatAnaliza.health.overallHealth : null,
+                report: tripReport
             });
             delete calatoriiActive[vin];
         });
@@ -331,6 +442,76 @@ app.get('/api/calatorii/:id/analiza', (req, res) => {
     });
 });
 
+app.get('/api/calatorii/:id/report', (req, res) => {
+    const id = req.params.id;
+    db.get(`SELECT ts.*, c.km_parcursi, c.consum_total_l, c.scor_eco, c.timestamp_start, c.timestamp_end
+            FROM trip_summary ts
+            JOIN calatorii c ON c.id_calatorie = ts.id_calatorie
+            WHERE ts.id_calatorie = ?`, [id], (err, row) => {
+        if (!row) return res.status(404).json({ eroare: "Raportul nu există pentru această cursă." });
+
+        let ai = null;
+        if (row.raport_ai_json) {
+            try { ai = JSON.parse(row.raport_ai_json); } catch(e) {}
+        }
+
+        const intelligence = ai?.intelligence || {};
+        const litriTotali = (row.cost_combustibil || 0) / THRESHOLDS.DIESEL_PRICE_PER_LITER;
+
+        const report = {
+            tripId: row.id_calatorie,
+            healthScore: row.health_score,
+            scores: {
+                engine: ai?.engine?.score || 100,
+                fuel: ai?.fuel?.score || 100,
+                driving: ai?.driving?.score || 100,
+                safety: ai?.safetyScore || 100
+            },
+            stats: {
+                distanceKm: Number((row.km_parcursi || 0).toFixed(2)),
+                durationMin: Math.round((row.durata_secunde || 0) / 60),
+                fuelLiters: Number(litriTotali.toFixed(2)),
+                consumptionPer100: row.km_parcursi > 0.1 ? Number((litriTotali / row.km_parcursi * 100).toFixed(1)) : 0,
+                costRON: Number((row.cost_combustibil || 0).toFixed(2)),
+                co2Kg: Number((row.emisii_co2 || 0).toFixed(2)),
+                ecoScore: row.scor_eco || 100
+            },
+            driving: {
+                smoothPct: ai?.driving?.style?.smoothPct || 0,
+                economicPct: ai?.driving?.style?.economicPct || 0,
+                aggressivePct: ai?.driving?.style?.aggressivePct || 0,
+                hardBrakes: row.hard_brakes || 0,
+                hardAccelerations: row.hard_accelerations || 0,
+                overspeeds: ai?.driving?.events?.overspeeds || 0
+            },
+            insights: [],
+            predictions: (intelligence.predictions || []).filter(p => p.severity === 'HIGH' || p.severity === 'MEDIUM').slice(0, 2),
+            timestamp: row.timestamp_start
+        };
+
+        // Generate insights from saved data
+        if (row.health_score >= 90) {
+            report.insights.push({ type: 'POSITIVE', icon: '✓', text: 'Cursă excelentă — sisteme în parametri optimi' });
+        }
+        if (report.driving.aggressivePct > 25) {
+            report.insights.push({ type: 'WARNING', icon: '⚡', text: `Condus agresiv ${Math.round(report.driving.aggressivePct)}% din cursă` });
+        } else if (report.driving.economicPct > 60) {
+            report.insights.push({ type: 'POSITIVE', icon: '✓', text: `Condus economic ${Math.round(report.driving.economicPct)}% din cursă` });
+        }
+        if (row.hard_brakes + row.hard_accelerations > 3) {
+            report.insights.push({ type: 'WARNING', icon: '⚠', text: `${row.hard_brakes + row.hard_accelerations} evenimente bruște detectate` });
+        }
+        if (row.coolant_max > 100) {
+            report.insights.push({ type: 'NEGATIVE', icon: '!', text: `Supraîncălzire: ${row.coolant_max}°C` });
+        }
+        if (row.voltaj_min < 13.2) {
+            report.insights.push({ type: 'WARNING', icon: '⚡', text: `Tensiune minimă ${row.voltaj_min}V` });
+        }
+
+        res.json(report);
+    });
+});
+
 app.get('/api/vehicul/:vin/statistici', (req, res) => {
     db.get(`SELECT COUNT(*) AS total_calatorii, SUM(km_parcursi) AS total_km, SUM(consum_total_l) AS total_combustibil, AVG(scor_eco) AS scor_mediu FROM calatorii WHERE vin = ? AND timestamp_end IS NOT NULL`, [req.params.vin], (err, stats) => res.json(stats || {}));
 });
@@ -358,6 +539,248 @@ app.post('/api/vehicul/:vin/stergere-erori', (req, res) => {
     res.json({ status: "SUCCES", mesaj: "Erorile au fost șterse." });
 });
 // ===============================================================
+// ENDPOINT VEHICLE HEALTH — alimentează Vehicle Health Dashboard
+// ===============================================================
+app.get('/api/vehicul/:vin/health', async (req, res) => {
+    const vin = req.params.vin || "WAUZZZ4A1RN000000";
+
+    try {
+        const lastTrips = await new Promise((resolve) => {
+            db.all(`SELECT ts.*, c.vin, c.timestamp_start, c.km_parcursi, c.consum_total_l, c.scor_eco
+                    FROM trip_summary ts
+                    JOIN calatorii c ON c.id_calatorie = ts.id_calatorie
+                    WHERE c.vin = ?
+                    ORDER BY ts.id_summary DESC LIMIT 10`, [vin], (err, rows) => resolve(rows || []));
+        });
+
+        if (lastTrips.length === 0) {
+            return res.json({
+                status: 'NO_DATA',
+                overallHealth: null,
+                scores: null,
+                subsystems: null,
+                predictions: [],
+                timeline: [],
+                lastTrip: null,
+                lastUpdated: null,
+                dataQuality: 'NONE'
+            });
+        }
+
+        const latest = lastTrips[0];
+        let ai = null;
+        if (latest.raport_ai_json) {
+            try { ai = JSON.parse(latest.raport_ai_json); } catch(e) {}
+        }
+
+        const intelligence = ai?.intelligence || {};
+
+        // Health scores
+        const overallHealth = latest.health_score || 100;
+        const scores = {
+            engine: ai?.engine?.score || 100,
+            fuel: ai?.fuel?.score || 100,
+            driving: ai?.driving?.score || 100,
+            safety: ai?.safetyScore || 100
+        };
+
+        // Subsisteme din VehicleDNA + predictions
+        const dna = intelligence.vehicle_dna || {};
+        const predictions = intelligence.predictions || [];
+        const subsystemsRaw = dna.subsystems || {};
+
+        // Calculare trend per subsistem (comparare medie ultimele 3 vs primele 3)
+        const computeTrend = (recentScores, olderScores) => {
+            if (recentScores.length < 2 || olderScores.length < 2) return 'STABLE';
+            const avgRecent = recentScores.reduce((s, v) => s + v, 0) / recentScores.length;
+            const avgOlder = olderScores.reduce((s, v) => s + v, 0) / olderScores.length;
+            const diff = avgRecent - avgOlder;
+            if (diff > 3) return 'IMPROVING';
+            if (diff < -3) return 'DECREASING';
+            return 'STABLE';
+        };
+
+        const recentHealthScores = lastTrips.slice(0, 3).map(t => t.health_score);
+        const olderHealthScores = lastTrips.slice(3, 7).map(t => t.health_score);
+        const overallTrend = computeTrend(recentHealthScores, olderHealthScores);
+
+        // Construire subsisteme cu statusuri inteligente
+        const getPredictionForSystem = (category) => {
+            return predictions.find(p => p.category === category && (p.severity === 'HIGH' || p.severity === 'MEDIUM'));
+        };
+
+        const subsystems = {
+            motor: {
+                score: subsystemsRaw.cooling?.score || scores.engine,
+                status: subsystemsRaw.cooling?.status || 'Normal',
+                trend: overallTrend,
+                prediction: getPredictionForSystem('TERMIC') || getPredictionForSystem('ADMISIE') || null
+            },
+            electric: {
+                score: subsystemsRaw.electrical?.score || 100,
+                status: subsystemsRaw.electrical?.status || 'Normal',
+                trend: (latest.voltaj_min < 13.4) ? 'DECREASING' : 'STABLE',
+                prediction: getPredictionForSystem('ELECTRIC') || null
+            },
+            turbo: {
+                score: subsystemsRaw.turbo?.score || 95,
+                status: subsystemsRaw.turbo?.status || 'Parametri în toleranță',
+                trend: 'STABLE',
+                prediction: getPredictionForSystem('TURBO') || null
+            },
+            combustibil: {
+                score: subsystemsRaw.fuel?.score || scores.fuel,
+                status: subsystemsRaw.fuel?.status || 'Injecție optimă',
+                trend: 'STABLE',
+                prediction: getPredictionForSystem('COMBUSTIBIL') || getPredictionForSystem('EMISII') || null
+            },
+            stil_condus: {
+                score: subsystemsRaw.driving_style?.score || scores.driving,
+                status: scores.driving > 85 ? 'Economic' : scores.driving > 65 ? 'Moderat' : 'Agresiv',
+                trend: 'STABLE',
+                prediction: null
+            }
+        };
+
+        // Timeline (ultimele 10 curse)
+        const timeline = lastTrips.map(t => ({
+            tripId: t.id_calatorie,
+            health: t.health_score,
+            date: new Date(t.created_at * 1000).toISOString().split('T')[0],
+            km: t.km_parcursi || 0,
+            duration: t.durata_secunde || 0
+        })).reverse();
+
+        // Ultima cursă
+        const lastTrip = {
+            id: latest.id_calatorie,
+            date: new Date(latest.created_at * 1000).toISOString(),
+            distanceKm: Number((latest.km_parcursi || 0).toFixed(1)),
+            durationMin: Math.round((latest.durata_secunde || 0) / 60),
+            consumptionPer100: latest.km_parcursi > 0.1
+                ? Number(((latest.cost_combustibil / THRESHOLDS.DIESEL_PRICE_PER_LITER) / latest.km_parcursi * 100).toFixed(1))
+                : 0,
+            ecoScore: latest.scor_eco || 100,
+            healthScore: latest.health_score
+        };
+
+        // Data quality
+        const sensorQuality = intelligence.sensorQuality || [];
+        const avgQuality = sensorQuality.length > 0
+            ? sensorQuality.reduce((s, sq) => s + sq.quality, 0) / sensorQuality.length
+            : 100;
+        const dataQuality = avgQuality >= 85 ? 'HIGH' : avgQuality >= 60 ? 'MEDIUM' : 'LOW';
+
+        res.json({
+            status: 'OK',
+            overallHealth,
+            overallTrend,
+            scores,
+            subsystems,
+            predictions: predictions.filter(p => p.severity === 'HIGH' || p.severity === 'MEDIUM').slice(0, 3),
+            timeline,
+            lastTrip,
+            lastUpdated: new Date(latest.created_at * 1000).toISOString(),
+            dataQuality
+        });
+
+    } catch (error) {
+        console.error('[HEALTH ENDPOINT EROARE]', error.message);
+        res.status(500).json({ eroare: "Nu s-a putut calcula starea de sănătate.", detalii: error.message });
+    }
+});
+
+// ===============================================================
+// ENDPOINT DETALIU SUBSISTEM — pentru SubsystemDetailScreen
+// ===============================================================
+app.get('/api/vehicul/:vin/health/:system', async (req, res) => {
+    const vin = req.params.vin || "WAUZZZ4A1RN000000";
+    const system = req.params.system;
+
+    try {
+        const latest = await new Promise((resolve) => {
+            db.get(`SELECT ts.* FROM trip_summary ts
+                    JOIN calatorii c ON c.id_calatorie = ts.id_calatorie
+                    WHERE c.vin = ?
+                    ORDER BY ts.id_summary DESC LIMIT 1`, [vin], (err, row) => resolve(row || null));
+        });
+
+        if (!latest || !latest.raport_ai_json) {
+            return res.status(404).json({ eroare: "Nu există date pentru acest vehicul." });
+        }
+
+        let ai;
+        try { ai = JSON.parse(latest.raport_ai_json); } catch(e) {
+            return res.status(500).json({ eroare: "Datele AI sunt corupte." });
+        }
+
+        const intelligence = ai.intelligence || {};
+        const predictions = (intelligence.predictions || []).filter(p => {
+            const categoryMap = {
+                motor: ['TERMIC', 'ADMISIE', 'MOTOR'],
+                electric: ['ELECTRIC'],
+                turbo: ['TURBO'],
+                combustibil: ['COMBUSTIBIL', 'EMISII'],
+                stil_condus: []
+            };
+            return (categoryMap[system] || []).includes(p.category);
+        });
+
+        const diagnostics = (intelligence.detailedExplainability || []).filter(d => {
+            const systemMap = {
+                motor: ['MOTOR', 'MOTOR / TRANSMISIE'],
+                electric: ['BATERIE & ELECTRIC', 'BATERIE'],
+                turbo: ['TURBO'],
+                combustibil: ['COMBUSTIBIL', 'COMBUSTIBIL / ADMISIE'],
+                stil_condus: ['COMPORTAMENT']
+            };
+            return (systemMap[system] || []).includes(d.system);
+        });
+
+        const reliability = (intelligence.reliability || []).filter(r => {
+            const systemMap = {
+                motor: ['MOTOR', 'MOTOR / TRANSMISIE'],
+                electric: ['BATERIE & ELECTRIC', 'BATERIE'],
+                turbo: ['TURBO'],
+                combustibil: ['COMBUSTIBIL', 'COMBUSTIBIL / ADMISIE'],
+                stil_condus: ['COMPORTAMENT']
+            };
+            return (systemMap[system] || []).includes(r.system);
+        });
+
+        // Evoluție per subsistem (ultimele 10 curse)
+        const evolution = await new Promise((resolve) => {
+            db.all(`SELECT ts.health_score, ts.voltaj_min, ts.voltaj_max, ts.coolant_max, ts.boost_mediu,
+                           ts.maf_mediu, ts.durata_secunde, ts.created_at, c.km_parcursi
+                    FROM trip_summary ts
+                    JOIN calatorii c ON c.id_calatorie = ts.id_calatorie
+                    WHERE c.vin = ?
+                    ORDER BY ts.id_summary DESC LIMIT 10`, [vin], (err, rows) => resolve((rows || []).reverse()));
+        });
+
+        const baseline = intelligence.baseline_comparison || {};
+        const correlations = intelligence.correlations || null;
+        const conflicts = intelligence.conflictResolution || {};
+
+        res.json({
+            system,
+            diagnostics,
+            reliability,
+            predictions,
+            evolution,
+            baseline,
+            correlations,
+            conflicts: conflicts.ambiguous || [],
+            sensorQuality: (intelligence.sensorQuality || []).slice(0, 5)
+        });
+
+    } catch (error) {
+        console.error('[HEALTH DETAIL EROARE]', error.message);
+        res.status(500).json({ eroare: "Nu s-a putut încărca detaliul.", detalii: error.message });
+    }
+});
+
+// ===============================================================
 // ENDPOINT MENTENANȚĂ PREDICTIVĂ (TREND ENGINE)
 // ===============================================================
 app.get('/api/vehicul/:vin/tendinte', async (req, res) => {
@@ -372,4 +795,137 @@ app.get('/api/vehicul/:vin/tendinte', async (req, res) => {
         res.status(500).json({ eroare: "Nu s-a putut calcula raportul de tendințe.", detalii: error.message });
     }
 });
+// ===============================================================
+// ENDPOINT FILTRARE AVANSATĂ CĂLĂTORII
+// ===============================================================
+app.get('/api/calatorii/filtrate', (req, res) => {
+    const { startDate, endDate, hasAlerts, hasDTC, tempOver, tag } = req.query;
+
+    let query = `
+        SELECT c.*, ts.health_score, ts.hard_brakes, ts.hard_accelerations, ts.nr_alerte, ts.nr_dtc,
+               ts.coolant_max, ts.trip_tag
+        FROM calatorii c
+        LEFT JOIN trip_summary ts ON ts.id_calatorie = c.id_calatorie
+        WHERE c.timestamp_end IS NOT NULL
+    `;
+    const params = [];
+
+    if (startDate) {
+        query += ` AND c.timestamp_start >= ?`;
+        params.push(new Date(startDate).getTime());
+    }
+    if (endDate) {
+        const endTs = new Date(endDate);
+        endTs.setHours(23, 59, 59, 999);
+        query += ` AND c.timestamp_start <= ?`;
+        params.push(endTs.getTime());
+    }
+    if (hasAlerts === 'true') {
+        query += ` AND (ts.hard_brakes > 0 OR ts.hard_accelerations > 0 OR ts.nr_alerte > 0)`;
+    }
+    if (hasDTC === 'true') {
+        query += ` AND ts.nr_dtc > 0`;
+    }
+    if (tempOver) {
+        query += ` AND ts.coolant_max > ?`;
+        params.push(parseFloat(tempOver));
+    }
+    if (tag && tag !== 'ALL') {
+        query += ` AND ts.trip_tag = ?`;
+        params.push(tag);
+    }
+
+    query += ` ORDER BY c.id_calatorie DESC`;
+
+    db.all(query, params, (err, rows) => {
+        if (err) return res.status(500).json({ eroare: err.message });
+        res.json(rows || []);
+    });
+});
+
+// ===============================================================
+// ENDPOINT RAPORT LUNAR AGREGAT
+// ===============================================================
+app.get('/api/rapoarte/lunar/:year/:month', (req, res) => {
+    const year = parseInt(req.params.year);
+    const month = parseInt(req.params.month);
+
+    const startOfMonth = new Date(year, month - 1, 1).getTime();
+    const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999).getTime();
+
+    db.all(`
+        SELECT c.*, ts.health_score, ts.hard_brakes, ts.hard_accelerations, ts.nr_alerte,
+               ts.nr_dtc, ts.cost_combustibil, ts.emisii_co2, ts.durata_secunde, ts.trip_tag
+        FROM calatorii c
+        LEFT JOIN trip_summary ts ON ts.id_calatorie = c.id_calatorie
+        WHERE c.timestamp_end IS NOT NULL
+          AND c.timestamp_start >= ? AND c.timestamp_start <= ?
+        ORDER BY c.timestamp_start ASC
+    `, [startOfMonth, endOfMonth], (err, rows) => {
+        if (err) return res.status(500).json({ eroare: err.message });
+
+        const trips = rows || [];
+        const totalKm = trips.reduce((s, t) => s + (t.km_parcursi || 0), 0);
+        const totalLitri = trips.reduce((s, t) => s + (t.consum_total_l || 0), 0);
+        const totalCost = trips.reduce((s, t) => s + (t.cost_combustibil || 0), 0);
+        const totalCO2 = trips.reduce((s, t) => s + (t.emisii_co2 || 0), 0);
+        const totalDurata = trips.reduce((s, t) => s + (t.durata_secunde || 0), 0);
+        const avgEco = trips.length > 0 ? Math.round(trips.reduce((s, t) => s + (t.scor_eco || 100), 0) / trips.length) : 0;
+        const avgHealth = trips.filter(t => t.health_score).length > 0
+            ? Math.round(trips.filter(t => t.health_score).reduce((s, t) => s + t.health_score, 0) / trips.filter(t => t.health_score).length)
+            : null;
+
+        const byTag = {};
+        trips.forEach(t => {
+            const tag = t.trip_tag || 'PERSONAL';
+            if (!byTag[tag]) byTag[tag] = { trips: 0, km: 0, litri: 0, cost: 0 };
+            byTag[tag].trips++;
+            byTag[tag].km += (t.km_parcursi || 0);
+            byTag[tag].litri += (t.consum_total_l || 0);
+            byTag[tag].cost += (t.cost_combustibil || 0);
+        });
+
+        res.json({
+            year,
+            month,
+            totalTrips: trips.length,
+            totalKm: Number(totalKm.toFixed(2)),
+            totalLitri: Number(totalLitri.toFixed(2)),
+            consumMediu100: totalKm > 0 ? Number((totalLitri / totalKm * 100).toFixed(1)) : 0,
+            totalCost: Number(totalCost.toFixed(2)),
+            totalCO2: Number(totalCO2.toFixed(2)),
+            totalDurataMin: Math.round(totalDurata / 60),
+            avgEcoScore: avgEco,
+            avgHealthScore: avgHealth,
+            byTag,
+            trips: trips.map(t => ({
+                id: t.id_calatorie,
+                date: t.timestamp_start,
+                km: t.km_parcursi,
+                litri: t.consum_total_l,
+                eco: t.scor_eco,
+                health: t.health_score,
+                tag: t.trip_tag || 'PERSONAL'
+            }))
+        });
+    });
+});
+
+// ===============================================================
+// ENDPOINT SETARE TAG PE O CURSĂ
+// ===============================================================
+app.put('/api/calatorii/:id/tag', (req, res) => {
+    const id = req.params.id;
+    const { tag } = req.body;
+    const validTags = ['BUSINESS', 'PERSONAL', 'TESTARE'];
+    if (!validTags.includes(tag)) {
+        return res.status(400).json({ eroare: `Tag invalid. Valori acceptate: ${validTags.join(', ')}` });
+    }
+    db.run(`UPDATE trip_summary SET trip_tag = ? WHERE id_calatorie = ?`, [tag, id], function(err) {
+        if (err) return res.status(500).json({ eroare: err.message });
+        if (this.changes === 0) return res.status(404).json({ eroare: 'Cursă negăsită' });
+        res.json({ success: true, id_calatorie: id, tag });
+    });
+});
+
 server.listen(3000, () => console.log(`[API REST & WS] Serverul funcționează pe http://localhost:3000`));

@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import { SERVER_URL } from '../utils/config'; // <- Importăm adresa auto-detectată!
+import { getActiveServerUrl } from '../utils/config';
 
 class SocketService {
     constructor() {
@@ -8,20 +8,21 @@ class SocketService {
 
     connect() {
         if (!this.socket) {
-            console.log(`[MOBIL -> WS] Încerc conectarea la: ${SERVER_URL}`);
-            
-            this.socket = io(SERVER_URL, {
+            const url = getActiveServerUrl();
+            console.log(`[MOBIL -> WS] Conectare la: ${url}`);
+
+            this.socket = io(url, {
                 transports: ['websocket', 'polling'],
                 reconnection: true,
                 reconnectionAttempts: 10
             });
 
             this.socket.on('connect', () => {
-                console.log('[MOBIL -> WS] CONECTAT CU SUCCES la server!');
+                console.log('[MOBIL -> WS] Conectat.');
             });
-            
+
             this.socket.on('disconnect', () => {
-                console.log('[MOBIL -> WS] Deconectat de la server.');
+                console.log('[MOBIL -> WS] Deconectat.');
             });
         }
         return this.socket;
