@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import { Linking } from 'react-native';
 import api from './api';
 import { getVin, getActiveServerUrl } from '../utils/config';
 
@@ -57,26 +56,8 @@ export async function fetchVehicleSummary() {
 export async function exportPDFReport() {
     const vehicleId = await getVehicleId();
     const url = `${getActiveServerUrl()}/api/vehicles/${vehicleId}/report/pdf`;
-    const fileName = `raport_vehicul_${Date.now()}.pdf`;
-    const localPath = FileSystem.documentDirectory + fileName;
-
-    const downloadResult = await FileSystem.downloadAsync(url, localPath);
-    if (downloadResult.status !== 200) {
-        throw new Error(`Serverul a returnat status ${downloadResult.status}`);
-    }
-
-    const canShare = await Sharing.isAvailableAsync();
-    if (!canShare) {
-        throw new Error('Partajarea nu este disponibilă pe acest dispozitiv.');
-    }
-
-    await Sharing.shareAsync(downloadResult.uri, {
-        mimeType: 'application/pdf',
-        dialogTitle: 'Raport Diagnostic Auto',
-        UTI: 'com.adobe.pdf',
-    });
-
-    return downloadResult.uri;
+    await Linking.openURL(url);
+    return url;
 }
 
 export async function fetchDocuments() {

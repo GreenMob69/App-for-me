@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TelemetryProvider } from './src/context/TelemetryContext';
 import { AppContext } from './src/context/AppContext';
 import { NotificationContext } from './src/context/NotificationContext';
-import { setCustomServerUrl } from './src/utils/config';
+import { setCustomServerUrl, setVin } from './src/utils/config';
 import api from './src/services/api';
 import socketService from './src/services/socket';
 import { colors, typography, layout, spacing } from './src/theme';
@@ -24,6 +24,7 @@ import TripHistoryScreen    from './src/screens/TripHistoryScreen';
 import SettingsScreen       from './src/screens/SettingsScreen';
 import VehicleOnboardingScreen from './src/screens/VehicleOnboardingScreen';
 import VehicleProfileScreen from './src/screens/VehicleProfileScreen';
+import VehicleHubScreen     from './src/screens/VehicleHubScreen';
 import AIExpertScreen       from './src/screens/AIExpertScreen';
 import NotificationScreen   from './src/screens/NotificationScreen';
 import GlobalSearchScreen   from './src/screens/GlobalSearchScreen';
@@ -80,20 +81,14 @@ function TabNavigator() {
                     },
                 }}
             />
-            <Tab.Screen name="Mentenanta" options={{ tabBarLabel: 'MENTENANȚĂ' }}>
-                {() => <ErrorBoundary><MaintenanceScreen /></ErrorBoundary>}
-            </Tab.Screen>
             <Tab.Screen name="Live" options={{ tabBarLabel: 'LIVE' }}>
                 {() => <ErrorBoundary><LiveDashboardScreen /></ErrorBoundary>}
-            </Tab.Screen>
-            <Tab.Screen name="Expert" options={{ tabBarLabel: 'EXPERT' }}>
-                {() => <ErrorBoundary><AIExpertScreen /></ErrorBoundary>}
             </Tab.Screen>
             <Tab.Screen name="Istoric" options={{ tabBarLabel: 'CURSE' }}>
                 {() => <ErrorBoundary><TripHistoryScreen /></ErrorBoundary>}
             </Tab.Screen>
-            <Tab.Screen name="Setari" options={{ tabBarLabel: 'SETARI' }}>
-                {() => <ErrorBoundary><SettingsScreen /></ErrorBoundary>}
+            <Tab.Screen name="Vehicul" options={{ tabBarLabel: 'VEHICUL' }}>
+                {() => <ErrorBoundary><VehicleHubScreen /></ErrorBoundary>}
             </Tab.Screen>
         </Tab.Navigator>
     );
@@ -156,6 +151,9 @@ export default function App() {
                     socketService.disconnect();
                     socketService.socket = null;
                 }
+
+                const savedVin = await AsyncStorage.getItem('@active_vin');
+                if (savedVin) setVin(savedVin);
             } catch (e) {}
 
             const vehicleId = await AsyncStorage.getItem('@vehicle_id');

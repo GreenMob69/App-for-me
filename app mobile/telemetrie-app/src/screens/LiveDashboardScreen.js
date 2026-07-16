@@ -1,5 +1,8 @@
-import React, { useContext, useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, useWindowDimensions, Modal, Platform, StatusBar } from 'react-native';
+import React, { useContext, useState, useMemo, useCallback, useRef } from 'react';
+import {
+    View, Text, StyleSheet, TouchableOpacity, ScrollView,
+    useWindowDimensions, Modal, Platform, StatusBar, PanResponder,
+} from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import { LiveContext } from '../context/LiveContext';
 import { AlertContext } from '../context/AlertContext';
@@ -9,28 +12,30 @@ import CircularGauge from '../components/CircularGauge';
 import RecommendationCard from '../components/ui/RecommendationCard';
 import { colors, typography, radii, spacing, layout } from '../theme';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const EXPERT_TABS = [
-    { id: 'MOTOR',  label: 'Motor'       },
-    { id: 'TEMP',   label: 'Temperaturi' },
-    { id: 'AER',    label: 'Aer & Turbo' },
-    { id: 'COMB',   label: 'Combustibil' },
-    { id: 'LAMBDA', label: 'Lambda'      },
-    { id: 'EMISII', label: 'Emisii & DPF'},
-    { id: 'TRANS',  label: 'Transmisie'  },
-    { id: 'ECU',    label: 'ECU & Timp'  },
+    { id: 'MOTOR',  label: 'Motor'        },
+    { id: 'TEMP',   label: 'Temperaturi'  },
+    { id: 'AER',    label: 'Aer & Turbo'  },
+    { id: 'COMB',   label: 'Combustibil'  },
+    { id: 'LAMBDA', label: 'Lambda'       },
+    { id: 'EMISII', label: 'Emisii & DPF' },
+    { id: 'TRANS',  label: 'Transmisie'   },
+    { id: 'ECU',    label: 'ECU & Timp'   },
 ];
 
 const OSCILLOSCOPE_METRICS = [
-    { id: 'rpm',        label: 'RPM',       color: colors.text.primary,    unit: 'RPM',    defaultMax: 5000  },
-    { id: 'speed',      label: 'Viteză',    color: colors.status.good,     unit: 'km/h',   defaultMax: 220   },
-    { id: 'map',        label: 'MAP',       color: colors.accent.default,  unit: 'kPa',    defaultMax: 250   },
-    { id: 'maf',        label: 'MAF',       color: colors.status.monitor,  unit: 'g/s',    defaultMax: 150   },
-    { id: 'inst_cons',  label: 'Consum',    color: colors.status.critical, unit: 'L/h',    defaultMax: 20    },
-    { id: 'coolant',    label: 'Temp Apă',  color: colors.status.critical, unit: '°C',     defaultMax: 110   },
-    { id: 'oil',        label: 'Temp Ulei', color: colors.status.monitor,  unit: '°C',     defaultMax: 130   },
-    { id: 'ecu_volt',   label: 'Voltaj',    color: colors.status.good,     unit: 'V',      defaultMax: 16    },
-    { id: 'rail_press', label: 'Rail Press',color: colors.text.secondary,  unit: 'kPa',    defaultMax: 40000 },
-    { id: 'accel_g',    label: 'G-Force',   color: colors.status.critical, unit: 'G',      defaultMax: 1.5   },
+    { id: 'rpm',        label: 'RPM',        color: colors.text.primary,    unit: 'RPM',    defaultMax: 5000  },
+    { id: 'speed',      label: 'Viteză',     color: colors.status.good,     unit: 'km/h',   defaultMax: 220   },
+    { id: 'map',        label: 'MAP',        color: colors.accent.default,  unit: 'kPa',    defaultMax: 250   },
+    { id: 'maf',        label: 'MAF',        color: colors.status.monitor,  unit: 'g/s',    defaultMax: 150   },
+    { id: 'inst_cons',  label: 'Consum',     color: colors.status.critical, unit: 'L/h',    defaultMax: 20    },
+    { id: 'coolant',    label: 'Temp Apă',   color: colors.status.critical, unit: '°C',     defaultMax: 110   },
+    { id: 'oil',        label: 'Temp Ulei',  color: colors.status.monitor,  unit: '°C',     defaultMax: 130   },
+    { id: 'ecu_volt',   label: 'Voltaj',     color: colors.status.good,     unit: 'V',      defaultMax: 16    },
+    { id: 'rail_press', label: 'Rail Press', color: colors.text.secondary,  unit: 'kPa',    defaultMax: 40000 },
+    { id: 'accel_g',    label: 'G-Force',    color: colors.status.critical, unit: 'G',      defaultMax: 1.5   },
 ];
 
 // ─── AI Live Assistant ────────────────────────────────────────────────────────
@@ -88,6 +93,18 @@ function buildContextualAlert(liveData, latestAlert) {
     return null;
 }
 
+// ─── SecMetric — small live tile ──────────────────────────────────────────────
+
+const SecMetric = ({ label, value, unit, color = colors.text.primary }) => (
+    <View style={styles.secCard}>
+        <Text style={styles.secLabel}>{label}</Text>
+        <Text style={[styles.secValue, styles.tabular, { color }]} numberOfLines={1}>
+            {value ?? 0}
+        </Text>
+        {unit ? <Text style={styles.secUnit}>{unit}</Text> : null}
+    </View>
+);
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const LiveDashboardScreen = () => {
@@ -98,10 +115,53 @@ const LiveDashboardScreen = () => {
 
     const [showNotificationsModal, setShowNotificationsModal] = useState(false);
     const [expertMode, setExpertMode] = useState(false);
-    const [activeTab, setActiveTab] = useState('MOTOR');
-    const [zoomX, setZoomX] = useState(10);
+    const [activeTab,  setActiveTab]  = useState('MOTOR');
+    const [zoomX,      setZoomX]      = useState(10);
     const [autoScaleY, setAutoScaleY] = useState(true);
-    const [zoomYMult, setZoomYMult] = useState(1);
+    const [zoomYMult,  setZoomYMult]  = useState(1);
+
+    // Pinch-to-zoom refs — keep current zoom readable inside PanResponder (no stale closures)
+    const zoomXRef    = useRef(10);
+    const pinchState  = useRef({ startDist: 0, startZoom: 10, active: false });
+    const pinchPanResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: evt => evt.nativeEvent.touches.length === 2,
+            onMoveShouldSetPanResponder:  evt => evt.nativeEvent.touches.length === 2,
+            onPanResponderGrant: evt => {
+                const t0 = evt.nativeEvent.touches[0];
+                const t1 = evt.nativeEvent.touches[1];
+                if (!t0 || !t1) return;
+                const dx = t0.pageX - t1.pageX;
+                const dy = t0.pageY - t1.pageY;
+                pinchState.current = {
+                    startDist: Math.sqrt(dx * dx + dy * dy),
+                    startZoom: zoomXRef.current,
+                    active: true,
+                };
+            },
+            onPanResponderMove: evt => {
+                if (!pinchState.current.active) return;
+                const t0 = evt.nativeEvent.touches[0];
+                const t1 = evt.nativeEvent.touches[1];
+                if (!t0 || !t1) return;
+                const dx   = t0.pageX - t1.pageX;
+                const dy   = t0.pageY - t1.pageY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (pinchState.current.startDist < 10) return;
+                const scale   = dist / pinchState.current.startDist;
+                // spread fingers = zoom OUT (more px/point = fewer points visible)
+                // pinch fingers  = zoom IN  (fewer px/point = more points visible)
+                const newZoom = Math.max(2, Math.min(40, Math.round(pinchState.current.startZoom / scale)));
+                zoomXRef.current = newZoom;
+                setZoomX(newZoom);
+            },
+            onPanResponderRelease: () => { pinchState.current.active = false; },
+            onPanResponderTerminate: () => { pinchState.current.active = false; },
+        })
+    ).current;
+
+    // Keep ref in sync when zoom changes via buttons
+    zoomXRef.current = zoomX;
 
     const m    = liveData.motor        || {};
     const t    = liveData.temperaturi  || {};
@@ -123,7 +183,6 @@ const LiveDashboardScreen = () => {
         () => buildAssistantMsg(liveData, isConnected),
         [liveData, isConnected],
     );
-
     const contextualAlert = useMemo(
         () => buildContextualAlert(liveData, latestAlert),
         [liveData, latestAlert],
@@ -133,17 +192,17 @@ const LiveDashboardScreen = () => {
     const renderCard = useCallback((label, val, unit, color = colors.text.primary, isLarge = false) => {
         if (activeTemplate === 'CLASSIC') {
             let min = 0; let max = 100;
-            if (unit === 'RPM')                            max = 5000;
-            else if (unit === 'km/h')                      max = 220;
-            else if (unit === '°C')                        max = (label.includes('CAT') || label.includes('EGT')) ? 800 : 130;
-            else if (unit === 'kPa')                       max = label.includes('RAIL') ? 40000 : 300;
-            else if (unit === 'bar')                       max = 2.5;
-            else if (unit === 'V')                         max = 16;
-            else if (unit === 'g/s')                       max = 150;
-            else if (unit === 'L/h' || unit === 'L/100km') max = 20;
-            else if (unit === 'Nm')                        max = 400;
-            else if (unit === 'mg' || unit === 'mg/crs')   max = 60;
-            else if (unit === '°')                         { min = -10; max = 30; }
+            if (unit === 'RPM')                             max = 5000;
+            else if (unit === 'km/h')                       max = 220;
+            else if (unit === '°C')                         max = (label.includes('CAT') || label.includes('EGT')) ? 800 : 130;
+            else if (unit === 'kPa')                        max = label.includes('RAIL') ? 40000 : 300;
+            else if (unit === 'bar')                        max = 2.5;
+            else if (unit === 'V')                          max = 16;
+            else if (unit === 'g/s')                        max = 150;
+            else if (unit === 'L/h' || unit === 'L/100km')  max = 20;
+            else if (unit === 'Nm')                         max = 400;
+            else if (unit === 'mg' || unit === 'mg/crs')    max = 60;
+            else if (unit === '°')                          { min = -10; max = 30; }
             const gaugeColor = color === colors.text.primary ? colors.accent.default : color;
             return (
                 <CircularGauge
@@ -170,9 +229,26 @@ const LiveDashboardScreen = () => {
     }, [activeTemplate, width]);
 
     // =========================================================================
-    // SIMPLE MODE — 4 KPIs + AI Assistant + Contextual Alert
+    // DRIVE MODE — CircularGauges + secondary strip + AI
     // =========================================================================
     const renderSimpleMode = () => {
+        const cool  = t.coolant ?? 0;
+        const volt  = bat.ecu_volt ?? 0;
+        const boost = a.boost_actual ?? 0;
+        const cons  = c.inst_cons ?? 0;
+        const gear  = tr.gear;
+        const eco   = liveData.scor_eco ?? 100;
+
+        const coolantColor = cool > 105 ? colors.status.critical
+            : cool > 95  ? colors.status.caution
+            : cool > 60  ? colors.status.good
+            : colors.accent.default;
+
+        const voltColor = volt > 0 && volt < 13.0 ? colors.status.critical
+            : volt > 0 && volt < 13.5 ? colors.status.monitor
+            : volt > 0 ? colors.status.good
+            : colors.text.secondary;
+
         const msgColorMap = {
             critical: colors.status.critical,
             serious:  colors.status.caution,
@@ -182,69 +258,110 @@ const LiveDashboardScreen = () => {
             neutral:  colors.text.tertiary,
         };
         const msgColor = msgColorMap[assistantMsg.level] || colors.text.secondary;
+        const cardBg = assistantMsg.level === 'critical' ? colors.tint.critical
+            : assistantMsg.level === 'serious' ? colors.tint.caution : 'transparent';
         const cardBorderColor = (assistantMsg.level === 'critical' || assistantMsg.level === 'serious')
             ? colors.status.critical
             : assistantMsg.level === 'warning'
             ? colors.status.monitor
             : colors.border.default;
-        const cardBg = assistantMsg.level === 'critical' ? colors.tint.critical : 'transparent';
+
+        const gaugeSize = Math.round(width * 0.42);
+        const ecoColor = eco >= 85 ? colors.status.good : eco >= 65 ? colors.status.monitor : colors.status.caution;
 
         return (
-            <View style={styles.simpleContainer}>
-                <View style={styles.kpiRow}>
-                    <View style={styles.kpiCard}>
-                        <Text style={styles.kpiLabel}>VITEZĂ</Text>
-                        <Text style={[styles.kpiValue, styles.tabular]}>{m.speed ?? 0}</Text>
-                        <Text style={styles.kpiUnit}>km/h</Text>
-                    </View>
-                    <View style={styles.kpiCard}>
-                        <Text style={styles.kpiLabel}>TURAȚIE</Text>
-                        <Text style={[styles.kpiValue, styles.tabular]}>{m.rpm ?? 0}</Text>
-                        <Text style={styles.kpiUnit}>RPM</Text>
-                    </View>
-                </View>
-                <View style={[styles.kpiRow, styles.kpiRowMt]}>
-                    <View style={styles.kpiCard}>
-                        <Text style={styles.kpiLabel}>TEMP. MOTOR</Text>
-                        <Text style={[
-                            styles.kpiValue, styles.tabular,
-                            (t.coolant ?? 0) > 95 && { color: colors.status.critical },
-                        ]}>{t.coolant ?? 0}</Text>
-                        <Text style={styles.kpiUnit}>°C</Text>
-                    </View>
-                    <View style={styles.kpiCard}>
-                        <Text style={styles.kpiLabel}>CONSUM</Text>
-                        <Text style={[styles.kpiValue, styles.tabular]}>{c.inst_cons ?? 0}</Text>
-                        <Text style={styles.kpiUnit}>L/h</Text>
-                    </View>
+            <View style={styles.driveContainer}>
+                {/* ── Primary gauges: Speed + RPM ───────────────────── */}
+                <View style={styles.gaugesRow}>
+                    <CircularGauge
+                        label="VITEZĂ"
+                        value={m.speed ?? 0}
+                        unit="km/h"
+                        color={colors.status.good}
+                        min={0}
+                        max={220}
+                        size={gaugeSize}
+                    />
+                    <CircularGauge
+                        label="TURAȚIE"
+                        value={m.rpm ?? 0}
+                        unit="RPM"
+                        color={colors.accent.default}
+                        min={0}
+                        max={5000}
+                        size={gaugeSize}
+                    />
                 </View>
 
-                <View style={[styles.assistantCard, { borderColor: cardBorderColor, backgroundColor: cardBg }]}>
-                    <Text style={[styles.assistantText, { color: msgColor }]}>{assistantMsg.text}</Text>
+                {/* ── DPF regen indicator ───────────────────────────── */}
+                {(dpf.regen_status === 'ACTIVE' || dpf.regen_status === 'ON') && (
+                    <View style={styles.dpfBanner}>
+                        <Text style={styles.dpfText}>♻  Regenerare DPF activă — drum lung recomandat</Text>
+                    </View>
+                )}
+
+                {/* ── Secondary strip: 4 live values ───────────────── */}
+                <View style={styles.secRow}>
+                    <SecMetric
+                        label="TEMP"
+                        value={cool}
+                        unit="°C"
+                        color={coolantColor}
+                    />
+                    <SecMetric
+                        label="CONSUM"
+                        value={cons}
+                        unit="L/h"
+                        color={cons > 15 ? colors.status.caution : colors.text.primary}
+                    />
+                    <SecMetric
+                        label="VOLTAJ"
+                        value={volt > 0 ? volt : '—'}
+                        unit={volt > 0 ? 'V' : ''}
+                        color={voltColor}
+                    />
+                    <SecMetric
+                        label="BOOST"
+                        value={boost}
+                        unit="bar"
+                        color={boost > 1.8 ? colors.status.caution : colors.text.primary}
+                    />
                 </View>
 
-                {contextualAlert ? (
+                {/* ── AI message ────────────────────────────────────── */}
+                <View style={[styles.assistantCard, {
+                    borderLeftColor: msgColor,
+                    backgroundColor: cardBg,
+                    borderColor: cardBorderColor,
+                }]}>
+                    <Text style={[styles.assistantText, { color: msgColor }]}>
+                        {assistantMsg.text}
+                    </Text>
+                </View>
+
+                {/* ── Contextual alert ──────────────────────────────── */}
+                {contextualAlert && (
                     <RecommendationCard
                         title={contextualAlert.title}
                         description={contextualAlert.description}
                         priority={contextualAlert.priority}
                         style={styles.alertCard}
                     />
-                ) : null}
+                )}
 
+                {/* ── Bottom: Gear + Eco Score ──────────────────────── */}
                 <View style={styles.bottomRow}>
-                    <View style={styles.infoChip}>
-                        <Text style={styles.infoChipLabel}>TREAPTĂ</Text>
-                        <Text style={[styles.infoChipValue, { color: colors.accent.default }]}>{tr.gear || 'N'}</Text>
+                    <View style={styles.gearCard}>
+                        <Text style={styles.gearLabel}>TREAPTĂ</Text>
+                        <Text style={[styles.gearValue, styles.tabular, { color: colors.accent.default }]}>
+                            {gear || 'N'}
+                        </Text>
                     </View>
-                    <View style={styles.infoChip}>
-                        <Text style={styles.infoChipLabel}>ECO SCORE</Text>
-                        <Text style={[
-                            styles.infoChipValue, styles.tabular,
-                            { color: (liveData.scor_eco ?? 100) >= 80 ? colors.status.good : colors.status.monitor },
-                        ]}>
-                            {liveData.scor_eco ?? 100}
-                            <Text style={{ fontSize: typography.sizes.caption, color: colors.text.secondary }}>/100</Text>
+                    <View style={[styles.ecoCard, { borderColor: ecoColor }]}>
+                        <Text style={styles.ecoLabel}>ECO SCORE</Text>
+                        <Text style={[styles.ecoValue, styles.tabular, { color: ecoColor }]}>
+                            {eco}
+                            <Text style={styles.ecoMax}>/100</Text>
                         </Text>
                     </View>
                 </View>
@@ -281,7 +398,7 @@ const LiveDashboardScreen = () => {
                 ]}
                 {activeTab === 'TEMP' && [
                     renderCard("Lichid Răcire",     t.coolant || 0,   "°C", (t.coolant || 0) > 95 ? colors.status.critical : colors.accent.default),
-                    renderCard("Aer Admisie (IAT)", t.iat || 0,      "°C", colors.accent.default),
+                    renderCard("Aer Admisie (IAT)", t.iat || 0,       "°C", colors.accent.default),
                     renderCard("Ambient",           t.ambient || 0,   "°C", colors.text.secondary),
                     renderCard("Ulei Motor",        t.oil || 0,       "°C", colors.status.monitor),
                     renderCard("Catalizator B1S1",  t.cat_b1s1 || 0,  "°C", colors.status.critical),
@@ -314,13 +431,13 @@ const LiveDashboardScreen = () => {
                     renderCard("Knock Retard",    ign.knock_retard || 0,"°", colors.status.good),
                 ]}
                 {activeTab === 'EMISII' && [
-                    renderCard("EGR Comandat",      em.egr_cmd || 0,         "%",  colors.accent.default),
-                    renderCard("EGR Eroare",        em.egr_error || 0,       "%",  colors.status.good),
-                    renderCard("DPF Presiune Dif.", dpf.diff_press || 0,    "kPa", colors.status.monitor),
-                    renderCard("DPF Funingine",     dpf.soot_load || 0,     "g",   colors.status.critical),
-                    renderCard("DPF Regenerare",    dpf.regen_status || "OFF", "-", colors.status.good),
-                    renderCard("EGT Sensor 1",      dpf.egt1 || 0,           "°C", colors.status.critical),
-                    renderCard("EGT Sensor 2",      dpf.egt2 || 0,           "°C", colors.text.secondary),
+                    renderCard("EGR Comandat",      em.egr_cmd || 0,         "%",   colors.accent.default),
+                    renderCard("EGR Eroare",        em.egr_error || 0,       "%",   colors.status.good),
+                    renderCard("DPF Presiune Dif.", dpf.diff_press || 0,    "kPa",  colors.status.monitor),
+                    renderCard("DPF Funingine",     dpf.soot_load || 0,     "g",    colors.status.critical),
+                    renderCard("DPF Regenerare",    dpf.regen_status || "OFF", "-",  colors.status.good),
+                    renderCard("EGT Sensor 1",      dpf.egt1 || 0,          "°C",   colors.status.critical),
+                    renderCard("EGT Sensor 2",      dpf.egt2 || 0,          "°C",   colors.text.secondary),
                 ]}
                 {activeTab === 'TRANS' && [
                     renderCard("Temp. Transmisie",  tr.trans_temp || 0,     "°C",  colors.status.monitor),
@@ -349,20 +466,20 @@ const LiveDashboardScreen = () => {
     const chartHistory = useMemo(() => getChartHistory(), [chartVersion]);
 
     const renderChartView = () => {
-        const config = OSCILLOSCOPE_METRICS.find(metric => metric.id === selectedMetric) || OSCILLOSCOPE_METRICS[0];
-        const maxPoints = Math.floor((width - 80) / zoomX);
+        const config     = OSCILLOSCOPE_METRICS.find(metric => metric.id === selectedMetric) || OSCILLOSCOPE_METRICS[0];
+        const maxPoints  = Math.floor((width - 80) / zoomX);
         const slicedHistory = chartHistory.slice(-maxPoints);
-        const visibleData = slicedHistory.map(item => ({
-            value: Number(item[config.id]) || 0,
-            label: item.label || '',
+        const visibleData   = slicedHistory.map(item => ({
+            value:   Number(item[config.id]) || 0,
+            label:   item.label || '',
             secunda: item.secunda || 0,
         }));
 
-        let maxValue = config.defaultMax * zoomYMult;
+        let maxValue  = config.defaultMax * zoomYMult;
         let stepValue = Math.round(maxValue / 4);
         if (autoScaleY && visibleData.length > 0) {
             const maxInSlice = Math.max(...visibleData.map(i => i.value), 5);
-            maxValue = Math.ceil(maxInSlice * 1.15);
+            maxValue  = Math.ceil(maxInSlice * 1.15);
             stepValue = Math.ceil(maxValue / 4);
         }
 
@@ -403,8 +520,8 @@ const LiveDashboardScreen = () => {
                     </TouchableOpacity>
                 </View>
 
-                <View style={styles.chartWrapper}>
-                    <Text style={styles.chartTitle}>{config.label} ({config.unit}) — ultim. {visibleData.length}s</Text>
+                <View style={styles.chartWrapper} {...pinchPanResponder.panHandlers}>
+                    <Text style={styles.chartTitle}>{config.label} ({config.unit}) — ultim. {visibleData.length}s · {zoomX}px/pt</Text>
                     <LineChart
                         data={visibleData}
                         width={width - 80}
@@ -456,6 +573,7 @@ const LiveDashboardScreen = () => {
     // ─── Render ───────────────────────────────────────────────────────────────
     return (
         <View style={styles.mainContainer}>
+            {/* ── Header ──────────────────────────────────────────────────── */}
             <View style={styles.header}>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>Driving</Text>
@@ -497,13 +615,14 @@ const LiveDashboardScreen = () => {
                 </View>
             </View>
 
+            {/* ── View toggle ─────────────────────────────────────────────── */}
             <View style={styles.viewToggle}>
                 <TouchableOpacity
                     style={[styles.toggleBtn, viewMode === 'COCKPIT' && styles.toggleBtnActive]}
                     onPress={() => setViewMode('COCKPIT')}
                 >
                     <Text style={[styles.toggleText, viewMode === 'COCKPIT' && styles.toggleTextActive]}>
-                        {expertMode ? 'Expert' : 'Simplu'}
+                        {expertMode ? 'Expert' : 'Drive'}
                     </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -521,6 +640,7 @@ const LiveDashboardScreen = () => {
                 }
             </ScrollView>
 
+            {/* ── Notifications modal ─────────────────────────────────────── */}
             <Modal
                 visible={showNotificationsModal}
                 transparent
@@ -532,7 +652,7 @@ const LiveDashboardScreen = () => {
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>Alerte Sesiune</Text>
                             <TouchableOpacity onPress={() => setShowNotificationsModal(false)} style={styles.closeBtn}>
-                                <Text style={{ color: colors.text.primary, fontWeight: typography.weights.bold }}>X</Text>
+                                <Text style={{ color: colors.text.primary, fontWeight: typography.weights.bold }}>✕</Text>
                             </TouchableOpacity>
                         </View>
                         <ScrollView style={{ maxHeight: 400 }}>
@@ -572,7 +692,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: colors.border.default,
     },
-    title: { fontSize: typography.sizes.title3, fontWeight: typography.weights.bold, color: colors.text.primary },
+    title:    { fontSize: typography.sizes.title3, fontWeight: typography.weights.bold, color: colors.text.primary },
     subtitle: { fontSize: typography.sizes.caption, color: colors.text.secondary, marginTop: spacing[1] - 2 },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
     iconBtn: {
@@ -586,10 +706,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         minWidth: 32,
     },
-    iconBtnActive: {
-        backgroundColor: colors.accent.default,
-        borderColor: colors.accent.border,
-    },
+    iconBtnActive: { backgroundColor: colors.accent.default, borderColor: colors.accent.border },
     iconBtnText: { color: colors.text.secondary, fontSize: typography.sizes.label2, fontWeight: typography.weights.bold },
     badge: {
         position: 'absolute', top: -4, right: -4,
@@ -601,8 +718,8 @@ const styles = StyleSheet.create({
     },
     badgeText: { color: '#FFFFFF', fontSize: typography.sizes.micro - 1, fontWeight: typography.weights.heavy },
     statusDot: { paddingHorizontal: spacing[2], paddingVertical: spacing[1], borderRadius: radii.full, borderWidth: 1 },
-    statusOnline: { backgroundColor: colors.tint.good, borderColor: colors.status.good },
-    statusOffline: { backgroundColor: colors.tint.critical, borderColor: colors.status.critical },
+    statusOnline:  { backgroundColor: colors.tint.good,     borderColor: colors.status.good     },
+    statusOffline: { backgroundColor: colors.tint.critical,  borderColor: colors.status.critical },
     statusText: { fontSize: typography.sizes.micro, fontWeight: typography.weights.bold },
 
     // ── View Toggle ───────────────────────────────────────────────────────────
@@ -620,55 +737,76 @@ const styles = StyleSheet.create({
     toggleText: { color: colors.text.secondary, fontWeight: typography.weights.bold, fontSize: typography.sizes.label2 },
     toggleTextActive: { color: colors.text.primary },
 
-    // ── Simple Mode ───────────────────────────────────────────────────────────
-    simpleContainer: { paddingTop: spacing[4] },
-    kpiRow: { flexDirection: 'row', justifyContent: 'space-between' },
-    kpiRowMt: { marginTop: spacing[3] },
-    kpiCard: {
-        width: '48.5%',
+    // ── Drive Mode ────────────────────────────────────────────────────────────
+    driveContainer: { paddingTop: spacing[2] },
+    gaugesRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        paddingHorizontal: spacing[2],
+    },
+    dpfBanner: {
+        backgroundColor: colors.tint.monitor,
+        borderWidth: 1,
+        borderColor: colors.status.monitor,
+        borderRadius: radii.sm,
+        paddingVertical: spacing[2],
+        paddingHorizontal: spacing[3],
+        alignItems: 'center',
+        marginTop: spacing[2],
+    },
+    dpfText: {
+        color: colors.status.monitor,
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.bold,
+    },
+    secRow: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        marginTop: spacing[3],
+    },
+    secCard: {
+        flex: 1,
         backgroundColor: colors.bg[1],
-        borderRadius: radii.md,
-        padding: spacing[4],
+        borderRadius: radii.sm,
+        paddingVertical: spacing[2] + 2,
+        paddingHorizontal: spacing[1],
         borderWidth: 1,
         borderColor: colors.border.default,
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 100,
+        minHeight: 68,
     },
-    kpiLabel: {
-        fontSize: typography.sizes.micro,
+    secLabel: {
+        fontSize: 8,
         color: colors.text.secondary,
         fontWeight: typography.weights.bold,
-        letterSpacing: 0.5,
-        marginBottom: spacing[1],
         textTransform: 'uppercase',
+        letterSpacing: 0.4,
+        marginBottom: spacing[1] - 2,
     },
-    kpiValue: {
-        fontSize: typography.sizes.hero,
+    secValue: {
+        fontSize: typography.sizes.title3,
         fontWeight: typography.weights.heavy,
         color: colors.text.primary,
     },
-    kpiUnit: {
-        fontSize: typography.sizes.label2,
+    secUnit: {
+        fontSize: typography.sizes.micro - 1,
         color: colors.text.secondary,
-        marginTop: spacing[1] - 2,
+        marginTop: spacing[1] - 3,
     },
     assistantCard: {
         backgroundColor: colors.bg[1],
         borderRadius: radii.md,
-        padding: spacing[4],
+        padding: spacing[3] + 2,
         borderWidth: 1,
-        borderColor: colors.border.default,
-        marginTop: spacing[4],
-        marginBottom: spacing[3],
-        alignItems: 'center',
+        borderLeftWidth: 4,
+        marginTop: spacing[3],
+        marginBottom: spacing[2],
     },
     assistantText: {
-        fontSize: typography.sizes.body,
-        color: colors.text.secondary,
-        textAlign: 'center',
+        fontSize: typography.sizes.label1,
+        lineHeight: typography.sizes.label1 * 1.55,
         fontStyle: 'italic',
-        lineHeight: typography.sizes.body * 1.5,
     },
     alertCard: { marginBottom: spacing[3] },
     bottomRow: {
@@ -676,26 +814,53 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         gap: spacing[3],
     },
-    infoChip: {
+    gearCard: {
         flex: 1,
         backgroundColor: colors.bg[1],
         borderRadius: radii.md,
-        padding: spacing[3] + 2,
+        paddingVertical: spacing[4],
         borderWidth: 1,
         borderColor: colors.border.default,
         alignItems: 'center',
+        justifyContent: 'center',
     },
-    infoChipLabel: {
+    ecoCard: {
+        flex: 1,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        paddingVertical: spacing[4],
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    gearLabel: {
         fontSize: typography.sizes.micro,
         color: colors.text.secondary,
         fontWeight: typography.weights.bold,
-        marginBottom: spacing[1],
         textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: spacing[1],
     },
-    infoChipValue: {
-        fontSize: typography.sizes.title2,
+    gearValue: {
+        fontSize: typography.sizes.display,
         fontWeight: typography.weights.heavy,
-        color: colors.text.primary,
+    },
+    ecoLabel: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.bold,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: spacing[1],
+    },
+    ecoValue: {
+        fontSize: typography.sizes.hero,
+        fontWeight: typography.weights.heavy,
+    },
+    ecoMax: {
+        fontSize: typography.sizes.body1,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.regular,
     },
 
     // ── Expert Mode ───────────────────────────────────────────────────────────
@@ -731,9 +896,9 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         textTransform: 'uppercase',
     },
-    val: { fontSize: typography.sizes.title2 + 2, fontWeight: typography.weights.heavy, color: colors.text.primary },
-    valLarge: { fontSize: typography.sizes.hero, fontWeight: typography.weights.heavy },
-    unit: { fontSize: typography.sizes.label2, color: colors.text.secondary, fontWeight: typography.weights.regular },
+    val:     { fontSize: typography.sizes.title2 + 2, fontWeight: typography.weights.heavy, color: colors.text.primary },
+    valLarge:{ fontSize: typography.sizes.hero, fontWeight: typography.weights.heavy },
+    unit:    { fontSize: typography.sizes.label2, color: colors.text.secondary, fontWeight: typography.weights.regular },
     tabular: { fontVariant: ['tabular-nums'] },
 
     // ── Oscilloscope ──────────────────────────────────────────────────────────
@@ -774,7 +939,7 @@ const styles = StyleSheet.create({
         borderColor: colors.accent.border,
     },
     crosshairValue: { color: colors.text.primary, fontSize: typography.sizes.label1, fontWeight: typography.weights.heavy },
-    crosshairTime: { color: colors.text.secondary, fontSize: typography.sizes.micro - 1, marginTop: spacing[1] - 2 },
+    crosshairTime:  { color: colors.text.secondary, fontSize: typography.sizes.micro - 1, marginTop: spacing[1] - 2 },
 
     // ── Modal ─────────────────────────────────────────────────────────────────
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: spacing[5] },

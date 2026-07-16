@@ -993,15 +993,103 @@ app.put('/api/calatorii/:id/tag', (req, res) => {
 app.get('/api/vehicul/:vin/twin', async (req, res) => {
     try {
         const { vin } = req.params;
-        const snapshot = await DigitalTwinSnapshot.load(db, vin);
+        let snapshot = await DigitalTwinSnapshot.load(db, vin);
+
+        // Fallback: if no snapshot yet, build a minimal context from the latest trip_summary
         if (!snapshot) {
+            const row = await new Promise(resolve =>
+                db.get(`SELECT ts.*, c.km_parcursi, c.consum_total_l, c.consum_mediu_100km,
+                               c.scor_eco, c.timestamp_start, c.timestamp_end
+                        FROM trip_summary ts
+                        JOIN calatorii c ON c.id_calatorie = ts.id_calatorie
+                        WHERE c.vin = ? AND ts.raport_ai_json IS NOT NULL
+                        ORDER BY ts.id_summary DESC LIMIT 1`,
+                    [vin], (err, r) => resolve(r || null))
+            );
+
+            if (!row) {
+                return res.json({
+                    status: 'NO_DATA',
+                    context: null,
+                    suggestedQuestions: ['Cum e starea generală?', 'Pot face un drum lung?', 'Ce știi despre mașina mea?'],
+                    message: 'Niciun Digital Twin disponibil. Finalizează o cursă pentru a genera analiza.'
+                });
+            }
+
+            let ai = null;
+            try { ai = JSON.parse(row.raport_ai_json); } catch(e) {}
+
+            const intel      = ai?.intelligence || {};
+            const litri      = (row.cost_combustibil || 0) / THRESHOLDS.DIESEL_PRICE_PER_LITER;
+            const vehicle    = await new Promise(resolve =>
+                db.get('SELECT * FROM vehicule WHERE vin = ?', [vin], (err, r) => resolve(r || {}))
+            );
+
+            // Build a minimal toAIExpert-compatible context from available data
+            const fallbackContext = {
+                identity: {
+                    make:              'Audi',
+                    model:             vehicle.model || 'A6 C4 2.5 TDI',
+                    year:              1995,
+                    fuelType:          vehicle.tip_combustibil || 'diesel',
+                    engineCode:        'AEL',
+                    displacementCc:    2500,
+                    currentMileageKm:  null,
+                    ageYears:          null,
+                    emissionStandard:  'Euro 2',
+                },
+                capabilities: null,
+                health: {
+                    overallHealth: row.health_score    || null,
+                    engineScore:   ai?.engine?.score   || null,
+                    fuelScore:     ai?.fuel?.score     || null,
+                    drivingScore:  ai?.driving?.score  || null,
+                    safetyScore:   ai?.safetyScore     || null,
+                    subsystems:    intel.vehicle_dna?.subsystems || null,
+                    scoringMethod: 'trip_summary_fallback',
+                },
+                predictions:     (intel.predictions || []).filter(p => p.severity === 'HIGH' || p.severity === 'MEDIUM'),
+                recommendations: (intel.recommendations || []).slice(0, 5),
+                baselines:       null,
+                correlated:      null,
+                reliability:     intel.reliability     || null,
+                sessionMetrics: {
+                    distanceKm:      row.km_parcursi         || 0,
+                    durationMin:     Math.round((row.durata_secunde || 0) / 60),
+                    fuelLiters:      litri,
+                    consumption100:  row.consum_mediu_100km  || 0,
+                    ecoScore:        row.scor_eco            || 100,
+                    hardBrakes:      row.hard_brakes         || 0,
+                    hardAccels:      row.hard_accelerations  || 0,
+                    coolantMax:      row.coolant_max         || null,
+                    voltageMin:      row.voltaj_min          || null,
+                    boostMax:        row.boost_max           || null,
+                    dpfSootMax:      row.dpf_soot_max        || null,
+                },
+                historical: {
+                    recentTrips: [],
+                    maintenance: [],
+                    milestones:  [],
+                },
+                trendAnalysis: null,
+                reasoning:     intel.detailedExplainability || null,
+                dna:           intel.vehicle_dna            || null,
+            };
+
             return res.json({
-                status: 'NO_DATA',
-                context: null,
-                suggestedQuestions: ['Cum e starea generală?', 'Pot face un drum lung?', 'Ce știi despre mașina mea?'],
-                message: 'Niciun Digital Twin disponibil. Finalizează o cursă pentru a genera analiza.'
+                status:             'OK',
+                context:            fallbackContext,
+                suggestedQuestions: buildSuggestedQuestions(fallbackContext),
+                twinMeta: {
+                    savedAt:          row.timestamp_start,
+                    healthScore:      row.health_score,
+                    alertLevel:       'NORMAL',
+                    dataCompleteness: 60,
+                    isFallback:       true,
+                }
             });
         }
+
         const context = DigitalTwinSerializer.toAIExpert(snapshot.twin);
         res.json({
             status: 'OK',
@@ -1207,6 +1295,235 @@ app.get('/api/vehicles/:id/report/pdf', async (req, res) => {
             res.status(500).json({ error: err.message });
         }
     }
+});
+
+// ===============================================================
+// EXPORT CSV — date brute telemetrie pentru o cursă
+// ===============================================================
+app.get('/api/calatorii/:id/export/csv', (req, res) => {
+    const id = req.params.id;
+
+    db.get(`SELECT c.id_calatorie, c.vin, c.km_parcursi, c.scor_eco, c.timestamp_start, c.timestamp_end
+            FROM calatorii c WHERE c.id_calatorie = ?`, [id], (err, trip) => {
+        if (err || !trip) return res.status(404).json({ eroare: 'Cursa nu există.' });
+
+        db.all(`SELECT * FROM telemetrie_flux WHERE id_calatorie = ? ORDER BY timestamp ASC`, [id], (err2, rows) => {
+            if (err2) return res.status(500).json({ eroare: err2.message });
+            if (!rows || rows.length === 0) {
+                return res.status(404).json({ eroare: 'Nu există date telemetrie pentru această cursă.' });
+            }
+
+            // Flatten nested object to dot-notation keys
+            function flatObj(obj, prefix = '') {
+                if (!obj || typeof obj !== 'object') return {};
+                return Object.entries(obj).reduce((acc, [k, v]) => {
+                    const key = prefix ? `${prefix}.${k}` : k;
+                    if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+                        Object.assign(acc, flatObj(v, key));
+                    } else {
+                        acc[key] = v;
+                    }
+                    return acc;
+                }, {});
+            }
+
+            // Fixed columns from telemetrie_flux table
+            const FIXED_COLS = ['timestamp', 'rpm', 'viteza_kmh', 'sarcina_pct', 'maf_gs', 'map_kpa',
+                'voltaj_v', 'temp_apa_c', 'temp_ulei_c', 'accel_g', 'consum_lh', 'boost_bar',
+                'dpf_soot', 'gear', 'torque_nm'];
+
+            // Collect all JSON keys across all rows
+            const jsonKeySet = new Set();
+            const parsedRows = rows.map(row => {
+                let flat = {};
+                if (row.matrice_completa_json) {
+                    try { flat = flatObj(JSON.parse(row.matrice_completa_json)); }
+                    catch(e) {}
+                }
+                Object.keys(flat).forEach(k => jsonKeySet.add(k));
+                return { ...row, _json: flat };
+            });
+
+            const JSON_COLS = [...jsonKeySet].sort();
+            const ALL_COLS  = [...FIXED_COLS, ...JSON_COLS];
+
+            // Escape a CSV cell value
+            const esc = v => {
+                if (v === null || v === undefined) return '';
+                const s = String(v);
+                if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+                    return `"${s.replace(/"/g, '""')}"`;
+                }
+                return s;
+            };
+
+            // Build CSV
+            const header = ALL_COLS.join(',');
+            const csvRows = parsedRows.map(row => {
+                return ALL_COLS.map(col => {
+                    if (FIXED_COLS.includes(col)) return esc(row[col]);
+                    return esc(row._json[col]);
+                }).join(',');
+            });
+
+            const metaComment = [
+                `# Cursă #${id} · VIN: ${trip.vin}`,
+                `# Start: ${trip.timestamp_start ? new Date(trip.timestamp_start).toISOString() : '-'}`,
+                `# Stop:  ${trip.timestamp_end   ? new Date(trip.timestamp_end).toISOString()   : '-'}`,
+                `# Distanță: ${(trip.km_parcursi || 0).toFixed(2)} km · Eco Score: ${trip.scor_eco || '-'}`,
+                `# Randuri: ${rows.length} · Coloane: ${ALL_COLS.length}`,
+                '',
+            ].join('\n');
+
+            const csv = metaComment + header + '\n' + csvRows.join('\n');
+
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="telemetrie_cursa_${id}.csv"`);
+            res.send('﻿' + csv);
+        });
+    });
+});
+
+// ===============================================================
+// LISTA VEHICULE — pentru switcher multi-vehicul
+// ===============================================================
+app.get('/api/vehicule/list', (req, res) => {
+    db.all(`SELECT vin, model, tip_combustibil, capacitate_rezervor_l FROM vehicule ORDER BY rowid ASC`, [], (err, rows) => {
+        if (err) return res.status(500).json({ eroare: err.message });
+        res.json(rows || []);
+    });
+});
+
+// ===============================================================
+// PDF PER CURSĂ — generează și trimite raportul ca fișier PDF
+// ===============================================================
+app.get('/api/calatorii/:id/report/pdf', (req, res) => {
+    const id = req.params.id;
+    // LEFT JOIN so we return a PDF even when trip_summary is missing
+    db.get(`SELECT c.id_calatorie, c.vin, c.km_parcursi, c.consum_total_l, c.consum_mediu_100km,
+                   c.scor_eco, c.timestamp_start, c.timestamp_end,
+                   ts.health_score, ts.durata_secunde, ts.viteza_max, ts.rpm_max,
+                   ts.coolant_max, ts.boost_max, ts.voltaj_min, ts.voltaj_max,
+                   ts.hard_brakes, ts.hard_accelerations, ts.cost_combustibil,
+                   ts.emisii_co2, ts.raport_ai_json
+            FROM calatorii c
+            LEFT JOIN trip_summary ts ON c.id_calatorie = ts.id_calatorie
+            WHERE c.id_calatorie = ?`, [id], (err, row) => {
+        if (err || !row) return res.status(404).json({ eroare: 'Cursa nu există.' });
+
+        let ai = null;
+        if (row.raport_ai_json) {
+            try { ai = JSON.parse(row.raport_ai_json); } catch(e) {}
+        }
+
+        const intelligence  = ai?.intelligence || {};
+        const litriTotali   = (row.cost_combustibil || 0) / THRESHOLDS.DIESEL_PRICE_PER_LITER;
+        const durationMin   = Math.round((row.durata_secunde || 0) / 60);
+        const startDate     = row.timestamp_start ? new Date(row.timestamp_start).toLocaleString('ro-RO') : '—';
+        const predictions   = (intelligence.predictions || []).filter(p => p.severity === 'HIGH' || p.severity === 'MEDIUM').slice(0, 3);
+
+        try {
+            const PDFDocument = require('pdfkit');
+            const chunks      = [];
+            const doc         = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
+
+            doc.on('data',  chunk => chunks.push(chunk));
+            doc.on('error', err  => {
+                console.error('[PDF] generation error:', err.message);
+                if (!res.headersSent) res.status(500).json({ eroare: 'Eroare internă la generarea PDF.' });
+            });
+            doc.on('end', () => {
+                const buf = Buffer.concat(chunks);
+                res.setHeader('Content-Type', 'application/pdf');
+                res.setHeader('Content-Disposition', `attachment; filename="cursa_${id}.pdf"`);
+                res.setHeader('Content-Length', buf.length);
+                res.send(buf);
+            });
+
+            // Title bar
+            doc.rect(50, 50, 495, 44).fill('#1A1A2E');
+            doc.fillColor('#FFFFFF').fontSize(16).text(`Raport Cursă #${id}`, 60, 62, { lineBreak: false });
+            doc.fillColor('#AAAAAA').fontSize(9).text(startDate, { align: 'right' });
+            doc.moveDown(2);
+
+            // Stats
+            doc.fillColor('#1A1A2E').fontSize(12).text('STATISTICI', { underline: true });
+            doc.moveDown(0.4).fillColor('#333333').fontSize(10);
+            doc.text(`Distanta:          ${(row.km_parcursi || 0).toFixed(2)} km`);
+            doc.text(`Durata:            ${durationMin} minute`);
+            doc.text(`Combustibil:       ${litriTotali.toFixed(2)} L`);
+            const cons100 = row.consum_mediu_100km > 0 ? row.consum_mediu_100km.toFixed(1)
+                : (row.km_parcursi > 0.1 ? (litriTotali / row.km_parcursi * 100).toFixed(1) : '-');
+            doc.text(`Consum mediu:      ${cons100} L/100km`);
+            doc.text(`Cost estimat:      ${(row.cost_combustibil || 0).toFixed(2)} RON`);
+            doc.text(`Emisii CO2:        ${(row.emisii_co2 || 0).toFixed(2)} kg`);
+            doc.text(`Eco Score:         ${row.scor_eco || 100}/100`);
+            if (row.health_score) doc.text(`Health Score:      ${row.health_score}%`);
+            doc.moveDown(1);
+
+            // Driving style
+            doc.fillColor('#1A1A2E').fontSize(12).text('STIL DE CONDUS', { underline: true });
+            doc.moveDown(0.4).fillColor('#333333').fontSize(10);
+            const ds = ai?.driving?.style || {};
+            doc.text(`Condus lin:        ${Math.round(ds.smoothPct || 0)}%`);
+            doc.text(`Condus economic:   ${Math.round(ds.economicPct || 0)}%`);
+            doc.text(`Condus agresiv:    ${Math.round(ds.aggressivePct || 0)}%`);
+            doc.text(`Franari bruste:    ${row.hard_brakes || 0}`);
+            doc.text(`Accelerari bruste: ${row.hard_accelerations || 0}`);
+            doc.moveDown(1);
+
+            // Predictions
+            if (predictions.length > 0) {
+                doc.fillColor('#1A1A2E').fontSize(12).text('PREDICTII AI', { underline: true });
+                doc.moveDown(0.4).fillColor('#333333').fontSize(10);
+                predictions.forEach(p => {
+                    doc.text(`[${p.severity}] ${p.title || ''}: ${p.description || ''}`);
+                });
+                doc.moveDown(1);
+            }
+
+            // Peak values
+            doc.fillColor('#1A1A2E').fontSize(12).text('VALORI DE VARF', { underline: true });
+            doc.moveDown(0.4).fillColor('#333333').fontSize(10);
+            if (row.viteza_max)  doc.text(`Viteza max:        ${row.viteza_max} km/h`);
+            if (row.rpm_max)     doc.text(`RPM max:           ${row.rpm_max}`);
+            if (row.coolant_max) doc.text(`Temp. racire max:  ${row.coolant_max} C`);
+            if (row.boost_max > 0) doc.text(`Boost max:       ${row.boost_max.toFixed(2)} bar`);
+            if (row.voltaj_min)  doc.text(`Tensiune min/max:  ${row.voltaj_min} / ${row.voltaj_max || '-'} V`);
+            doc.moveDown(2);
+
+            doc.fillColor('#AAAAAA').fontSize(8)
+                .text(`Generat de OBD-II Monitor  |  VIN: ${row.vin || '-'}  |  Audi A6 C4`, { align: 'center' });
+
+            doc.end();
+        } catch (pdfErr) {
+            console.error('[PDF] unexpected error:', pdfErr.message);
+            if (!res.headersSent) res.status(500).json({ eroare: 'Eroare la generarea PDF: ' + pdfErr.message });
+        }
+    });
+});
+
+// POST /admin/reset-db — șterge toate datele (curse, telemetrie, analize)
+// Profilul vehiculului (vehicule) și structura DB rămân intacte.
+app.post('/admin/reset-db', (req, res) => {
+    const tables = [
+        'digital_twin_snapshots', 'trip_summary', 'dtc_events',
+        'telemetrie_flux', 'calatorii',
+    ];
+    db.serialize(() => {
+        let errors = [];
+        const run = (i) => {
+            if (i >= tables.length) {
+                if (errors.length) return res.status(500).json({ eroare: errors.join(', ') });
+                return res.json({ ok: true, mesaj: `${tables.length} tabele resetate.` });
+            }
+            db.run(`DELETE FROM ${tables[i]}`, (err) => {
+                if (err) errors.push(tables[i]);
+                run(i + 1);
+            });
+        };
+        run(0);
+    });
 });
 
 server.listen(3000, () => console.log(`[API REST & WS] Serverul funcționează pe http://localhost:3000`));

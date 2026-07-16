@@ -1,22 +1,17 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-    View, Text, StyleSheet, FlatList, ScrollView,
+    View, Text, StyleSheet, SectionList, ScrollView,
     TouchableOpacity, Share, RefreshControl, Platform, StatusBar,
     useWindowDimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import { getVin } from '../utils/config';
+import { writeCache } from '../utils/cache';
 import {
-    HeroCard,
-    SearchBar,
-    StatusBadge,
-    TimelineCard,
-    MetricCard,
-    CostCard,
-    EmptyState,
-    SectionHeader,
-    Button,
-    BottomSheet,
+    HeroCard, SearchBar, StatusBadge,
+    MetricCard, CostCard, EmptyState,
+    SectionHeader, Button, BottomSheet,
 } from '../components/ui';
 import TripDetailScreen from './TripDetailScreen';
 import { colors, typography, radii, spacing, layout } from '../theme';
@@ -24,10 +19,10 @@ import { colors, typography, radii, spacing, layout } from '../theme';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const FILTERS = [
-    { key: 'ALL',   label: 'Toate'     },
-    { key: 'TODAY', label: 'Astăzi'    },
-    { key: 'WEEK',  label: 'Săptămâna' },
-    { key: 'MONTH', label: 'Luna'      },
+    { key: 'ALL',   label: 'Toate'      },
+    { key: 'TODAY', label: 'Astăzi'     },
+    { key: 'WEEK',  label: 'Săptămâna'  },
+    { key: 'MONTH', label: 'Luna'       },
 ];
 
 const MONTH_NAMES = [
@@ -37,8 +32,6 @@ const MONTH_NAMES = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// toISOString() returnează UTC, ceea ce în România (UTC+3) înseamnă data de ieri.
-// Folosim getFullYear/getMonth/getDate pentru a obține data locală corectă.
 function localDateStr(date) {
     return [
         date.getFullYear(),
@@ -113,7 +106,7 @@ function buildTripDesc(trip) {
     const dur   = (end && start) ? Math.round((end - start) / 60000) : 0;
 
     const parts = [];
-    if (cons > 0)                parts.push(`${cons.toFixed(1)} L/100km`);
+    if (cons > 0) parts.push(`${cons.toFixed(1)} L/100km`);
     if (km > 0 && dur > 0) {
         const avg = Math.round((km / dur) * 60);
         if (avg > 5 && avg < 250) parts.push(`~${avg} km/h`);
@@ -141,12 +134,6 @@ function buildTripBadges(trip) {
         badges.push({ label: 'Eco', status: 'optimal' });
     }
     return badges;
-}
-
-function getTripType(trip) {
-    if ((trip.nr_dtc || 0) > 0 || parseFloat(trip.coolant_max || 0) > 100) return 'alert';
-    if ((trip.nr_alerte || 0) > 0) return 'alert';
-    return 'trip';
 }
 
 function buildHeroInfo(trips, stats) {
@@ -211,6 +198,123 @@ function buildMonthlyHeroText(data) {
     return { text, status };
 }
 
+// Group trips by date into SectionList-compatible sections
+function groupTripsByDate(trips) {
+    const now   = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const groups  = new Map();
+    const orderedKeys = [];
+
+    trips.forEach(trip => {
+        if (!trip.timestamp_start) return;
+        const d = new Date(trip.timestamp_start);
+        const tripDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const diffDays = Math.round((today.getTime() - tripDay.getTime()) / 86400000);
+
+        let label;
+        if (diffDays === 0) label = 'Astăzi';
+        else if (diffDays === 1) label = 'Ieri';
+        else if (diffDays < 7) {
+            label = tripDay.toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'short' });
+            label = label.charAt(0).toUpperCase() + label.slice(1);
+        } else {
+            label = tripDay.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' });
+        }
+
+        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        if (!groups.has(key)) {
+            groups.set(key, { title: label, sortTs: trip.timestamp_start, data: [] });
+            orderedKeys.push(key);
+        }
+        groups.get(key).data.push(trip);
+    });
+
+    return orderedKeys.map(k => groups.get(k));
+}
+
+// Stale-while-revalidate cache helper
+async function fetchWithOfflineFallback(cacheKey, fetchFn, ttl = 30 * 60 * 1000) {
+    try {
+        const data = await fetchFn();
+        await writeCache(cacheKey, data, { ttl });
+        return { data, fromCache: false, ageMs: 0 };
+    } catch {
+        const raw = await AsyncStorage.getItem(`@cache::${cacheKey}`);
+        if (raw) {
+            try {
+                const entry = JSON.parse(raw);
+                return { data: entry.data, fromCache: true, ageMs: Date.now() - (entry.cachedAt || 0) };
+            } catch {}
+        }
+        throw new Error('offline_no_cache');
+    }
+}
+
+// ─── TripRow component ───────────────────────────────────────────────────────
+
+const TripRow = ({ trip, onPress }) => {
+    const eco    = trip.scor_eco ?? 100;
+    const km     = parseFloat(trip.km_parcursi ?? 0);
+    const hasDTC = (trip.nr_dtc ?? 0) > 0;
+    const hasCool = parseFloat(trip.coolant_max ?? 0) > 100;
+    const hasAlerts = (trip.nr_alerte ?? 0) > 0;
+    const badges = buildTripBadges(trip);
+
+    const lineColor = hasDTC || hasCool
+        ? colors.status.critical
+        : hasAlerts
+        ? colors.status.caution
+        : eco >= 85 ? colors.status.good
+        : eco >= 65 ? colors.status.monitor
+        : colors.status.caution;
+
+    const ecoColor = eco >= 85 ? colors.status.good
+        : eco >= 65 ? colors.status.monitor : colors.status.caution;
+
+    return (
+        <TouchableOpacity onPress={onPress} activeOpacity={0.72} style={styles.tripRow}>
+            {/* Left colored strip */}
+            <View style={[styles.tripStrip, { backgroundColor: lineColor }]} />
+
+            <View style={styles.tripBody}>
+                {/* Row 1: title + time */}
+                <View style={styles.tripTopRow}>
+                    <Text style={styles.tripTitle} numberOfLines={1}>{buildTripTitle(trip)}</Text>
+                    <Text style={styles.tripTime}>{formatTripTime(trip.timestamp_start)}</Text>
+                </View>
+
+                {/* Row 2: desc + eco pill */}
+                <View style={styles.tripMidRow}>
+                    <Text style={styles.tripDesc} numberOfLines={1}>{buildTripDesc(trip)}</Text>
+                    <View style={[styles.ecoPill, { borderColor: ecoColor }]}>
+                        <Text style={[styles.ecoPillNum, { color: ecoColor }]}>{eco}</Text>
+                        <Text style={styles.ecoPillMax}>/100</Text>
+                    </View>
+                </View>
+
+                {/* Row 3: eco progress bar + km */}
+                <View style={styles.tripBarRow}>
+                    <View style={styles.tripBarBg}>
+                        <View style={[styles.tripBarFill, {
+                            width: `${Math.min(100, eco)}%`,
+                            backgroundColor: ecoColor,
+                        }]} />
+                    </View>
+                    <Text style={styles.tripKm}>{km.toFixed(1)} km</Text>
+                </View>
+
+                {/* Row 4: status badges */}
+                <View style={styles.tripBadgesRow}>
+                    {badges.map(b => (
+                        <StatusBadge key={b.label} status={b.status} label={b.label} variant="filled" size="sm" />
+                    ))}
+                </View>
+            </View>
+        </TouchableOpacity>
+    );
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const TripHistoryScreen = () => {
@@ -230,26 +334,51 @@ const TripHistoryScreen = () => {
     const [showReport,     setShowReport]     = useState(false);
     const [monthlyData,    setMonthlyData]    = useState(null);
     const [reportLoading,  setReportLoading]  = useState(false);
+    const [fromCache,      setFromCache]      = useState(false);
+    const [cacheAgeMin,    setCacheAgeMin]    = useState(null);
     const [reportMonth,    setReportMonth]    = useState(() => {
         const n = new Date();
         return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
     });
 
-    const loadData = useCallback(async () => {
+    const loadData = useCallback(async (forceRefresh = false) => {
         setScreenState(prev => prev === 'success' ? 'success' : 'loading');
+        setFromCache(false);
+        setCacheAgeMin(null);
+
+        const { startDate, endDate } = getFilterDates(activeFilter);
+        const params = {};
+        if (startDate) params.startDate = startDate;
+        if (endDate)   params.endDate   = endDate;
+
+        const tripsKey = `trips_${getVin()}_${activeFilter}`;
+        const statsKey = `stats_${getVin()}`;
+
         try {
-            const { startDate, endDate } = getFilterDates(activeFilter);
-            const params = {};
-            if (startDate) params.startDate = startDate;
-            if (endDate)   params.endDate   = endDate;
+            // Trips — with offline fallback
+            const tripsResult = await fetchWithOfflineFallback(
+                tripsKey,
+                () => api.get('/calatorii/filtrate', { params, timeout: 7000 }).then(r => r.data),
+                forceRefresh ? 0 : 30 * 60 * 1000,
+            );
+            setTrips(tripsResult.data || []);
+            if (tripsResult.fromCache) {
+                setFromCache(true);
+                setCacheAgeMin(Math.floor(tripsResult.ageMs / 60000));
+            }
 
-            const [tripsRes, statsRes] = await Promise.allSettled([
-                api.get('/calatorii/filtrate', { params }),
-                api.get(`/vehicul/${getVin()}/statistici`),
-            ]);
+            // Stats — non-critical, best effort
+            try {
+                const statsResult = await fetchWithOfflineFallback(
+                    statsKey,
+                    () => api.get(`/vehicul/${getVin()}/statistici`, { timeout: 5000 }).then(r => r.data),
+                    60 * 60 * 1000,
+                );
+                setStats(statsResult.data || {});
+            } catch {
+                setStats({});
+            }
 
-            setTrips(tripsRes.status === 'fulfilled' ? (tripsRes.value.data || []) : []);
-            setStats(statsRes.status === 'fulfilled' ? (statsRes.value.data || {}) : {});
             setScreenState('success');
         } catch {
             setScreenState(prev => prev === 'success' ? prev : 'error');
@@ -260,7 +389,7 @@ const TripHistoryScreen = () => {
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
-        try { await loadData(); }
+        try { await loadData(true); }
         finally { setRefreshing(false); }
     }, [loadData]);
 
@@ -279,6 +408,36 @@ const TripHistoryScreen = () => {
         }
     }, [reportMonth]);
 
+    // Weekly activity dots — computed from ALL trips (not filtered)
+    const weekActivity = useMemo(() => {
+        const now = new Date();
+        const days = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(now);
+            d.setDate(d.getDate() - i);
+            const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+            const dayEnd   = dayStart + 86400000;
+
+            const dayTrips = trips.filter(t =>
+                (t.timestamp_start || 0) >= dayStart && (t.timestamp_start || 0) < dayEnd
+            );
+            const km      = dayTrips.reduce((s, t) => s + (t.km_parcursi || 0), 0);
+            const bestEco = dayTrips.length > 0
+                ? Math.max(...dayTrips.map(t => t.scor_eco || 100))
+                : 0;
+
+            days.push({
+                label:    d.toLocaleDateString('ro-RO', { weekday: 'narrow' }),
+                hasTrips: dayTrips.length > 0,
+                km,
+                eco:      bestEco,
+                isToday:  i === 0,
+                count:    dayTrips.length,
+            });
+        }
+        return days;
+    }, [trips]);
+
     const filteredTrips = useMemo(() => {
         if (!search.trim()) return trips;
         const q = search.toLowerCase();
@@ -292,44 +451,19 @@ const TripHistoryScreen = () => {
         });
     }, [trips, search]);
 
+    // Group filtered trips into sections by date
+    const sections = useMemo(() => groupTripsByDate(filteredTrips), [filteredTrips]);
+
     const heroInfo = useMemo(() => buildHeroInfo(trips, stats), [trips, stats]);
 
-    // renderItem trebuie declarat ÎNAINTE de orice early return (Rules of Hooks)
-    const renderItem = useCallback(({ item: trip, index }) => {
-        const isFirst = index === 0;
-        const isLast  = index === filteredTrips.length - 1;
-        const badges  = buildTripBadges(trip);
+    const renderItem = useCallback(({ item: trip }) => (
+        <TripRow
+            trip={trip}
+            onPress={() => setSelectedTripId(trip.id_calatorie)}
+        />
+    ), []);
 
-        return (
-            <View>
-                <TimelineCard
-                    title={buildTripTitle(trip)}
-                    description={buildTripDesc(trip)}
-                    date={formatTripDate(trip.timestamp_start)}
-                    time={formatTripTime(trip.timestamp_start)}
-                    type={getTripType(trip)}
-                    isFirst={isFirst}
-                    isLast={isLast}
-                    onPress={() => setSelectedTripId(trip.id_calatorie)}
-                />
-                {badges.length > 0 && (
-                    <View style={[styles.badgesRow, isLast && styles.badgesRowLast]}>
-                        {badges.map(b => (
-                            <StatusBadge
-                                key={b.label}
-                                status={b.status}
-                                label={b.label}
-                                variant="filled"
-                                size="sm"
-                            />
-                        ))}
-                    </View>
-                )}
-            </View>
-        );
-    }, [filteredTrips]);
-
-    // ─── Trip Detail (inline rendering — navigation prepare in Sprint 3.5) ───
+    // ── Trip Detail ───────────────────────────────────────────────────────────
     if (selectedTripId !== null) {
         return (
             <TripDetailScreen
@@ -343,12 +477,10 @@ const TripHistoryScreen = () => {
         return (
             <View style={styles.main}>
                 <View style={styles.header}>
-                    <View>
-                        <Text style={styles.title}>Jurnal</Text>
-                        <Text style={styles.subtitle}>Audi A6 C4 · Logbook</Text>
-                    </View>
+                    <Text style={styles.title}>Jurnal</Text>
+                    <Text style={styles.subtitle}>Audi A6 C4 · Logbook</Text>
                 </View>
-                <View style={[{ flex: 1, paddingHorizontal: layout.screenPaddingH, paddingTop: spacing[4] }]}>
+                <View style={{ flex: 1, paddingHorizontal: layout.screenPaddingH, paddingTop: spacing[4] }}>
                     <HeroCard
                         value="…"
                         unit="/100"
@@ -375,7 +507,7 @@ const TripHistoryScreen = () => {
         );
     }
 
-    // ─── Monthly report share ─────────────────────────────────────────────────
+    // ── Monthly report share ──────────────────────────────────────────────────
     const shareMonthly = () => {
         if (!monthlyData) return;
         const [yr, mo] = reportMonth.split('-');
@@ -396,14 +528,13 @@ const TripHistoryScreen = () => {
         Share.share({ message: text, title: `Raport ${monthName} ${yr}` });
     };
 
-    // ─── Non-hook helpers (după early returns) ───────────────────────────────
     const [yr, mo] = reportMonth.split('-');
     const monthLabel = (mo && yr)
         ? `${MONTH_NAMES[parseInt(mo, 10) - 1] || mo} ${yr}`
         : reportMonth;
-
     const monthlyHero = monthlyData ? buildMonthlyHeroText(monthlyData) : null;
 
+    // ─── List header component ────────────────────────────────────────────────
     const ListHeader = () => (
         <View>
             <HeroCard
@@ -415,12 +546,27 @@ const TripHistoryScreen = () => {
                 status={heroInfo.status}
                 style={styles.heroCard}
             />
+
+            {/* Offline cache indicator */}
+            {fromCache && (
+                <View style={styles.cacheBar}>
+                    <Text style={styles.cacheBarText}>
+                        Date din cache{cacheAgeMin != null ? ` · ${cacheAgeMin} min` : ''} — server indisponibil
+                    </Text>
+                    <TouchableOpacity onPress={onRefresh}>
+                        <Text style={styles.cacheBarRefresh}>↺ Reîncarcă</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             <SearchBar
                 value={search}
                 onChangeText={setSearch}
                 placeholder="Caută curse, date, km, etichete..."
                 style={styles.searchBar}
             />
+
+            {/* Filter chips */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
                 {FILTERS.map(f => (
                     <TouchableOpacity
@@ -437,6 +583,31 @@ const TripHistoryScreen = () => {
                     </TouchableOpacity>
                 ))}
             </ScrollView>
+
+            {/* Weekly activity dots */}
+            {trips.length > 0 && (
+                <View style={styles.weekRow}>
+                    {weekActivity.map((day, i) => {
+                        const dotColor = day.hasTrips
+                            ? day.eco >= 85 ? colors.status.good
+                            : day.eco >= 65 ? colors.status.monitor
+                            : colors.status.caution
+                            : colors.border.default;
+                        return (
+                            <View key={i} style={styles.weekDayCol}>
+                                <View style={[styles.weekDot, { backgroundColor: dotColor }]} />
+                                {day.hasTrips && (
+                                    <Text style={styles.weekDotKm}>{Math.round(day.km)}</Text>
+                                )}
+                                <Text style={[styles.weekDotLabel, day.isToday && { color: colors.accent.default, fontWeight: typography.weights.bold }]}>
+                                    {day.label}
+                                </Text>
+                            </View>
+                        );
+                    })}
+                </View>
+            )}
+
             {filteredTrips.length > 0 && (
                 <SectionHeader
                     title={`${filteredTrips.length} ${filteredTrips.length === 1 ? 'CURSĂ' : 'CURSE'}`}
@@ -444,6 +615,15 @@ const TripHistoryScreen = () => {
                     style={styles.sectionHeader}
                 />
             )}
+        </View>
+    );
+
+    const renderSectionHeader = ({ section }) => (
+        <View style={styles.dateSectionHeader}>
+            <Text style={styles.dateSectionTitle}>{section.title}</Text>
+            <Text style={styles.dateSectionCount}>
+                {section.data.length} {section.data.length === 1 ? 'cursă' : 'curse'}
+            </Text>
         </View>
     );
 
@@ -471,7 +651,7 @@ const TripHistoryScreen = () => {
                 <View style={styles.headerActions}>
                     <TouchableOpacity
                         style={styles.iconBtn}
-                        onPress={loadData}
+                        onPress={onRefresh}
                         accessibilityRole="button"
                         accessibilityLabel="Reîncarcă lista de curse"
                     >
@@ -488,20 +668,21 @@ const TripHistoryScreen = () => {
                 </View>
             </View>
 
-            {/* ── Trip timeline ─────────────────────────────────────────────── */}
-            <FlatList
+            {/* ── SectionList — trips grouped by date ──────────────────────── */}
+            <SectionList
                 style={styles.list}
                 contentContainerStyle={styles.listContent}
-                data={filteredTrips}
+                sections={sections}
                 keyExtractor={item => String(item.id_calatorie)}
+                renderItem={renderItem}
+                renderSectionHeader={renderSectionHeader}
                 ListHeaderComponent={ListHeader}
                 ListEmptyComponent={ListEmpty}
-                renderItem={renderItem}
                 showsVerticalScrollIndicator={false}
-                initialNumToRender={12}
-                maxToRenderPerBatch={12}
+                stickySectionHeadersEnabled={false}
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
                 windowSize={7}
-                removeClippedSubviews
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -515,155 +696,86 @@ const TripHistoryScreen = () => {
             {/* ── Monthly Report — BottomSheet ─────────────────────────────── */}
             <BottomSheet visible={showReport} onClose={() => setShowReport(false)} title="Raport Lunar">
                 <View style={styles.sheetContent}>
-                        {/* Month quick-select chips */}
-                        <View style={styles.monthRow}>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-                                {[0, 1, 2, 3].map(offset => {
-                                    const d = new Date();
-                                    d.setMonth(d.getMonth() - offset);
-                                    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                                    const lbl = MONTH_NAMES[d.getMonth()].slice(0, 3);
-                                    return (
-                                        <TouchableOpacity
-                                            key={val}
-                                            style={[styles.chip, reportMonth === val && styles.chipActive]}
-                                            onPress={() => setReportMonth(val)}
-                                            accessibilityRole="radio"
-                                            accessibilityLabel={MONTH_NAMES[d.getMonth()]}
-                                            accessibilityState={{ checked: reportMonth === val }}
-                                        >
-                                            <Text style={[styles.chipText, reportMonth === val && styles.chipTextActive]}>
-                                                {lbl}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </ScrollView>
-                            <TouchableOpacity
-                                style={[styles.iconBtn, styles.iconBtnAccent, { marginLeft: spacing[2] }]}
-                                onPress={fetchMonthlyReport}
-                                accessibilityRole="button"
-                                accessibilityLabel={reportLoading ? 'Se generează raportul' : 'Generează raportul lunar'}
-                            >
-                                <Text style={[styles.iconBtnText, { color: '#FFFFFF' }]}>
-                                    {reportLoading ? '...' : 'Vezi'}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-                            {/* HeroCard — AI summary */}
-                            {monthlyData && monthlyHero && (
-                                <HeroCard
-                                    value={String(parseFloat(monthlyData.totalKm || 0).toFixed(0))}
-                                    unit="km"
-                                    title={monthLabel.toUpperCase()}
-                                    subtitle={monthlyHero.text}
-                                    status={monthlyHero.status}
-                                    style={styles.reportSection}
-                                />
-                            )}
-
-                            {/* CostCard — total cost */}
-                            {monthlyData && parseFloat(monthlyData.totalCost || 0) > 0 && (
-                                <CostCard
-                                    title="Costuri deplasare"
-                                    amount={parseFloat(monthlyData.totalCost || 0)}
-                                    currency="RON"
-                                    period={monthLabel}
-                                    breakdown={[
-                                        { label: 'Combustibil', amount: parseFloat(monthlyData.totalCost || 0) },
-                                    ]}
-                                    style={styles.reportSection}
-                                />
-                            )}
-
-                            {/* MetricCards grid */}
-                            {monthlyData && monthlyData.totalTrips > 0 && (
-                                <View style={styles.metricsGrid}>
-                                    <MetricCard
-                                        label="L/100KM"
-                                        value={parseFloat(monthlyData.consumMediu100 || 0).toFixed(1)}
-                                        unit="medie"
-                                        size="sm"
-                                        style={metricCardStyle}
-                                    />
-                                    <MetricCard
-                                        label="ECO SCORE"
-                                        value={monthlyData.avgEcoScore || 100}
-                                        unit="/100"
-                                        size="sm"
-                                        status={(monthlyData.avgEcoScore || 100) >= 80 ? 'good' : 'monitor'}
-                                        style={metricCardStyle}
-                                    />
-                                    <MetricCard
-                                        label="LITRI"
-                                        value={parseFloat(monthlyData.totalLitri || 0).toFixed(0)}
-                                        unit="L"
-                                        size="sm"
-                                        style={metricCardStyle}
-                                    />
-                                    <MetricCard
-                                        label="CO₂"
-                                        value={parseFloat(monthlyData.totalCO2 || 0).toFixed(1)}
-                                        unit="kg"
-                                        size="sm"
-                                        style={metricCardStyle}
-                                    />
-                                    <MetricCard
-                                        label="TIMP"
-                                        value={monthlyData.totalDurataMin || 0}
-                                        unit="min"
-                                        size="sm"
-                                        style={metricCardStyle}
-                                    />
-                                    {monthlyData.avgHealthScore ? (
-                                        <MetricCard
-                                            label="HEALTH"
-                                            value={monthlyData.avgHealthScore}
-                                            unit="%"
-                                            size="sm"
-                                            status={monthlyData.avgHealthScore >= 80 ? 'good' : 'monitor'}
-                                            style={metricCardStyle}
-                                        />
-                                    ) : (
-                                        <MetricCard
-                                            label="CURSE"
-                                            value={monthlyData.totalTrips}
-                                            unit="total"
-                                            size="sm"
-                                            style={metricCardStyle}
-                                        />
-                                    )}
-                                </View>
-                            )}
-
-                            {/* Empty / prompt states */}
-                            {!monthlyData && !reportLoading && (
-                                <EmptyState
-                                    title="Selectează o lună."
-                                    subtitle="Apasă 'Vezi' pentru a genera raportul lunar."
-                                    style={styles.reportEmpty}
-                                />
-                            )}
-                            {monthlyData && monthlyData.totalTrips === 0 && (
-                                <EmptyState
-                                    title="Nicio cursă în această lună."
-                                    subtitle={`Nu am date înregistrate pentru ${monthLabel}.`}
-                                    style={styles.reportEmpty}
-                                />
-                            )}
-
-                            {/* Share */}
-                            {monthlyData && monthlyData.totalTrips > 0 && (
-                                <Button
-                                    label="Descarcă / Trimite raportul"
-                                    variant="primary"
-                                    onPress={shareMonthly}
-                                    style={styles.shareBtn}
-                                />
-                            )}
+                    <View style={styles.monthRow}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                            {[0, 1, 2, 3].map(offset => {
+                                const d = new Date();
+                                d.setMonth(d.getMonth() - offset);
+                                const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                                const lbl = MONTH_NAMES[d.getMonth()].slice(0, 3);
+                                return (
+                                    <TouchableOpacity
+                                        key={val}
+                                        style={[styles.chip, reportMonth === val && styles.chipActive]}
+                                        onPress={() => setReportMonth(val)}
+                                        accessibilityRole="radio"
+                                        accessibilityLabel={MONTH_NAMES[d.getMonth()]}
+                                        accessibilityState={{ checked: reportMonth === val }}
+                                    >
+                                        <Text style={[styles.chipText, reportMonth === val && styles.chipTextActive]}>
+                                            {lbl}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </ScrollView>
+                        <TouchableOpacity
+                            style={[styles.iconBtn, styles.iconBtnAccent, { marginLeft: spacing[2] }]}
+                            onPress={fetchMonthlyReport}
+                            accessibilityRole="button"
+                            accessibilityLabel={reportLoading ? 'Se generează raportul' : 'Generează raportul lunar'}
+                        >
+                            <Text style={[styles.iconBtnText, { color: '#FFFFFF' }]}>
+                                {reportLoading ? '...' : 'Vezi'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                        {monthlyData && monthlyHero && (
+                            <HeroCard
+                                value={String(parseFloat(monthlyData.totalKm || 0).toFixed(0))}
+                                unit="km"
+                                title={monthLabel.toUpperCase()}
+                                subtitle={monthlyHero.text}
+                                status={monthlyHero.status}
+                                style={styles.reportSection}
+                            />
+                        )}
+                        {monthlyData && parseFloat(monthlyData.totalCost || 0) > 0 && (
+                            <CostCard
+                                title="Costuri deplasare"
+                                amount={parseFloat(monthlyData.totalCost || 0)}
+                                currency="RON"
+                                period={monthLabel}
+                                breakdown={[{ label: 'Combustibil', amount: parseFloat(monthlyData.totalCost || 0) }]}
+                                style={styles.reportSection}
+                            />
+                        )}
+                        {monthlyData && monthlyData.totalTrips > 0 && (
+                            <View style={styles.metricsGrid}>
+                                <MetricCard label="L/100KM"   value={parseFloat(monthlyData.consumMediu100 || 0).toFixed(1)} unit="medie" size="sm" style={metricCardStyle} />
+                                <MetricCard label="ECO SCORE" value={monthlyData.avgEcoScore || 100} unit="/100" size="sm" status={(monthlyData.avgEcoScore || 100) >= 80 ? 'good' : 'monitor'} style={metricCardStyle} />
+                                <MetricCard label="LITRI"     value={parseFloat(monthlyData.totalLitri || 0).toFixed(0)} unit="L" size="sm" style={metricCardStyle} />
+                                <MetricCard label="CO₂"       value={parseFloat(monthlyData.totalCO2 || 0).toFixed(1)} unit="kg" size="sm" style={metricCardStyle} />
+                                <MetricCard label="TIMP"      value={monthlyData.totalDurataMin || 0} unit="min" size="sm" style={metricCardStyle} />
+                                {monthlyData.avgHealthScore ? (
+                                    <MetricCard label="HEALTH" value={monthlyData.avgHealthScore} unit="%" size="sm" status={monthlyData.avgHealthScore >= 80 ? 'good' : 'monitor'} style={metricCardStyle} />
+                                ) : (
+                                    <MetricCard label="CURSE" value={monthlyData.totalTrips} unit="total" size="sm" style={metricCardStyle} />
+                                )}
+                            </View>
+                        )}
+                        {!monthlyData && !reportLoading && (
+                            <EmptyState title="Selectează o lună." subtitle="Apasă 'Vezi' pentru a genera raportul lunar." style={styles.reportEmpty} />
+                        )}
+                        {monthlyData && monthlyData.totalTrips === 0 && (
+                            <EmptyState title="Nicio cursă în această lună." subtitle={`Nu am date înregistrate pentru ${monthLabel}.`} style={styles.reportEmpty} />
+                        )}
+                        {monthlyData && monthlyData.totalTrips > 0 && (
+                            <Button label="Descarcă / Trimite raportul" variant="primary" onPress={shareMonthly} style={styles.shareBtn} />
+                        )}
+                    </ScrollView>
                 </View>
             </BottomSheet>
         </View>
@@ -706,7 +818,7 @@ const styles = StyleSheet.create({
     iconBtnText: { color: colors.text.secondary, fontSize: typography.sizes.label2, fontWeight: typography.weights.bold },
 
     // ── List ──────────────────────────────────────────────────────────────────
-    list: { flex: 1 },
+    list:        { flex: 1 },
     listContent: { paddingHorizontal: layout.screenPaddingH, paddingBottom: spacing[12] },
 
     // ── List header ───────────────────────────────────────────────────────────
@@ -727,23 +839,183 @@ const styles = StyleSheet.create({
     chipText:       { color: colors.text.secondary, fontSize: typography.sizes.label2, fontWeight: typography.weights.semibold },
     chipTextActive: { color: '#FFFFFF' },
 
-    // ── Trip entries ──────────────────────────────────────────────────────────
-    badgesRow: {
+    // ── Offline cache indicator ───────────────────────────────────────────────
+    cacheBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: colors.tint.monitor,
+        borderWidth: 1,
+        borderColor: colors.status.monitor,
+        borderRadius: radii.xs,
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[2],
+        marginBottom: spacing[3],
+    },
+    cacheBarText: {
+        fontSize: typography.sizes.caption,
+        color: colors.status.monitor,
+        flex: 1,
+    },
+    cacheBarRefresh: {
+        fontSize: typography.sizes.caption,
+        color: colors.accent.default,
+        fontWeight: typography.weights.bold,
+        marginLeft: spacing[2],
+    },
+
+    // ── Weekly dots ───────────────────────────────────────────────────────────
+    weekRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        paddingVertical: spacing[3],
+        paddingHorizontal: spacing[2],
+        marginBottom: spacing[3],
+    },
+    weekDayCol: {
+        flex: 1,
+        alignItems: 'center',
+        gap: spacing[1] - 2,
+    },
+    weekDot: {
+        width: 10,
+        height: 10,
+        borderRadius: radii.full,
+    },
+    weekDotKm: {
+        fontSize: typography.sizes.micro - 1,
+        color: colors.text.secondary,
+        fontVariant: ['tabular-nums'],
+    },
+    weekDotLabel: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.tertiary,
+    },
+
+    // ── Section header (date) ─────────────────────────────────────────────────
+    dateSectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: spacing[2] + 2,
+        paddingTop: spacing[4],
+    },
+    dateSectionTitle: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    dateSectionCount: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.tertiary,
+    },
+
+    // ── Trip row ──────────────────────────────────────────────────────────────
+    tripRow: {
+        flexDirection: 'row',
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        marginBottom: spacing[2] + 2,
+        overflow: 'hidden',
+    },
+    tripStrip: {
+        width: 4,
+        alignSelf: 'stretch',
+    },
+    tripBody: {
+        flex: 1,
+        padding: spacing[3],
+    },
+    tripTopRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing[1],
+    },
+    tripMidRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing[2],
+    },
+    tripBarRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[2],
+        marginBottom: spacing[2],
+    },
+    tripTitle: {
+        flex: 1,
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.semibold,
+        color: colors.text.primary,
+        marginRight: spacing[2],
+    },
+    tripTime: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        fontVariant: ['tabular-nums'],
+    },
+    tripDesc: {
+        flex: 1,
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        marginRight: spacing[2],
+    },
+    ecoPill: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        paddingHorizontal: spacing[2],
+        paddingVertical: spacing[1] - 2,
+        borderRadius: radii.full,
+        borderWidth: 1,
+    },
+    ecoPillNum: {
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.bold,
+        fontVariant: ['tabular-nums'],
+    },
+    ecoPillMax: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.secondary,
+        marginLeft: 1,
+    },
+    tripBarBg: {
+        flex: 1,
+        height: 4,
+        backgroundColor: colors.border.default,
+        borderRadius: radii.full,
+        overflow: 'hidden',
+    },
+    tripBarFill: {
+        height: 4,
+        borderRadius: radii.full,
+    },
+    tripKm: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        fontVariant: ['tabular-nums'],
+        minWidth: 44,
+        textAlign: 'right',
+    },
+    tripBadgesRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: spacing[2],
-        paddingLeft: 28 + spacing[3] + spacing[3],
-        marginTop: -spacing[2],
-        paddingBottom: spacing[3],
+        gap: spacing[1] + 1,
     },
-    badgesRowLast: { paddingBottom: spacing[2] },
     emptyState: { marginTop: spacing[6] },
 
     // ── Monthly report BottomSheet ────────────────────────────────────────────
     sheetContent: { paddingHorizontal: spacing[5] },
     monthRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: spacing[4] },
-
-    // ── Monthly report content ────────────────────────────────────────────────
     reportSection: { marginBottom: spacing[3] },
     metricsGrid: {
         flexDirection: 'row',
@@ -751,8 +1023,8 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: spacing[3],
     },
-    reportEmpty:  { marginVertical: spacing[6] },
-    shareBtn:     { marginBottom: spacing[6] },
+    reportEmpty: { marginVertical: spacing[6] },
+    shareBtn:    { marginBottom: spacing[6] },
 });
 
 export default TripHistoryScreen;

@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView,
-    useWindowDimensions, Platform, StatusBar,
+    useWindowDimensions, Platform, StatusBar, Alert, Linking,
 } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import api from '../services/api';
 import { t } from '../i18n';
+import { getActiveServerUrl } from '../utils/config';
 import { colors, typography, radii, spacing, layout } from '../theme';
 import { getSubsystemColor } from '../utils/statusUtils';
 import {
@@ -71,10 +72,10 @@ const barStyles = StyleSheet.create({
 // ─── CHART CONFIGS ────────────────────────────────────────────────────────────
 
 const CHART_CONFIGS = {
-    RPM:   { key: 'rpm',   label: 'Turație (RPM)',       color: colors.accent.default,  field: 'rpm' },
-    SPEED: { key: 'speed', label: 'Viteză (km/h)',        color: colors.status.good,     field: 'speed' },
-    TEMP:  { key: 'temp',  label: 'Temp. Lichid (°C)',    color: colors.status.critical, field: 'coolant_temp' },
-    BOOST: { key: 'boost', label: 'Presiune Turbo (kPa)', color: colors.status.monitor,  field: 'boost_pressure' },
+    RPM:   { key: 'rpm',   label: 'Turație (RPM)',      color: colors.accent.default,  field: 'rpm' },
+    SPEED: { key: 'speed', label: 'Viteză (km/h)',       color: colors.status.good,     field: 'speed' },
+    TEMP:  { key: 'temp',  label: 'Temp. Lichid (°C)',   color: colors.status.critical, field: 'temp_apa_c' },
+    BOOST: { key: 'boost', label: 'Presiune Turbo (bar)',color: colors.status.monitor,  field: 'boost_bar' },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +88,20 @@ const TripDetailScreen = ({ tripId, onBack }) => {
     const [graficData,  setGraficData]  = useState([]);
     const [analiza,     setAnaliza]     = useState(null);
     const [activeChart, setActiveChart] = useState('RPM');
+    const [sharing,     setSharing]     = useState(false);
+
+    const exportCSV = useCallback(async () => {
+        if (sharing) return;
+        setSharing(true);
+        try {
+            const url = `${getActiveServerUrl()}/api/calatorii/${tripId}/export/csv`;
+            await Linking.openURL(url);
+        } catch (e) {
+            Alert.alert('Eroare CSV', `Nu s-a putut descărca exportul: ${e.message}`);
+        } finally {
+            setSharing(false);
+        }
+    }, [tripId, sharing]);
 
     useEffect(() => {
         const load = async () => {
@@ -203,13 +218,25 @@ const TripDetailScreen = ({ tripId, onBack }) => {
                     <Text style={styles.headerTitle}>{tripDateLabel}</Text>
                     <Text style={styles.headerSub}>{getDuration(trip.timestamp_start, trip.timestamp_end)}</Text>
                 </View>
-                {analiza?.health_score != null ? (
-                    <View style={[styles.healthPill, { borderColor: getSubsystemColor(analiza.health_score) }]}>
-                        <Text style={[styles.healthPillText, { color: getSubsystemColor(analiza.health_score) }]}>
-                            {analiza.health_score}%
-                        </Text>
-                    </View>
-                ) : <View style={{ width: 52 }} />}
+                <View style={styles.headerRight}>
+                    {analiza?.health_score != null && (
+                        <View style={[styles.healthPill, { borderColor: getSubsystemColor(analiza.health_score) }]}>
+                            <Text style={[styles.healthPillText, { color: getSubsystemColor(analiza.health_score) }]}>
+                                {analiza.health_score}%
+                            </Text>
+                        </View>
+                    )}
+                    <TouchableOpacity
+                        onPress={exportCSV}
+                        disabled={sharing}
+                        style={styles.shareBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={sharing ? 'Se exportă...' : 'Exportă CSV date brute'}
+                        accessibilityState={{ disabled: sharing }}
+                    >
+                        <Text style={styles.shareBtnText}>{sharing ? '...' : 'CSV'}</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <ScrollView
@@ -464,6 +491,18 @@ const styles = StyleSheet.create({
         borderBottomColor: colors.border.subtle,
     },
     headerCenter: { flex: 1, alignItems: 'center' },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+    shareBtn: {
+        backgroundColor: colors.accent.default,
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[2],
+        borderRadius: radii.sm,
+    },
+    shareBtnText: {
+        color: '#FFFFFF',
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.bold,
+    },
     headerTitle: {
         fontSize: typography.sizes.body2,
         fontWeight: typography.weights.bold,
