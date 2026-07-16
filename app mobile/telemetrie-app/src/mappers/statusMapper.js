@@ -14,8 +14,10 @@
  *   observations: ObservationModel[],
  *   comparison: { trend, summary, detail } | null,
  *   upcoming: TimelineItem[] | null,
- *   lastTrip: { text, detail } | null,
+ *   lastEvent: { type, title, description, meta } | null,
  *   longTripReady: { answer, detail } | null,
+ *   lastUpdated: string | null,
+ *   dataQuality: 'HIGH' | 'MEDIUM' | 'LOW' | null,
  * }
  */
 
@@ -30,7 +32,7 @@ import {
     buildComparisonMessages,
     buildUpcomingTimeline,
     buildLongTripMessage,
-    buildLastTripMessage,
+    buildLatestEvent,
     mapConfidenceLevel,
     mapSeverityToCardSeverity,
 } from '../engine/MessageEngine';
@@ -87,8 +89,10 @@ export function mapStatusData(health, trends) {
             subtitle: t('status.empty.subtitle'),
             observations: [],
             comparison: null,
-            lastTrip: null,
+            lastEvent: null,
             longTripReady: null,
+            lastUpdated: null,
+            dataQuality: null,
         };
     }
 
@@ -123,8 +127,8 @@ export function mapStatusData(health, trends) {
     // Upcoming maintenance timeline — prioritized list or null
     const upcoming = buildUpcomingTimeline(predictions);
 
-    // Last trip
-    const lastTrip = buildLastTripMessage(health.lastTrip);
+    // Latest event (enriched last trip for "Ultimul eveniment important")
+    const lastEvent = buildLatestEvent(health.lastTrip);
 
     // Long trip readiness
     const longTripReady = buildLongTripMessage(score, predictions);
@@ -137,7 +141,9 @@ export function mapStatusData(health, trends) {
         observations,
         comparison,
         upcoming,
-        lastTrip,
+        lastEvent,
         longTripReady,
+        lastUpdated: health.lastUpdated || null,
+        dataQuality: health.dataQuality || null,
     };
 }

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, useWindowDimensions, ActivityIndicator, Platform, StatusBar } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import api from '../services/api';
-
-const { width } = Dimensions.get('window');
+import { t } from '../i18n';
+import { colors, typography, radii, spacing, layout } from '../theme';
+import { getSubsystemColor } from '../utils/statusUtils';
 
 const TripDetailScreen = ({ tripId, onBack }) => {
+    const { width: screenWidth } = useWindowDimensions();
     const [loading, setLoading] = useState(true);
     const [trip, setTrip] = useState(null);
     const [alerte, setAlerte] = useState([]);
@@ -56,10 +58,10 @@ const TripDetailScreen = ({ tripId, onBack }) => {
     };
 
     const CHART_CONFIGS = {
-        RPM: { key: 'rpm', label: 'Turație (RPM)', color: '#58a6ff', field: 'rpm' },
-        SPEED: { key: 'speed', label: 'Viteză (km/h)', color: '#3fb950', field: 'speed' },
-        TEMP: { key: 'temp', label: 'Temp. Lichid (C)', color: '#f85149', field: 'coolant_temp' },
-        BOOST: { key: 'boost', label: 'Presiune Turbo (kPa)', color: '#d29922', field: 'boost_pressure' },
+        RPM:   { key: 'rpm',   label: 'Turație (RPM)',       color: colors.accent.default,  field: 'rpm' },
+        SPEED: { key: 'speed', label: 'Viteză (km/h)',        color: colors.status.good,     field: 'speed' },
+        TEMP:  { key: 'temp',  label: 'Temp. Lichid (°C)',    color: colors.status.critical, field: 'coolant_temp' },
+        BOOST: { key: 'boost', label: 'Presiune Turbo (kPa)', color: colors.status.monitor,  field: 'boost_pressure' },
     };
 
     const getChartData = () => {
@@ -76,21 +78,23 @@ const TripDetailScreen = ({ tripId, onBack }) => {
         return points;
     };
 
+    const chartWidth = screenWidth - layout.screenPaddingH * 2 - spacing[8];
+
     if (loading) {
         return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color="#58a6ff" />
-                <Text style={styles.loadingText}>Se incarca detaliile cursei...</Text>
+            <View style={[styles.container, styles.center]}>
+                <ActivityIndicator size="large" color={colors.accent.default} />
+                <Text style={styles.loadingText}>Se încarcă detaliile cursei...</Text>
             </View>
         );
     }
 
     if (!trip) {
         return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <Text style={styles.errorText}>Nu s-au putut incarca datele cursei.</Text>
+            <View style={[styles.container, styles.center]}>
+                <Text style={styles.errorText}>Nu s-au putut încărca datele cursei.</Text>
                 <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-                    <Text style={styles.backBtnText}>Inapoi</Text>
+                    <Text style={styles.backBtnText}>{t('detail.back')}</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -101,18 +105,16 @@ const TripDetailScreen = ({ tripId, onBack }) => {
 
     return (
         <View style={styles.container}>
-            {/* HEADER */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-                    <Text style={styles.backBtnText}>Inapoi</Text>
+                    <Text style={styles.backBtnText}>{t('detail.back')}</Text>
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Cursa #{tripId}</Text>
                 <View style={{ width: 60 }} />
             </View>
 
-            <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: spacing[10] }} showsVerticalScrollIndicator={false}>
 
-                {/* INFO CARD */}
                 <View style={styles.card}>
                     <Text style={styles.cardTitle}>REZUMAT</Text>
                     <View style={styles.infoRow}>
@@ -120,67 +122,65 @@ const TripDetailScreen = ({ tripId, onBack }) => {
                         <Text style={styles.infoValue}>{formatDate(trip.timestamp_start)}</Text>
                     </View>
                     <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Sfarsit</Text>
+                        <Text style={styles.infoLabel}>Sfârșit</Text>
                         <Text style={styles.infoValue}>{formatDate(trip.timestamp_end)}</Text>
                     </View>
-                    <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Durata</Text>
+                    <View style={[styles.infoRow, styles.infoRowLast]}>
+                        <Text style={styles.infoLabel}>Durată</Text>
                         <Text style={styles.infoValue}>{getDuration()}</Text>
                     </View>
                 </View>
 
-                {/* METRICS GRID */}
                 <View style={styles.metricsGrid}>
                     <View style={styles.metricBox}>
-                        <Text style={styles.metricValue}>{(trip.km_parcursi || 0).toFixed(1)}</Text>
+                        <Text style={[styles.metricValue, styles.tabular]}>{(trip.km_parcursi || 0).toFixed(1)}</Text>
                         <Text style={styles.metricLabel}>km</Text>
                     </View>
                     <View style={styles.metricBox}>
-                        <Text style={styles.metricValue}>{(trip.consum_total_l || 0).toFixed(1)}</Text>
+                        <Text style={[styles.metricValue, styles.tabular]}>{(trip.consum_total_l || 0).toFixed(1)}</Text>
                         <Text style={styles.metricLabel}>litri</Text>
                     </View>
                     <View style={styles.metricBox}>
-                        <Text style={styles.metricValue}>{trip.consum_mediu_100km || 0}</Text>
+                        <Text style={[styles.metricValue, styles.tabular]}>{trip.consum_mediu_100km || 0}</Text>
                         <Text style={styles.metricLabel}>L/100km</Text>
                     </View>
                     <View style={styles.metricBox}>
-                        <Text style={[styles.metricValue, { color: (trip.scor_eco || 100) >= 80 ? '#3fb950' : '#f85149' }]}>
+                        <Text style={[styles.metricValue, styles.tabular, { color: getSubsystemColor(trip.scor_eco || 100) }]}>
                             {trip.scor_eco || 100}
                         </Text>
                         <Text style={styles.metricLabel}>Eco Score</Text>
                     </View>
                 </View>
 
-                {/* ANALIZA AI */}
                 {analiza && (
                     <View style={styles.card}>
-                        <Text style={styles.cardTitle}>ANALIZA AI</Text>
+                        <Text style={styles.cardTitle}>ANALIZĂ AI</Text>
                         {analiza.health_score != null && (
                             <View style={styles.infoRow}>
                                 <Text style={styles.infoLabel}>Health Score</Text>
-                                <Text style={[styles.infoValue, { color: analiza.health_score >= 80 ? '#3fb950' : '#d29922', fontWeight: '900' }]}>
+                                <Text style={[styles.infoValue, styles.tabular, { color: getSubsystemColor(analiza.health_score), fontWeight: typography.weights.heavy }]}>
                                     {analiza.health_score}%
                                 </Text>
                             </View>
                         )}
                         {analiza.ai?.diagnostics && analiza.ai.diagnostics.length > 0 && (
-                            <View style={{ marginTop: 10 }}>
+                            <View style={{ marginTop: spacing[2] + 2 }}>
                                 <Text style={styles.subLabel}>Diagnostice:</Text>
                                 {analiza.ai.diagnostics.slice(0, 4).map((diag, i) => (
                                     <View key={i} style={styles.diagItem}>
                                         <Text style={styles.diagText}>{diag.issue || diag.component}</Text>
-                                        {diag.confidence && <Text style={styles.diagConf}>{diag.confidence}%</Text>}
+                                        {diag.confidence && <Text style={[styles.diagConf, styles.tabular]}>{diag.confidence}%</Text>}
                                     </View>
                                 ))}
                             </View>
                         )}
                         {analiza.ai?.intelligence?.predictions && analiza.ai.intelligence.predictions.length > 0 && (
-                            <View style={{ marginTop: 10 }}>
-                                <Text style={styles.subLabel}>Predictii:</Text>
+                            <View style={{ marginTop: spacing[2] + 2 }}>
+                                <Text style={styles.subLabel}>Predicții:</Text>
                                 {analiza.ai.intelligence.predictions.slice(0, 3).map((pred, i) => (
                                     <View key={i} style={styles.diagItem}>
                                         <Text style={styles.diagText}>{pred.component}: {pred.prediction}</Text>
-                                        <Text style={[styles.diagConf, { color: pred.severity === 'HIGH' ? '#f85149' : '#d29922' }]}>
+                                        <Text style={[styles.diagConf, styles.tabular, { color: pred.severity === 'HIGH' ? colors.status.critical : colors.status.monitor }]}>
                                             {pred.probability}%
                                         </Text>
                                     </View>
@@ -190,18 +190,17 @@ const TripDetailScreen = ({ tripId, onBack }) => {
                     </View>
                 )}
 
-                {/* GRAFIC TELEMETRIE */}
                 {graficData.length > 0 && (
                     <View style={styles.card}>
                         <Text style={styles.cardTitle}>TELEMETRIE</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing[3] }}>
                             {Object.entries(CHART_CONFIGS).map(([key, cfg]) => (
                                 <TouchableOpacity
                                     key={key}
                                     style={[styles.chartTab, activeChart === key && { backgroundColor: cfg.color }]}
                                     onPress={() => setActiveChart(key)}
                                 >
-                                    <Text style={[styles.chartTabText, activeChart === key && { color: '#fff' }]}>{cfg.label}</Text>
+                                    <Text style={[styles.chartTabText, activeChart === key && { color: '#FFFFFF' }]}>{cfg.label}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -210,15 +209,15 @@ const TripDetailScreen = ({ tripId, onBack }) => {
                             <View style={{ alignItems: 'center' }}>
                                 <LineChart
                                     data={chartData}
-                                    width={width - 80}
+                                    width={chartWidth}
                                     height={180}
                                     color={chartConfig.color}
                                     thickness={2}
                                     hideDataPoints
-                                    yAxisTextStyle={{ color: '#8b949e', fontSize: 10 }}
-                                    xAxisLabelTextStyle={{ color: '#8b949e', fontSize: 9 }}
-                                    rulesColor="#21262d"
-                                    backgroundColor="#0d1117"
+                                    yAxisTextStyle={{ color: colors.text.secondary, fontSize: typography.sizes.micro - 1 }}
+                                    xAxisLabelTextStyle={{ color: colors.text.secondary, fontSize: typography.sizes.micro - 1 }}
+                                    rulesColor={colors.border.subtle}
+                                    backgroundColor={colors.bg[0]}
                                     noOfSections={4}
                                     curved
                                     startFillColor={chartConfig.color}
@@ -229,21 +228,20 @@ const TripDetailScreen = ({ tripId, onBack }) => {
                                 />
                             </View>
                         ) : (
-                            <Text style={{ color: '#8b949e', textAlign: 'center', padding: 20 }}>
+                            <Text style={styles.chartNoData}>
                                 Nu sunt date disponibile pentru acest parametru.
                             </Text>
                         )}
-                        <Text style={styles.chartFooter}>{graficData.length} puncte inregistrate</Text>
+                        <Text style={styles.chartFooter}>{graficData.length} puncte înregistrate</Text>
                     </View>
                 )}
 
-                {/* ALERTE */}
                 {alerte.length > 0 && (
                     <View style={styles.card}>
-                        <Text style={[styles.cardTitle, { color: '#f85149' }]}>ALERTE ({alerte.length})</Text>
+                        <Text style={[styles.cardTitle, { color: colors.status.critical }]}>ALERTE ({alerte.length})</Text>
                         {alerte.slice(0, 10).map((a, i) => (
                             <View key={i} style={styles.alertItem}>
-                                <View style={[styles.alertDot, { backgroundColor: a.severitate === 'CRITICAL' ? '#f85149' : '#d29922' }]} />
+                                <View style={[styles.alertDot, { backgroundColor: a.severitate === 'CRITICAL' ? colors.status.critical : colors.status.monitor }]} />
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.alertText}>{a.descriere || a.tip}</Text>
                                     <Text style={styles.alertMeta}>{a.parametru}: {a.valoare} (limita: {a.limita})</Text>
@@ -251,8 +249,8 @@ const TripDetailScreen = ({ tripId, onBack }) => {
                             </View>
                         ))}
                         {alerte.length > 10 && (
-                            <Text style={{ color: '#8b949e', fontSize: 11, marginTop: 8 }}>
-                                ...si inca {alerte.length - 10} alerte
+                            <Text style={styles.alertMore}>
+                                ...și încă {alerte.length - 10} alerte
                             </Text>
                         )}
                     </View>
@@ -265,77 +263,198 @@ const TripDetailScreen = ({ tripId, onBack }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0d1117',
+        backgroundColor: colors.bg[0],
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 40) + 10 : 44,
+    },
+    center: {
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingBottom: 12,
+        paddingHorizontal: layout.screenPaddingH,
+        paddingBottom: spacing[3],
         borderBottomWidth: 1,
-        borderBottomColor: '#21262d',
+        borderBottomColor: colors.border.subtle,
     },
-    headerTitle: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-    backBtn: { backgroundColor: '#21262d', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#30363d' },
-    backBtnText: { color: '#58a6ff', fontWeight: '700', fontSize: 12 },
-    scroll: { flex: 1, paddingHorizontal: 16 },
-    loadingText: { color: '#8b949e', marginTop: 15 },
-    errorText: { color: '#f85149', fontSize: 14, marginBottom: 20 },
-
-    card: {
-        backgroundColor: '#161b22',
-        borderRadius: 10,
-        padding: 16,
-        marginTop: 12,
+    headerTitle: {
+        color: colors.text.primary,
+        fontSize: typography.sizes.body1,
+        fontWeight: typography.weights.bold,
+    },
+    backBtn: {
+        backgroundColor: colors.bg[2],
+        paddingHorizontal: spacing[3] + 2,
+        paddingVertical: spacing[2],
+        borderRadius: radii.xs,
         borderWidth: 1,
-        borderColor: '#30363d',
+        borderColor: colors.border.default,
     },
-    cardTitle: { fontSize: 11, color: '#c9d1d9', fontWeight: '700', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.3 },
-    infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#21262d' },
-    infoLabel: { color: '#8b949e', fontSize: 13 },
-    infoValue: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
-    subLabel: { color: '#8b949e', fontSize: 11, fontWeight: '700', marginBottom: 6 },
-
+    backBtnText: {
+        color: colors.accent.default,
+        fontWeight: typography.weights.bold,
+        fontSize: typography.sizes.label2,
+    },
+    scroll: {
+        flex: 1,
+        paddingHorizontal: layout.screenPaddingH,
+    },
+    loadingText: {
+        color: colors.text.secondary,
+        marginTop: spacing[4],
+    },
+    errorText: {
+        color: colors.status.critical,
+        fontSize: typography.sizes.body2,
+        marginBottom: spacing[5],
+    },
+    card: {
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[4],
+        marginTop: spacing[3],
+        borderWidth: 1,
+        borderColor: colors.border.default,
+    },
+    cardTitle: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.primary,
+        fontWeight: typography.weights.bold,
+        marginBottom: spacing[3],
+        textTransform: 'uppercase',
+        letterSpacing: 0.3,
+    },
+    infoRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: spacing[1] + 2,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border.subtle,
+    },
+    infoRowLast: {
+        borderBottomWidth: 0,
+    },
+    infoLabel: {
+        color: colors.text.secondary,
+        fontSize: typography.sizes.label1,
+    },
+    infoValue: {
+        color: colors.text.primary,
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.semibold,
+    },
+    subLabel: {
+        color: colors.text.secondary,
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        marginBottom: spacing[1] + 2,
+    },
     metricsGrid: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginTop: 12,
+        marginTop: spacing[3],
     },
     metricBox: {
         flex: 1,
-        backgroundColor: '#161b22',
-        borderRadius: 8,
-        padding: 12,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.sm,
+        padding: spacing[3],
         alignItems: 'center',
         marginHorizontal: 3,
         borderWidth: 1,
-        borderColor: '#30363d',
+        borderColor: colors.border.default,
     },
-    metricValue: { fontSize: 18, fontWeight: '900', color: '#ffffff' },
-    metricLabel: { fontSize: 9, color: '#8b949e', marginTop: 4, fontWeight: '700' },
-
-    diagItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#21262d' },
-    diagText: { color: '#c9d1d9', fontSize: 12, flex: 1, marginRight: 10 },
-    diagConf: { color: '#58a6ff', fontSize: 12, fontWeight: '700' },
-
+    metricValue: {
+        fontSize: typography.sizes.title2,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+    },
+    tabular: {
+        fontVariant: ['tabular-nums'],
+    },
+    metricLabel: {
+        fontSize: typography.sizes.micro - 1,
+        color: colors.text.secondary,
+        marginTop: spacing[1],
+        fontWeight: typography.weights.bold,
+    },
+    diagItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: spacing[1] + 1,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border.subtle,
+    },
+    diagText: {
+        color: colors.text.primary,
+        fontSize: typography.sizes.label2,
+        flex: 1,
+        marginRight: spacing[2] + 2,
+    },
+    diagConf: {
+        color: colors.accent.default,
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.bold,
+    },
     chartTab: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-        backgroundColor: '#21262d',
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[1] + 2,
+        borderRadius: radii.full,
+        backgroundColor: colors.bg[2],
         borderWidth: 1,
-        borderColor: '#30363d',
-        marginRight: 8,
+        borderColor: colors.border.default,
+        marginRight: spacing[2],
     },
-    chartTabText: { color: '#8b949e', fontSize: 11, fontWeight: '600' },
-    chartFooter: { color: '#484f58', fontSize: 10, textAlign: 'center', marginTop: 8 },
-
-    alertItem: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#21262d', gap: 10 },
-    alertDot: { width: 8, height: 8, borderRadius: 4, marginTop: 4 },
-    alertText: { color: '#c9d1d9', fontSize: 12, fontWeight: '600' },
-    alertMeta: { color: '#8b949e', fontSize: 10, marginTop: 2 },
+    chartTabText: {
+        color: colors.text.secondary,
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.semibold,
+    },
+    chartNoData: {
+        color: colors.text.secondary,
+        textAlign: 'center',
+        padding: spacing[5],
+        fontSize: typography.sizes.label1,
+    },
+    chartFooter: {
+        color: colors.text.disabled,
+        fontSize: typography.sizes.micro,
+        textAlign: 'center',
+        marginTop: spacing[2],
+    },
+    alertItem: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        paddingVertical: spacing[2],
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border.subtle,
+        gap: spacing[2] + 2,
+    },
+    alertDot: {
+        width: 8,
+        height: 8,
+        borderRadius: radii.full,
+        marginTop: spacing[1],
+    },
+    alertText: {
+        color: colors.text.primary,
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.semibold,
+    },
+    alertMeta: {
+        color: colors.text.secondary,
+        fontSize: typography.sizes.micro,
+        marginTop: spacing[1] - 2,
+    },
+    alertMore: {
+        color: colors.text.secondary,
+        fontSize: typography.sizes.caption,
+        marginTop: spacing[2],
+    },
 });
 
 export default TripDetailScreen;

@@ -1,32 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar, useWindowDimensions, ActivityIndicator } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import api from '../services/api';
-
-const { width } = Dimensions.get('window');
-
-const getHealthColor = (score) => {
-    if (score >= 90) return '#3fb950';
-    if (score >= 75) return '#7ee787';
-    if (score >= 60) return '#d29922';
-    if (score >= 40) return '#f0883e';
-    return '#f85149';
-};
+import { colors, typography, radii, spacing, layout } from '../theme';
+import { getHealthColor } from '../utils/statusUtils';
 
 const getInsightStyle = (type) => {
     switch (type) {
-        case 'POSITIVE': return { bg: 'rgba(63, 185, 80, 0.08)', border: '#238636', text: '#3fb950' };
-        case 'WARNING': return { bg: 'rgba(210, 153, 34, 0.08)', border: '#d29922', text: '#d29922' };
-        case 'NEGATIVE': return { bg: 'rgba(248, 81, 73, 0.08)', border: '#da3633', text: '#f85149' };
-        default: return { bg: 'rgba(88, 166, 255, 0.08)', border: '#1f6feb', text: '#58a6ff' };
+        case 'POSITIVE': return { bg: colors.tint.good,     border: colors.status.good,     text: colors.status.good };
+        case 'WARNING':  return { bg: colors.tint.monitor,  border: colors.status.monitor,  text: colors.status.monitor };
+        case 'NEGATIVE': return { bg: colors.tint.critical, border: colors.status.critical, text: colors.status.critical };
+        default:         return { bg: colors.tint.accent,   border: colors.accent.default,  text: colors.accent.default };
     }
 };
 
-const getDrivingRank = (ecoScore, aggressivePct) => {
-    if (ecoScore >= 90 && aggressivePct < 10) return { label: 'Eco Master', color: '#3fb950' };
-    if (ecoScore >= 75) return { label: 'Eficient', color: '#7ee787' };
-    if (aggressivePct > 30) return { label: 'Agresiv', color: '#f85149' };
-    return { label: 'Moderat', color: '#d29922' };
+const getDrivingRankReport = (ecoScore, aggressivePct) => {
+    if (ecoScore >= 90 && aggressivePct < 10) return { label: 'Eco Master', color: colors.status.optimal };
+    if (ecoScore >= 75) return { label: 'Eficient',    color: colors.status.good };
+    if (aggressivePct > 30) return { label: 'Agresiv', color: colors.status.critical };
+    return { label: 'Moderat', color: colors.status.monitor };
 };
 
 const ScoreBar = ({ label, score, color }) => (
@@ -42,6 +34,7 @@ const ScoreBar = ({ label, score, color }) => (
 );
 
 const TripReportScreen = ({ route, navigation }) => {
+    const { width } = useWindowDimensions();
     const [report, setReport] = useState(route?.params?.report || null);
     const [loading, setLoading] = useState(!report);
 
@@ -65,7 +58,7 @@ const TripReportScreen = ({ route, navigation }) => {
     if (loading) {
         return (
             <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color="#58a6ff" />
+                <ActivityIndicator size="large" color={colors.accent.default} />
                 <Text style={styles.loadingText}>Se generează raportul...</Text>
             </View>
         );
@@ -84,9 +77,8 @@ const TripReportScreen = ({ route, navigation }) => {
 
     const { healthScore, scores, stats, driving, insights, predictions } = report;
     const color = getHealthColor(healthScore);
-    const rank = getDrivingRank(stats.ecoScore, driving.aggressivePct);
+    const rank = getDrivingRankReport(stats.ecoScore, driving.aggressivePct);
 
-    // Arc gauge
     const gaugeSize = width * 0.5;
     const strokeWidth = 12;
     const radius = (gaugeSize - strokeWidth) / 2 - 8;
@@ -106,9 +98,8 @@ const TripReportScreen = ({ route, navigation }) => {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#0d1117" />
+            <StatusBar barStyle="light-content" backgroundColor={colors.bg[0]} />
 
-            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation?.goBack()}>
                     <Text style={styles.headerBack}>← Înapoi</Text>
@@ -119,11 +110,10 @@ const TripReportScreen = ({ route, navigation }) => {
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-                {/* HEALTH GAUGE */}
                 <View style={styles.gaugeSection}>
                     <View style={{ width: gaugeSize, height: gaugeSize * 0.55, alignItems: 'center', justifyContent: 'flex-end' }}>
                         <Svg width={gaugeSize} height={gaugeSize * 0.55} style={{ position: 'absolute', top: 0 }}>
-                            <Path d={describeArc(startAngle, 2 * Math.PI)} stroke="#21262d" strokeWidth={strokeWidth} fill="none" strokeLinecap="round" />
+                            <Path d={describeArc(startAngle, 2 * Math.PI)} stroke={colors.border.strong} strokeWidth={strokeWidth} fill="none" strokeLinecap="round" />
                             <Path d={describeArc(startAngle, progressAngle)} stroke={color} strokeWidth={strokeWidth} fill="none" strokeLinecap="round" />
                         </Svg>
                         <View style={styles.gaugeCenter}>
@@ -132,107 +122,77 @@ const TripReportScreen = ({ route, navigation }) => {
                         </View>
                     </View>
                     <Text style={styles.gaugeLabel}>Health Score</Text>
-
-                    {/* Rank badge */}
                     <View style={[styles.rankBadge, { borderColor: rank.color }]}>
                         <Text style={[styles.rankText, { color: rank.color }]}>{rank.label}</Text>
                     </View>
                 </View>
 
-                {/* SUB-SCORES */}
                 <View style={styles.section}>
-                    <ScoreBar label="Motor" score={scores.engine} color={getHealthColor(scores.engine)} />
-                    <ScoreBar label="Combustibil" score={scores.fuel} color={getHealthColor(scores.fuel)} />
-                    <ScoreBar label="Stil Condus" score={scores.driving} color={getHealthColor(scores.driving)} />
-                    <ScoreBar label="Siguranță" score={scores.safety} color={getHealthColor(scores.safety)} />
+                    <ScoreBar label="Motor"        score={scores.engine}  color={getHealthColor(scores.engine)} />
+                    <ScoreBar label="Combustibil"  score={scores.fuel}    color={getHealthColor(scores.fuel)} />
+                    <ScoreBar label="Stil Condus"  score={scores.driving} color={getHealthColor(scores.driving)} />
+                    <ScoreBar label="Siguranță"    score={scores.safety}  color={getHealthColor(scores.safety)} />
                 </View>
 
-                {/* STATISTICI CURSĂ */}
                 <View style={styles.statsGrid}>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{stats.distanceKm}</Text>
-                        <Text style={styles.statUnit}>km</Text>
-                        <Text style={styles.statLabel}>Distanță</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{stats.durationMin}</Text>
-                        <Text style={styles.statUnit}>min</Text>
-                        <Text style={styles.statLabel}>Durată</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{stats.consumptionPer100}</Text>
-                        <Text style={styles.statUnit}>L/100km</Text>
-                        <Text style={styles.statLabel}>Consum</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{stats.costRON}</Text>
-                        <Text style={styles.statUnit}>RON</Text>
-                        <Text style={styles.statLabel}>Cost</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statValue}>{stats.co2Kg}</Text>
-                        <Text style={styles.statUnit}>kg CO₂</Text>
-                        <Text style={styles.statLabel}>Emisii</Text>
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={[styles.statValue, { color: stats.ecoScore >= 80 ? '#3fb950' : '#d29922' }]}>{stats.ecoScore}</Text>
-                        <Text style={styles.statUnit}>puncte</Text>
-                        <Text style={styles.statLabel}>Eco Score</Text>
-                    </View>
+                    {[
+                        { value: stats.distanceKm,        unit: 'km',      label: 'Distanță' },
+                        { value: stats.durationMin,        unit: 'min',     label: 'Durată' },
+                        { value: stats.consumptionPer100,  unit: 'L/100km', label: 'Consum' },
+                        { value: stats.costRON,            unit: 'RON',     label: 'Cost' },
+                        { value: stats.co2Kg,              unit: 'kg CO₂',  label: 'Emisii' },
+                        { value: stats.ecoScore,           unit: 'puncte',  label: 'Eco Score',
+                          color: stats.ecoScore >= 80 ? colors.status.good : colors.status.monitor },
+                    ].map((s, i) => (
+                        <View key={i} style={styles.statCard}>
+                            <Text style={[styles.statValue, s.color && { color: s.color }]}>{s.value}</Text>
+                            <Text style={styles.statUnit}>{s.unit}</Text>
+                            <Text style={styles.statLabel}>{s.label}</Text>
+                        </View>
+                    ))}
                 </View>
 
-                {/* DRIVING STYLE */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Stil de Condus</Text>
                     <View style={styles.drivingBars}>
-                        <View style={styles.drivingRow}>
-                            <Text style={styles.drivingLabel}>Fluent</Text>
-                            <View style={styles.drivingBarBg}>
-                                <View style={[styles.drivingBarFill, { width: `${driving.smoothPct}%`, backgroundColor: '#3fb950' }]} />
+                        {[
+                            { label: 'Fluent',    pct: driving.smoothPct,     fill: colors.status.good },
+                            { label: 'Economic',  pct: driving.economicPct,   fill: colors.accent.default },
+                            { label: 'Agresiv',   pct: driving.aggressivePct, fill: colors.status.critical },
+                        ].map((row) => (
+                            <View key={row.label} style={styles.drivingRow}>
+                                <Text style={styles.drivingLabel}>{row.label}</Text>
+                                <View style={styles.drivingBarBg}>
+                                    <View style={[styles.drivingBarFill, { width: `${row.pct}%`, backgroundColor: row.fill }]} />
+                                </View>
+                                <Text style={styles.drivingPct}>{Math.round(row.pct)}%</Text>
                             </View>
-                            <Text style={styles.drivingPct}>{Math.round(driving.smoothPct)}%</Text>
-                        </View>
-                        <View style={styles.drivingRow}>
-                            <Text style={styles.drivingLabel}>Economic</Text>
-                            <View style={styles.drivingBarBg}>
-                                <View style={[styles.drivingBarFill, { width: `${driving.economicPct}%`, backgroundColor: '#58a6ff' }]} />
-                            </View>
-                            <Text style={styles.drivingPct}>{Math.round(driving.economicPct)}%</Text>
-                        </View>
-                        <View style={styles.drivingRow}>
-                            <Text style={styles.drivingLabel}>Agresiv</Text>
-                            <View style={styles.drivingBarBg}>
-                                <View style={[styles.drivingBarFill, { width: `${driving.aggressivePct}%`, backgroundColor: '#f85149' }]} />
-                            </View>
-                            <Text style={styles.drivingPct}>{Math.round(driving.aggressivePct)}%</Text>
-                        </View>
+                        ))}
                     </View>
                     {(driving.hardBrakes > 0 || driving.hardAccelerations > 0 || driving.overspeeds > 0) && (
                         <View style={styles.eventsRow}>
-                            {driving.hardBrakes > 0 && <Text style={styles.eventBadge}>Frânări: {driving.hardBrakes}</Text>}
+                            {driving.hardBrakes > 0        && <Text style={styles.eventBadge}>Frânări: {driving.hardBrakes}</Text>}
                             {driving.hardAccelerations > 0 && <Text style={styles.eventBadge}>Accelerări: {driving.hardAccelerations}</Text>}
-                            {driving.overspeeds > 0 && <Text style={styles.eventBadge}>Depășiri: {driving.overspeeds}</Text>}
+                            {driving.overspeeds > 0        && <Text style={styles.eventBadge}>Depășiri: {driving.overspeeds}</Text>}
                         </View>
                     )}
                 </View>
 
-                {/* INSIGHTS */}
                 {insights && insights.length > 0 && (
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Observații</Text>
                         {insights.map((insight, idx) => {
-                            const style = getInsightStyle(insight.type);
+                            const s = getInsightStyle(insight.type);
                             return (
-                                <View key={idx} style={[styles.insightCard, { backgroundColor: style.bg, borderColor: style.border }]}>
-                                    <Text style={[styles.insightIcon, { color: style.text }]}>{insight.icon}</Text>
-                                    <Text style={[styles.insightText, { color: style.text }]}>{insight.text}</Text>
+                                <View key={idx} style={[styles.insightCard, { backgroundColor: s.bg, borderColor: s.border }]}>
+                                    <Text style={[styles.insightIcon, { color: s.text }]}>{insight.icon}</Text>
+                                    <Text style={[styles.insightText, { color: s.text }]}>{insight.text}</Text>
                                 </View>
                             );
                         })}
                     </View>
                 )}
 
-                {/* PREDICTIONS */}
                 {predictions && predictions.length > 0 && (
                     <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Predicții Active</Text>
@@ -240,7 +200,9 @@ const TripReportScreen = ({ route, navigation }) => {
                             <View key={idx} style={styles.predCard}>
                                 <View style={styles.predHeader}>
                                     <Text style={styles.predComponent}>{pred.component}</Text>
-                                    <Text style={[styles.predSeverity, { color: pred.severity === 'HIGH' ? '#f85149' : '#d29922' }]}>{pred.probability}%</Text>
+                                    <Text style={[styles.predSeverity, {
+                                        color: pred.severity === 'HIGH' ? colors.status.critical : colors.status.monitor,
+                                    }]}>{pred.probability}%</Text>
                                 </View>
                                 <Text style={styles.predRecommendation}>{pred.recommendation}</Text>
                             </View>
@@ -248,7 +210,7 @@ const TripReportScreen = ({ route, navigation }) => {
                     </View>
                 )}
 
-                <View style={{ height: 40 }} />
+                <View style={{ height: spacing[10] }} />
             </ScrollView>
         </View>
     );
@@ -257,93 +219,262 @@ const TripReportScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0d1117',
+        backgroundColor: colors.bg[0],
         paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 44,
     },
     centerContainer: {
         flex: 1,
-        backgroundColor: '#0d1117',
+        backgroundColor: colors.bg[0],
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 40,
+        padding: spacing[10],
     },
-    loadingText: { color: '#8b949e', marginTop: 12, fontSize: 14 },
-    errorText: { color: '#8b949e', fontSize: 14, marginBottom: 16 },
-    backBtn: { backgroundColor: '#21262d', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 8 },
-    backBtnText: { color: '#58a6ff', fontWeight: '600' },
+    loadingText: {
+        color: colors.text.secondary,
+        marginTop: spacing[3],
+        fontSize: typography.sizes.body2,
+    },
+    errorText: {
+        color: colors.text.secondary,
+        fontSize: typography.sizes.body2,
+        marginBottom: spacing[4],
+    },
+    backBtn: {
+        backgroundColor: colors.bg[2],
+        paddingHorizontal: spacing[6],
+        paddingVertical: spacing[2] + 2,
+        borderRadius: radii.sm,
+    },
+    backBtnText: {
+        color: colors.accent.default,
+        fontWeight: typography.weights.semibold,
+    },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomColor: '#21262d',
+        paddingHorizontal: layout.screenPaddingH,
+        paddingVertical: spacing[3],
+        borderBottomColor: colors.border.default,
         borderBottomWidth: 1,
     },
-    headerBack: { color: '#58a6ff', fontSize: 14, fontWeight: '600' },
-    headerTitle: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-    headerTrip: { color: '#8b949e', fontSize: 13 },
+    headerBack: {
+        color: colors.accent.default,
+        fontSize: typography.sizes.body2,
+        fontWeight: typography.weights.semibold,
+    },
+    headerTitle: {
+        color: colors.text.primary,
+        fontSize: typography.sizes.title3,
+        fontWeight: typography.weights.bold,
+    },
+    headerTrip: {
+        color: colors.text.secondary,
+        fontSize: typography.sizes.label1,
+    },
     scroll: { flex: 1 },
-    scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
-    gaugeSection: { alignItems: 'center', marginBottom: 20 },
-    gaugeCenter: { flexDirection: 'row', alignItems: 'baseline' },
-    gaugeScore: { fontSize: 44, fontWeight: '900' },
-    gaugePercent: { fontSize: 18, fontWeight: '700', color: '#8b949e', marginLeft: 2 },
-    gaugeLabel: { fontSize: 12, color: '#8b949e', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.2, marginTop: 4 },
-    rankBadge: { marginTop: 10, paddingHorizontal: 16, paddingVertical: 5, borderRadius: 20, borderWidth: 1.5 },
-    rankText: { fontSize: 13, fontWeight: '700' },
-    section: { marginBottom: 20 },
-    sectionTitle: { fontSize: 13, fontWeight: '700', color: '#c9d1d9', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 },
-    scoreBarContainer: { marginBottom: 10 },
-    scoreBarHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-    scoreBarLabel: { fontSize: 13, color: '#c9d1d9' },
-    scoreBarValue: { fontSize: 13, fontWeight: '800' },
-    scoreBarBg: { height: 6, backgroundColor: '#21262d', borderRadius: 3, overflow: 'hidden' },
-    scoreBarFill: { height: 6, borderRadius: 3 },
-    statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 },
+    scrollContent: {
+        paddingHorizontal: layout.screenPaddingH,
+        paddingTop: spacing[5],
+    },
+    gaugeSection: {
+        alignItems: 'center',
+        marginBottom: spacing[5],
+    },
+    gaugeCenter: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+    },
+    gaugeScore: {
+        fontSize: typography.sizes.hero,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+    },
+    gaugePercent: {
+        fontSize: typography.sizes.title2,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+        marginLeft: 2,  // optical: aliniază % cu baseline scorului
+    },
+    gaugeLabel: {
+        fontSize: typography.sizes.label2,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
+        textTransform: 'uppercase',
+        letterSpacing: 1.2,
+        marginTop: spacing[1],
+    },
+    rankBadge: {
+        marginTop: spacing[2] + 2,
+        paddingHorizontal: spacing[4],
+        paddingVertical: spacing[1],
+        borderRadius: radii.full,
+        borderWidth: 1.5,
+    },
+    rankText: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.bold,
+    },
+    section: { marginBottom: spacing[5] },
+    sectionTitle: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: spacing[3],
+    },
+    scoreBarContainer: { marginBottom: spacing[2] + 2 },
+    scoreBarHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: spacing[1],
+    },
+    scoreBarLabel: {
+        fontSize: typography.sizes.label1,
+        color: colors.text.primary,
+    },
+    scoreBarValue: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+    },
+    scoreBarBg: {
+        height: 6,
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.xs,
+        overflow: 'hidden',
+    },
+    scoreBarFill: {
+        height: 6,
+        borderRadius: radii.xs,
+    },
+    statsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        marginBottom: spacing[5],
+    },
     statCard: {
         width: '31%',
-        backgroundColor: '#161b22',
-        borderRadius: 10,
-        padding: 12,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[3],
         alignItems: 'center',
-        marginBottom: 8,
-        borderColor: '#30363d',
+        marginBottom: spacing[2],
+        borderColor: colors.border.default,
         borderWidth: 1,
     },
-    statValue: { fontSize: 20, fontWeight: '900', color: '#ffffff' },
-    statUnit: { fontSize: 10, color: '#8b949e', marginTop: 2 },
-    statLabel: { fontSize: 10, color: '#8b949e', marginTop: 4, fontWeight: '600' },
-    drivingBars: { marginBottom: 10 },
-    drivingRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-    drivingLabel: { fontSize: 12, color: '#c9d1d9', width: 70 },
-    drivingBarBg: { flex: 1, height: 6, backgroundColor: '#21262d', borderRadius: 3, overflow: 'hidden', marginHorizontal: 10 },
-    drivingBarFill: { height: 6, borderRadius: 3 },
-    drivingPct: { fontSize: 12, color: '#8b949e', fontWeight: '600', width: 35, textAlign: 'right' },
-    eventsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    eventBadge: { fontSize: 11, color: '#f85149', backgroundColor: 'rgba(248, 81, 73, 0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4, overflow: 'hidden' },
+    statValue: {
+        fontSize: typography.sizes.title2,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    statUnit: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.secondary,
+        marginTop: 2,  // optical: tight sub-value label
+    },
+    statLabel: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.secondary,
+        marginTop: spacing[1],
+        fontWeight: typography.weights.semibold,
+    },
+    drivingBars: { marginBottom: spacing[2] + 2 },
+    drivingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: spacing[2],
+    },
+    drivingLabel: {
+        fontSize: typography.sizes.label2,
+        color: colors.text.primary,
+        width: 70,  // coloană fixă — aliniament tabel
+    },
+    drivingBarBg: {
+        flex: 1,
+        height: 6,
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.xs,
+        overflow: 'hidden',
+        marginHorizontal: spacing[2] + 2,
+    },
+    drivingBarFill: {
+        height: 6,
+        borderRadius: radii.xs,
+    },
+    drivingPct: {
+        fontSize: typography.sizes.label2,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
+        width: 35,  // coloană fixă — aliniament tabel
+        textAlign: 'right',
+        fontVariant: ['tabular-nums'],
+    },
+    eventsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing[2],
+    },
+    eventBadge: {
+        fontSize: typography.sizes.caption,
+        color: colors.status.critical,
+        backgroundColor: colors.tint.critical,
+        paddingHorizontal: spacing[2] + 2,
+        paddingVertical: spacing[1],
+        borderRadius: radii.xs,
+        overflow: 'hidden',
+    },
     insightCard: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        padding: 12,
-        borderRadius: 8,
+        padding: spacing[3],
+        borderRadius: radii.sm,
         borderWidth: 1,
-        marginBottom: 8,
+        marginBottom: spacing[2],
     },
-    insightIcon: { fontSize: 14, fontWeight: '700', marginRight: 10, marginTop: 1 },
-    insightText: { fontSize: 13, flex: 1, lineHeight: 19 },
+    insightIcon: {
+        fontSize: typography.sizes.body2,
+        fontWeight: typography.weights.bold,
+        marginRight: spacing[2] + 2,
+        marginTop: 1,  // optical: aliniere verticală icon cu text
+    },
+    insightText: {
+        fontSize: typography.sizes.label1,
+        flex: 1,
+        lineHeight: typography.lineHeights.body2,
+    },
     predCard: {
-        backgroundColor: '#161b22',
-        borderRadius: 10,
-        padding: 14,
-        borderColor: '#30363d',
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: layout.cardPaddingV,
+        borderColor: colors.border.default,
         borderWidth: 1,
-        marginBottom: 8,
+        marginBottom: spacing[2],
     },
-    predHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    predComponent: { fontSize: 14, fontWeight: '700', color: '#ffffff' },
-    predSeverity: { fontSize: 14, fontWeight: '800' },
-    predRecommendation: { fontSize: 12, color: '#8b949e', lineHeight: 17 },
+    predHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing[1] + 2,
+    },
+    predComponent: {
+        fontSize: typography.sizes.body2,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+    },
+    predSeverity: {
+        fontSize: typography.sizes.body2,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+    },
+    predRecommendation: {
+        fontSize: typography.sizes.label2,
+        color: colors.text.secondary,
+        lineHeight: typography.lineHeights.label1,
+    },
 });
 
 export default TripReportScreen;

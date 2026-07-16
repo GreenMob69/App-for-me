@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar, Animated, useWindowDimensions } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import api from '../services/api';
 import { t } from '../i18n';
+import { colors, typography, radii, spacing, layout, motion } from '../theme';
+import { getSubsystemColor } from '../utils/statusUtils';
 import { buildDetailExplanation } from '../engine/MessageEngine';
+import { Skeleton, EmptyState } from '../components/ui';
 
 const SubsystemDetailScreen = ({ route, navigation }) => {
     const { system, vin } = route.params;
+    const { width: screenWidth } = useWindowDimensions();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [technicalExpanded, setTechnicalExpanded] = useState(false);
@@ -22,7 +26,7 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
             setData(response.data);
             Animated.timing(contentOpacity, {
                 toValue: 1,
-                duration: 400,
+                duration: motion.duration.normal,
                 useNativeDriver: true,
             }).start();
         } catch (err) {
@@ -34,16 +38,42 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
 
     if (loading) {
         return (
-            <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color="#58a6ff" />
+            <View style={styles.container}>
+                <StatusBar barStyle="light-content" backgroundColor={colors.bg[0]} />
+                <View style={styles.headerBar}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                        <Text style={styles.backText}>{t('detail.back')}</Text>
+                    </TouchableOpacity>
+                    <Skeleton variant="text" height={typography.sizes.body1} width={120} />
+                </View>
+                <View style={styles.skeletonContent}>
+                    <Skeleton variant="card" height={80} style={styles.skGap} />
+                    <Skeleton variant="text" height={typography.sizes.label2} width={100} style={styles.skGap} />
+                    <Skeleton variant="card" height={120} style={styles.skGap} />
+                    <Skeleton variant="text" height={typography.sizes.label2} width={100} style={styles.skGap} />
+                    <Skeleton variant="card" height={160} />
+                </View>
             </View>
         );
     }
 
     if (!data) {
         return (
-            <View style={styles.centerContainer}>
-                <Text style={styles.noDataText}>{t('detail.noData')}</Text>
+            <View style={styles.container}>
+                <StatusBar barStyle="light-content" backgroundColor={colors.bg[0]} />
+                <View style={styles.headerBar}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+                        <Text style={styles.backText}>{t('detail.back')}</Text>
+                    </TouchableOpacity>
+                </View>
+                <View style={styles.centerContainer}>
+                    <EmptyState
+                        icon="—"
+                        title={t('detail.noData')}
+                        subtitle="Nu există date pentru acest subsistem."
+                        size="lg"
+                    />
+                </View>
             </View>
         );
     }
@@ -60,11 +90,12 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
         }))
         : [];
 
+    const chartWidth = screenWidth - layout.screenPaddingH * 2 - spacing[4] * 2;
+
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#0d1117" />
+            <StatusBar barStyle="light-content" backgroundColor={colors.bg[0]} />
 
-            {/* Header */}
             <View style={styles.headerBar}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Text style={styles.backText}>{t('detail.back')}</Text>
@@ -77,7 +108,6 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* 1. CONCLUZIA */}
                 {explanation && explanation.conclusion && (
                     <View style={styles.section}>
                         <Text style={styles.sectionLabel}>{t('detail.conclusionLabel')}</Text>
@@ -90,7 +120,6 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                     </View>
                 )}
 
-                {/* 2. DE CE */}
                 {explanation && explanation.factors && explanation.factors.length > 0 && (
                     <View style={styles.section}>
                         <Text style={styles.sectionLabel}>{t('detail.whyLabel')}</Text>
@@ -108,29 +137,28 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                     </View>
                 )}
 
-                {/* 3. EVOLUTIE IN TIMP */}
                 {hasChart && (
                     <View style={styles.section}>
                         <Text style={styles.sectionLabel}>{t('detail.evolutionLabel')}</Text>
                         <View style={styles.chartContainer}>
                             <LineChart
                                 data={chartData}
-                                width={280}
+                                width={chartWidth}
                                 height={100}
-                                spacing={280 / Math.max(chartData.length - 1, 1)}
-                                color="#58a6ff"
+                                spacing={chartWidth / Math.max(chartData.length - 1, 1)}
+                                color={colors.accent.default}
                                 thickness={2}
                                 hideRules
                                 yAxisColor="transparent"
-                                xAxisColor="#30363d"
-                                yAxisTextStyle={{ color: '#8b949e', fontSize: 9 }}
-                                xAxisLabelTextStyle={{ color: '#8b949e', fontSize: 9 }}
+                                xAxisColor={colors.border.default}
+                                yAxisTextStyle={{ color: colors.text.secondary, fontSize: typography.sizes.micro - 1 }}
+                                xAxisLabelTextStyle={{ color: colors.text.secondary, fontSize: typography.sizes.micro - 1 }}
                                 hideYAxisText
                                 dataPointsRadius={3}
-                                dataPointsColor="#58a6ff"
+                                dataPointsColor={colors.accent.default}
                                 curved
-                                startFillColor="rgba(88, 166, 255, 0.12)"
-                                endFillColor="rgba(88, 166, 255, 0.01)"
+                                startFillColor={colors.accent.muted}
+                                endFillColor="rgba(77,142,245,0.01)"
                                 areaChart
                                 noOfSections={3}
                             />
@@ -138,7 +166,6 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                     </View>
                 )}
 
-                {/* 4. BASELINE */}
                 {explanation && explanation.baselineExplanation && (
                     <View style={styles.section}>
                         <Text style={styles.sectionLabel}>{t('detail.baselineLabel')}</Text>
@@ -155,7 +182,6 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                     </View>
                 )}
 
-                {/* 5. CORELATII — doar daca ajuta */}
                 {explanation && explanation.relevantCorrelations && explanation.relevantCorrelations.length > 0 && (
                     <View style={styles.section}>
                         <Text style={styles.sectionLabel}>{t('detail.correlationsLabel')}</Text>
@@ -168,7 +194,6 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                     </View>
                 )}
 
-                {/* 6. RECOMANDARE */}
                 {explanation && explanation.recommendation && (
                     <View style={styles.section}>
                         <Text style={styles.sectionLabel}>{t('detail.recommendationLabel')}</Text>
@@ -178,7 +203,6 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                     </View>
                 )}
 
-                {/* NIVEL 3: Date tehnice — progressive disclosure */}
                 {diagnostics && diagnostics.length > 0 && (
                     <View style={styles.technicalSection}>
                         <TouchableOpacity
@@ -196,7 +220,7 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                                     <View key={idx} style={styles.diagCard}>
                                         <Text style={styles.diagTitle}>{diag.diagnosis}</Text>
                                         <View style={styles.diagMeta}>
-                                            <Text style={styles.diagProb}>{diag.probability}%</Text>
+                                            <Text style={[styles.diagProb, styles.tabular]}>{diag.probability}%</Text>
                                             {diag.trendStatus && (
                                                 <Text style={styles.diagTrend}>
                                                     {diag.trendStatus === 'CONFIRMED' ? t('detail.trendConfirmed') : t('detail.trendStable')}
@@ -220,10 +244,10 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                                                 <View style={styles.sensorBarBg}>
                                                     <View style={[styles.sensorBarFill, {
                                                         width: `${sq.quality}%`,
-                                                        backgroundColor: sq.quality >= 85 ? '#3fb950' : sq.quality >= 60 ? '#d29922' : '#f85149',
+                                                        backgroundColor: getSubsystemColor(sq.quality),
                                                     }]} />
                                                 </View>
-                                                <Text style={styles.sensorPct}>{sq.quality}%</Text>
+                                                <Text style={[styles.sensorPct, styles.tabular]}>{sq.quality}%</Text>
                                             </View>
                                         ))}
                                     </View>
@@ -233,7 +257,7 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                     </View>
                 )}
 
-                <View style={{ height: 40 }} />
+                <View style={{ height: spacing[10] }} />
             </Animated.ScrollView>
         </View>
     );
@@ -242,74 +266,75 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0d1117',
+        backgroundColor: colors.bg[0],
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 40) : 44,
     },
     centerContainer: {
         flex: 1,
-        backgroundColor: '#0d1117',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    noDataText: {
-        color: '#8b949e',
-        fontSize: 14,
+    skeletonContent: {
+        paddingHorizontal: layout.screenPaddingH,
+        paddingTop: spacing[5],
     },
+    skGap: { marginBottom: spacing[3] },
     headerBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomColor: '#21262d',
+        paddingHorizontal: layout.screenPaddingH,
+        paddingVertical: spacing[3],
+        borderBottomColor: colors.border.subtle,
         borderBottomWidth: 1,
     },
     backBtn: {
-        marginRight: 12,
-        paddingVertical: 4,
+        marginRight: spacing[3],
+        paddingVertical: spacing[1],
     },
     backText: {
-        color: '#58a6ff',
-        fontSize: 14,
-        fontWeight: '600',
+        color: colors.accent.default,
+        fontSize: typography.sizes.body2,
+        fontWeight: typography.weights.semibold,
     },
     headerTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: '#ffffff',
+        fontSize: typography.sizes.body1,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
     },
     scroll: {
         flex: 1,
     },
     scrollContent: {
-        paddingHorizontal: 16,
-        paddingTop: 20,
+        paddingHorizontal: layout.screenPaddingH,
+        paddingTop: spacing[5],
     },
     section: {
-        marginBottom: 24,
+        marginBottom: spacing[6],
     },
     sectionLabel: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#8b949e',
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
+        color: colors.text.tertiary,
         letterSpacing: 0.5,
-        marginBottom: 10,
+        textTransform: 'uppercase',
+        marginBottom: spacing[2] + 2,
     },
     conclusionText: {
-        fontSize: 15,
-        fontWeight: '500',
-        color: '#ffffff',
-        lineHeight: 22,
+        fontSize: typography.sizes.body1,
+        fontWeight: typography.weights.medium,
+        color: colors.text.primary,
+        lineHeight: typography.lineHeights.body1,
     },
     qualityHint: {
-        fontSize: 11,
-        color: '#8b949e',
-        marginTop: 8,
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        marginTop: spacing[2],
     },
     qualityWarn: {
-        color: '#d29922',
+        color: colors.status.monitor,
     },
     factorsList: {
-        gap: 10,
+        gap: spacing[2] + 2,
     },
     factorRow: {
         flexDirection: 'row',
@@ -318,42 +343,42 @@ const styles = StyleSheet.create({
     factorDot: {
         width: 6,
         height: 6,
-        borderRadius: 3,
-        backgroundColor: '#58a6ff',
-        marginTop: 6,
-        marginRight: 10,
+        borderRadius: radii.full,
+        backgroundColor: colors.accent.default,
+        marginTop: spacing[1] + 2,
+        marginRight: spacing[2] + 2,
     },
     factorContent: {
         flex: 1,
     },
     factorParam: {
-        fontSize: 13,
-        color: '#c9d1d9',
-        lineHeight: 19,
+        fontSize: typography.sizes.label1,
+        color: colors.text.primary,
+        lineHeight: typography.lineHeights.label1,
     },
     factorValue: {
-        fontWeight: '600',
-        color: '#ffffff',
+        fontWeight: typography.weights.semibold,
+        color: colors.text.primary,
     },
     factorImpact: {
-        fontSize: 12,
-        color: '#8b949e',
-        marginTop: 2,
+        fontSize: typography.sizes.label2,
+        color: colors.text.secondary,
+        marginTop: spacing[1] - 2,
     },
     chartContainer: {
-        backgroundColor: '#161b22',
-        borderRadius: 12,
-        padding: 16,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[4],
         borderWidth: 1,
-        borderColor: '#30363d',
+        borderColor: colors.border.default,
     },
     baselineList: {
-        backgroundColor: '#161b22',
-        borderRadius: 12,
-        padding: 14,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[3] + 2,
         borderWidth: 1,
-        borderColor: '#30363d',
-        gap: 8,
+        borderColor: colors.border.default,
+        gap: spacing[2],
     },
     baselineRow: {
         flexDirection: 'row',
@@ -361,130 +386,133 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     baselineParam: {
-        fontSize: 13,
-        color: '#c9d1d9',
+        fontSize: typography.sizes.label1,
+        color: colors.text.primary,
         textTransform: 'capitalize',
     },
     baselineValue: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#8b949e',
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.semibold,
+        color: colors.text.secondary,
     },
     baselineDeviation: {
-        color: '#d29922',
+        color: colors.status.monitor,
     },
     correlationCard: {
-        backgroundColor: '#161b22',
-        borderRadius: 12,
-        padding: 14,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[3] + 2,
         borderWidth: 1,
-        borderColor: '#30363d',
-        marginBottom: 8,
+        borderColor: colors.border.default,
+        marginBottom: spacing[2],
     },
     correlationPair: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#c9d1d9',
-        marginBottom: 4,
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.semibold,
+        color: colors.text.primary,
+        marginBottom: spacing[1],
     },
     correlationMessage: {
-        fontSize: 12,
-        color: '#8b949e',
-        lineHeight: 17,
+        fontSize: typography.sizes.label2,
+        color: colors.text.secondary,
+        lineHeight: typography.lineHeights.label2 + 1,
     },
     recommendationBox: {
-        backgroundColor: 'rgba(63,185,80,0.06)',
-        borderRadius: 12,
-        padding: 16,
+        backgroundColor: colors.tint.good,
+        borderRadius: radii.md,
+        padding: spacing[4],
         borderWidth: 1,
-        borderColor: 'rgba(63,185,80,0.2)',
+        borderColor: 'rgba(52,209,114,0.20)',
     },
     recommendationText: {
-        fontSize: 14,
-        color: '#c9d1d9',
-        lineHeight: 20,
+        fontSize: typography.sizes.body2,
+        color: colors.text.primary,
+        lineHeight: typography.lineHeights.body2,
     },
     technicalSection: {
-        marginTop: 8,
+        marginTop: spacing[2],
         borderTopWidth: 1,
-        borderTopColor: '#21262d',
-        paddingTop: 16,
+        borderTopColor: colors.border.subtle,
+        paddingTop: spacing[4],
     },
     technicalToggle: {
-        paddingVertical: 10,
+        paddingVertical: spacing[2] + 2,
         alignItems: 'center',
     },
     technicalToggleText: {
-        fontSize: 12,
-        color: '#58a6ff',
-        fontWeight: '600',
+        fontSize: typography.sizes.label2,
+        color: colors.accent.default,
+        fontWeight: typography.weights.semibold,
     },
     technicalContent: {
-        marginTop: 12,
-        gap: 8,
+        marginTop: spacing[3],
+        gap: spacing[2],
     },
     diagCard: {
-        backgroundColor: '#161b22',
-        borderRadius: 10,
-        padding: 14,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[3] + 2,
         borderWidth: 1,
-        borderColor: '#30363d',
+        borderColor: colors.border.default,
     },
     diagTitle: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#ffffff',
-        marginBottom: 6,
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.semibold,
+        color: colors.text.primary,
+        marginBottom: spacing[1] + 2,
     },
     diagMeta: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        marginBottom: 8,
+        gap: spacing[2] + 2,
+        marginBottom: spacing[2],
     },
     diagProb: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#58a6ff',
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        color: colors.accent.default,
+    },
+    tabular: {
+        fontVariant: ['tabular-nums'],
     },
     diagTrend: {
-        fontSize: 11,
-        color: '#8b949e',
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
     },
     diagFactor: {
-        fontSize: 11,
-        color: '#8b949e',
-        lineHeight: 16,
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        lineHeight: typography.lineHeights.caption,
     },
     sensorSection: {
-        marginTop: 8,
+        marginTop: spacing[2],
     },
     sensorRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 5,
+        paddingVertical: spacing[1] + 1,
     },
     sensorName: {
-        fontSize: 11,
-        color: '#c9d1d9',
+        fontSize: typography.sizes.caption,
+        color: colors.text.primary,
         width: 80,
     },
     sensorBarBg: {
         flex: 1,
         height: 4,
-        backgroundColor: '#21262d',
-        borderRadius: 2,
+        backgroundColor: colors.border.default,
+        borderRadius: radii.xs,
         overflow: 'hidden',
-        marginHorizontal: 8,
+        marginHorizontal: spacing[2],
     },
     sensorBarFill: {
         height: 4,
-        borderRadius: 2,
+        borderRadius: radii.xs,
     },
     sensorPct: {
-        fontSize: 10,
-        color: '#8b949e',
-        fontWeight: '600',
+        fontSize: typography.sizes.micro,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
         width: 30,
         textAlign: 'right',
     },

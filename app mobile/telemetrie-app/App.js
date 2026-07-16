@@ -7,21 +7,29 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TelemetryProvider } from './src/context/TelemetryContext';
 import { AppContext } from './src/context/AppContext';
+import { NotificationContext } from './src/context/NotificationContext';
 import { setCustomServerUrl } from './src/utils/config';
 import api from './src/services/api';
 import socketService from './src/services/socket';
+import { colors, typography, layout, spacing } from './src/theme';
 
-import StatusScreen from './src/screens/StatusScreen';
-import VehicleHealthScreen from './src/screens/VehicleHealthScreen';
+import StatusScreen         from './src/screens/StatusScreen';
+import MaintenanceScreen    from './src/screens/MaintenanceScreen';
+import VehicleHealthScreen  from './src/screens/VehicleHealthScreen';
 import SubsystemDetailScreen from './src/screens/SubsystemDetailScreen';
-import TripReportScreen from './src/screens/TripReportScreen';
-import LiveDashboardScreen from './src/screens/LiveDashboardScreen';
-import TripHistoryScreen from './src/screens/TripHistoryScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
+import TripReportScreen     from './src/screens/TripReportScreen';
+import TripDetailScreen     from './src/screens/TripDetailScreen';
+import LiveDashboardScreen  from './src/screens/LiveDashboardScreen';
+import TripHistoryScreen    from './src/screens/TripHistoryScreen';
+import SettingsScreen       from './src/screens/SettingsScreen';
 import VehicleOnboardingScreen from './src/screens/VehicleOnboardingScreen';
-import ErrorBoundary from './src/components/ErrorBoundary';
+import VehicleProfileScreen from './src/screens/VehicleProfileScreen';
+import AIExpertScreen       from './src/screens/AIExpertScreen';
+import NotificationScreen   from './src/screens/NotificationScreen';
+import GlobalSearchScreen   from './src/screens/GlobalSearchScreen';
+import ErrorBoundary        from './src/components/ErrorBoundary';
 
-const Tab = createBottomTabNavigator();
+const Tab       = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
 const StatusStack = createNativeStackNavigator();
 
@@ -29,8 +37,8 @@ function StatusStackScreen() {
     return (
         <ErrorBoundary>
             <StatusStack.Navigator screenOptions={{ headerShown: false }}>
-                <StatusStack.Screen name="StatusMain" component={StatusScreen} />
-                <StatusStack.Screen name="HealthDetail" component={VehicleHealthScreen} />
+                <StatusStack.Screen name="StatusMain"    component={StatusScreen} />
+                <StatusStack.Screen name="HealthDetail"  component={VehicleHealthScreen} />
                 <StatusStack.Screen name="SubsystemDetail" component={SubsystemDetailScreen} />
             </StatusStack.Navigator>
         </ErrorBoundary>
@@ -38,45 +46,53 @@ function StatusStackScreen() {
 }
 
 function TabNavigator() {
+    const { unreadCount } = useContext(NotificationContext);
+
     return (
         <Tab.Navigator
             screenOptions={{
                 headerShown: false,
                 tabBarStyle: {
-                    backgroundColor: '#161b22',
-                    borderTopColor: '#30363d',
-                    paddingBottom: 5,
-                    height: 60,
+                    backgroundColor: colors.bg[1],
+                    borderTopColor: colors.border.default,
+                    paddingBottom: spacing[1],
+                    height: layout.tabBarHeight,
                 },
-                tabBarActiveTintColor: '#58a6ff',
-                tabBarInactiveTintColor: '#8b949e',
+                tabBarActiveTintColor:   colors.accent.default,
+                tabBarInactiveTintColor: colors.text.secondary,
                 tabBarLabelStyle: {
-                    fontSize: 11,
-                    fontWeight: 'bold',
+                    fontSize:    typography.sizes.caption,
+                    fontWeight:  typography.weights.bold,
                 },
             }}
         >
             <Tab.Screen
                 name="Stare"
                 component={StatusStackScreen}
-                options={{ tabBarLabel: 'STARE' }}
+                options={{
+                    tabBarLabel: 'STARE',
+                    tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
+                    tabBarBadgeStyle: {
+                        backgroundColor: colors.status.critical,
+                        fontSize: 9,
+                        minWidth: 16,
+                        height: 16,
+                    },
+                }}
             />
-            <Tab.Screen
-                name="Live"
-                options={{ tabBarLabel: 'LIVE' }}
-            >
+            <Tab.Screen name="Mentenanta" options={{ tabBarLabel: 'MENTENANȚĂ' }}>
+                {() => <ErrorBoundary><MaintenanceScreen /></ErrorBoundary>}
+            </Tab.Screen>
+            <Tab.Screen name="Live" options={{ tabBarLabel: 'LIVE' }}>
                 {() => <ErrorBoundary><LiveDashboardScreen /></ErrorBoundary>}
             </Tab.Screen>
-            <Tab.Screen
-                name="Istoric"
-                options={{ tabBarLabel: 'CURSE' }}
-            >
+            <Tab.Screen name="Expert" options={{ tabBarLabel: 'EXPERT' }}>
+                {() => <ErrorBoundary><AIExpertScreen /></ErrorBoundary>}
+            </Tab.Screen>
+            <Tab.Screen name="Istoric" options={{ tabBarLabel: 'CURSE' }}>
                 {() => <ErrorBoundary><TripHistoryScreen /></ErrorBoundary>}
             </Tab.Screen>
-            <Tab.Screen
-                name="Setari"
-                options={{ tabBarLabel: 'SETARI' }}
-            >
+            <Tab.Screen name="Setari" options={{ tabBarLabel: 'SETARI' }}>
                 {() => <ErrorBoundary><SettingsScreen /></ErrorBoundary>}
             </Tab.Screen>
         </Tab.Navigator>
@@ -95,11 +111,31 @@ function AppNavigator() {
             }}
         >
             <RootStack.Navigator screenOptions={{ headerShown: false }}>
-                <RootStack.Screen name="MainTabs" component={TabNavigator} />
+                <RootStack.Screen name="MainTabs"      component={TabNavigator} />
                 <RootStack.Screen
                     name="TripReport"
                     component={TripReportScreen}
                     options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                />
+                <RootStack.Screen
+                    name="VehicleProfile"
+                    component={VehicleProfileScreen}
+                    options={{ animation: 'slide_from_right' }}
+                />
+                <RootStack.Screen
+                    name="TripDetail"
+                    component={TripDetailScreen}
+                    options={{ animation: 'slide_from_right' }}
+                />
+                <RootStack.Screen
+                    name="Notifications"
+                    component={NotificationScreen}
+                    options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                />
+                <RootStack.Screen
+                    name="GlobalSearch"
+                    component={GlobalSearchScreen}
+                    options={{ animation: 'slide_from_top' }}
                 />
             </RootStack.Navigator>
         </NavigationContainer>
@@ -107,7 +143,7 @@ function AppNavigator() {
 }
 
 export default function App() {
-    const [ready, setReady] = useState(false);
+    const [ready, setReady]                   = useState(false);
     const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
     useEffect(() => {
@@ -122,11 +158,8 @@ export default function App() {
                 }
             } catch (e) {}
 
-            // Check if vehicle profile exists
             const vehicleId = await AsyncStorage.getItem('@vehicle_id');
-            if (!vehicleId) {
-                setNeedsOnboarding(true);
-            }
+            if (!vehicleId) setNeedsOnboarding(true);
 
             setReady(true);
         };
@@ -143,7 +176,7 @@ export default function App() {
     if (!ready) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color="#58a6ff" />
+                <ActivityIndicator size="large" color={colors.accent.default} />
             </View>
         );
     }
@@ -151,7 +184,7 @@ export default function App() {
     if (needsOnboarding) {
         return (
             <View style={styles.container}>
-                <StatusBar style="light" backgroundColor="#0d1117" />
+                <StatusBar style="light" backgroundColor={colors.bg[0]} />
                 <VehicleOnboardingScreen onComplete={handleOnboardingComplete} />
             </View>
         );
@@ -160,7 +193,7 @@ export default function App() {
     return (
         <TelemetryProvider>
             <View style={styles.container}>
-                <StatusBar style="light" backgroundColor="#0d1117" />
+                <StatusBar style="light" backgroundColor={colors.bg[0]} />
                 <AppNavigator />
             </View>
         </TelemetryProvider>
@@ -170,6 +203,6 @@ export default function App() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0d1117',
-    }
+        backgroundColor: colors.bg[0],
+    },
 });

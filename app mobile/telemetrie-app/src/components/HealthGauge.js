@@ -1,32 +1,21 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-
-const AnimatedPath = Animated.createAnimatedComponent ? Animated.createAnimatedComponent(Path) : Path;
-
-const getHealthColor = (score) => {
-    if (score >= 90) return '#3fb950';
-    if (score >= 75) return '#7ee787';
-    if (score >= 60) return '#d29922';
-    if (score >= 40) return '#f0883e';
-    return '#f85149';
-};
+import { t } from '../i18n';
+import { colors, typography, spacing, motion } from '../theme';
+import { getHealthColor } from '../utils/statusUtils';
 
 const getHealthMessage = (score, subsystems) => {
-    if (score === null) return 'Se calculează...';
-    if (score >= 90) return 'Vehiculul funcționează optim';
+    if (score === null) return t('states.loading');
+    if (score >= 90) return t('status.excellent.message');
     if (score >= 75) {
         const degraded = Object.entries(subsystems || {}).find(([_, v]) => v.trend === 'DECREASING');
-        if (degraded) return `Funcționare normală · ${degraded[0]} monitorizat`;
-        return 'Funcționare normală';
+        if (degraded) return t('status.good.message');
+        return t('status.good.message');
     }
-    if (score >= 60) {
-        const warning = Object.entries(subsystems || {}).find(([_, v]) => v.score < 70);
-        if (warning) return `Atenție: ${warning[0]} necesită verificare`;
-        return 'Necesită atenție';
-    }
-    if (score >= 40) return 'Problemă activă detectată';
-    return 'Stare critică — verificare urgentă';
+    if (score >= 60) return t('status.attention.subtitleGeneral');
+    if (score >= 40) return t('status.problem.subtitle');
+    return t('status.critical.subtitle');
 };
 
 const HealthGauge = ({ score, subsystems, size = 220 }) => {
@@ -36,7 +25,7 @@ const HealthGauge = ({ score, subsystems, size = 220 }) => {
         if (score !== null && score !== undefined) {
             Animated.timing(animatedValue, {
                 toValue: score,
-                duration: 800,
+                duration: motion.duration.reveal,
                 useNativeDriver: false,
             }).start();
         }
@@ -51,7 +40,6 @@ const HealthGauge = ({ score, subsystems, size = 220 }) => {
     const centerX = size / 2;
     const centerY = size / 2 + 10;
 
-    // Arc semicircular (180 grade)
     const startAngle = Math.PI;
     const endAngle = 2 * Math.PI;
     const progressAngle = startAngle + ((score || 0) / 100) * Math.PI;
@@ -74,7 +62,7 @@ const HealthGauge = ({ score, subsystems, size = 220 }) => {
                 <Svg width={size} height={size * 0.6} style={{ position: 'absolute', top: 0 }}>
                     <Path
                         d={backgroundArc}
-                        stroke="#21262d"
+                        stroke={colors.border.strong}
                         strokeWidth={strokeWidth}
                         fill="none"
                         strokeLinecap="round"
@@ -90,11 +78,11 @@ const HealthGauge = ({ score, subsystems, size = 220 }) => {
                     ) : null}
                 </Svg>
                 <View style={styles.scoreContainer}>
-                    <Text style={[styles.scoreText, { color }]}>{displayScore}</Text>
+                    <Text style={[styles.scoreText, { color }, styles.tabular]}>{displayScore}</Text>
                     <Text style={styles.percentText}>%</Text>
                 </View>
             </View>
-            <Text style={styles.labelText}>Overall Health</Text>
+            <Text style={styles.labelText}>{t('health.overall').toUpperCase()}</Text>
             <Text style={[styles.messageText, { color }]}>{message}</Text>
         </View>
     );
@@ -103,37 +91,39 @@ const HealthGauge = ({ score, subsystems, size = 220 }) => {
 const styles = StyleSheet.create({
     container: {
         alignItems: 'center',
-        paddingVertical: 16,
+        paddingVertical: spacing[4],
     },
     scoreContainer: {
         flexDirection: 'row',
         alignItems: 'baseline',
-        marginBottom: 4,
+        marginBottom: spacing[1],
     },
     scoreText: {
-        fontSize: 52,
-        fontWeight: '900',
+        fontSize: typography.sizes.display,
+        fontWeight: typography.weights.heavy,
+    },
+    tabular: {
+        fontVariant: ['tabular-nums'],
     },
     percentText: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#8b949e',
-        marginLeft: 2,
+        fontSize: typography.sizes.title2,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+        marginLeft: spacing[1] - 2,
     },
     labelText: {
-        fontSize: 13,
-        color: '#8b949e',
-        fontWeight: '600',
-        textTransform: 'uppercase',
+        fontSize: typography.sizes.label1,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
         letterSpacing: 1.5,
-        marginTop: 4,
+        marginTop: spacing[1],
     },
     messageText: {
-        fontSize: 14,
-        fontWeight: '500',
-        marginTop: 6,
+        fontSize: typography.sizes.body2,
+        fontWeight: typography.weights.medium,
+        marginTop: spacing[1] + 2,
         textAlign: 'center',
-        paddingHorizontal: 20,
+        paddingHorizontal: spacing[5],
     },
 });
 

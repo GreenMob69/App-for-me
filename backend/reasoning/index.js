@@ -5,13 +5,9 @@
  * Poate fi importat și direct de AI Expert în viitor.
  */
 
-const { analyzeFromContext, analyze, resolveActiveNodes, traceChain } = require('./ReasoningEngine');
-const { graph } = require('./CausalGraph');
+const { analyzeFromContext } = require('./ReasoningEngine');
 
-module.exports = {
-    analyzeFromContext,
-    analyze,
-    resolveActiveNodes,
-    traceChain,
-    graph
-};
+// Exportăm doar intrarea publică a modulului.
+// analyze(), resolveActiveNodes(), traceChain() și graph sunt
+// detalii de implementare folosite intern de ReasoningEngine.
+module.exports = { analyzeFromContext };

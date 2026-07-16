@@ -1,9 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { t } from '../i18n';
+import { colors, typography, radii, spacing } from '../theme';
 
 const getSeverityStyle = (severity) => {
-    if (severity === 'HIGH') return { borderColor: '#da3633', iconColor: '#f85149', bgTint: 'rgba(218, 54, 51, 0.06)' };
-    return { borderColor: '#d29922', iconColor: '#d29922', bgTint: 'rgba(210, 153, 34, 0.06)' };
+    if (severity === 'HIGH') return {
+        borderColor: colors.status.critical,
+        iconColor:   colors.status.critical,
+        bgTint:      colors.tint.critical,
+    };
+    return {
+        borderColor: colors.status.monitor,
+        iconColor:   colors.status.monitor,
+        bgTint:      colors.tint.monitor,
+    };
 };
 
 const PredictionCard = ({ prediction, onPress }) => {
@@ -18,107 +28,111 @@ const PredictionCard = ({ prediction, onPress }) => {
         >
             <View style={styles.header}>
                 <Text style={[styles.warningIcon, { color: style.iconColor }]}>⚠</Text>
-                <Text style={styles.title}>{component}: semne de uzură</Text>
+                <Text style={styles.title}>{component}: {t('predictionCard.wearSigns')}</Text>
             </View>
 
             <View style={styles.barContainer}>
                 <View style={styles.barBg}>
                     <View style={[styles.barFill, { width: `${probability}%`, backgroundColor: style.borderColor }]} />
                 </View>
-                <Text style={[styles.barLabel, { color: style.borderColor }]}>{probability}%</Text>
+                <Text style={[styles.barLabel, { color: style.borderColor }, styles.tabular]}>{probability}%</Text>
             </View>
 
             <View style={styles.details}>
                 <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Distanță estimată rămasă</Text>
-                    <Text style={styles.detailValue}>~{estimatedRemainingKm?.toLocaleString()} km</Text>
+                    <Text style={styles.detailLabel}>{t('predictionCard.remainingDist')}</Text>
+                    <Text style={[styles.detailValue, styles.tabular]}>~{estimatedRemainingKm?.toLocaleString()} km</Text>
                 </View>
                 <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Încredere analiză</Text>
-                    <Text style={styles.detailValue}>{confidence}%</Text>
+                    <Text style={styles.detailLabel}>{t('predictionCard.analysisConfidence')}</Text>
+                    <Text style={[styles.detailValue, styles.tabular]}>{confidence}%</Text>
                 </View>
             </View>
 
             <Text style={styles.recommendation} numberOfLines={2}>{recommendation}</Text>
 
-            <Text style={[styles.link, { color: style.borderColor }]}>Vezi analiza completă →</Text>
+            <Text style={[styles.link, { color: style.borderColor }]}>{t('predictionCard.viewFull')}</Text>
         </TouchableOpacity>
     );
 };
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: '#161b22',
-        borderRadius: 10,
-        padding: 16,
-        borderLeftWidth: 4,
-        marginBottom: 10,
+        borderRadius: radii.md,
+        padding: spacing[4],
+        borderLeftWidth: 3,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        marginBottom: spacing[2] + 2,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: spacing[3],
     },
     warningIcon: {
-        fontSize: 16,
-        marginRight: 8,
+        fontSize: typography.sizes.body1,
+        marginRight: spacing[2],
     },
     title: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#ffffff',
+        fontSize: typography.sizes.body2,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
         flex: 1,
     },
     barContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: spacing[3],
     },
     barBg: {
         flex: 1,
         height: 6,
-        backgroundColor: '#21262d',
-        borderRadius: 3,
+        backgroundColor: colors.border.strong,
+        borderRadius: radii.xs,
         overflow: 'hidden',
-        marginRight: 10,
+        marginRight: spacing[2] + 2,
     },
     barFill: {
         height: 6,
-        borderRadius: 3,
+        borderRadius: radii.xs,
     },
     barLabel: {
-        fontSize: 13,
-        fontWeight: '800',
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
         minWidth: 36,
         textAlign: 'right',
     },
     details: {
-        marginBottom: 10,
+        marginBottom: spacing[2] + 2,
     },
     detailRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginBottom: 4,
+        marginBottom: spacing[1],
     },
     detailLabel: {
-        fontSize: 12,
-        color: '#8b949e',
+        fontSize: typography.sizes.label2,
+        color: colors.text.secondary,
     },
     detailValue: {
-        fontSize: 12,
-        color: '#c9d1d9',
-        fontWeight: '600',
+        fontSize: typography.sizes.label2,
+        color: colors.text.primary,
+        fontWeight: typography.weights.semibold,
+    },
+    tabular: {
+        fontVariant: ['tabular-nums'],
     },
     recommendation: {
-        fontSize: 12,
-        color: '#8b949e',
+        fontSize: typography.sizes.label2,
+        color: colors.text.secondary,
         fontStyle: 'italic',
-        marginBottom: 10,
-        lineHeight: 17,
+        marginBottom: spacing[2] + 2,
+        lineHeight: typography.lineHeights.label2 + 1,
     },
     link: {
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.semibold,
     },
 });
 

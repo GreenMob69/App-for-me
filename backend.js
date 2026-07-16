@@ -17,6 +17,9 @@ const { analyzeTrends } = require('./backend/analyzers/TrendEngine');
 const { initVehicleProfileTable } = require('./backend/intelligence/BaselineEngine');
 const { loadRules } = require('./backend/knowledge/KnowledgeBase');
 const { initVehicleProfile } = require('./backend/vehicle-profile');
+const { DigitalTwinSnapshot, DigitalTwinSerializer } = require('./backend/digitalTwin');
+const { answerWithContext, buildSuggestedQuestions } = require('./backend/intelligence/ExpertQueryEngine');
+const { PDFReportGenerator } = require('./backend/pdf/PDFReportGenerator');
 
 const app = express();
 app.use(cors());
@@ -974,6 +977,230 @@ app.put('/api/calatorii/:id/tag', (req, res) => {
         if (this.changes === 0) return res.status(404).json({ eroare: 'Cursă negăsită' });
         res.json({ success: true, id_calatorie: id, tag });
     });
+});
+
+// ===============================================================
+// AI EXPERT — Digital Twin endpoints
+// ===============================================================
+
+// GET /api/vehicul/:vin/twin — context AI Expert (toAIExpert view)
+app.get('/api/vehicul/:vin/twin', async (req, res) => {
+    try {
+        const { vin } = req.params;
+        const snapshot = await DigitalTwinSnapshot.load(db, vin);
+        if (!snapshot) {
+            return res.json({
+                status: 'NO_DATA',
+                context: null,
+                suggestedQuestions: ['Cum e starea generală?', 'Pot face un drum lung?', 'Ce știi despre mașina mea?'],
+                message: 'Niciun Digital Twin disponibil. Finalizează o cursă pentru a genera analiza.'
+            });
+        }
+        const context = DigitalTwinSerializer.toAIExpert(snapshot.twin);
+        res.json({
+            status: 'OK',
+            context,
+            suggestedQuestions: buildSuggestedQuestions(context),
+            twinMeta: {
+                savedAt:          snapshot.savedAt,
+                healthScore:      snapshot.healthScore,
+                alertLevel:       snapshot.alertLevel,
+                dataCompleteness: snapshot.dataCompleteness
+            }
+        });
+    } catch (err) {
+        console.error('[/api/vehicul/twin]', err.message);
+        res.status(500).json({ status: 'ERROR', message: err.message });
+    }
+});
+
+// POST /api/ai/expert/query — răspuns la întrebare în limbaj natural
+app.post('/api/ai/expert/query', async (req, res) => {
+    try {
+        const { vin, question, history } = req.body || {};
+        if (!vin || !question?.trim()) {
+            return res.status(400).json({ error: '"vin" și "question" sunt obligatorii.' });
+        }
+        const snapshot = await DigitalTwinSnapshot.load(db, vin);
+        if (!snapshot) {
+            return res.json({
+                answer: 'Nu am date despre vehiculul tău. Finalizează câteva curse pentru a genera o analiză.',
+                confidence: 'LOW',
+                intent: 'NO_DATA',
+                sources: [],
+                relatedQuestions: [],
+                isFollowUp: false,
+                topicRef: null,
+            });
+        }
+        const context = DigitalTwinSerializer.toAIExpert(snapshot.twin);
+        const { hydrateStatus, sortDocs } = require('./backend/vehicle-profile/DocumentsModule');
+        const documents = await new Promise(resolve => {
+            db.get(`SELECT id FROM vehicles WHERE vin = ?`, [vin], (err, row) => {
+                if (err || !row) return resolve([]);
+                db.all(`SELECT * FROM vehicle_documents WHERE vehicle_id = ? ORDER BY expiry_date ASC`,
+                    [row.id], (e2, rows) => resolve(sortDocs(hydrateStatus(rows || []))));
+            });
+        });
+        context.documents = documents;
+        const result = answerWithContext(question, context, history || []);
+        res.json({ ...result, twinSavedAt: snapshot.savedAt });
+    } catch (err) {
+        console.error('[/api/ai/expert/query]', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/vehicles/:id/summary — JSON complet din Digital Twin (notifications, search, dashboard)
+app.get('/api/vehicles/:id/summary', async (req, res) => {
+    try {
+        const vehicleId = req.params.id;
+
+        const vehicle = await new Promise((resolve, reject) => {
+            db.get('SELECT vin FROM vehicles WHERE id = ?', [vehicleId], (err, row) => {
+                if (err) reject(err); else resolve(row);
+            });
+        });
+        if (!vehicle) return res.status(404).json({ error: 'Vehicul negăsit.' });
+
+        const { vin } = vehicle;
+
+        const snapshot = await DigitalTwinSnapshot.load(db, vin);
+        if (!snapshot) return res.status(404).json({ error: 'Nu există date. Finalizează o cursă mai întâi.' });
+
+        const pdfData  = DigitalTwinSerializer.toPDF(snapshot.twin);
+
+        const timeline = await new Promise((resolve) => {
+            db.all(
+                `SELECT category, title, description, icon, event_date, mileage_km
+                 FROM vehicle_timeline WHERE vehicle_id = ? ORDER BY event_date DESC LIMIT 40`,
+                [vehicleId], (err, rows) => resolve(err ? [] : (rows || []))
+            );
+        });
+
+        const stats = await new Promise((resolve) => {
+            db.get(
+                `SELECT COUNT(*) AS total_calatorii,
+                        COALESCE(SUM(km_parcursi), 0) AS total_km,
+                        COALESCE(SUM(combustibil_consumat_l), 0) AS total_combustibil
+                 FROM calatorii WHERE vin = ?`,
+                [vin], (err, row) => resolve(err ? {} : (row || {}))
+            );
+        });
+
+        const { hydrateStatus, sortDocs } = require('./backend/vehicle-profile/DocumentsModule');
+        const documents = await new Promise((resolve) => {
+            db.all(
+                `SELECT * FROM vehicle_documents WHERE vehicle_id = ? ORDER BY expiry_date ASC`,
+                [vehicleId], (err, rows) => resolve(sortDocs(hydrateStatus(rows || [])))
+            );
+        });
+
+        res.json({ ...pdfData, timeline, stats, documents, lastSyncAt: snapshot.savedAt });
+    } catch (err) {
+        console.error('[/api/vehicles/:id/summary]', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/vehicles/:id/report/pdf — raport PDF complet bazat pe Digital Twin
+app.get('/api/vehicles/:id/report/pdf', async (req, res) => {
+    try {
+        const vehicleId = req.params.id;
+
+        // Resolve VIN from vehicle ID
+        const vehicle = await new Promise((resolve, reject) => {
+            db.get('SELECT vin, make, model, year, fuel_type FROM vehicles WHERE id = ?', [vehicleId], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        if (!vehicle) return res.status(404).json({ error: 'Vehicul negăsit.' });
+
+        const { vin } = vehicle;
+
+        // Load Digital Twin snapshot
+        const snapshot = await DigitalTwinSnapshot.load(db, vin);
+        if (!snapshot) {
+            return res.status(404).json({
+                error: 'Nu există date suficiente. Finalizează cel puțin o cursă pentru a genera raportul.',
+            });
+        }
+
+        // Primary data via DigitalTwinSerializer
+        const pdfData = DigitalTwinSerializer.toPDF(snapshot.twin);
+
+        // Supplementary: timeline events
+        const timeline = await new Promise((resolve) => {
+            db.all(
+                `SELECT category, title, description, icon, event_date, mileage_km
+                 FROM vehicle_timeline
+                 WHERE vehicle_id = ?
+                 ORDER BY event_date DESC
+                 LIMIT 40`,
+                [vehicleId],
+                (err, rows) => resolve(err ? [] : (rows || []))
+            );
+        });
+
+        // Supplementary: recent service sessions
+        const services = await new Promise((resolve) => {
+            db.all(
+                `SELECT title, performed_at, mileage_km, cost_total, workshop_name
+                 FROM service_sessions
+                 WHERE vehicle_id = ?
+                 ORDER BY performed_at DESC
+                 LIMIT 10`,
+                [vehicleId],
+                (err, rows) => resolve(err ? [] : (rows || []))
+            );
+        });
+
+        // Supplementary: vehicle documents
+        const { hydrateStatus: _hydrate, sortDocs: _sort } = require('./backend/vehicle-profile/DocumentsModule');
+        const documents = await new Promise((resolve) => {
+            db.all(
+                `SELECT * FROM vehicle_documents WHERE vehicle_id = ? ORDER BY expiry_date ASC`,
+                [vehicleId], (err, rows) => resolve(_sort(_hydrate(rows || [])))
+            );
+        });
+
+        // Supplementary: aggregate trip stats
+        const stats = await new Promise((resolve) => {
+            db.get(
+                `SELECT
+                    COUNT(*) AS total_calatorii,
+                    COALESCE(SUM(km_parcursi), 0) AS total_km,
+                    COALESCE(SUM(combustibil_consumat_l), 0) AS total_combustibil
+                 FROM calatorii WHERE vin = ?`,
+                [vin],
+                (err, row) => resolve(err ? {} : (row || {}))
+            );
+        });
+
+        // Supplementary: total service costs
+        const costs = await new Promise((resolve) => {
+            db.get(
+                `SELECT COALESCE(SUM(cost_total), 0) AS service
+                 FROM service_sessions WHERE vin = ?`,
+                [vin],
+                (err, row) => resolve(err ? {} : (row || {}))
+            );
+        });
+
+        const fileName = `raport_${vin}_${Date.now()}.pdf`;
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+        const generator = new PDFReportGenerator(pdfData, { timeline, services, stats, costs, documents });
+        generator.generate(res);
+
+    } catch (err) {
+        console.error('[/api/vehicles/:id/report/pdf]', err.message);
+        if (!res.headersSent) {
+            res.status(500).json({ error: err.message });
+        }
+    }
 });
 
 server.listen(3000, () => console.log(`[API REST & WS] Serverul funcționează pe http://localhost:3000`));

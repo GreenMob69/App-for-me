@@ -1,13 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { t } from '../i18n';
+import { colors, typography, radii, spacing, motion } from '../theme';
+import { SEVERITY_COLORS } from '../utils/statusUtils';
 import ConfidenceBadge from './ConfidenceBadge';
-
-const SEVERITY_COLORS = {
-    info: '#58a6ff',
-    warning: '#d29922',
-    serious: '#f0883e',
-    critical: '#f85149',
-};
 
 const ObservationCard = ({
     title,
@@ -29,39 +25,34 @@ const ObservationCard = ({
 
     useEffect(() => {
         Animated.parallel([
-            Animated.timing(opacity, { toValue: 1, duration: 400, delay: index * 100, useNativeDriver: true }),
-            Animated.timing(translateY, { toValue: 0, duration: 400, delay: index * 100, useNativeDriver: true }),
+            Animated.timing(opacity,    { toValue: 1, duration: motion.duration.normal, delay: index * 100, useNativeDriver: true }),
+            Animated.timing(translateY, { toValue: 0, duration: motion.duration.normal, delay: index * 100, useNativeDriver: true }),
         ]).start();
     }, []);
 
     return (
         <Animated.View style={[styles.container, { borderLeftColor: accentColor, opacity, transform: [{ translateY }] }]}>
-            {/* Concluzia */}
             <Text style={styles.title}>{title}</Text>
 
-            {/* Evidenta tehnica */}
             {evidence ? <Text style={styles.evidence}>{evidence}</Text> : null}
 
-            {/* Explicatia — vizibila la expand */}
             {explanation ? (
                 <TouchableOpacity onPress={() => setExpanded(!expanded)}>
                     {expanded ? (
                         <Text style={styles.explanation}>{explanation}</Text>
                     ) : (
-                        <Text style={styles.expandHint}>De ce spun asta...</Text>
+                        <Text style={[styles.expandHint, { color: accentColor }]}>{t('observation.expandHint')}</Text>
                     )}
                 </TouchableOpacity>
             ) : null}
 
-            {/* Actiunea recomandata */}
             {action ? (
                 <View style={styles.actionBox}>
-                    <Text style={styles.actionLabel}>CE SA FACI:</Text>
+                    <Text style={styles.actionLabel}>{t('observation.actionLabel')}</Text>
                     <Text style={styles.actionText}>{action}</Text>
                 </View>
             ) : null}
 
-            {/* Footer: urgenta + estimare + confidence */}
             <View style={styles.footer}>
                 <View style={styles.footerLeft}>
                     {urgency ? <Text style={[styles.urgency, { color: accentColor }]}>{urgency}</Text> : null}
@@ -76,10 +67,9 @@ const ObservationCard = ({
                 {confidence ? <ConfidenceBadge level={confidence} /> : null}
             </View>
 
-            {/* Link detalii */}
             {onDetailPress ? (
                 <TouchableOpacity style={styles.detailLink} onPress={onDetailPress}>
-                    <Text style={styles.detailLinkText}>Vezi detalii</Text>
+                    <Text style={[styles.detailLinkText, { color: colors.accent.default }]}>Vezi detalii</Text>
                 </TouchableOpacity>
             ) : null}
         </Animated.View>
@@ -88,55 +78,53 @@ const ObservationCard = ({
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#161b22',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 12,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[4],
+        marginBottom: spacing[3],
         borderLeftWidth: 3,
         borderWidth: 1,
-        borderColor: '#30363d',
+        borderColor: colors.border.default,
     },
     title: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#ffffff',
-        lineHeight: 22,
-        marginBottom: 6,
+        fontSize: typography.sizes.body1,
+        fontWeight: typography.weights.semibold,
+        color: colors.text.primary,
+        lineHeight: typography.lineHeights.body1,
+        marginBottom: spacing[1] + 2,
     },
     evidence: {
-        fontSize: 12,
-        color: '#8b949e',
-        fontFamily: undefined,
-        marginBottom: 8,
+        fontSize: typography.sizes.label2,
+        color: colors.text.secondary,
+        marginBottom: spacing[2],
     },
     expandHint: {
-        fontSize: 12,
-        color: '#58a6ff',
-        marginBottom: 8,
+        fontSize: typography.sizes.label2,
+        marginBottom: spacing[2],
     },
     explanation: {
-        fontSize: 13,
-        color: '#c9d1d9',
-        lineHeight: 19,
-        marginBottom: 10,
+        fontSize: typography.sizes.label1,
+        color: colors.text.primary,
+        lineHeight: typography.lineHeights.label1,
+        marginBottom: spacing[2] + 2,
     },
     actionBox: {
-        backgroundColor: 'rgba(88,166,255,0.06)',
-        borderRadius: 8,
-        padding: 12,
-        marginBottom: 12,
+        backgroundColor: colors.tint.accent,
+        borderRadius: radii.sm,
+        padding: spacing[3],
+        marginBottom: spacing[3],
     },
     actionLabel: {
-        fontSize: 9,
-        fontWeight: '700',
-        color: '#8b949e',
+        fontSize: typography.sizes.micro - 1,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
         letterSpacing: 0.5,
-        marginBottom: 4,
+        marginBottom: spacing[1],
     },
     actionText: {
-        fontSize: 13,
-        color: '#ffffff',
-        lineHeight: 19,
+        fontSize: typography.sizes.label1,
+        color: colors.text.primary,
+        lineHeight: typography.lineHeights.label1,
     },
     footer: {
         flexDirection: 'row',
@@ -145,26 +133,25 @@ const styles = StyleSheet.create({
     },
     footerLeft: {
         flex: 1,
-        gap: 2,
+        gap: spacing[0] + 2,
     },
     urgency: {
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.semibold,
     },
     estimate: {
-        fontSize: 11,
-        color: '#484f58',
+        fontSize: typography.sizes.caption,
+        color: colors.text.disabled,
     },
     detailLink: {
-        marginTop: 12,
-        paddingTop: 10,
+        marginTop: spacing[3],
+        paddingTop: spacing[2] + 2,
         borderTopWidth: 1,
-        borderTopColor: '#21262d',
+        borderTopColor: colors.border.subtle,
     },
     detailLinkText: {
-        fontSize: 12,
-        color: '#58a6ff',
-        fontWeight: '600',
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.semibold,
     },
 });
 

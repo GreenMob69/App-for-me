@@ -372,6 +372,30 @@ export function buildLastTripMessage(lastTrip) {
     return { text: meta, detail };
 }
 
+// --- Latest event (richer version of lastTrip for "Ultimul eveniment important") ---
+
+export function buildLatestEvent(lastTrip) {
+    if (!lastTrip) return null;
+
+    const date = formatRelativeDate(lastTrip.date);
+    const meta = `${lastTrip.distanceKm} km · ${lastTrip.durationMin} min`;
+
+    let type = 'trip';
+    let title = t('lastEvent.tripTitle');
+    let description = t('lastTrip.normal');
+
+    if (lastTrip.healthScore && lastTrip.healthScore < 60) {
+        type = 'alert';
+        title = t('lastEvent.alertTitle');
+        description = t('lastTrip.problems');
+    } else if (lastTrip.ecoScore && lastTrip.ecoScore < 60) {
+        description = t('lastTrip.aggressive');
+    }
+
+    // date → TimelineCard.date, meta → TimelineCard.time (displayed as "Ieri · 120 km · 45 min")
+    return { type, title, description, date, meta };
+}
+
 function formatRelativeDate(isoString) {
     if (!isoString) return '';
     const date = new Date(isoString);

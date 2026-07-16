@@ -20,11 +20,13 @@ const { vehicleEventBus } = require('./EventBus');
 const { initTimelineSchema, initTimelineListener, registerTimelineRoutes } = require('./VehicleTimeline');
 const { computeVehicleStatus, initVehicleStatusListeners } = require('./VehicleStatus');
 const { initMilestoneListeners, registerMilestoneRoutes } = require('./MilestoneTracker');
+const { initDocumentsSchema, registerDocumentRoutes } = require('./DocumentsModule');
 
 function initVehicleProfile(app, db) {
     // 1. Schema
     initVehicleProfileSchema(db);
     initTimelineSchema(db);
+    initDocumentsSchema(db);
 
     // 2. Event listeners
     initTimelineListener();
@@ -35,8 +37,9 @@ function initVehicleProfile(app, db) {
     registerVehicleProfileRoutes(app, db);
     registerTimelineRoutes(app, db);
     registerMilestoneRoutes(app, db);
+    registerDocumentRoutes(app, db);
 
-    console.log('[VEHICLE PROFILE] Module initialized (schema + events + timeline + status + milestones + routes)');
+    console.log('[VEHICLE PROFILE] Module initialized (schema + events + timeline + status + milestones + documents + routes)');
 }
 
 module.exports = {
@@ -48,4 +51,6 @@ module.exports = {
     onServiceAdded,
     vehicleEventBus,
     computeVehicleStatus,
+    initDocumentsSchema,
+    registerDocumentRoutes,
 };

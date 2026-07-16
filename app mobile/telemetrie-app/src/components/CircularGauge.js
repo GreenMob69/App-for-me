@@ -1,13 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { colors, typography, spacing } from '../theme';
 
-const CircularGauge = ({ label, value, unit, min = 0, max = 100, color = '#58a6ff', size = 130 }) => {
+const CircularGauge = ({ label, value, unit, min = 0, max = 100, color = colors.accent.default, size = 130 }) => {
     const strokeWidth = 12;
     const radius = (size - strokeWidth) / 2;
     const circumference = radius * 2 * Math.PI;
 
-    // Calculăm cât la sută din cerc trebuie umplut
     const safeValue = Math.min(Math.max(Number(value) || 0, min), max);
     const percent = ((safeValue - min) / (max - min)) * 100;
     const strokeDashoffset = circumference - (percent / 100) * circumference;
@@ -16,16 +16,14 @@ const CircularGauge = ({ label, value, unit, min = 0, max = 100, color = '#58a6f
         <View style={styles.container}>
             <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
                 <Svg width={size} height={size} style={{ position: 'absolute' }}>
-                    {/* Cercul de fundal (Gri închis) */}
                     <Circle
-                        stroke="#21262d"
+                        stroke={colors.border.strong}
                         cx={size / 2}
                         cy={size / 2}
                         r={radius}
                         strokeWidth={strokeWidth}
                         fill="none"
                     />
-                    {/* Cercul de progres (Colorat, animat vizual) */}
                     <Circle
                         stroke={color}
                         cx={size / 2}
@@ -36,20 +34,16 @@ const CircularGauge = ({ label, value, unit, min = 0, max = 100, color = '#58a6f
                         strokeDasharray={circumference}
                         strokeDashoffset={strokeDashoffset}
                         strokeLinecap="round"
-                        rotation="-90" // Începe de sus
+                        rotation="-90"
                         originX={size / 2}
                         originY={size / 2}
                     />
                 </Svg>
-                
-                {/* Valorile din interiorul cercului */}
-                <Text style={[styles.valText, { color }]} numberOfLines={1} adjustsFontSizeToFit>
+                <Text style={[styles.valText, { color }, styles.tabular]} numberOfLines={1} adjustsFontSizeToFit>
                     {value}
                 </Text>
                 <Text style={styles.unitText}>{unit}</Text>
             </View>
-            
-            {/* Eticheta senzorului (sub cadran) */}
             <Text style={styles.labelText}>{label}</Text>
         </View>
     );
@@ -58,26 +52,30 @@ const CircularGauge = ({ label, value, unit, min = 0, max = 100, color = '#58a6f
 const styles = StyleSheet.create({
     container: {
         alignItems: 'center',
-        marginVertical: 10,
-        width: '48%', // Pentru a intra câte 2 pe un rând
+        marginVertical: spacing[2] + 2,
+        width: '48%',
     },
     valText: {
-        fontSize: 28,
-        fontWeight: '900',
+        fontSize: typography.sizes.hero - 8,
+        fontWeight: typography.weights.heavy,
+    },
+    tabular: {
+        fontVariant: ['tabular-nums'],
     },
     unitText: {
-        fontSize: 12,
-        color: '#8b949e',
+        fontSize: typography.sizes.label2,
+        color: colors.text.secondary,
         marginTop: -2,
     },
     labelText: {
-        fontSize: 10,
-        color: '#c9d1d9',
-        fontWeight: 'bold',
-        marginTop: 10,
+        fontSize: typography.sizes.micro,
+        color: colors.text.primary,
+        fontWeight: typography.weights.bold,
+        marginTop: spacing[2] + 2,
         textAlign: 'center',
         textTransform: 'uppercase',
-    }
+        letterSpacing: 0.5,
+    },
 });
 
 export default CircularGauge;

@@ -1,13 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { t } from '../i18n';
-
-const TREND_INDICATORS = {
-    stable: { color: '#8b949e', symbol: '—' },
-    improving: { color: '#3fb950', symbol: '↑' },
-    declining: { color: '#f0883e', symbol: '↓' },
-    warning: { color: '#d29922', symbol: '↓' },
-};
+import { colors, typography, radii, spacing, motion } from '../theme';
+import { TREND_INDICATORS } from '../utils/statusUtils';
 
 const ComparisonSection = ({ comparison }) => {
     const opacity = useRef(new Animated.Value(0)).current;
@@ -15,7 +10,7 @@ const ComparisonSection = ({ comparison }) => {
     useEffect(() => {
         Animated.timing(opacity, {
             toValue: 1,
-            duration: 400,
+            duration: motion.duration.normal,
             delay: 150,
             useNativeDriver: true,
         }).start();
@@ -43,43 +38,44 @@ const ComparisonSection = ({ comparison }) => {
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#161b22',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 12,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[4],
+        marginBottom: spacing[3],
         borderWidth: 1,
-        borderColor: '#30363d',
+        borderColor: colors.border.default,
     },
     sectionLabel: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#8b949e',
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
+        color: colors.text.tertiary,
         letterSpacing: 0.5,
-        marginBottom: 12,
+        textTransform: 'uppercase',
+        marginBottom: spacing[3],
     },
     content: {
-        gap: 8,
+        gap: spacing[2],
     },
     indicatorRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        gap: 10,
+        gap: spacing[2] + 2,
     },
     indicator: {
-        fontSize: 16,
-        fontWeight: '700',
+        fontSize: typography.sizes.title3 - 1,
+        fontWeight: typography.weights.bold,
         marginTop: 1,
     },
     summary: {
         flex: 1,
-        fontSize: 14,
-        color: '#c9d1d9',
-        lineHeight: 20,
+        fontSize: typography.sizes.body2,
+        color: colors.text.primary,
+        lineHeight: typography.lineHeights.body2,
     },
     detail: {
-        fontSize: 13,
-        color: '#8b949e',
-        lineHeight: 19,
+        fontSize: typography.sizes.label1,
+        color: colors.text.secondary,
+        lineHeight: typography.lineHeights.label1,
         marginLeft: 26,
     },
 });

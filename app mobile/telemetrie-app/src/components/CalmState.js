@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { t } from '../i18n';
+import { colors, typography, radii, spacing, motion } from '../theme';
 
 const CalmState = ({ lastTrip }) => {
     const opacity = useRef(new Animated.Value(0)).current;
@@ -8,7 +9,7 @@ const CalmState = ({ lastTrip }) => {
     useEffect(() => {
         Animated.timing(opacity, {
             toValue: 1,
-            duration: 600,
+            duration: motion.duration.slow,
             delay: 200,
             useNativeDriver: true,
         }).start();
@@ -31,34 +32,34 @@ const CalmState = ({ lastTrip }) => {
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: 'rgba(63,185,80,0.04)',
-        borderRadius: 12,
-        padding: 24,
-        marginBottom: 12,
+        backgroundColor: colors.tint.good,
+        borderRadius: radii.md,
+        padding: spacing[6],
+        marginBottom: spacing[3],
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(63,185,80,0.15)',
+        borderColor: 'rgba(52,209,114,0.15)', // optical: bordura good la 15% — mai vizibilă decât tint.good (8%) pe fundal întunecat
     },
     iconRow: {
-        marginBottom: 12,
+        marginBottom: spacing[3],
     },
     dot: {
         width: 12,
         height: 12,
-        borderRadius: 6,
-        backgroundColor: '#3fb950',
+        borderRadius: radii.full,
+        backgroundColor: colors.status.good,
     },
     message: {
-        fontSize: 14,
-        color: '#c9d1d9',
+        fontSize: typography.sizes.body2,
+        color: colors.text.primary,
         textAlign: 'center',
-        lineHeight: 20,
+        lineHeight: typography.lineHeights.body2,
     },
     detail: {
-        fontSize: 12,
-        color: '#8b949e',
+        fontSize: typography.sizes.label2,
+        color: colors.text.secondary,
         textAlign: 'center',
-        marginTop: 8,
+        marginTop: spacing[2],
     },
 });
 

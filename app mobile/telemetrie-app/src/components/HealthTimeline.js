@@ -1,18 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
+import { t } from '../i18n';
+import { colors, typography, radii, spacing, layout } from '../theme';
+import { getSubsystemColor } from '../utils/statusUtils';
 
-const getPointColor = (value) => {
-    if (value >= 85) return '#3fb950';
-    if (value >= 60) return '#d29922';
-    return '#f85149';
-};
+const HealthTimeline = ({ timeline }) => {
+    const { width: screenWidth } = useWindowDimensions();
+    const chartWidth = screenWidth - layout.screenPaddingH * 2 - spacing[4] * 2;
 
-const HealthTimeline = ({ timeline, onPointPress }) => {
     if (!timeline || timeline.length < 2) {
         return (
             <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Efectuează cel puțin 3 curse pentru a vedea evoluția</Text>
+                <Text style={styles.emptyText}>{t('healthTimeline.emptyHint')}</Text>
             </View>
         );
     }
@@ -20,56 +20,52 @@ const HealthTimeline = ({ timeline, onPointPress }) => {
     const data = timeline.map((point, index) => ({
         value: point.health,
         label: point.date ? point.date.slice(5) : `#${index + 1}`,
-        dataPointColor: getPointColor(point.health),
+        dataPointColor: getSubsystemColor(point.health),
         customDataPoint: () => (
-            <View style={[styles.dot, { backgroundColor: getPointColor(point.health) }]} />
+            <View style={[styles.dot, { backgroundColor: getSubsystemColor(point.health) }]} />
         ),
     }));
 
     const minVal = Math.min(...timeline.map(p => p.health));
-    const maxVal = Math.max(...timeline.map(p => p.health));
     const yMin = Math.max(0, minVal - 10);
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Evoluție Health Score</Text>
-                <Text style={styles.subtitle}>Ultimele {timeline.length} curse</Text>
+                <Text style={styles.title}>{t('healthTimeline.title')}</Text>
+                <Text style={styles.subtitle}>{t('healthTimeline.lastN', { n: timeline.length })}</Text>
             </View>
             <LineChart
                 data={data}
-                width={280}
+                width={chartWidth}
                 height={120}
-                spacing={280 / Math.max(data.length - 1, 1)}
-                color="#58a6ff"
+                spacing={chartWidth / Math.max(data.length - 1, 1)}
+                color={colors.accent.default}
                 thickness={2}
                 hideRules
                 yAxisColor="transparent"
-                xAxisColor="#30363d"
-                yAxisTextStyle={{ color: '#8b949e', fontSize: 10 }}
-                xAxisLabelTextStyle={{ color: '#8b949e', fontSize: 9, width: 40, textAlign: 'center' }}
+                xAxisColor={colors.border.default}
+                yAxisTextStyle={{ color: colors.text.secondary, fontSize: typography.sizes.micro }}
+                xAxisLabelTextStyle={{ color: colors.text.secondary, fontSize: typography.sizes.micro - 1, width: 40, textAlign: 'center' }}
                 hideYAxisText
                 dataPointsRadius={5}
-                dataPointsColor="#58a6ff"
+                dataPointsColor={colors.accent.default}
                 curved
-                startFillColor="rgba(88, 166, 255, 0.15)"
-                endFillColor="rgba(88, 166, 255, 0.01)"
+                startFillColor={colors.accent.muted}
+                endFillColor="rgba(77,142,245,0.01)"
                 areaChart
                 pointerConfig={{
-                    pointerStripColor: '#58a6ff',
+                    pointerStripColor: colors.accent.default,
                     pointerStripWidth: 1,
-                    pointerColor: '#58a6ff',
+                    pointerColor: colors.accent.default,
                     radius: 6,
-                    pointerLabelWidth: 100,
-                    pointerLabelHeight: 40,
-                    pointerLabelComponent: (items) => {
-                        const item = items[0];
-                        return (
-                            <View style={styles.tooltip}>
-                                <Text style={styles.tooltipText}>{item.value}%</Text>
-                            </View>
-                        );
-                    },
+                    pointerLabelWidth: 60,
+                    pointerLabelHeight: 32,
+                    pointerLabelComponent: (items) => (
+                        <View style={styles.tooltip}>
+                            <Text style={styles.tooltipText}>{items[0].value}%</Text>
+                        </View>
+                    ),
                 }}
                 noOfSections={3}
                 maxValue={100}
@@ -81,57 +77,58 @@ const HealthTimeline = ({ timeline, onPointPress }) => {
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#161b22',
-        borderRadius: 12,
-        padding: 16,
-        borderColor: '#30363d',
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[4],
+        borderColor: colors.border.default,
         borderWidth: 1,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: spacing[3],
     },
     title: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: '#c9d1d9',
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
     },
     subtitle: {
-        fontSize: 11,
-        color: '#8b949e',
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
     },
     emptyContainer: {
-        backgroundColor: '#161b22',
-        borderRadius: 12,
-        padding: 24,
-        borderColor: '#30363d',
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[6],
+        borderColor: colors.border.default,
         borderWidth: 1,
         alignItems: 'center',
     },
     emptyText: {
-        fontSize: 13,
-        color: '#8b949e',
+        fontSize: typography.sizes.label1,
+        color: colors.text.secondary,
         textAlign: 'center',
     },
     dot: {
         width: 8,
         height: 8,
-        borderRadius: 4,
+        borderRadius: radii.full,
     },
     tooltip: {
-        backgroundColor: '#21262d',
-        borderRadius: 6,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderColor: '#58a6ff',
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.xs,
+        paddingHorizontal: spacing[2],
+        paddingVertical: spacing[1],
+        borderColor: colors.accent.default,
         borderWidth: 1,
     },
     tooltipText: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#ffffff',
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
     },
 });
 

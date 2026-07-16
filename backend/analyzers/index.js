@@ -34,6 +34,8 @@ const { deriveProfile } = require('../powertrain/PowertrainProfileRegistry');
 const { createAnalysis, updateAnalyzer } = require('./TripAnalyzer');
 const { calculateHealthScore } = require('./HealthEngine');
 const { buildTripSummary, buildAIReport } = require('./TripSummary');
+// Notă: calculateHealthScore, buildTripSummary, buildAIReport sunt folosite intern;
+// nu sunt re-exportate deoarece niciun consumator extern nu le importă din acest barrel.
 
 const { evaluateDiagnostics } = require('../diagnostics/RuleEngine');
 
@@ -316,8 +318,5 @@ async function finalizeTripAnalysis(trip, opts = {}) {
 module.exports = {
     createAnalysis,
     updateAnalyzer,
-    calculateHealthScore,
-    buildTripSummary,
-    buildAIReport,
     finalizeTripAnalysis
 };

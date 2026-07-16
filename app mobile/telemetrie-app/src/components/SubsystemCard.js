@@ -1,48 +1,22 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { t } from '../i18n';
+import { colors, typography, radii, spacing } from '../theme';
+import { getSubsystemColor, TREND_INDICATORS } from '../utils/statusUtils';
 
-const SYSTEM_ICONS = {
-    motor: '⚙',
-    electric: '⚡',
-    turbo: '🌀',
-    combustibil: '⛽',
-    stil_condus: '🛣',
-};
-
-const SYSTEM_LABELS = {
-    motor: 'MOTOR',
-    electric: 'ELECTRIC',
-    turbo: 'TURBO',
-    combustibil: 'COMBUSTIBIL',
-    stil_condus: 'STIL CONDUS',
-};
-
-const getTrendIndicator = (trend) => {
-    switch (trend) {
-        case 'IMPROVING': return { symbol: '▲', color: '#3fb950' };
-        case 'DECREASING': return { symbol: '▼', color: '#f85149' };
-        default: return { symbol: '●', color: '#8b949e' };
-    }
-};
-
-const getScoreColor = (score) => {
-    if (score >= 85) return '#238636';
-    if (score >= 60) return '#d29922';
-    return '#da3633';
-};
-
-const getBorderColor = (score) => {
-    if (score >= 85) return '#238636';
-    if (score >= 60) return '#d29922';
-    return '#da3633';
+const getTrendInfo = (trend) => {
+    if (!trend) return TREND_INDICATORS.stable;
+    const key = trend.toLowerCase() === 'improving' ? 'improving'
+              : trend.toLowerCase() === 'decreasing' ? 'declining'
+              : 'stable';
+    return TREND_INDICATORS[key] || TREND_INDICATORS.stable;
 };
 
 const SubsystemCard = ({ systemKey, data, onPress }) => {
     const { score, status, trend, prediction } = data;
-    const trendInfo = getTrendIndicator(trend);
-    const borderColor = getBorderColor(score);
-    const icon = SYSTEM_ICONS[systemKey] || '●';
-    const label = SYSTEM_LABELS[systemKey] || systemKey;
+    const accentColor = getSubsystemColor(score);
+    const trendInfo = getTrendInfo(trend);
+    const label = t(`subsystems.${systemKey}`) || systemKey.toUpperCase();
 
     const displayStatus = prediction
         ? prediction.component + ' monitorizat'
@@ -50,21 +24,20 @@ const SubsystemCard = ({ systemKey, data, onPress }) => {
 
     return (
         <TouchableOpacity
-            style={[styles.card, { borderLeftColor: borderColor }]}
+            style={[styles.card, { borderLeftColor: accentColor }]}
             onPress={() => onPress && onPress(systemKey)}
             activeOpacity={0.7}
         >
             <View style={styles.header}>
-                <Text style={styles.icon}>{icon}</Text>
                 <Text style={styles.label}>{label}</Text>
                 <View style={styles.scoreRow}>
-                    <Text style={[styles.score, { color: getScoreColor(score) }]}>{score}%</Text>
+                    <Text style={[styles.score, { color: accentColor }, styles.tabular]}>{score}%</Text>
                     <Text style={[styles.trend, { color: trendInfo.color }]}>{trendInfo.symbol}</Text>
                 </View>
             </View>
             <Text style={styles.status} numberOfLines={1}>{displayStatus}</Text>
             <View style={styles.progressBg}>
-                <View style={[styles.progressFill, { width: `${score}%`, backgroundColor: borderColor }]} />
+                <View style={[styles.progressFill, { width: `${score}%`, backgroundColor: accentColor }]} />
             </View>
         </TouchableOpacity>
     );
@@ -72,56 +45,57 @@ const SubsystemCard = ({ systemKey, data, onPress }) => {
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: '#161b22',
-        borderRadius: 10,
-        padding: 14,
-        borderLeftWidth: 4,
-        borderColor: '#30363d',
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[3] + 2,
+        borderLeftWidth: 3,
+        borderWidth: 1,
+        borderColor: colors.border.default,
         width: '48%',
-        marginBottom: 10,
+        marginBottom: spacing[2] + 2,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 6,
-    },
-    icon: {
-        fontSize: 14,
-        marginRight: 6,
+        marginBottom: spacing[1] + 2,
     },
     label: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#c9d1d9',
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
         flex: 1,
         letterSpacing: 0.5,
+        textTransform: 'uppercase',
     },
     scoreRow: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     score: {
-        fontSize: 16,
-        fontWeight: '900',
+        fontSize: typography.sizes.title3,
+        fontWeight: typography.weights.heavy,
+    },
+    tabular: {
+        fontVariant: ['tabular-nums'],
     },
     trend: {
-        fontSize: 10,
-        marginLeft: 4,
+        fontSize: typography.sizes.label2,
+        marginLeft: spacing[1],
     },
     status: {
-        fontSize: 11,
-        color: '#8b949e',
-        marginBottom: 8,
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        marginBottom: spacing[2],
     },
     progressBg: {
         height: 3,
-        backgroundColor: '#21262d',
-        borderRadius: 2,
+        backgroundColor: colors.border.default,
+        borderRadius: radii.xs,
         overflow: 'hidden',
     },
     progressFill: {
         height: 3,
-        borderRadius: 2,
+        borderRadius: radii.xs,
     },
 });
 

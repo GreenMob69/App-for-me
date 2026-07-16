@@ -81,9 +81,11 @@ const EVENT_META = {
     MAINTENANCE_DUE_SOON:   { category: 'MAINTENANCE', icon: '◌', severity: 'WARNING', titleFn: (e) => `Se apropie: ${e.item_name}` },
     MAINTENANCE_OVERDUE:    { category: 'MAINTENANCE', icon: '!', severity: 'CRITICAL', titleFn: (e) => `Depasit: ${e.item_name}` },
 
-    DOCUMENT_EXPIRING:      { category: 'DOCUMENT',    icon: '◫', severity: 'WARNING', titleFn: (e) => `Expira curand: ${e.doc_title}` },
+    DOCUMENT_ADDED:         { category: 'DOCUMENT',    icon: '◫', severity: 'INFO',     titleFn: (e) => `Document adaugat: ${e.doc_title}` },
+    DOCUMENT_UPDATED:       { category: 'DOCUMENT',    icon: '✎', severity: 'INFO',     titleFn: (e) => `Document actualizat: ${e.doc_title}` },
+    DOCUMENT_EXPIRING:      { category: 'DOCUMENT',    icon: '◫', severity: 'WARNING',  titleFn: (e) => `Expira curand: ${e.doc_title}` },
     DOCUMENT_EXPIRED:       { category: 'DOCUMENT',    icon: '!', severity: 'CRITICAL', titleFn: (e) => `Expirat: ${e.doc_title}` },
-    DOCUMENT_RENEWED:       { category: 'DOCUMENT',    icon: '✓', severity: 'INFO', titleFn: (e) => `Reinnoit: ${e.doc_title}` },
+    DOCUMENT_RENEWED:       { category: 'DOCUMENT',    icon: '✓', severity: 'INFO',     titleFn: (e) => `Reinnoit: ${e.doc_title}` },
 
     NOTE_ADDED:             { category: 'USER',        icon: '✎', severity: 'INFO', titleFn: (e) => e.title || 'Nota adaugata' },
 

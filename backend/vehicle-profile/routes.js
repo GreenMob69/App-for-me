@@ -6,6 +6,7 @@
 const { decodeVin, validateVin } = require('./VinDecoder');
 const { seedMaintenanceItems, recalculateAllItems, onServiceAdded, getEstimatedOdometer } = require('./MaintenanceCalculator');
 const { vehicleEventBus } = require('./EventBus');
+const { hydrateStatus, sortDocs } = require('./DocumentsModule');
 
 // Service type -> event type mapping
 const SERVICE_EVENT_MAP = {
@@ -646,7 +647,7 @@ function registerVehicleProfileRoutes(app, db) {
             const { computeVehicleStatus } = require('./VehicleStatus');
             const vehicleStatus = await computeVehicleStatus(db, vehicleId);
 
-            const [odometer, maintenanceItems, recentSessions, workshops, recentTimeline, milestones, healthScore] = await Promise.all([
+            const [odometer, maintenanceItems, recentSessions, workshops, recentTimeline, milestones, healthScore, documents] = await Promise.all([
                 getEstimatedOdometer(db, vehicleId),
                 new Promise(resolve => {
                     db.all(`SELECT * FROM maintenance_items WHERE vehicle_id = ? ORDER BY
@@ -678,6 +679,10 @@ function registerVehicleProfileRoutes(app, db) {
                             JOIN calatorii c ON c.id_calatorie = ts.id_calatorie
                             WHERE c.vin = ? ORDER BY ts.id_summary DESC LIMIT 1`,
                         [vehicle.vin], (err, row) => resolve(row?.health_score || null));
+                }),
+                new Promise(resolve => {
+                    db.all(`SELECT * FROM vehicle_documents WHERE vehicle_id = ? ORDER BY expiry_date ASC`,
+                        [vehicleId], (err, rows) => resolve(sortDocs(hydrateStatus(rows || []))));
                 }),
             ]);
 
@@ -723,6 +728,7 @@ function registerVehicleProfileRoutes(app, db) {
                 recent_timeline: recentTimeline,
                 milestones,
                 workshops,
+                documents,
                 cost_last_year: Number(totalCostYear.toFixed(2)),
             });
         } catch (err) {

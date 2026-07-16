@@ -86,14 +86,12 @@ function searchRules(query) {
     );
 }
 
+// Exporturi publice: funcțiile efectiv folosite de alte module.
+// reloadRules, getRulesBySeverity, getCategories, getRuleMetadata, searchRules
+// sunt disponibile în fișier dar nu sunt importate de niciun consumator extern.
 module.exports = {
     loadRules,
-    reloadRules,
     getAllRules,
     getRuleById,
-    getRulesByCategory,
-    getRulesBySeverity,
-    getCategories,
-    getRuleMetadata,
-    searchRules
+    getRulesByCategory
 };

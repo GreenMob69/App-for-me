@@ -103,7 +103,8 @@ function evaluateDiagnostics(summary, liveData = null, dtcList = [], capabilitie
             detectedSymptoms: [...new Set(item.symptoms)],
             strategy,
             failureId,
-            driveRecommendation: failureDef?.driveRecommendation || null
+            // driveRecommendation în JSON este { LOW, MEDIUM, HIGH } — rezolvăm cu severitate medie ca default
+            driveRecommendation: failureDef?.driveRecommendation?.MEDIUM || null
         };
     });
 

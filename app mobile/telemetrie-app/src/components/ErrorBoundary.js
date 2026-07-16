@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { t } from '../i18n';
+import { colors, typography, radii, spacing } from '../theme';
 
 class ErrorBoundary extends React.Component {
     constructor(props) {
@@ -23,10 +25,10 @@ class ErrorBoundary extends React.Component {
         if (this.state.hasError) {
             return (
                 <View style={styles.container}>
-                    <Text style={styles.title}>Ceva nu a functionat.</Text>
-                    <Text style={styles.subtitle}>Incearca din nou sau revino mai tarziu.</Text>
+                    <Text style={styles.title}>{t('error.title')}</Text>
+                    <Text style={styles.subtitle}>{t('error.subtitle')}</Text>
                     <TouchableOpacity style={styles.button} onPress={this.handleReset}>
-                        <Text style={styles.buttonText}>Reincearca</Text>
+                        <Text style={styles.buttonText}>{t('error.retry')}</Text>
                     </TouchableOpacity>
                 </View>
             );
@@ -39,36 +41,36 @@ class ErrorBoundary extends React.Component {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0d1117',
+        backgroundColor: colors.bg[0],
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 32,
+        paddingHorizontal: spacing[8],
     },
     title: {
-        color: '#f85149',
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 8,
+        color: colors.status.critical,
+        fontSize: typography.sizes.body1,
+        fontWeight: typography.weights.semibold,
+        marginBottom: spacing[2],
     },
     subtitle: {
-        color: '#8b949e',
-        fontSize: 13,
+        color: colors.text.secondary,
+        fontSize: typography.sizes.label1,
         textAlign: 'center',
-        lineHeight: 19,
+        lineHeight: typography.lineHeights.label1,
     },
     button: {
-        marginTop: 20,
-        backgroundColor: '#21262d',
-        paddingHorizontal: 24,
-        paddingVertical: 10,
-        borderRadius: 8,
+        marginTop: spacing[5],
+        backgroundColor: colors.bg[2],
+        paddingHorizontal: spacing[6],
+        paddingVertical: spacing[2] + 2,
+        borderRadius: radii.sm,
         borderWidth: 1,
-        borderColor: '#30363d',
+        borderColor: colors.border.default,
     },
     buttonText: {
-        color: '#58a6ff',
-        fontWeight: '600',
-        fontSize: 13,
+        color: colors.accent.default,
+        fontWeight: typography.weights.semibold,
+        fontSize: typography.sizes.label1,
     },
 });
 

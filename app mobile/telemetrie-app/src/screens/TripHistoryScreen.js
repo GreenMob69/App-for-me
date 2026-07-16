@@ -1,778 +1,747 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Dimensions, ActivityIndicator, Platform, StatusBar, TextInput, Modal, Alert, Share } from 'react-native';
-import { BarChart } from 'react-native-gifted-charts';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+    View, Text, StyleSheet, FlatList, ScrollView,
+    TouchableOpacity, Share, RefreshControl, Platform, StatusBar,
+    useWindowDimensions,
+} from 'react-native';
 import api from '../services/api';
 import { getVin } from '../utils/config';
+import {
+    HeroCard,
+    SearchBar,
+    StatusBadge,
+    TimelineCard,
+    MetricCard,
+    CostCard,
+    EmptyState,
+    SectionHeader,
+    Button,
+    BottomSheet,
+} from '../components/ui';
 import TripDetailScreen from './TripDetailScreen';
+import { colors, typography, radii, spacing, layout } from '../theme';
 
-const { width } = Dimensions.get('window');
-
-const TAGS = [
-    { key: 'PERSONAL', label: 'Personal', icon: '⌂', color: '#58a6ff' },
-    { key: 'BUSINESS', label: 'Serviciu', icon: '◆', color: '#3fb950' },
-    { key: 'TESTARE', label: 'Testare', icon: '⚙', color: '#d29922' },
-];
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const FILTERS = [
-    { key: 'ALL', label: 'Toate' },
-    { key: 'ALERTS', label: 'Cu alerte' },
-    { key: 'DTC', label: 'Cu erori DTC' },
-    { key: 'TEMP', label: 'Temp > 95°C' },
+    { key: 'ALL',   label: 'Toate'     },
+    { key: 'TODAY', label: 'Astăzi'    },
+    { key: 'WEEK',  label: 'Săptămâna' },
+    { key: 'MONTH', label: 'Luna'      },
 ];
 
+const MONTH_NAMES = [
+    'Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie',
+    'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie',
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getFilterDates(filter) {
+    const now   = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    switch (filter) {
+        case 'TODAY': {
+            const s = today.toISOString().split('T')[0];
+            return { startDate: s, endDate: s };
+        }
+        case 'WEEK': {
+            const w = new Date(today);
+            w.setDate(w.getDate() - 7);
+            return { startDate: w.toISOString().split('T')[0], endDate: null };
+        }
+        case 'MONTH': {
+            const m = new Date(today.getFullYear(), today.getMonth(), 1);
+            return { startDate: m.toISOString().split('T')[0], endDate: null };
+        }
+        default:
+            return { startDate: null, endDate: null };
+    }
+}
+
+function formatTripDate(ts) {
+    if (!ts) return '';
+    const date    = new Date(ts);
+    const now     = new Date();
+    const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const tripMs  = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const diffDays = Math.round((todayMs - tripMs) / 86400000);
+
+    if (diffDays === 0) return 'Astăzi';
+    if (diffDays === 1) return 'Ieri';
+    if (diffDays < 7)  return `Acum ${diffDays} zile`;
+    return date.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' });
+}
+
+function formatTripTime(ts) {
+    if (!ts) return '';
+    return new Date(ts).toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
+}
+
+function buildTripTitle(trip) {
+    const km   = parseFloat(trip.km_parcursi || 0);
+    const hour = trip.timestamp_start ? new Date(trip.timestamp_start).getHours() : 12;
+
+    const timeCtx =
+        (hour >= 5  && hour < 10) ? 'de dimineață' :
+        (hour >= 10 && hour < 13) ? 'de zi' :
+        (hour >= 13 && hour < 17) ? 'de după-amiază' :
+        (hour >= 17 && hour < 22) ? 'de seară' : 'de noapte';
+
+    if (km < 2)  return `Deplasare ${timeCtx}`;
+    if (km < 15) return `Drum ${timeCtx}`;
+    if (km < 60) return `Drum ${timeCtx} · ${km.toFixed(0)} km`;
+    return `Drum lung · ${km.toFixed(0)} km`;
+}
+
+function buildTripDesc(trip) {
+    const km    = parseFloat(trip.km_parcursi || 0);
+    const cons  = parseFloat(trip.consum_mediu_100km || 0);
+    const start = trip.timestamp_start;
+    const end   = trip.timestamp_end;
+    const dur   = (end && start) ? Math.round((end - start) / 60000) : 0;
+
+    const parts = [];
+    if (cons > 0)                parts.push(`${cons.toFixed(1)} L/100km`);
+    if (km > 0 && dur > 0) {
+        const avg = Math.round((km / dur) * 60);
+        if (avg > 5 && avg < 250) parts.push(`~${avg} km/h`);
+    }
+    if (dur > 0) parts.push(`${dur} min`);
+
+    return parts.join(' · ') || '—';
+}
+
+function buildTripBadges(trip) {
+    const hasDTC    = (trip.nr_dtc    || 0) > 0;
+    const hasAlerts = (trip.nr_alerte || 0) > 0;
+    const coolantMx = parseFloat(trip.coolant_max || 0);
+    const cons      = parseFloat(trip.consum_mediu_100km || 0);
+    const eco       = trip.scor_eco || 100;
+
+    const badges = [];
+    if (hasDTC)               badges.push({ label: 'Erori DTC',      status: 'critical' });
+    else if (coolantMx > 100) badges.push({ label: 'Supraîncălzire', status: 'critical' });
+    else if (hasAlerts)       badges.push({ label: 'Alerte',          status: 'caution'  });
+    else if (cons > 9)        badges.push({ label: 'Consum ridicat',  status: 'monitor'  });
+    else                      badges.push({ label: 'Normal',           status: 'good'     });
+
+    if (eco >= 90 && !hasDTC && !hasAlerts) {
+        badges.push({ label: 'Eco', status: 'optimal' });
+    }
+    return badges;
+}
+
+function getTripType(trip) {
+    if ((trip.nr_dtc || 0) > 0 || parseFloat(trip.coolant_max || 0) > 100) return 'alert';
+    if ((trip.nr_alerte || 0) > 0) return 'alert';
+    return 'trip';
+}
+
+function buildHeroInfo(trips, stats) {
+    if (!trips || trips.length === 0) {
+        return {
+            value: '0', unit: 'curse',
+            subtitle: 'Nicio cursă înregistrată încă.',
+            description: 'Efectuează prima cursă pentru a vedea jurnalul.',
+            status: 'neutral',
+        };
+    }
+    const recent   = trips.slice(0, 5);
+    const anyDTC   = recent.some(t => (t.nr_dtc     || 0) > 0);
+    const anyCool  = recent.some(t => (t.coolant_max || 0) > 100);
+    const highCons = recent.some(t => parseFloat(t.consum_mediu_100km || 0) > 9);
+    const avgEco   = Math.round(recent.reduce((s, t) => s + (t.scor_eco || 100), 0) / recent.length);
+    const ecoDisp  = String(Math.round(stats.scor_mediu || avgEco));
+    const cnt      = recent.length;
+
+    if (anyDTC || anyCool) return {
+        value: ecoDisp, unit: '/100',
+        subtitle: 'Am observat probleme la cursele recente.',
+        description: 'Verifică cursele marcate cu roșu mai jos.',
+        status: 'caution',
+    };
+    if (highCons) return {
+        value: ecoDisp, unit: '/100',
+        subtitle: 'Consumul a crescut în ultima perioadă.',
+        description: 'Ultimele curse au un consum mai ridicat decât de obicei.',
+        status: 'monitor',
+    };
+    if (avgEco >= 90) return {
+        value: ecoDisp, unit: '/100',
+        subtitle: `Ultimele ${cnt} curse au fost excelente.`,
+        description: 'Condus economic și fără probleme detectate.',
+        status: 'optimal',
+    };
+    return {
+        value: ecoDisp, unit: '/100',
+        subtitle: `Ultimele ${cnt} curse au fost normale.`,
+        description: 'Nicio problemă importantă detectată.',
+        status: 'good',
+    };
+}
+
+function buildMonthlyHeroText(data) {
+    if (!data || !data.totalTrips) return { text: 'Nu am date pentru această lună.', status: 'neutral' };
+    const km   = parseFloat(data.totalKm     || 0);
+    const cons = parseFloat(data.consumMediu100 || 0);
+    const eco  = data.avgEcoScore  || 100;
+    const hlth = data.avgHealthScore;
+
+    let text = `${data.totalTrips} curse · ${km.toFixed(0)} km parcurși`;
+    if (cons > 0) text += `, ${cons.toFixed(1)} L/100km medie`;
+    text += '.';
+
+    let status = 'good';
+    if (hlth && hlth < 70) { text += ' Am detectat probleme la câteva curse.'; status = 'caution'; }
+    else if (eco >= 88)    { text += ' Conducere economică. Bine!';             status = 'optimal'; }
+    else                   { text += ' Nicio problemă importantă detectată.'; }
+
+    return { text, status };
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 const TripHistoryScreen = () => {
-    const [trips, setTrips] = useState([]);
-    const [stats, setStats] = useState({});
-    const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState('LIST');
-    const [chartMetric, setChartMetric] = useState('CONSUM');
+    const { width: screenWidth } = useWindowDimensions();
+    const metricCardStyle = useMemo(() => ({
+        width:        screenWidth >= 600 ? '32%' : '48.5%',
+        marginBottom: spacing[3],
+    }), [screenWidth]);
+
+    const [screenState,    setScreenState]    = useState('loading');
+    const [refreshing,     setRefreshing]     = useState(false);
+    const [trips,          setTrips]          = useState([]);
+    const [stats,          setStats]          = useState({});
+    const [search,         setSearch]         = useState('');
+    const [activeFilter,   setActiveFilter]   = useState('ALL');
     const [selectedTripId, setSelectedTripId] = useState(null);
-
-    // Filtrare
-    const [activeFilter, setActiveFilter] = useState('ALL');
-    const [activeTag, setActiveTag] = useState('ALL');
-    const [dateFrom, setDateFrom] = useState('');
-    const [dateTo, setDateTo] = useState('');
-    const [showDateFilter, setShowDateFilter] = useState(false);
-
-    // Raport lunar
-    const [showMonthlyReport, setShowMonthlyReport] = useState(false);
-    const [monthlyData, setMonthlyData] = useState(null);
-    const [reportMonth, setReportMonth] = useState(() => {
-        const now = new Date();
-        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const [showReport,     setShowReport]     = useState(false);
+    const [monthlyData,    setMonthlyData]    = useState(null);
+    const [reportLoading,  setReportLoading]  = useState(false);
+    const [reportMonth,    setReportMonth]    = useState(() => {
+        const n = new Date();
+        return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
     });
 
-    // Tag modal
-    const [tagModalTrip, setTagModalTrip] = useState(null);
-
-    const fetchData = async () => {
-        setLoading(true);
+    const loadData = useCallback(async () => {
+        setScreenState(prev => prev === 'success' ? 'success' : 'loading');
         try {
+            const { startDate, endDate } = getFilterDates(activeFilter);
             const params = {};
-            if (dateFrom) params.startDate = dateFrom;
-            if (dateTo) params.endDate = dateTo;
-            if (activeFilter === 'ALERTS') params.hasAlerts = 'true';
-            if (activeFilter === 'DTC') params.hasDTC = 'true';
-            if (activeFilter === 'TEMP') params.tempOver = '95';
-            if (activeTag !== 'ALL') params.tag = activeTag;
+            if (startDate) params.startDate = startDate;
+            if (endDate)   params.endDate   = endDate;
 
-            const hasFilter = Object.keys(params).length > 0;
-
-            const [tripsRes, statsRes] = await Promise.all([
-                hasFilter
-                    ? api.get('/calatorii/filtrate', { params })
-                    : api.get('/calatorii'),
-                api.get(`/vehicul/${getVin()}/statistici`)
+            const [tripsRes, statsRes] = await Promise.allSettled([
+                api.get('/calatorii/filtrate', { params }),
+                api.get(`/vehicul/${getVin()}/statistici`),
             ]);
-            setTrips(tripsRes.data || []);
-            setStats(statsRes.data || {});
-        } catch (error) {
-            console.error('[API EROARE]', error.message);
-        } finally {
-            setLoading(false);
+
+            setTrips(tripsRes.status === 'fulfilled' ? (tripsRes.value.data || []) : []);
+            setStats(statsRes.status === 'fulfilled' ? (statsRes.value.data || {}) : {});
+            setScreenState('success');
+        } catch {
+            setScreenState(prev => prev === 'success' ? prev : 'error');
         }
-    };
+    }, [activeFilter]);
 
-    useEffect(() => {
-        fetchData();
-    }, [activeFilter, activeTag]);
+    useEffect(() => { loadData(); }, [loadData]);
 
-    const applyDateFilter = () => {
-        setShowDateFilter(false);
-        fetchData();
-    };
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try { await loadData(); }
+        finally { setRefreshing(false); }
+    }, [loadData]);
 
-    const clearDateFilter = () => {
-        setDateFrom('');
-        setDateTo('');
-        setShowDateFilter(false);
-        fetchData();
-    };
-
-    const fetchMonthlyReport = async () => {
+    const fetchMonthlyReport = useCallback(async () => {
         const [year, month] = reportMonth.split('-');
         if (!year || !month) return;
+        setReportLoading(true);
         setMonthlyData(null);
         try {
             const res = await api.get(`/rapoarte/lunar/${year}/${month}`);
             setMonthlyData(res.data);
-        } catch (err) {
-            console.error('[API EROARE] Raport lunar:', err.message);
-            Alert.alert('Eroare', 'Nu s-a putut genera raportul lunar. Verifică conexiunea la server.');
+        } catch {
+            setMonthlyData(null);
+        } finally {
+            setReportLoading(false);
         }
-    };
+    }, [reportMonth]);
 
-    const setTripTag = async (tripId, tag) => {
-        try {
-            await api.put(`/calatorii/${tripId}/tag`, { tag });
-            setTrips(prev => prev.map(t =>
-                (t.id_calatorie === tripId) ? { ...t, trip_tag: tag } : t
-            ));
-            setTagModalTrip(null);
-        } catch (err) {
-            Alert.alert('Eroare', 'Nu s-a putut seta tag-ul.');
-        }
-    };
+    const filteredTrips = useMemo(() => {
+        if (!search.trim()) return trips;
+        const q = search.toLowerCase();
+        return trips.filter(trip => {
+            const title = buildTripTitle(trip).toLowerCase();
+            const date  = formatTripDate(trip.timestamp_start).toLowerCase();
+            const km    = String(Math.round(trip.km_parcursi || 0));
+            const cons  = String(trip.consum_mediu_100km || '');
+            const bgs   = buildTripBadges(trip).map(b => b.label.toLowerCase()).join(' ');
+            return title.includes(q) || date.includes(q) || km.includes(q) || cons.includes(q) || bgs.includes(q);
+        });
+    }, [trips, search]);
 
+    const heroInfo = useMemo(() => buildHeroInfo(trips, stats), [trips, stats]);
+
+    // ─── Trip Detail (inline rendering — navigation prepare in Sprint 3.5) ───
     if (selectedTripId !== null) {
         return (
             <TripDetailScreen
                 tripId={selectedTripId}
-                onBack={() => { setSelectedTripId(null); fetchData(); }}
+                onBack={() => { setSelectedTripId(null); loadData(); }}
             />
         );
     }
 
-    const getBarChartData = () => {
-        return trips.slice(0, 7).reverse().map((trip) => {
-            const val = chartMetric === 'CONSUM' ? parseFloat(trip.consum_total_l || 0) : parseFloat(trip.km_parcursi || 0);
-            const color = chartMetric === 'CONSUM' ? '#d29922' : '#3fb950';
-            return {
-                value: val,
-                label: `#${trip.id_calatorie}`,
-                frontColor: color,
-                topLabelComponent: () => (
-                    <Text style={{ color: '#8b949e', fontSize: 10, marginBottom: 2 }}>{val}</Text>
-                )
-            };
-        });
-    };
-
-    const formatDate = (timestamp) => {
-        if (!timestamp) return 'Activa...';
-        const d = new Date(timestamp);
-        return `${d.toLocaleDateString('ro-RO')} ${d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}`;
-    };
-
-    const getTagInfo = (tag) => TAGS.find(t => t.key === tag) || TAGS[0];
-
-    if (loading) {
+    if (screenState === 'loading') {
         return (
-            <View style={[styles.mainContainer, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color="#58a6ff" />
-                <Text style={{ color: '#8b949e', marginTop: 15 }}>Se încarcă istoricul...</Text>
+            <View style={styles.main}>
+                <View style={styles.header}>
+                    <View>
+                        <Text style={styles.title}>Jurnal</Text>
+                        <Text style={styles.subtitle}>Audi A6 C4 · Logbook</Text>
+                    </View>
+                </View>
+                <View style={[{ flex: 1, paddingHorizontal: layout.screenPaddingH, paddingTop: spacing[4] }]}>
+                    <HeroCard
+                        value="…"
+                        unit="/100"
+                        title="JURNALUL MAȘINII"
+                        subtitle="Se încarcă istoricul..."
+                        status="neutral"
+                        loading
+                    />
+                </View>
             </View>
         );
     }
 
-    return (
-        <View style={styles.mainContainer}>
-            {/* HEADER */}
-            <View style={styles.header}>
-                <View style={styles.headerTitleContainer}>
-                    <Text style={styles.title} numberOfLines={1}>Arhiva Curse</Text>
-                    <Text style={styles.subtitle} numberOfLines={1}>Audi A6 C4 · Logbook</Text>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity style={styles.refreshBtn} onPress={fetchData}>
-                        <Text style={styles.refreshBtnText}>Refresh</Text>
+    if (screenState === 'error') {
+        return (
+            <View style={[styles.main, styles.center]}>
+                <EmptyState
+                    title="Nu mă pot conecta la server."
+                    subtitle="Verifică conexiunea și încearcă din nou."
+                    action={{ label: 'Încearcă din nou', onPress: loadData }}
+                    style={{ paddingHorizontal: layout.screenPaddingH }}
+                />
+            </View>
+        );
+    }
+
+    // ─── Monthly report share ─────────────────────────────────────────────────
+    const shareMonthly = () => {
+        if (!monthlyData) return;
+        const [yr, mo] = reportMonth.split('-');
+        const monthName = MONTH_NAMES[parseInt(mo, 10) - 1] || mo;
+        const text = [
+            `RAPORT LUNAR — ${monthName} ${yr}`,
+            'Audi A6 C4 · 2.5 TDI', '',
+            `Curse: ${monthlyData.totalTrips}`,
+            `Distanță: ${monthlyData.totalKm} km`,
+            `Combustibil: ${monthlyData.totalLitri} L`,
+            `Consum mediu: ${monthlyData.consumMediu100} L/100km`,
+            `Cost total: ${monthlyData.totalCost} RON`,
+            `Emisii CO₂: ${monthlyData.totalCO2} kg`,
+            `Eco Score mediu: ${monthlyData.avgEcoScore}`,
+            monthlyData.avgHealthScore ? `Health Score: ${monthlyData.avgHealthScore}%` : '',
+            '', 'Generat de OBD-II Monitor',
+        ].filter(Boolean).join('\n');
+        Share.share({ message: text, title: `Raport ${monthName} ${yr}` });
+    };
+
+    // ─── FlatList helpers ─────────────────────────────────────────────────────
+    const [yr, mo] = reportMonth.split('-');
+    const monthLabel = (mo && yr)
+        ? `${MONTH_NAMES[parseInt(mo, 10) - 1] || mo} ${yr}`
+        : reportMonth;
+
+    const monthlyHero = monthlyData ? buildMonthlyHeroText(monthlyData) : null;
+
+    const ListHeader = () => (
+        <View>
+            <HeroCard
+                value={heroInfo.value}
+                unit={heroInfo.unit}
+                title="JURNALUL MAȘINII"
+                subtitle={heroInfo.subtitle}
+                description={heroInfo.description}
+                status={heroInfo.status}
+                style={styles.heroCard}
+            />
+            <SearchBar
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Caută curse, date, km, etichete..."
+                style={styles.searchBar}
+            />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
+                {FILTERS.map(f => (
+                    <TouchableOpacity
+                        key={f.key}
+                        style={[styles.chip, activeFilter === f.key && styles.chipActive]}
+                        onPress={() => setActiveFilter(f.key)}
+                        accessibilityRole="radio"
+                        accessibilityLabel={`Filtrează: ${f.label}`}
+                        accessibilityState={{ checked: activeFilter === f.key }}
+                    >
+                        <Text style={[styles.chipText, activeFilter === f.key && styles.chipTextActive]}>
+                            {f.label}
+                        </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.reportBtn} onPress={() => setShowMonthlyReport(true)}>
-                        <Text style={styles.reportBtnText}>Raport</Text>
+                ))}
+            </ScrollView>
+            {filteredTrips.length > 0 && (
+                <SectionHeader
+                    title={`${filteredTrips.length} ${filteredTrips.length === 1 ? 'CURSĂ' : 'CURSE'}`}
+                    size="sm"
+                    style={styles.sectionHeader}
+                />
+            )}
+        </View>
+    );
+
+    const ListEmpty = () => (
+        <EmptyState
+            title="Nicio cursă în această perioadă."
+            subtitle="Cursele înregistrate vor apărea aici ca jurnal."
+            action={(activeFilter !== 'ALL' || search.trim()) ? {
+                label: 'Resetează filtrele',
+                onPress: () => { setActiveFilter('ALL'); setSearch(''); },
+            } : undefined}
+            style={styles.emptyState}
+        />
+    );
+
+    const renderItem = useCallback(({ item: trip, index }) => {
+        const isFirst = index === 0;
+        const isLast  = index === filteredTrips.length - 1;
+        const badges  = buildTripBadges(trip);
+
+        return (
+            <View>
+                <TimelineCard
+                    title={buildTripTitle(trip)}
+                    description={buildTripDesc(trip)}
+                    date={formatTripDate(trip.timestamp_start)}
+                    time={formatTripTime(trip.timestamp_start)}
+                    type={getTripType(trip)}
+                    isFirst={isFirst}
+                    isLast={isLast}
+                    onPress={() => setSelectedTripId(trip.id_calatorie)}
+                />
+                {badges.length > 0 && (
+                    <View style={[styles.badgesRow, isLast && styles.badgesRowLast]}>
+                        {badges.map(b => (
+                            <StatusBadge
+                                key={b.label}
+                                status={b.status}
+                                label={b.label}
+                                variant="filled"
+                                size="sm"
+                            />
+                        ))}
+                    </View>
+                )}
+            </View>
+        );
+    }, [filteredTrips, navigation]);
+
+    // ─── Render ───────────────────────────────────────────────────────────────
+    return (
+        <View style={styles.main}>
+            {/* ── Header ───────────────────────────────────────────────────── */}
+            <View style={styles.header}>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.title}>Jurnal</Text>
+                    <Text style={styles.subtitle}>Audi A6 C4 · Logbook</Text>
+                </View>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity
+                        style={styles.iconBtn}
+                        onPress={loadData}
+                        accessibilityRole="button"
+                        accessibilityLabel="Reîncarcă lista de curse"
+                    >
+                        <Text style={styles.iconBtnText}>↺</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.iconBtn, styles.iconBtnAccent]}
+                        onPress={() => setShowReport(true)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Deschide raportul lunar"
+                    >
+                        <Text style={[styles.iconBtnText, { color: '#FFFFFF' }]}>Raport</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
+            {/* ── Trip timeline ─────────────────────────────────────────────── */}
             <FlatList
-                style={styles.scrollContainer}
-                contentContainerStyle={{ paddingBottom: 40 }}
+                style={styles.list}
+                contentContainerStyle={styles.listContent}
+                data={filteredTrips}
+                keyExtractor={item => String(item.id_calatorie)}
+                ListHeaderComponent={ListHeader}
+                ListEmptyComponent={ListEmpty}
+                renderItem={renderItem}
                 showsVerticalScrollIndicator={false}
-                data={viewMode === 'LIST' ? trips : []}
-                keyExtractor={(item) => String(item.id_calatorie)}
-                ListHeaderComponent={<>
-                {/* STATS BANNER */}
-                <View style={styles.statsBanner}>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>SESIUNI</Text>
-                        <Text style={styles.statValue}>{stats.total_calatorii || 0}</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>KM</Text>
-                        <Text style={styles.statValue}>{(stats.total_km || 0).toFixed(1)}</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>LITRI</Text>
-                        <Text style={styles.statValue}>{(stats.total_combustibil || 0).toFixed(1)}</Text>
-                    </View>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>ECO</Text>
-                        <Text style={[styles.statValue, { color: '#3fb950' }]}>{Math.round(stats.scor_mediu || 100)}</Text>
-                    </View>
-                </View>
+                initialNumToRender={12}
+                maxToRenderPerBatch={12}
+                windowSize={7}
+                removeClippedSubviews
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={colors.accent.default}
+                        colors={[colors.accent.default]}
+                    />
+                }
+            />
 
-                {/* FILTRE RAPIDE */}
-                <View style={styles.filterSection}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        {FILTERS.map(f => (
+            {/* ── Monthly Report — BottomSheet ─────────────────────────────── */}
+            <BottomSheet visible={showReport} onClose={() => setShowReport(false)} title="Raport Lunar">
+                <View style={styles.sheetContent}>
+                        {/* Month quick-select chips */}
+                        <View style={styles.monthRow}>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
+                                {[0, 1, 2, 3].map(offset => {
+                                    const d = new Date();
+                                    d.setMonth(d.getMonth() - offset);
+                                    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                                    const lbl = MONTH_NAMES[d.getMonth()].slice(0, 3);
+                                    return (
+                                        <TouchableOpacity
+                                            key={val}
+                                            style={[styles.chip, reportMonth === val && styles.chipActive]}
+                                            onPress={() => setReportMonth(val)}
+                                            accessibilityRole="radio"
+                                            accessibilityLabel={MONTH_NAMES[d.getMonth()]}
+                                            accessibilityState={{ checked: reportMonth === val }}
+                                        >
+                                            <Text style={[styles.chipText, reportMonth === val && styles.chipTextActive]}>
+                                                {lbl}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
                             <TouchableOpacity
-                                key={f.key}
-                                style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]}
-                                onPress={() => setActiveFilter(f.key)}
+                                style={[styles.iconBtn, styles.iconBtnAccent, { marginLeft: spacing[2] }]}
+                                onPress={fetchMonthlyReport}
+                                accessibilityRole="button"
+                                accessibilityLabel={reportLoading ? 'Se generează raportul' : 'Generează raportul lunar'}
                             >
-                                <Text style={[styles.filterChipText, activeFilter === f.key && styles.filterChipTextActive]}>{f.label}</Text>
+                                <Text style={[styles.iconBtnText, { color: '#FFFFFF' }]}>
+                                    {reportLoading ? '...' : 'Vezi'}
+                                </Text>
                             </TouchableOpacity>
-                        ))}
-                        <View style={styles.filterSeparator} />
-                        <TouchableOpacity
-                            style={[styles.filterChip, activeTag !== 'ALL' && styles.filterChipActive]}
-                            onPress={() => {
-                                const tags = ['ALL', ...TAGS.map(t => t.key)];
-                                const idx = tags.indexOf(activeTag);
-                                setActiveTag(tags[(idx + 1) % tags.length]);
-                            }}
-                        >
-                            <Text style={[styles.filterChipText, activeTag !== 'ALL' && styles.filterChipTextActive]}>
-                                {activeTag === 'ALL' ? 'Tag: Toate' : getTagInfo(activeTag).label}
-                            </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.filterChip, (dateFrom || dateTo) && styles.filterChipActive]}
-                            onPress={() => setShowDateFilter(!showDateFilter)}
-                        >
-                            <Text style={[styles.filterChipText, (dateFrom || dateTo) && styles.filterChipTextActive]}>
-                                {(dateFrom || dateTo) ? 'Dată ✓' : 'Dată'}
-                            </Text>
-                        </TouchableOpacity>
-                    </ScrollView>
-                </View>
+                        </View>
 
-                {/* DATE FILTER INPUT */}
-                {showDateFilter && (
-                    <View style={styles.dateFilterBox}>
-                        <Text style={styles.dateFilterLabel}>Filtrare după perioadă</Text>
-                        <View style={styles.dateRow}>
-                            <View style={styles.dateInputContainer}>
-                                <Text style={styles.dateInputLabel}>De la:</Text>
-                                <TextInput
-                                    style={styles.dateInput}
-                                    placeholder="2025-01-01"
-                                    placeholderTextColor="#484f58"
-                                    value={dateFrom}
-                                    onChangeText={setDateFrom}
-                                    keyboardType="default"
+                        <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                            {/* HeroCard — AI summary */}
+                            {monthlyData && monthlyHero && (
+                                <HeroCard
+                                    value={String(parseFloat(monthlyData.totalKm || 0).toFixed(0))}
+                                    unit="km"
+                                    title={monthLabel.toUpperCase()}
+                                    subtitle={monthlyHero.text}
+                                    status={monthlyHero.status}
+                                    style={styles.reportSection}
                                 />
-                            </View>
-                            <View style={styles.dateInputContainer}>
-                                <Text style={styles.dateInputLabel}>Până la:</Text>
-                                <TextInput
-                                    style={styles.dateInput}
-                                    placeholder="2025-04-13"
-                                    placeholderTextColor="#484f58"
-                                    value={dateTo}
-                                    onChangeText={setDateTo}
-                                    keyboardType="default"
+                            )}
+
+                            {/* CostCard — total cost */}
+                            {monthlyData && parseFloat(monthlyData.totalCost || 0) > 0 && (
+                                <CostCard
+                                    title="Costuri deplasare"
+                                    amount={parseFloat(monthlyData.totalCost || 0)}
+                                    currency="RON"
+                                    period={monthLabel}
+                                    breakdown={[
+                                        { label: 'Combustibil', amount: parseFloat(monthlyData.totalCost || 0) },
+                                    ]}
+                                    style={styles.reportSection}
                                 />
-                            </View>
-                        </View>
-                        <Text style={styles.dateHint}>Format: YYYY-MM-DD (ex: 2025-01-01) sau doar ziua: 2025-04-13</Text>
-                        <View style={styles.dateActions}>
-                            <TouchableOpacity style={styles.dateApplyBtn} onPress={applyDateFilter}>
-                                <Text style={styles.dateApplyText}>Aplică</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.dateClearBtn} onPress={clearDateFilter}>
-                                <Text style={styles.dateClearText}>Resetează</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                )}
+                            )}
 
-                {/* VIEW MODE TOGGLE */}
-                <View style={styles.viewToggleContainer}>
-                    <TouchableOpacity
-                        style={[styles.toggleBtn, viewMode === 'LIST' && styles.toggleBtnActive]}
-                        onPress={() => setViewMode('LIST')}
-                    >
-                        <Text style={[styles.toggleText, viewMode === 'LIST' && styles.toggleTextActive]}>Lista</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.toggleBtn, viewMode === 'CHART' && styles.toggleBtnActive]}
-                        onPress={() => setViewMode('CHART')}
-                    >
-                        <Text style={[styles.toggleText, viewMode === 'CHART' && styles.toggleTextActive]}>Grafic</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* CHART VIEW */}
-                {viewMode === 'CHART' && (
-                    <View style={styles.chartContainer}>
-                        <Text style={styles.chartTitle}>ULTIMELE 7 SESIUNI</Text>
-                        <View style={styles.metricSelector}>
-                            <TouchableOpacity
-                                style={[styles.metricBtn, chartMetric === 'CONSUM' && { backgroundColor: '#d29922' }]}
-                                onPress={() => setChartMetric('CONSUM')}
-                            >
-                                <Text style={styles.metricBtnText}>Consum (L)</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.metricBtn, chartMetric === 'KM' && { backgroundColor: '#3fb950' }]}
-                                onPress={() => setChartMetric('KM')}
-                            >
-                                <Text style={styles.metricBtnText}>Distanță (km)</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <View style={{ alignItems: 'center', marginTop: 15 }}>
-                            <BarChart
-                                data={getBarChartData()}
-                                width={width - 80}
-                                height={200}
-                                barWidth={28}
-                                spacing={20}
-                                roundedTop
-                                yAxisTextStyle={{ color: '#8b949e', fontSize: 11 }}
-                                xAxisLabelTextStyle={{ color: '#c9d1d9', fontSize: 11, fontWeight: 'bold' }}
-                                rulesColor="#30363d"
-                                noOfSections={4}
-                            />
-                        </View>
-                    </View>
-                )}
-
-                {/* LIST VIEW — empty state shown in header */}
-                {viewMode === 'LIST' && trips.length === 0 && (
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>Nicio cursă găsită cu filtrele selectate.</Text>
-                        <TouchableOpacity onPress={() => { setActiveFilter('ALL'); setActiveTag('ALL'); setDateFrom(''); setDateTo(''); }}>
-                            <Text style={styles.emptyReset}>Resetează filtrele</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-                </>}
-                renderItem={({ item: trip }) => {
-                    const tagInfo = getTagInfo(trip.trip_tag || 'PERSONAL');
-                    return (
-                        <TouchableOpacity
-                            style={styles.tripCard}
-                            onPress={() => setSelectedTripId(trip.id_calatorie)}
-                            onLongPress={() => setTagModalTrip(trip.id_calatorie)}
-                            activeOpacity={0.7}
-                        >
-                            <View style={styles.tripHeader}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <Text style={styles.tripId}>#{trip.id_calatorie}</Text>
-                                    <View style={[styles.tagBadge, { borderColor: tagInfo.color }]}>
-                                        <Text style={[styles.tagBadgeText, { color: tagInfo.color }]}>{tagInfo.icon} {tagInfo.label}</Text>
-                                    </View>
-                                </View>
-                                <Text style={styles.tripDate}>{formatDate(trip.timestamp_start)}</Text>
-                            </View>
-
-                            <View style={styles.tripDetailsGrid}>
-                                <View style={styles.tripDetail}>
-                                    <Text style={styles.detailLabel}>KM</Text>
-                                    <Text style={styles.detailValue}>{(trip.km_parcursi || 0).toFixed(1)}</Text>
-                                </View>
-                                <View style={styles.tripDetail}>
-                                    <Text style={styles.detailLabel}>LITRI</Text>
-                                    <Text style={styles.detailValue}>{(trip.consum_total_l || 0).toFixed(1)}</Text>
-                                </View>
-                                <View style={styles.tripDetail}>
-                                    <Text style={styles.detailLabel}>L/100</Text>
-                                    <Text style={styles.detailValue}>{trip.consum_mediu_100km || 0}</Text>
-                                </View>
-                                <View style={styles.tripDetail}>
-                                    <Text style={styles.detailLabel}>ECO</Text>
-                                    <Text style={[styles.detailValue, { color: (trip.scor_eco || 100) >= 80 ? '#3fb950' : '#f85149' }]}>
-                                        {trip.scor_eco || 100}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {(trip.nr_alerte > 0 || trip.nr_dtc > 0 || trip.health_score) && (
-                                <View style={styles.indicatorsRow}>
-                                    {trip.health_score && (
-                                        <Text style={[styles.indicator, { color: trip.health_score >= 80 ? '#3fb950' : '#d29922' }]}>
-                                            Health: {trip.health_score}%
-                                        </Text>
-                                    )}
-                                    {trip.nr_alerte > 0 && (
-                                        <Text style={[styles.indicator, { color: '#f85149' }]}>
-                                            {trip.nr_alerte} alerte
-                                        </Text>
-                                    )}
-                                    {trip.nr_dtc > 0 && (
-                                        <Text style={[styles.indicator, { color: '#f85149' }]}>
-                                            {trip.nr_dtc} DTC
-                                        </Text>
+                            {/* MetricCards grid */}
+                            {monthlyData && monthlyData.totalTrips > 0 && (
+                                <View style={styles.metricsGrid}>
+                                    <MetricCard
+                                        label="L/100KM"
+                                        value={parseFloat(monthlyData.consumMediu100 || 0).toFixed(1)}
+                                        unit="medie"
+                                        size="sm"
+                                        style={metricCardStyle}
+                                    />
+                                    <MetricCard
+                                        label="ECO SCORE"
+                                        value={monthlyData.avgEcoScore || 100}
+                                        unit="/100"
+                                        size="sm"
+                                        status={(monthlyData.avgEcoScore || 100) >= 80 ? 'good' : 'monitor'}
+                                        style={metricCardStyle}
+                                    />
+                                    <MetricCard
+                                        label="LITRI"
+                                        value={parseFloat(monthlyData.totalLitri || 0).toFixed(0)}
+                                        unit="L"
+                                        size="sm"
+                                        style={metricCardStyle}
+                                    />
+                                    <MetricCard
+                                        label="CO₂"
+                                        value={parseFloat(monthlyData.totalCO2 || 0).toFixed(1)}
+                                        unit="kg"
+                                        size="sm"
+                                        style={metricCardStyle}
+                                    />
+                                    <MetricCard
+                                        label="TIMP"
+                                        value={monthlyData.totalDurataMin || 0}
+                                        unit="min"
+                                        size="sm"
+                                        style={metricCardStyle}
+                                    />
+                                    {monthlyData.avgHealthScore ? (
+                                        <MetricCard
+                                            label="HEALTH"
+                                            value={monthlyData.avgHealthScore}
+                                            unit="%"
+                                            size="sm"
+                                            status={monthlyData.avgHealthScore >= 80 ? 'good' : 'monitor'}
+                                            style={metricCardStyle}
+                                        />
+                                    ) : (
+                                        <MetricCard
+                                            label="CURSE"
+                                            value={monthlyData.totalTrips}
+                                            unit="total"
+                                            size="sm"
+                                            style={metricCardStyle}
+                                        />
                                     )}
                                 </View>
                             )}
 
-                            <Text style={styles.tapHint}>Apasă lung pentru tag</Text>
-                        </TouchableOpacity>
-                    );
-                }}
-                ListEmptyComponent={null}
-            />
+                            {/* Empty / prompt states */}
+                            {!monthlyData && !reportLoading && (
+                                <EmptyState
+                                    title="Selectează o lună."
+                                    subtitle="Apasă 'Vezi' pentru a genera raportul lunar."
+                                    style={styles.reportEmpty}
+                                />
+                            )}
+                            {monthlyData && monthlyData.totalTrips === 0 && (
+                                <EmptyState
+                                    title="Nicio cursă în această lună."
+                                    subtitle={`Nu am date înregistrate pentru ${monthLabel}.`}
+                                    style={styles.reportEmpty}
+                                />
+                            )}
 
-            {/* TAG MODAL */}
-            <Modal visible={tagModalTrip !== null} transparent animationType="fade" onRequestClose={() => setTagModalTrip(null)}>
-                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setTagModalTrip(null)}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Etichetă Cursă #{tagModalTrip}</Text>
-                        {TAGS.map(tag => (
-                            <TouchableOpacity
-                                key={tag.key}
-                                style={styles.modalOption}
-                                onPress={() => setTripTag(tagModalTrip, tag.key)}
-                            >
-                                <Text style={[styles.modalOptionText, { color: tag.color }]}>{tag.icon}  {tag.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                        <TouchableOpacity style={styles.modalCancel} onPress={() => setTagModalTrip(null)}>
-                            <Text style={styles.modalCancelText}>Anulează</Text>
-                        </TouchableOpacity>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
-
-            {/* MONTHLY REPORT MODAL */}
-            <Modal visible={showMonthlyReport} transparent animationType="slide" onRequestClose={() => setShowMonthlyReport(false)}>
-                <View style={styles.modalOverlay}>
-                    <View style={styles.reportModal}>
-                        <View style={styles.reportHeader}>
-                            <Text style={styles.reportTitle}>Sinteză Lunară</Text>
-                            <TouchableOpacity onPress={() => setShowMonthlyReport(false)}>
-                                <Text style={styles.reportClose}>✕</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {/* Month selector */}
-                        <View style={styles.monthSelector}>
-                            <TextInput
-                                style={styles.monthInput}
-                                placeholder="2025-07"
-                                placeholderTextColor="#484f58"
-                                value={reportMonth}
-                                onChangeText={setReportMonth}
-                            />
-                            <TouchableOpacity style={styles.monthFetchBtn} onPress={fetchMonthlyReport}>
-                                <Text style={styles.monthFetchText}>Generează</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {monthlyData && monthlyData.totalTrips === 0 && (
-                            <View style={{ padding: 20, alignItems: 'center' }}>
-                                <Text style={{ color: '#8b949e', fontSize: 14, textAlign: 'center' }}>
-                                    Nu există curse înregistrate în luna {monthlyData.month}/{monthlyData.year}.
-                                </Text>
-                            </View>
-                        )}
-
-                        {monthlyData && monthlyData.totalTrips > 0 && (
-                            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                                <Text style={styles.reportSubtitle}>
-                                    {monthlyData.month}/{monthlyData.year} — {monthlyData.totalTrips} curse
-                                </Text>
-
-                                <View style={styles.reportGrid}>
-                                    <View style={styles.reportCard}>
-                                        <Text style={styles.reportCardValue}>{monthlyData.totalKm}</Text>
-                                        <Text style={styles.reportCardLabel}>km total</Text>
-                                    </View>
-                                    <View style={styles.reportCard}>
-                                        <Text style={styles.reportCardValue}>{monthlyData.totalLitri}</Text>
-                                        <Text style={styles.reportCardLabel}>litri</Text>
-                                    </View>
-                                    <View style={styles.reportCard}>
-                                        <Text style={styles.reportCardValue}>{monthlyData.consumMediu100}</Text>
-                                        <Text style={styles.reportCardLabel}>L/100km</Text>
-                                    </View>
-                                    <View style={styles.reportCard}>
-                                        <Text style={[styles.reportCardValue, { color: '#3fb950' }]}>{monthlyData.totalCost}</Text>
-                                        <Text style={styles.reportCardLabel}>RON cost</Text>
-                                    </View>
-                                    <View style={styles.reportCard}>
-                                        <Text style={styles.reportCardValue}>{monthlyData.totalCO2}</Text>
-                                        <Text style={styles.reportCardLabel}>kg CO₂</Text>
-                                    </View>
-                                    <View style={styles.reportCard}>
-                                        <Text style={styles.reportCardValue}>{monthlyData.totalDurataMin}</Text>
-                                        <Text style={styles.reportCardLabel}>min condus</Text>
-                                    </View>
-                                </View>
-
-                                {monthlyData.avgHealthScore && (
-                                    <View style={styles.reportRow}>
-                                        <Text style={styles.reportRowLabel}>Health Score mediu:</Text>
-                                        <Text style={[styles.reportRowValue, { color: monthlyData.avgHealthScore >= 80 ? '#3fb950' : '#d29922' }]}>
-                                            {monthlyData.avgHealthScore}%
-                                        </Text>
-                                    </View>
-                                )}
-                                <View style={styles.reportRow}>
-                                    <Text style={styles.reportRowLabel}>Eco Score mediu:</Text>
-                                    <Text style={[styles.reportRowValue, { color: monthlyData.avgEcoScore >= 80 ? '#3fb950' : '#d29922' }]}>
-                                        {monthlyData.avgEcoScore}
-                                    </Text>
-                                </View>
-
-                                {/* BY TAG */}
-                                {monthlyData.byTag && Object.keys(monthlyData.byTag).length > 0 && (
-                                    <View style={styles.reportTagSection}>
-                                        <Text style={styles.reportTagTitle}>Defalcare pe categorie:</Text>
-                                        {Object.entries(monthlyData.byTag).map(([tag, data]) => {
-                                            const info = getTagInfo(tag);
-                                            return (
-                                                <View key={tag} style={styles.reportTagRow}>
-                                                    <Text style={[styles.reportTagName, { color: info.color }]}>{info.icon} {info.label}</Text>
-                                                    <Text style={styles.reportTagData}>{data.trips} curse · {data.km.toFixed(1)} km · {data.cost.toFixed(0)} RON</Text>
-                                                </View>
-                                            );
-                                        })}
-                                    </View>
-                                )}
-
-                                {/* BUTON DESCARCĂ / SHARE */}
-                                <TouchableOpacity
+                            {/* Share */}
+                            {monthlyData && monthlyData.totalTrips > 0 && (
+                                <Button
+                                    label="Descarcă / Trimite raportul"
+                                    variant="primary"
+                                    onPress={shareMonthly}
                                     style={styles.shareBtn}
-                                    onPress={() => {
-                                        const tagLines = monthlyData.byTag
-                                            ? Object.entries(monthlyData.byTag).map(([tag, d]) => `  ${getTagInfo(tag).label}: ${d.trips} curse, ${d.km.toFixed(1)} km, ${d.cost.toFixed(0)} RON`).join('\n')
-                                            : '';
-                                        const text = [
-                                            `RAPORT LUNAR — ${monthlyData.month}/${monthlyData.year}`,
-                                            `Audi A6 C4 · 2.5 TDI`,
-                                            ``,
-                                            `Total curse: ${monthlyData.totalTrips}`,
-                                            `Distanță: ${monthlyData.totalKm} km`,
-                                            `Combustibil: ${monthlyData.totalLitri} L`,
-                                            `Consum mediu: ${monthlyData.consumMediu100} L/100km`,
-                                            `Cost total: ${monthlyData.totalCost} RON`,
-                                            `Emisii CO2: ${monthlyData.totalCO2} kg`,
-                                            `Timp condus: ${monthlyData.totalDurataMin} min`,
-                                            `Eco Score mediu: ${monthlyData.avgEcoScore}`,
-                                            monthlyData.avgHealthScore ? `Health Score mediu: ${monthlyData.avgHealthScore}%` : '',
-                                            tagLines ? `\nDefalcare:\n${tagLines}` : '',
-                                            ``,
-                                            `Generat de OBD-II Monitor App`,
-                                        ].filter(Boolean).join('\n');
-                                        Share.share({ message: text, title: `Raport ${monthlyData.month}/${monthlyData.year}` });
-                                    }}
-                                >
-                                    <Text style={styles.shareBtnText}>Descarcă / Trimite Raportul</Text>
-                                </TouchableOpacity>
-                            </ScrollView>
-                        )}
-                    </View>
+                                />
+                            )}
+                        </ScrollView>
                 </View>
-            </Modal>
+            </BottomSheet>
         </View>
     );
 };
 
 const styles = StyleSheet.create({
-    mainContainer: {
+    main: {
         flex: 1,
-        backgroundColor: '#0d1117',
+        backgroundColor: colors.bg[0],
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 40) + 10 : 44,
     },
+    center: { justifyContent: 'center', alignItems: 'center' },
+
+    // ── Header ────────────────────────────────────────────────────────────────
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingBottom: 12,
+        paddingHorizontal: layout.screenPaddingH,
+        paddingBottom: spacing[3],
         borderBottomWidth: 1,
-        borderBottomColor: '#21262d',
+        borderBottomColor: colors.border.default,
     },
-    headerTitleContainer: { flex: 1, paddingRight: 10 },
-    title: { fontSize: 18, fontWeight: '700', color: '#ffffff' },
-    subtitle: { fontSize: 11, color: '#8b949e', marginTop: 2 },
-    refreshBtn: { backgroundColor: '#21262d', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#30363d' },
-    refreshBtnText: { color: '#8b949e', fontWeight: '700', fontSize: 11 },
-    reportBtn: { backgroundColor: '#1f6feb', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 },
-    reportBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 11 },
-    scrollContainer: { flex: 1, paddingHorizontal: 16 },
-    statsBanner: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        backgroundColor: '#161b22',
-        padding: 14,
-        borderRadius: 10,
+    title:    { fontSize: typography.sizes.title3, fontWeight: typography.weights.bold, color: colors.text.primary },
+    subtitle: { fontSize: typography.sizes.caption, color: colors.text.secondary, marginTop: spacing[1] - 2 },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
+    iconBtn: {
+        height: 32,
+        paddingHorizontal: spacing[3],
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.full,
         borderWidth: 1,
-        borderColor: '#30363d',
-        marginTop: 12,
-        marginBottom: 12,
-    },
-    statItem: { alignItems: 'center' },
-    statLabel: { fontSize: 9, color: '#8b949e', fontWeight: '700', marginBottom: 3 },
-    statValue: { fontSize: 16, fontWeight: '900', color: '#ffffff' },
-
-    // Filters
-    filterSection: { marginBottom: 10 },
-    filterChip: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-        backgroundColor: '#21262d',
-        borderWidth: 1,
-        borderColor: '#30363d',
-        marginRight: 8,
-    },
-    filterChipActive: { backgroundColor: '#1f6feb', borderColor: '#1f6feb' },
-    filterChipText: { color: '#8b949e', fontSize: 12, fontWeight: '600' },
-    filterChipTextActive: { color: '#ffffff' },
-    filterSeparator: { width: 1, backgroundColor: '#30363d', marginHorizontal: 4 },
-
-    // Date filter
-    dateFilterBox: {
-        backgroundColor: '#161b22',
-        borderRadius: 10,
-        padding: 14,
-        borderWidth: 1,
-        borderColor: '#30363d',
-        marginBottom: 12,
-    },
-    dateFilterLabel: { color: '#c9d1d9', fontSize: 12, fontWeight: '700', marginBottom: 10 },
-    dateRow: { flexDirection: 'row', gap: 10 },
-    dateInputContainer: { flex: 1 },
-    dateInputLabel: { color: '#8b949e', fontSize: 10, marginBottom: 4 },
-    dateInput: {
-        backgroundColor: '#0d1117',
-        borderWidth: 1,
-        borderColor: '#30363d',
-        borderRadius: 6,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        color: '#ffffff',
-        fontSize: 13,
-    },
-    dateHint: { color: '#484f58', fontSize: 10, marginTop: 8 },
-    dateActions: { flexDirection: 'row', gap: 10, marginTop: 10 },
-    dateApplyBtn: { backgroundColor: '#1f6feb', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6 },
-    dateApplyText: { color: '#ffffff', fontWeight: '700', fontSize: 12 },
-    dateClearBtn: { backgroundColor: '#21262d', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6, borderWidth: 1, borderColor: '#30363d' },
-    dateClearText: { color: '#8b949e', fontWeight: '600', fontSize: 12 },
-
-    // View toggle
-    viewToggleContainer: {
-        flexDirection: 'row',
-        backgroundColor: '#161b22',
-        borderRadius: 8,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: '#30363d',
-    },
-    toggleBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 6 },
-    toggleBtnActive: { backgroundColor: '#21262d', borderColor: '#8b949e', borderWidth: 1 },
-    toggleText: { color: '#8b949e', fontWeight: '700', fontSize: 12 },
-    toggleTextActive: { color: '#ffffff' },
-
-    // Chart
-    chartContainer: { backgroundColor: '#161b22', padding: 16, borderRadius: 10, borderWidth: 1, borderColor: '#30363d', marginBottom: 12 },
-    chartTitle: { color: '#c9d1d9', fontSize: 11, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
-    metricSelector: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
-    metricBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: '#21262d', borderWidth: 1, borderColor: '#30363d' },
-    metricBtnText: { color: '#ffffff', fontSize: 10, fontWeight: '700' },
-
-    // Trip card
-    tripCard: {
-        backgroundColor: '#161b22',
-        borderRadius: 10,
-        padding: 14,
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#30363d',
-    },
-    tripHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 10,
-        paddingBottom: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: '#21262d',
-    },
-    tripId: { color: '#58a6ff', fontWeight: '700', fontSize: 14 },
-    tripDate: { color: '#8b949e', fontSize: 11 },
-    tagBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, borderWidth: 1 },
-    tagBadgeText: { fontSize: 10, fontWeight: '700' },
-    tripDetailsGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-    tripDetail: { alignItems: 'center', flex: 1 },
-    detailLabel: { fontSize: 9, color: '#8b949e', fontWeight: '700', marginBottom: 3 },
-    detailValue: { fontSize: 16, fontWeight: '800', color: '#ffffff' },
-    indicatorsRow: { flexDirection: 'row', marginTop: 8, gap: 12 },
-    indicator: { fontSize: 11, fontWeight: '600' },
-    tapHint: { color: '#30363d', fontSize: 9, marginTop: 6, textAlign: 'right' },
-
-    // Empty
-    emptyState: { alignItems: 'center', paddingVertical: 40 },
-    emptyText: { color: '#8b949e', fontSize: 13, marginBottom: 12 },
-    emptyReset: { color: '#58a6ff', fontSize: 13, fontWeight: '600' },
-
-    // Tag modal
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.7)',
+        borderColor: colors.border.default,
         justifyContent: 'center',
         alignItems: 'center',
+        minWidth: 32,
     },
-    modalContent: {
-        backgroundColor: '#161b22',
-        borderRadius: 14,
-        padding: 24,
-        width: width * 0.75,
-        borderWidth: 1,
-        borderColor: '#30363d',
-    },
-    modalTitle: { color: '#ffffff', fontSize: 16, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
-    modalOption: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#21262d' },
-    modalOptionText: { fontSize: 15, fontWeight: '600' },
-    modalCancel: { marginTop: 12, paddingVertical: 10, alignItems: 'center' },
-    modalCancelText: { color: '#8b949e', fontSize: 14 },
+    iconBtnAccent: { backgroundColor: colors.accent.default, borderColor: colors.accent.default },
+    iconBtnText: { color: colors.text.secondary, fontSize: typography.sizes.label2, fontWeight: typography.weights.bold },
 
-    // Monthly report modal
-    reportModal: {
-        backgroundColor: '#0d1117',
-        borderRadius: 16,
-        padding: 20,
-        width: width * 0.9,
-        maxHeight: '80%',
+    // ── List ──────────────────────────────────────────────────────────────────
+    list: { flex: 1 },
+    listContent: { paddingHorizontal: layout.screenPaddingH, paddingBottom: spacing[12] },
+
+    // ── List header ───────────────────────────────────────────────────────────
+    heroCard:      { marginTop: spacing[4], marginBottom: spacing[3] },
+    searchBar:     { marginBottom: spacing[3] },
+    filterRow:     { marginBottom: spacing[2] },
+    sectionHeader: { marginTop: spacing[2], marginBottom: spacing[1] },
+    chip: {
+        paddingHorizontal: spacing[3] + 2,
+        paddingVertical: spacing[1] + 2,
+        borderRadius: radii.full,
+        backgroundColor: colors.bg[1],
         borderWidth: 1,
-        borderColor: '#30363d',
+        borderColor: colors.border.default,
+        marginRight: spacing[2],
     },
-    reportHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    reportTitle: { color: '#ffffff', fontSize: 18, fontWeight: '700' },
-    reportClose: { color: '#8b949e', fontSize: 20 },
-    monthSelector: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-    monthInput: {
-        flex: 1,
-        backgroundColor: '#161b22',
-        borderWidth: 1,
-        borderColor: '#30363d',
-        borderRadius: 6,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        color: '#ffffff',
-        fontSize: 14,
+    chipActive:     { backgroundColor: colors.accent.default, borderColor: colors.accent.default },
+    chipText:       { color: colors.text.secondary, fontSize: typography.sizes.label2, fontWeight: typography.weights.semibold },
+    chipTextActive: { color: '#FFFFFF' },
+
+    // ── Trip entries ──────────────────────────────────────────────────────────
+    badgesRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing[2],
+        paddingLeft: 28 + spacing[3] + spacing[3],
+        marginTop: -spacing[2],
+        paddingBottom: spacing[3],
     },
-    monthFetchBtn: { backgroundColor: '#1f6feb', paddingHorizontal: 16, borderRadius: 6, justifyContent: 'center' },
-    monthFetchText: { color: '#ffffff', fontWeight: '700', fontSize: 12 },
-    reportSubtitle: { color: '#8b949e', fontSize: 13, marginBottom: 14 },
-    reportGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 14 },
-    reportCard: {
-        width: '31%',
-        backgroundColor: '#161b22',
-        borderRadius: 8,
-        padding: 10,
-        alignItems: 'center',
-        marginBottom: 8,
-        borderWidth: 1,
-        borderColor: '#30363d',
+    badgesRowLast: { paddingBottom: spacing[2] },
+    emptyState: { marginTop: spacing[6] },
+
+    // ── Monthly report BottomSheet ────────────────────────────────────────────
+    sheetContent: { paddingHorizontal: spacing[5] },
+    monthRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: spacing[4] },
+
+    // ── Monthly report content ────────────────────────────────────────────────
+    reportSection: { marginBottom: spacing[3] },
+    metricsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        marginBottom: spacing[3],
     },
-    reportCardValue: { fontSize: 16, fontWeight: '900', color: '#ffffff' },
-    reportCardLabel: { fontSize: 9, color: '#8b949e', marginTop: 2 },
-    reportRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
-    reportRowLabel: { color: '#8b949e', fontSize: 13 },
-    reportRowValue: { fontSize: 14, fontWeight: '800' },
-    reportTagSection: { marginTop: 12, borderTopWidth: 1, borderTopColor: '#21262d', paddingTop: 12 },
-    reportTagTitle: { color: '#c9d1d9', fontSize: 12, fontWeight: '700', marginBottom: 8 },
-    reportTagRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
-    reportTagName: { fontSize: 13, fontWeight: '700' },
-    reportTagData: { color: '#8b949e', fontSize: 11 },
-    shareBtn: { backgroundColor: '#1f6feb', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 16 },
-    shareBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 13 },
+    reportEmpty:  { marginVertical: spacing[6] },
+    shareBtn:     { marginBottom: spacing[6] },
 });
 
 export default TripHistoryScreen;

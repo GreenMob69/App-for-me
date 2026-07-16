@@ -1,15 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { t } from '../i18n';
-
-const LEVEL_STYLES = {
-    HIGH: { color: '#3fb950', bg: 'rgba(63,185,80,0.1)' },
-    MEDIUM: { color: '#d29922', bg: 'rgba(210,153,34,0.1)' },
-    LOW: { color: '#8b949e', bg: 'rgba(139,148,158,0.1)' },
-};
+import { typography, radii, spacing } from '../theme';
+import { CONFIDENCE_STYLES } from '../utils/statusUtils';
 
 const ConfidenceBadge = ({ level = 'MEDIUM' }) => {
-    const style = LEVEL_STYLES[level] || LEVEL_STYLES.MEDIUM;
+    const style = CONFIDENCE_STYLES[level] || CONFIDENCE_STYLES.MEDIUM;
     const label = t(`confidence.${level}`);
 
     return (
@@ -25,20 +21,20 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         alignSelf: 'flex-start',
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 12,
+        paddingHorizontal: spacing[2] + 2,
+        paddingVertical: spacing[1] + 1,
+        borderRadius: radii.md,
         borderWidth: 1,
-        gap: 6,
+        gap: spacing[1] + 2,
     },
     dot: {
         width: 6,
         height: 6,
-        borderRadius: 3,
+        borderRadius: radii.full,
     },
     label: {
-        fontSize: 11,
-        fontWeight: '600',
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.semibold,
     },
 });
 
