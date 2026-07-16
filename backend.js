@@ -37,6 +37,7 @@ const db = new sqlite3.Database('./telemetrie_industriala.db', (err) => {
     if (err) return console.error('[EROARE DB]', err.message);
     console.log('[DB] Conectat. Inițializez schema relațională pentru matricea exhaustivă SAE J1979 & VAG...');
     db.run("PRAGMA foreign_keys = ON;");
+    db.run("PRAGMA journal_mode=WAL;");
 
     db.serialize(() => {
         db.run(`CREATE TABLE IF NOT EXISTS vehicule (
@@ -129,6 +130,30 @@ const db = new sqlite3.Database('./telemetrie_industriala.db', (err) => {
         db.run(`ALTER TABLE trip_summary ADD COLUMN raport_ai_json TEXT`, () => {});
         db.run(`ALTER TABLE trip_summary ADD COLUMN trip_tag TEXT DEFAULT 'PERSONAL'`, () => {});
 
+        db.run(`CREATE TABLE IF NOT EXISTS realimentari (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vin TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
+            litri REAL NOT NULL,
+            pret_pe_litru REAL NOT NULL DEFAULT 0,
+            odometru_km REAL DEFAULT 0,
+            notite TEXT DEFAULT ''
+        )`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS predictii_validare (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vin TEXT NOT NULL,
+            prediction_hash TEXT NOT NULL,
+            titlu TEXT,
+            status TEXT DEFAULT 'ACTIVA',
+            timestamp_creat INTEGER NOT NULL,
+            timestamp_rezolvat INTEGER,
+            UNIQUE(vin, prediction_hash)
+        )`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_realimentari_vin ON realimentari(vin, timestamp DESC);`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_predictii_vin ON predictii_validare(vin, status);`);
+
+        db.run(`CREATE INDEX IF NOT EXISTS idx_calatorii_vin ON calatorii(vin, timestamp_start);`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_flux_calatorie ON telemetrie_flux(id_calatorie, timestamp);`);
         db.run(`
         CREATE INDEX IF NOT EXISTS idx_trip_summary
@@ -143,6 +168,43 @@ const db = new sqlite3.Database('./telemetrie_industriala.db', (err) => {
         // Vehicle Profile — schema + routes
         initVehicleProfile(app, db);
     });
+
+    // ── Watchdog: auto-închide cursele blocate (>2h fără OPRIRE) ─────────────
+    setInterval(() => {
+        const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+        db.all(
+            `SELECT id_calatorie, vin, timestamp_start FROM calatorii WHERE timestamp_end IS NULL AND timestamp_start < ?`,
+            [cutoff],
+            (err, rows) => {
+                if (err || !rows.length) return;
+                rows.forEach(row => {
+                    const now = Date.now();
+                    const durSec = Math.round((now - row.timestamp_start) / 1000);
+                    console.warn(`[WATCHDOG] Cursă #${row.id_calatorie} (${row.vin}) stale >2h — auto-închidere.`);
+                    db.run(`UPDATE calatorii SET timestamp_end=? WHERE id_calatorie=?`, [now, row.id_calatorie]);
+                    db.run(
+                        `INSERT OR IGNORE INTO trip_summary (id_calatorie, durata_secunde, trip_tag)
+                         VALUES (?, ?, 'AUTO_CLOSED')`,
+                        [row.id_calatorie, durSec]
+                    );
+                    if (calatoriiActive[row.vin]?.id_calatorie === row.id_calatorie) {
+                        delete calatoriiActive[row.vin];
+                    }
+                });
+            }
+        );
+    }, 5 * 60 * 1000);
+
+    // ── Cleanup: șterge telemetrie_flux mai veche de 90 zile ─────────────────
+    const runCleanup = () => {
+        const cutoff = Date.now() - 90 * 24 * 3600 * 1000;
+        db.run(`DELETE FROM telemetrie_flux WHERE timestamp < ?`, [cutoff], function(err) {
+            if (!err && this.changes > 0)
+                console.log(`[CLEANUP] ${this.changes} rânduri vechi șterse din telemetrie_flux (>90 zile).`);
+        });
+    };
+    runCleanup();
+    setInterval(runCleanup, 24 * 60 * 60 * 1000);
 });
 
 // ===============================================================
@@ -202,11 +264,29 @@ function buildTripInsights(rezultat) {
 
 const calatoriiActive = {};
 const client = mqtt.connect('mqtt://broker.emqx.io');
-const TOPIC_TELEMETRIE = 'licenta/audi_a6_c4/telemetrie';
+// Topic generic — orice ESP32 conectat trimite aici, VIN-ul din pachet diferențiază mașina.
+// Schimbă în 'telemetrie/{VIN}/obd2' dacă vrei topicuri separate per vehicul.
+const TOPIC_TELEMETRIE = 'telemetrie/obd2';
 
 client.on('connect', () => {
     console.log('[MQTT] Conectat la broker! Gata pentru receptia matricei OBD-II & UDS...');
     client.subscribe(TOPIC_TELEMETRIE);
+});
+
+client.on('error', (err) => {
+    console.error('[MQTT] Eroare conexiune:', err.message);
+});
+
+client.on('close', () => {
+    console.warn('[MQTT] Conexiune închisă. Se reconectează automat...');
+});
+
+client.on('reconnect', () => {
+    console.log('[MQTT] Reconectare în curs...');
+});
+
+client.on('offline', () => {
+    console.warn('[MQTT] Broker inaccesibil — mod offline.');
 });
 
 client.on('message', async (topic, message) => {
@@ -218,20 +298,63 @@ client.on('message', async (topic, message) => {
         return;
     }
 
-    if (!pachet || typeof pachet !== 'object' || !pachet.timestamp) {
-        console.warn('[MQTT] Pachet ignorat — structura invalida (lipseste timestamp).');
+    if (!pachet || typeof pachet !== 'object') {
+        console.warn('[MQTT] Pachet ignorat — structura invalida.');
+        return;
+    }
+
+    // Timestamp auto-corecție: dacă ESP32 trimite secunde în loc de ms
+    if (pachet.timestamp && pachet.timestamp < 1e10) {
+        pachet.timestamp = pachet.timestamp * 1000;
+    }
+
+    if (!pachet.timestamp) {
+        console.warn('[MQTT] Pachet ignorat — lipseste timestamp.');
         return;
     }
 
     const vin = pachet.ecu?.vin || "WAUZZZ4A1RN000000";
     const eveniment_motor = pachet.stare_motor;
 
+    // DTC-uri live din pachet — actualizează lista activă
+    // ESP32 poate trimite: pachet.dtc = [{ cod, descriere, severitate }]
+    if (Array.isArray(pachet.dtc) && pachet.dtc.length > 0) {
+        const coduriNoi = pachet.dtc.map(d => ({
+            cod:       d.cod || d.code || 'UNKNOWN',
+            modul:     d.modul || d.module || 'ECU',
+            severitate: d.severitate || d.severity || 'WARNING',
+            descriere: d.descriere || d.description || d.cod || '',
+        }));
+        // Merge: adaugă doar coduri noi, nu duplica
+        coduriNoi.forEach(nou => {
+            if (!eroriActiveDTC.find(e => e.cod === nou.cod)) {
+                eroriActiveDTC.push(nou);
+                io.emit('alerta_live', {
+                    tip: 'DTC_DETECTAT',
+                    cod: nou.cod,
+                    descriere: nou.descriere,
+                    severitate: nou.severitate,
+                });
+                console.log(`[DTC] Cod nou detectat: ${nou.cod} — ${nou.descriere}`);
+            }
+        });
+    }
+
+    // Auto-start trip dacă ESP32 trimite MERS fără PORNIRE prealabil
+    // (ex: bootează cu motorul deja pornit, sau pachet PORNIRE pierdut)
+    if (eveniment_motor === "MERS" && !calatoriiActive[vin]) {
+        console.warn(`[TRIP] MERS fără PORNIRE prealabil pentru ${vin} — auto-start cursă.`);
+        pachet.stare_motor = "PORNIRE";
+    }
+
     if (eveniment_motor === "PORNIRE" && !calatoriiActive[vin]) {
-        db.run(`INSERT OR IGNORE INTO vehicule (vin, model) VALUES (?, ?)`, [vin, "Audi A6 C4 2.5 TDI AEL"], () => {
+        const modelVehicul = pachet.ecu?.model || "Audi A6 C4 2.5 TDI AEL";
+        db.run(`INSERT OR IGNORE INTO vehicule (vin, model) VALUES (?, ?)`, [vin, modelVehicul], () => {
             db.run(`INSERT INTO calatorii (vin, timestamp_start) VALUES (?, ?)`, [vin, pachet.timestamp], function(err) {
                 if (!err) {
                     calatoriiActive[vin] = {
                                               id_calatorie: this.lastID,
+                                              timestamp_start: pachet.timestamp,
 
                                               km: 0,
                                               consum_l: 0,
@@ -351,14 +474,25 @@ client.on('message', async (topic, message) => {
         });
         const rezultatAnaliza = await rezultatAnalizaPromise;
 
-        db.run(`UPDATE calatorii SET timestamp_end = ?, km_parcursi = ?, consum_total_l = ?, consum_mediu_100km = ?, scor_eco = ? WHERE id_calatorie = ?`, 
-            [pachet.timestamp, trip.km.toFixed(2), trip.consum_l.toFixed(2), consum_mediu.toFixed(1), scor_final, trip.id_calatorie], () => {
+        db.run(`UPDATE calatorii SET timestamp_end = ?, km_parcursi = ?, consum_total_l = ?, consum_mediu_100km = ?, scor_eco = ? WHERE id_calatorie = ?`,
+            [pachet.timestamp, trip.km.toFixed(2), trip.consum_l.toFixed(2), consum_mediu.toFixed(1), scor_final, trip.id_calatorie], async () => {
 
             const litriTotali = rezultatAnaliza
                 ? (rezultatAnaliza.summary.fuel.idleLiters + rezultatAnaliza.summary.fuel.movingLiters)
                 : 0;
-            const cost = litriTotali * THRESHOLDS.DIESEL_PRICE_PER_LITER;
-            const co2  = litriTotali * THRESHOLDS.DIESEL_CO2_KG_PER_LITER;
+
+            // Factori cost/CO₂ în funcție de combustibilul vehiculului
+            const fuelRow = await new Promise(r =>
+                db.get(`SELECT tip_combustibil FROM vehicule WHERE vin = ?`, [vin], (e, row) => r(row))
+            );
+            const fuelKey = (fuelRow?.tip_combustibil || 'diesel').toUpperCase().replace('-', '');
+            const priceKey = `${fuelKey}_PRICE_PER_LITER`;
+            const co2Key   = `${fuelKey}_CO2_KG_PER_LITER`;
+            const pricePerL = THRESHOLDS[priceKey] ?? THRESHOLDS.DIESEL_PRICE_PER_LITER;
+            const co2PerL   = THRESHOLDS[co2Key]   ?? THRESHOLDS.DIESEL_CO2_KG_PER_LITER;
+
+            const cost = litriTotali * pricePerL;
+            const co2  = litriTotali * co2PerL;
 
             if (rezultatAnaliza) {
                 const { summary, health, ai } = rezultatAnaliza;
@@ -464,6 +598,16 @@ client.on('message', async (topic, message) => {
     }
 });
 
+// ── Auth middleware: protejează rutele administrative ─────────────────────────
+const API_TOKEN = process.env.API_TOKEN || 'telemetrie-dev-2024';
+const requireAuth = (req, res, next) => {
+    const auth = req.headers['authorization'];
+    if (auth === `Bearer ${API_TOKEN}`) return next();
+    res.status(401).json({ eroare: 'Token invalid sau lipsă.' });
+};
+app.use('/admin', requireAuth);
+app.post('/api/vehicul/:vin/stergere-erori-auth', requireAuth, (req, res, next) => next());
+
 app.get('/api/ping', (req, res) => res.json({ ok: true }));
 
 app.get('/api/calatorii', (req, res) => {
@@ -476,7 +620,7 @@ app.get('/api/calatorii/filtrate', (req, res) => {
 
     let query = `
         SELECT c.*, ts.health_score, ts.hard_brakes, ts.hard_accelerations, ts.nr_alerte, ts.nr_dtc,
-               ts.coolant_max, ts.trip_tag
+               ts.coolant_max, ts.trip_tag, ts.viteza_max, ts.viteza_medie
         FROM calatorii c
         LEFT JOIN trip_summary ts ON ts.id_calatorie = c.id_calatorie
         WHERE c.timestamp_end IS NOT NULL
@@ -511,9 +655,41 @@ app.get('/api/calatorii/filtrate', (req, res) => {
 
     query += ` ORDER BY c.id_calatorie DESC`;
 
-    db.all(query, params, (err, rows) => {
+    const limit  = parseInt(req.query.limit  || '50', 10);
+    const offset = parseInt(req.query.offset || '0',  10);
+
+    // Count total for pagination hasMore
+    db.get(`SELECT COUNT(*) AS total FROM (${query})`, params, (err, countRow) => {
+        const total = countRow?.total || 0;
+        query += ` LIMIT ? OFFSET ?`;
+        db.all(query, [...params, limit, offset], (err, rows) => {
+            if (err) return res.status(500).json({ eroare: err.message });
+            res.json({ rows: rows || [], total, limit, offset });
+        });
+    });
+});
+
+// Media ultimelor 30 de zile per vehicul — folosită pentru comparații în TripDetailScreen
+app.get('/api/calatorii/comparatie', (req, res) => {
+    const vin = req.query.vin || '';
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 3600 * 1000;
+    db.get(`
+        SELECT
+            AVG(c.consum_mediu_100km)  AS avg_consum,
+            AVG(c.scor_eco)            AS avg_eco,
+            AVG(ts.viteza_medie)       AS avg_viteza,
+            AVG(ts.cost_combustibil)   AS avg_cost,
+            AVG(ts.emisii_co2)         AS avg_co2,
+            AVG(ts.rpm_mediu)          AS avg_rpm,
+            COUNT(*)                   AS nr_curse
+        FROM calatorii c
+        LEFT JOIN trip_summary ts ON ts.id_calatorie = c.id_calatorie
+        WHERE c.vin = ?
+          AND c.timestamp_start >= ?
+          AND c.timestamp_end IS NOT NULL
+    `, [vin, thirtyDaysAgo], (err, row) => {
         if (err) return res.status(500).json({ eroare: err.message });
-        res.json(rows || []);
+        res.json(row || {});
     });
 });
 
@@ -621,21 +797,195 @@ app.get('/api/vehicul/:vin/statistici', (req, res) => {
     db.get(`SELECT COUNT(*) AS total_calatorii, SUM(km_parcursi) AS total_km, SUM(consum_total_l) AS total_combustibil, AVG(scor_eco) AS scor_mediu FROM calatorii WHERE vin = ? AND timestamp_end IS NOT NULL`, [req.params.vin], (err, stats) => res.json(stats || {}));
 });
 
-let eroriActiveDTC = [
-    { cod: "P0101", modul: "Motor (ECU)", severitate: "CRITICAL", descriere: "Senzor MAF (Debitul de aer) - Semnal în afara limitelor" },
-    { cod: "P0234", modul: "Turbo", severitate: "WARNING", descriere: "Turbosuflanta - Condiție de suprapresiune (Overboost)" },
-    { cod: "17586", modul: "K-Line VAG", severitate: "INFO", descriere: "Senzor temperatură lichid de răcire G62 - Semnal intermitent" }
-];
+// ── DTC descriptions lookup (coduri OBD-II comune SAE J2012) ─────────────────
+const DTC_DESCRIPTIONS = {
+    // MAF / Aer admisie
+    P0100: 'Circuit senzor debit masic aer (MAF) — defect',
+    P0101: 'Senzor MAF — valoare în afara domeniului',
+    P0102: 'Senzor MAF — semnal prea jos',
+    P0103: 'Senzor MAF — semnal prea sus',
+    P0104: 'Senzor MAF — circuit intermitent',
+    P0110: 'Senzor temperatură aer admisie (IAT) — circuit',
+    P0112: 'Senzor IAT — semnal prea jos',
+    P0113: 'Senzor IAT — semnal prea sus',
+    // Temperatură răcire
+    P0115: 'Senzor temperatură lichid răcire — circuit',
+    P0116: 'Senzor temperatură răcire — valoare incorectă',
+    P0117: 'Senzor temperatură răcire — semnal prea jos',
+    P0118: 'Senzor temperatură răcire — semnal prea sus',
+    // Poziție accelerator / papion
+    P0120: 'Senzor poziție clapetă (TPS) — circuit A',
+    P0121: 'Senzor TPS A — valoare în afara domeniului',
+    P0122: 'Senzor TPS A — semnal prea jos',
+    P0123: 'Senzor TPS A — semnal prea sus',
+    // Sonde lambda / O2
+    P0130: 'Sondă lambda — bancul 1, senzor 1 (înainte catalizator)',
+    P0131: 'Sondă O2 B1S1 — tensiune prea mică',
+    P0132: 'Sondă O2 B1S1 — tensiune prea mare',
+    P0133: 'Sondă O2 B1S1 — răspuns lent',
+    P0134: 'Sondă O2 B1S1 — fără activitate',
+    P0135: 'Sondă O2 B1S1 — încălzitor circuit',
+    P0136: 'Sondă lambda B1S2 — circuit (după catalizator)',
+    P0137: 'Sondă O2 B1S2 — tensiune prea mică',
+    P0138: 'Sondă O2 B1S2 — tensiune prea mare',
+    P0141: 'Sondă O2 B1S2 — încălzitor circuit',
+    P0150: 'Sondă lambda B2S1 — circuit',
+    P0171: 'Sistem combustibil prea sărac — bancul 1',
+    P0172: 'Sistem combustibil prea bogat — bancul 1',
+    P0174: 'Sistem combustibil prea sărac — bancul 2',
+    P0175: 'Sistem combustibil prea bogat — bancul 2',
+    // Presiune combustibil
+    P0190: 'Senzor presiune combustibil — circuit',
+    P0191: 'Senzor presiune combustibil — valoare incorectă',
+    P0192: 'Senzor presiune combustibil — semnal prea jos',
+    P0193: 'Senzor presiune combustibil — semnal prea sus',
+    // Injectoare
+    P0200: 'Circuit injector — defect general',
+    P0201: 'Injector cilindru 1 — circuit',
+    P0202: 'Injector cilindru 2 — circuit',
+    P0203: 'Injector cilindru 3 — circuit',
+    P0204: 'Injector cilindru 4 — circuit',
+    P0205: 'Injector cilindru 5 — circuit',
+    P0206: 'Injector cilindru 6 — circuit',
+    // Rateu aprindere / Misfire
+    P0300: 'Rateu aprindere aleator detectat (misfire)',
+    P0301: 'Rateu aprindere — cilindrul 1',
+    P0302: 'Rateu aprindere — cilindrul 2',
+    P0303: 'Rateu aprindere — cilindrul 3',
+    P0304: 'Rateu aprindere — cilindrul 4',
+    P0305: 'Rateu aprindere — cilindrul 5',
+    P0306: 'Rateu aprindere — cilindrul 6',
+    // Senzor arbore cotit / camă
+    P0335: 'Senzor poziție arbore cotit (CKP) — circuit A',
+    P0336: 'Senzor CKP A — valoare în afara domeniului',
+    P0340: 'Senzor poziție arbore cu came (CMP) — circuit bancul 1',
+    P0341: 'Senzor CMP B1 — valoare în afara domeniului',
+    P0345: 'Senzor CMP bancul 2 — circuit',
+    // Bujii incandescenţă (diesel)
+    P0380: 'Circuit bujii incandescenţă — grup A',
+    P0381: 'Indicator bujii incandescenţă — circuit',
+    P0382: 'Circuit bujii incandescenţă — grup B',
+    // EGR
+    P0400: 'Debit recirculare gaze ardere (EGR) — insuficient',
+    P0401: 'EGR — debit prea mic detectat',
+    P0402: 'EGR — debit excesiv detectat',
+    P0403: 'EGR — circuit supapă',
+    P0404: 'EGR — valoare în afara domeniului',
+    P0405: 'Senzor poziție EGR A — semnal prea jos',
+    P0406: 'Senzor poziție EGR A — semnal prea sus',
+    // Catalizator
+    P0420: 'Eficiență catalizator sub limita — bancul 1',
+    P0421: 'Eficiență catalizator degradată — bancul 1',
+    P0430: 'Eficiență catalizator sub limita — bancul 2',
+    // EVAP / Vapori combustibil
+    P0440: 'Sistem control vapori combustibil (EVAP) — defect',
+    P0441: 'EVAP — debit purjare incorect',
+    P0442: 'EVAP — scurgere mică detectată',
+    P0443: 'EVAP — supapă purjare canister — circuit',
+    P0455: 'EVAP — scurgere mare detectată',
+    P0457: 'EVAP — scurgere — bușon rezervor slab strâns',
+    // Ventilatoare răcire
+    P0480: 'Ventilator răcire 1 — circuit comandă',
+    P0481: 'Ventilator răcire 2 — circuit comandă',
+    // Viteză vehicul
+    P0500: 'Senzor viteză vehicul (VSS) — defect',
+    P0501: 'Senzor VSS — valoare în afara domeniului',
+    P0502: 'Senzor VSS — semnal prea jos',
+    P0503: 'Senzor VSS — semnal intermitent',
+    // Relanti / Control ralanti
+    P0505: 'Sistem control relanti (IAC) — defect',
+    P0506: 'Control relanti — tura prea mică',
+    P0507: 'Control relanti — tura prea mare',
+    // Tensiune baterie / Circuit electric
+    P0560: 'Circuit tensiune sistem — defect general',
+    P0561: 'Tensiune sistem — instabilă',
+    P0562: 'Tensiune sistem — prea mică',
+    P0563: 'Tensiune sistem — prea mare',
+    // Memorie / ECU
+    P0600: 'Legătură serială ECU — defect',
+    P0601: 'Memorie internă ECU — eroare checksum',
+    P0602: 'Modul comandă — programare eronată',
+    P0603: 'ECU — memorie KAM eșec la ștergere',
+    P0604: 'ECU — eroare memorie RAM',
+    P0605: 'ECU — eroare memorie ROM',
+    P0606: 'Procesor ECU — eroare',
+    P0607: 'ECU — performanță modul',
+    P0630: 'VIN nestocat în ECU',
+    // Turbo / Supraalimentare
+    P0299: 'Presiune supraatmosferică insuficientă (turbo sub-boost)',
+    P0234: 'Supraîncărcare turbo excesivă (over-boost)',
+    P0235: 'Senzor presiune turbo — circuit bancul 1',
+    P0236: 'Senzor presiune turbo — valoare incorectă',
+    P0237: 'Senzor presiune turbo — semnal prea jos',
+    P0238: 'Senzor presiune turbo — semnal prea sus',
+    P0243: 'Supapă waste-gate turbo — circuit',
+    P0245: 'Supapă waste-gate — circuit semnal prea jos',
+    P0246: 'Supapă waste-gate — circuit semnal prea sus',
+    // Transmisie automată
+    P0700: 'Sistem de comandă transmisie automată — defect',
+    P0701: 'Control transmisie — valoare în afara domeniului',
+    P0705: 'Senzor selector poziție transmisie — circuit',
+    P0710: 'Senzor temperatură ulei transmisie — circuit',
+    P0715: 'Senzor viteză turbină intrare — circuit A',
+    P0720: 'Senzor viteză ieșire transmisie — circuit',
+    P0730: 'Raport transmisie incorect',
+    P0731: 'Raport 1 incorect',
+    P0732: 'Raport 2 incorect',
+    // Frână / ABS
+    C0020: 'Frână față dreapta — circuit motor',
+    C0040: 'Frână față stânga — circuit motor',
+    C0060: 'Frână spate dreapta — circuit motor',
+    C0080: 'Frână spate stânga — circuit motor',
+    C0110: 'Pompă ABS — circuit motor',
+    C0121: 'Supapă ABS — circuit',
+    // Airbag / SRS
+    B0001: 'Airbag șofer — circuit declanșare',
+    B0002: 'Airbag pasager — circuit declanșare',
+    B0010: 'Airbag cortina stânga — circuit',
+    B0011: 'Airbag cortina dreapta — circuit',
+    B0051: 'Centură pretensionator stânga — circuit',
+    // VAG specifice (U-codes)
+    U0001: 'Bus CAN viteză mare — comunicare',
+    U0100: 'Pierdere comunicare ECM/PCM',
+    U0101: 'Pierdere comunicare TCM (transmisie)',
+    U0121: 'Pierdere comunicare modul ABS',
+    U0140: 'Pierdere comunicare BCM (modul caroserie)',
+    U0155: 'Pierdere comunicare tablou bord (cluster)',
+};
+
+// DTC-urile sunt populate dinamic din pachetele MQTT (câmpul `dtc`)
+// și se golesc la /api/vehicul/:vin/stergere-erori
+let eroriActiveDTC = [];
 
 app.get('/api/vehicul/:vin/diagnoza', (req, res) => {
-    db.get(`SELECT voltaj_v FROM telemetrie_flux WHERE id_calatorie IN (SELECT id_calatorie FROM calatorii WHERE vin = ?) ORDER BY id_flux DESC LIMIT 1`, [req.params.vin], (err, row) => {
-        const v = row ? row.voltaj_v : 14.1;
-        res.json({
-            vin: req.params.vin, model: "Audi A6 C4 2.5 TDI AEL",
-            sistem_electric: { voltaj_curent: v, stare_alternator: v < 13.6 ? "UZAT_DEGRADAT" : "OPTIM", baterie_soh_pct: v >= 13.8 ? 98 : 80 },
-            coduri_dtc: eroriActiveDTC, total_erori: eroriActiveDTC.length
-        });
-    });
+    const vin = req.params.vin;
+    db.get(
+        `SELECT v.model, tf.voltaj_v
+         FROM telemetrie_flux tf
+         JOIN calatorii c ON c.id_calatorie = tf.id_calatorie
+         LEFT JOIN vehicule v ON v.vin = c.vin
+         WHERE c.vin = ?
+         ORDER BY tf.id_flux DESC LIMIT 1`,
+        [vin],
+        (err, row) => {
+            const v = row?.voltaj_v ?? 14.1;
+            const coduriCuDescrierii = eroriActiveDTC.map(e => ({
+                ...e,
+                descriere: e.descriere || DTC_DESCRIPTIONS[e.cod] || 'Cod OBD-II detectat',
+            }));
+            res.json({
+                vin,
+                model: row?.model || 'Vehicul',
+                sistem_electric: {
+                    voltaj_curent: v,
+                    stare_alternator: v < 13.6 ? 'UZAT_DEGRADAT' : 'OPTIM',
+                    baterie_soh_pct: v >= 13.8 ? 98 : 80,
+                },
+                coduri_dtc: coduriCuDescrierii,
+                total_erori: coduriCuDescrierii.length,
+            });
+        }
+    );
 });
 
 app.post('/api/vehicul/:vin/stergere-erori', (req, res) => {
@@ -1388,7 +1738,22 @@ app.get('/api/calatorii/:id/export/csv', (req, res) => {
 // LISTA VEHICULE — pentru switcher multi-vehicul
 // ===============================================================
 app.get('/api/vehicule/list', (req, res) => {
-    db.all(`SELECT vin, model, tip_combustibil, capacitate_rezervor_l FROM vehicule ORDER BY rowid ASC`, [], (err, rows) => {
+    // JOIN cu vehicles pentru date complete (make/model/year/putere) dacă există profil
+    db.all(`
+        SELECT
+            v.vin,
+            COALESCE(vp.make || ' ' || vp.model, v.model) AS model,
+            COALESCE(vp.fuel_type, v.tip_combustibil)     AS tip_combustibil,
+            COALESCE(vp.fuel_tank_liters, v.capacitate_rezervor_l) AS capacitate_rezervor_l,
+            vp.year,
+            vp.variant,
+            vp.power_hp,
+            vp.engine_code,
+            vp.id AS vehicle_profile_id
+        FROM vehicule v
+        LEFT JOIN vehicles vp ON UPPER(vp.vin) = UPPER(v.vin)
+        ORDER BY v.rowid ASC
+    `, [], (err, rows) => {
         if (err) return res.status(500).json({ eroare: err.message });
         res.json(rows || []);
     });
@@ -1524,6 +1889,150 @@ app.post('/admin/reset-db', (req, res) => {
         };
         run(0);
     });
+});
+
+// ── Trend scor eco săptămânal ─────────────────────────────────────────────────
+app.get('/api/vehicul/:vin/trend-eco', (req, res) => {
+    const vin = req.params.vin;
+    const weeks = Math.min(parseInt(req.query.weeks || '8', 10), 26);
+    const cutoff = Date.now() - weeks * 7 * 24 * 3600 * 1000;
+    db.all(`
+        SELECT
+            CAST((c.timestamp_start - ?) / (7 * 24 * 3600 * 1000) AS INTEGER) AS week_index,
+            ROUND(AVG(c.scor_eco), 1)         AS avg_eco,
+            ROUND(AVG(c.consum_mediu_100km),1) AS avg_consum,
+            COUNT(*)                           AS nr_curse
+        FROM calatorii c
+        WHERE c.vin = ?
+          AND c.timestamp_start >= ?
+          AND c.timestamp_end IS NOT NULL
+        GROUP BY week_index
+        ORDER BY week_index ASC
+    `, [cutoff, vin, cutoff], (err, rows) => {
+        if (err) return res.status(500).json({ eroare: err.message });
+        // Completează săptămânile lipsă cu null
+        const result = Array.from({ length: weeks }, (_, i) => {
+            const found = (rows || []).find(r => r.week_index === i);
+            return found || { week_index: i, avg_eco: null, avg_consum: null, nr_curse: 0 };
+        });
+        res.json({ weeks: result, total_saptamani: weeks });
+    });
+});
+
+// ── Realimentare ──────────────────────────────────────────────────────────────
+app.post('/api/vehicul/:vin/realimentare', (req, res) => {
+    const vin = req.params.vin;
+    const { litri, pret_pe_litru, odometru_km, notite } = req.body;
+    if (!litri || litri <= 0) return res.status(400).json({ eroare: 'litri trebuie să fie > 0' });
+    db.run(
+        `INSERT INTO realimentari (vin, timestamp, litri, pret_pe_litru, odometru_km, notite)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [vin, Date.now(), parseFloat(litri), parseFloat(pret_pe_litru || 0), parseFloat(odometru_km || 0), notite || ''],
+        function(err) {
+            if (err) return res.status(500).json({ eroare: err.message });
+            res.json({ ok: true, id: this.lastID });
+        }
+    );
+});
+
+app.get('/api/vehicul/:vin/realimentari', (req, res) => {
+    const vin = req.params.vin;
+    const limit = parseInt(req.query.limit || '10', 10);
+    db.all(
+        `SELECT * FROM realimentari WHERE vin = ? ORDER BY timestamp DESC LIMIT ?`,
+        [vin, limit],
+        (err, rows) => {
+            if (err) return res.status(500).json({ eroare: err.message });
+            // Calcul consum real între realimentări consecutive
+            const enriched = (rows || []).map((r, i, arr) => {
+                const prev = arr[i + 1];
+                let consum_real = null;
+                if (prev && r.odometru_km > 0 && prev.odometru_km > 0) {
+                    const km = r.odometru_km - prev.odometru_km;
+                    if (km > 0) consum_real = ((r.litri / km) * 100).toFixed(2);
+                }
+                return { ...r, consum_real_100km: consum_real };
+            });
+            res.json(enriched);
+        }
+    );
+});
+
+app.delete('/api/vehicul/:vin/realimentare/:id', requireAuth, (req, res) => {
+    db.run(`DELETE FROM realimentari WHERE id = ? AND vin = ?`, [req.params.id, req.params.vin], function(err) {
+        if (err) return res.status(500).json({ eroare: err.message });
+        res.json({ ok: true, deleted: this.changes });
+    });
+});
+
+// ── Validare predicții AI ─────────────────────────────────────────────────────
+app.post('/api/vehicul/:vin/predictii/valideaza', (req, res) => {
+    const { prediction_hash, titlu, status } = req.body;
+    if (!prediction_hash) return res.status(400).json({ eroare: 'prediction_hash necesar' });
+    const now = Date.now();
+    db.run(
+        `INSERT INTO predictii_validare (vin, prediction_hash, titlu, status, timestamp_creat, timestamp_rezolvat)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(vin, prediction_hash) DO UPDATE SET status=excluded.status, timestamp_rezolvat=excluded.timestamp_rezolvat`,
+        [req.params.vin, prediction_hash, titlu || '', status || 'REZOLVATA', now, now],
+        (err) => err ? res.status(500).json({ eroare: err.message }) : res.json({ ok: true })
+    );
+});
+
+app.get('/api/vehicul/:vin/predictii/acuratete', (req, res) => {
+    db.all(
+        `SELECT status, COUNT(*) AS nr FROM predictii_validare WHERE vin = ? GROUP BY status`,
+        [req.params.vin],
+        (err, rows) => {
+            if (err) return res.status(500).json({ eroare: err.message });
+            const stats = { ACTIVA: 0, REZOLVATA: 0, FALSA: 0 };
+            (rows || []).forEach(r => { stats[r.status] = r.nr; });
+            const total = stats.REZOLVATA + stats.FALSA;
+            res.json({
+                ...stats,
+                acuratete_pct: total > 0 ? Math.round((stats.REZOLVATA / total) * 100) : null,
+                total_validate: total,
+            });
+        }
+    );
+});
+
+app.get('/api/vehicul/:vin/predictii/active', (req, res) => {
+    db.all(
+        `SELECT prediction_hash FROM predictii_validare WHERE vin = ? AND status != 'ACTIVA'`,
+        [req.params.vin],
+        (err, rows) => res.json((rows || []).map(r => r.prediction_hash))
+    );
+});
+
+// ── Export JSON complet ───────────────────────────────────────────────────────
+app.get('/api/export', (req, res) => {
+    const vin = req.query.vin || '';
+    if (!vin) return res.status(400).json({ eroare: 'vin necesar' });
+    db.all(
+        `SELECT c.id_calatorie, c.vin, c.timestamp_start, c.timestamp_end,
+                c.km_parcursi, c.consum_total_l, c.consum_mediu_100km, c.scor_eco,
+                ts.durata_secunde, ts.viteza_max, ts.viteza_medie, ts.rpm_max, ts.rpm_mediu,
+                ts.coolant_max, ts.boost_max, ts.hard_brakes, ts.hard_accelerations,
+                ts.nr_alerte, ts.nr_dtc, ts.cost_combustibil, ts.emisii_co2,
+                ts.health_score, ts.trip_tag
+         FROM calatorii c
+         LEFT JOIN trip_summary ts ON ts.id_calatorie = c.id_calatorie
+         WHERE c.vin = ?
+         ORDER BY c.id_calatorie DESC`,
+        [vin],
+        (err, rows) => {
+            if (err) return res.status(500).json({ eroare: err.message });
+            res.setHeader('Content-Disposition', `attachment; filename="export-${vin}.json"`);
+            res.setHeader('Content-Type', 'application/json');
+            res.json({
+                exportat_la: new Date().toISOString(),
+                vin,
+                total_curse: rows.length,
+                curse: rows || [],
+            });
+        }
+    );
 });
 
 server.listen(3000, () => console.log(`[API REST & WS] Serverul funcționează pe http://localhost:3000`));

@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-    View, Text, StyleSheet, TextInput, TouchableOpacity,
+    View, Text, StyleSheet, TextInput, TouchableOpacity, Alert,
     Animated, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import api from '../services/api';
+import { DEFAULT_VIN } from '../utils/config';
 import { colors, typography, radii, spacing, motion } from '../theme';
 
 const STEPS = ['Bun venit', 'VIN', 'Confirmare'];
@@ -98,22 +99,35 @@ const VehicleOnboardingScreen = ({ onComplete }) => {
         finally { setLoading(false); }
     };
 
-    const handleSkip = async () => {
+    const handleSkip = () => {
+        Alert.alert(
+            'Continuă fără configurare?',
+            `Aplicația va folosi un VIN generic (${DEFAULT_VIN.slice(-6)}). Unele funcții (comparații, profilul vehiculului) vor fi limitate până când adaugi un vehicul real.`,
+            [
+                { text: 'Înapoi', style: 'cancel' },
+                { text: 'Continuă', style: 'destructive', onPress: doSkip },
+            ]
+        );
+    };
+
+    const doSkip = async () => {
         setLoading(true);
         try {
-            const body = { vin: 'WAUZZZ4A1RN000000', make: 'Necunoscut', model: 'Necunoscut', fuel_type: 'DIESEL' };
+            const body = { vin: DEFAULT_VIN, make: 'Necunoscut', model: 'Necunoscut', fuel_type: 'DIESEL' };
             const res = await api.post('/vehicles', body);
             onComplete(res.data);
         } catch (err) {
             if (err.response?.status === 409) {
                 try {
-                    const ex = await api.get('/vehicles/vin/WAUZZZ4A1RN000000');
+                    const ex = await api.get(`/vehicles/vin/${DEFAULT_VIN}`);
                     onComplete(ex.data);
-                } catch { onComplete({ id: 1, vin: 'WAUZZZ4A1RN000000' }); }
-            } else onComplete({ id: 1, vin: 'WAUZZZ4A1RN000000' });
+                } catch { onComplete({ id: 1, vin: DEFAULT_VIN }); }
+            } else onComplete({ id: 1, vin: DEFAULT_VIN });
         }
         finally { setLoading(false); }
     };
+
+
 
     // ── Render ────────────────────────────────────────────────────────────────
     const contentStyle = {

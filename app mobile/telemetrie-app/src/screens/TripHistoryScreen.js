@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
     View, Text, StyleSheet, SectionList, ScrollView,
     TouchableOpacity, Share, RefreshControl, Platform, StatusBar,
-    useWindowDimensions,
+    ActivityIndicator, useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
-import { getVin } from '../utils/config';
+import { getVin, getVehicleLabel } from '../utils/config';
 import { writeCache } from '../utils/cache';
 import {
     HeroCard, SearchBar, StatusBadge,
@@ -17,6 +17,8 @@ import TripDetailScreen from './TripDetailScreen';
 import { colors, typography, radii, spacing, layout } from '../theme';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 25;
 
 const FILTERS = [
     { key: 'ALL',   label: 'Toate'      },
@@ -304,6 +306,22 @@ const TripRow = ({ trip, onPress }) => {
                     <Text style={styles.tripKm}>{km.toFixed(1)} km</Text>
                 </View>
 
+                {/* Row 3b: speed stats */}
+                {(trip.viteza_medie > 0 || trip.viteza_max > 0) && (
+                    <View style={styles.tripSpeedRow}>
+                        {trip.viteza_medie > 0 && (
+                            <Text style={styles.tripSpeedStat}>
+                                ø {Math.round(trip.viteza_medie)} km/h
+                            </Text>
+                        )}
+                        {trip.viteza_max > 0 && (
+                            <Text style={styles.tripSpeedStat}>
+                                ↑ {Math.round(trip.viteza_max)} km/h
+                            </Text>
+                        )}
+                    </View>
+                )}
+
                 {/* Row 4: status badges */}
                 <View style={styles.tripBadgesRow}>
                     {badges.map(b => (
@@ -336,6 +354,9 @@ const TripHistoryScreen = () => {
     const [reportLoading,  setReportLoading]  = useState(false);
     const [fromCache,      setFromCache]      = useState(false);
     const [cacheAgeMin,    setCacheAgeMin]    = useState(null);
+    const [hasMore,        setHasMore]        = useState(false);
+    const [loadingMore,    setLoadingMore]    = useState(false);
+    const offsetRef = useRef(0);
     const [reportMonth,    setReportMonth]    = useState(() => {
         const n = new Date();
         return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
@@ -345,9 +366,10 @@ const TripHistoryScreen = () => {
         setScreenState(prev => prev === 'success' ? 'success' : 'loading');
         setFromCache(false);
         setCacheAgeMin(null);
+        offsetRef.current = 0;
 
         const { startDate, endDate } = getFilterDates(activeFilter);
-        const params = {};
+        const params = { limit: PAGE_SIZE, offset: 0 };
         if (startDate) params.startDate = startDate;
         if (endDate)   params.endDate   = endDate;
 
@@ -355,19 +377,23 @@ const TripHistoryScreen = () => {
         const statsKey = `stats_${getVin()}`;
 
         try {
-            // Trips — with offline fallback
             const tripsResult = await fetchWithOfflineFallback(
                 tripsKey,
                 () => api.get('/calatorii/filtrate', { params, timeout: 7000 }).then(r => r.data),
                 forceRefresh ? 0 : 30 * 60 * 1000,
             );
-            setTrips(tripsResult.data || []);
+            // Backend returns { rows, total } — handle both old array format and new object
+            const rows  = Array.isArray(tripsResult.data) ? tripsResult.data : (tripsResult.data?.rows || []);
+            const total = tripsResult.data?.total ?? rows.length;
+            setTrips(rows);
+            setHasMore(rows.length < total);
+            offsetRef.current = rows.length;
+
             if (tripsResult.fromCache) {
                 setFromCache(true);
                 setCacheAgeMin(Math.floor(tripsResult.ageMs / 60000));
             }
 
-            // Stats — non-critical, best effort
             try {
                 const statsResult = await fetchWithOfflineFallback(
                     statsKey,
@@ -384,6 +410,35 @@ const TripHistoryScreen = () => {
             setScreenState(prev => prev === 'success' ? prev : 'error');
         }
     }, [activeFilter]);
+
+    const loadMore = useCallback(async () => {
+        if (loadingMore || !hasMore || search.trim()) return;
+        setLoadingMore(true);
+        try {
+            const { startDate, endDate } = getFilterDates(activeFilter);
+            const params = { limit: PAGE_SIZE, offset: offsetRef.current };
+            if (startDate) params.startDate = startDate;
+            if (endDate)   params.endDate   = endDate;
+
+            const res  = await api.get('/calatorii/filtrate', { params, timeout: 7000 });
+            const rows  = res.data?.rows || [];
+            const total = res.data?.total ?? 0;
+
+            if (rows.length > 0) {
+                setTrips(prev => {
+                    const existingIds = new Set(prev.map(t => t.id_calatorie));
+                    const fresh = rows.filter(t => !existingIds.has(t.id_calatorie));
+                    const merged = [...prev, ...fresh];
+                    offsetRef.current = merged.length;
+                    setHasMore(merged.length < total);
+                    return merged;
+                });
+            } else {
+                setHasMore(false);
+            }
+        } catch {}
+        finally { setLoadingMore(false); }
+    }, [loadingMore, hasMore, search, activeFilter]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -478,7 +533,7 @@ const TripHistoryScreen = () => {
             <View style={styles.main}>
                 <View style={styles.header}>
                     <Text style={styles.title}>Jurnal</Text>
-                    <Text style={styles.subtitle}>Audi A6 C4 · Logbook</Text>
+                    <Text style={styles.subtitle}>{getVehicleLabel() || 'Logbook'}</Text>
                 </View>
                 <View style={{ flex: 1, paddingHorizontal: layout.screenPaddingH, paddingTop: spacing[4] }}>
                     <HeroCard
@@ -514,7 +569,7 @@ const TripHistoryScreen = () => {
         const monthName = MONTH_NAMES[parseInt(mo, 10) - 1] || mo;
         const text = [
             `RAPORT LUNAR — ${monthName} ${yr}`,
-            'Audi A6 C4 · 2.5 TDI', '',
+            getVehicleLabel() || 'Vehicul', '',
             `Curse: ${monthlyData.totalTrips}`,
             `Distanță: ${monthlyData.totalKm} km`,
             `Combustibil: ${monthlyData.totalLitri} L`,
@@ -646,7 +701,7 @@ const TripHistoryScreen = () => {
             <View style={styles.header}>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>Jurnal</Text>
-                    <Text style={styles.subtitle}>Audi A6 C4 · Logbook</Text>
+                    <Text style={styles.subtitle}>{getVehicleLabel() || 'Logbook'}</Text>
                 </View>
                 <View style={styles.headerActions}>
                     <TouchableOpacity
@@ -678,6 +733,20 @@ const TripHistoryScreen = () => {
                 renderSectionHeader={renderSectionHeader}
                 ListHeaderComponent={ListHeader}
                 ListEmptyComponent={ListEmpty}
+                ListFooterComponent={
+                    loadingMore ? (
+                        <View style={styles.loadMoreFooter}>
+                            <ActivityIndicator size="small" color={colors.accent.default} />
+                            <Text style={styles.loadMoreText}>Se încarcă mai multe curse...</Text>
+                        </View>
+                    ) : hasMore && !search.trim() ? (
+                        <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMore}>
+                            <Text style={styles.loadMoreBtnText}>Încarcă mai multe</Text>
+                        </TouchableOpacity>
+                    ) : null
+                }
+                onEndReached={() => { if (!search.trim()) loadMore(); }}
+                onEndReachedThreshold={0.3}
                 showsVerticalScrollIndicator={false}
                 stickySectionHeadersEnabled={false}
                 initialNumToRender={10}
@@ -1006,12 +1075,44 @@ const styles = StyleSheet.create({
         minWidth: 44,
         textAlign: 'right',
     },
+    tripSpeedRow: {
+        flexDirection: 'row',
+        gap: spacing[3],
+        marginTop: 2,
+    },
+    tripSpeedStat: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.disabled,
+        fontVariant: ['tabular-nums'],
+    },
     tripBadgesRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: spacing[1] + 1,
     },
     emptyState: { marginTop: spacing[6] },
+
+    loadMoreFooter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: spacing[4],
+        gap: spacing[2],
+    },
+    loadMoreText: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+    },
+    loadMoreBtn: {
+        alignItems: 'center',
+        paddingVertical: spacing[3],
+        marginBottom: spacing[4],
+    },
+    loadMoreBtnText: {
+        fontSize: typography.sizes.label2,
+        color: colors.accent.default,
+        fontWeight: typography.weights.semibold,
+    },
 
     // ── Monthly report BottomSheet ────────────────────────────────────────────
     sheetContent: { paddingHorizontal: spacing[5] },

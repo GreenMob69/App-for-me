@@ -6,7 +6,7 @@ import {
 import { LineChart } from 'react-native-gifted-charts';
 import api from '../services/api';
 import { t } from '../i18n';
-import { getActiveServerUrl } from '../utils/config';
+import { getActiveServerUrl, getVin } from '../utils/config';
 import { colors, typography, radii, spacing, layout } from '../theme';
 import { getSubsystemColor } from '../utils/statusUtils';
 import {
@@ -89,6 +89,7 @@ const TripDetailScreen = ({ tripId, onBack }) => {
     const [analiza,     setAnaliza]     = useState(null);
     const [activeChart, setActiveChart] = useState('RPM');
     const [sharing,     setSharing]     = useState(false);
+    const [medie,       setMedie]       = useState(null);
 
     const exportCSV = useCallback(async () => {
         if (sharing) return;
@@ -120,6 +121,11 @@ const TripDetailScreen = ({ tripId, onBack }) => {
                 if (analizaRes.status === 'fulfilled' && analizaRes.value.data) {
                     setAnaliza(analizaRes.value.data);
                 }
+
+                try {
+                    const medieRes = await api.get(`/calatorii/comparatie?vin=${getVin()}`);
+                    if (medieRes.data?.nr_curse > 0) setMedie(medieRes.data);
+                } catch {}
             } catch (e) {
                 // error handled by null trip state
             } finally {
@@ -468,6 +474,71 @@ const TripDetailScreen = ({ tripId, onBack }) => {
                         </View>
                     </>
                 )}
+
+                {/* ── Comparație cu media 30 zile ───────────────────────── */}
+                {analiza && medie && medie.nr_curse >= 3 && (
+                    <>
+                        <SectionHeader
+                            title={`vs. media ta (${medie.nr_curse} curse · 30 zile)`}
+                            style={styles.sectionHeader}
+                        />
+                        <View style={styles.cmpCard}>
+                            {[
+                                {
+                                    label: 'Consum',
+                                    current: parseFloat(trip?.consum_mediu_100km || 0),
+                                    avg: parseFloat(medie.avg_consum || 0),
+                                    unit: 'L/100',
+                                    lowerIsBetter: true,
+                                },
+                                {
+                                    label: 'Scor eco',
+                                    current: parseFloat(trip?.scor_eco || analiza.health_score || 0),
+                                    avg: parseFloat(medie.avg_eco || 0),
+                                    unit: '/100',
+                                    lowerIsBetter: false,
+                                },
+                                {
+                                    label: 'CO₂',
+                                    current: parseFloat(analiza.emisii_co2 || 0),
+                                    avg: parseFloat(medie.avg_co2 || 0),
+                                    unit: 'kg',
+                                    lowerIsBetter: true,
+                                },
+                                {
+                                    label: 'Viteză ø',
+                                    current: parseFloat(analiza.viteza_medie || 0),
+                                    avg: parseFloat(medie.avg_viteza || 0),
+                                    unit: 'km/h',
+                                    lowerIsBetter: false,
+                                },
+                            ].filter(r => r.current > 0 && r.avg > 0).map((row) => {
+                                const delta = row.current - row.avg;
+                                const pct   = row.avg > 0 ? Math.abs(delta / row.avg * 100) : 0;
+                                const better = row.lowerIsBetter ? delta < 0 : delta > 0;
+                                const neutral = pct < 3;
+                                const color = neutral
+                                    ? colors.text.secondary
+                                    : better ? colors.status.good : colors.status.critical;
+                                const sign  = delta > 0 ? '+' : '';
+                                return (
+                                    <View key={row.label} style={styles.cmpRow}>
+                                        <Text style={styles.cmpLabel}>{row.label}</Text>
+                                        <Text style={styles.cmpCurrent}>
+                                            {row.current.toFixed(1)} {row.unit}
+                                        </Text>
+                                        <Text style={[styles.cmpDelta, { color }]}>
+                                            {neutral ? '≈' : `${sign}${delta.toFixed(1)}`}
+                                        </Text>
+                                        <Text style={styles.cmpAvg}>
+                                            ø {row.avg.toFixed(1)}
+                                        </Text>
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    </>
+                )}
             </ScrollView>
         </View>
     );
@@ -641,6 +712,51 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.caption,
         marginTop: spacing[2],
         textAlign: 'center',
+    },
+
+    // ── Comparison vs. 30-day average ─────────────────────────────────────────
+    cmpCard: {
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        overflow: 'hidden',
+    },
+    cmpRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: spacing[4],
+        paddingVertical: spacing[3],
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border.subtle,
+        gap: spacing[2],
+    },
+    cmpLabel: {
+        flex: 1,
+        fontSize: typography.sizes.label2,
+        color: colors.text.secondary,
+    },
+    cmpCurrent: {
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.semibold,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+        minWidth: 64,
+        textAlign: 'right',
+    },
+    cmpDelta: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        fontVariant: ['tabular-nums'],
+        minWidth: 40,
+        textAlign: 'right',
+    },
+    cmpAvg: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.disabled,
+        fontVariant: ['tabular-nums'],
+        minWidth: 52,
+        textAlign: 'right',
     },
 });
 

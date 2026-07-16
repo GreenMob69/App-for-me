@@ -327,6 +327,28 @@ const AIExpertScreen = () => {
                         keyboardShouldPersistTaps="handled"
                     />
 
+                    {/* ── Persistent suggestions strip (after conversation starts) ── */}
+                    {messages.length > 0 && suggestedQuestions.length > 0 && (
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.persistSuggestScroll}
+                            contentContainerStyle={styles.persistSuggestContent}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            {suggestedQuestions.slice(0, 4).map(sq => (
+                                <TouchableOpacity
+                                    key={sq}
+                                    style={styles.persistChip}
+                                    onPress={() => sendQuestion(sq)}
+                                    disabled={isQuerying}
+                                >
+                                    <Text style={styles.persistChipText} numberOfLines={1}>{sq}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    )}
+
                     {/* ── Input ────────────────────────────────────────── */}
                     <View style={styles.inputRow}>
                         <TextInput
@@ -561,6 +583,34 @@ const styles = StyleSheet.create({
         fontWeight: typography.weights.bold,
         marginTop: -2,
     },
+    // ── Persistent suggestions strip ──────────────────────────────────────────
+    persistSuggestScroll: {
+        borderTopWidth: 1,
+        borderTopColor: colors.border.subtle ?? colors.border.default,
+        backgroundColor: colors.bg[0],
+        maxHeight: 44,
+    },
+    persistSuggestContent: {
+        paddingHorizontal: layout.screenPaddingH,
+        paddingVertical: spacing[2],
+        gap: spacing[2],
+        alignItems: 'center',
+    },
+    persistChip: {
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[1] + 1,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.full,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        maxWidth: 200,
+    },
+    persistChipText: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
+    },
+
     // Context chip — apare deasupra bulei AI când răspunsul este un follow-up
     contextChip: {
         alignSelf: 'flex-start',

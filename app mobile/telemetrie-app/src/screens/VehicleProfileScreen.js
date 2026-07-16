@@ -11,7 +11,7 @@ import {
 } from '../components/ui';
 import { fetchProfileSummary, fetchHealthStatus, fetchCostDashboard, exportPDFReport, fetchVehicleSummary, fetchDocuments } from '../services/vehicleService';
 import api from '../services/api';
-import { getVin } from '../utils/config';
+import { getVin, getVehicleLabel } from '../utils/config';
 import { computeEvaluation, buildHeaderMessage } from '../engine/MessageEngine';
 import { NotificationContext } from '../context/NotificationContext';
 import { colors, typography, radii, spacing, layout } from '../theme';
@@ -189,7 +189,7 @@ const VehicleProfileScreen = () => {
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.title}>Profilul meu</Text>
-                        <Text style={styles.subtitle}>Audi A6 C4 · Logbook</Text>
+                        <Text style={styles.subtitle}>{getVehicleLabel() || 'Logbook'}</Text>
                     </View>
                 </View>
                 <View style={styles.scrollContent}>

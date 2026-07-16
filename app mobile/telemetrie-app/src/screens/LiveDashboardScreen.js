@@ -7,7 +7,7 @@ import { LineChart } from 'react-native-gifted-charts';
 import { LiveContext } from '../context/LiveContext';
 import { AlertContext } from '../context/AlertContext';
 import { AppContext } from '../context/AppContext';
-import { getVin } from '../utils/config';
+import { getVin, getVehicleLabel } from '../utils/config';
 import CircularGauge from '../components/CircularGauge';
 import RecommendationCard from '../components/ui/RecommendationCard';
 import { colors, typography, radii, spacing, layout } from '../theme';
@@ -109,7 +109,7 @@ const SecMetric = ({ label, value, unit, color = colors.text.primary }) => (
 
 const LiveDashboardScreen = () => {
     const { width } = useWindowDimensions();
-    const { isConnected, liveData, chartVersion, getChartHistory } = useContext(LiveContext);
+    const { isConnected, isReconnecting, liveData, chartVersion, getChartHistory } = useContext(LiveContext);
     const { latestAlert, alertsList, unreadCount, markAlertsAsRead } = useContext(AlertContext);
     const { viewMode, setViewMode, selectedMetric, setSelectedMetric, activeTemplate, setActiveTemplate } = useContext(AppContext);
 
@@ -577,7 +577,7 @@ const LiveDashboardScreen = () => {
             <View style={styles.header}>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>Driving</Text>
-                    <Text style={styles.subtitle}>Audi A6 C4 · Live</Text>
+                    <Text style={styles.subtitle}>{getVehicleLabel() || 'Live'}</Text>
                 </View>
                 <View style={styles.headerActions}>
                     {expertMode && (
@@ -598,7 +598,7 @@ const LiveDashboardScreen = () => {
                     )}
                     <TouchableOpacity
                         style={styles.iconBtn}
-                        onPress={() => { markAlertsAsRead(); setShowNotificationsModal(true); }}
+                        onPress={() => setShowNotificationsModal(true)}
                     >
                         <Text style={styles.iconBtnText}>N</Text>
                         {unreadCount > 0 && (
@@ -607,13 +607,30 @@ const LiveDashboardScreen = () => {
                             </View>
                         )}
                     </TouchableOpacity>
-                    <View style={[styles.statusDot, isConnected ? styles.statusOnline : styles.statusOffline]}>
-                        <Text style={[styles.statusText, { color: isConnected ? colors.status.good : colors.status.critical }]}>
-                            {isConnected ? 'ON' : 'OFF'}
+                    <View style={[
+                        styles.statusDot,
+                        isConnected ? styles.statusOnline : (isReconnecting ? styles.statusReconnecting : styles.statusOffline),
+                    ]}>
+                        <Text style={[styles.statusText, {
+                            color: isConnected ? colors.status.good : (isReconnecting ? colors.status.monitor : colors.status.critical),
+                        }]}>
+                            {isConnected ? 'ON' : (isReconnecting ? '...' : 'OFF')}
                         </Text>
                     </View>
                 </View>
             </View>
+
+            {/* ── Reconnecting banner ─────────────────────────────────────── */}
+            {!isConnected && isReconnecting && (
+                <View style={styles.reconnectBanner}>
+                    <Text style={styles.reconnectText}>Reconectare la server...</Text>
+                </View>
+            )}
+            {!isConnected && !isReconnecting && (
+                <View style={[styles.reconnectBanner, styles.reconnectBannerOffline]}>
+                    <Text style={styles.reconnectText}>Fără conexiune — date înghețate</Text>
+                </View>
+            )}
 
             {/* ── View toggle ─────────────────────────────────────────────── */}
             <View style={styles.viewToggle}>
@@ -645,13 +662,13 @@ const LiveDashboardScreen = () => {
                 visible={showNotificationsModal}
                 transparent
                 animationType="slide"
-                onRequestClose={() => setShowNotificationsModal(false)}
+                onRequestClose={() => { markAlertsAsRead(); setShowNotificationsModal(false); }}
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>Alerte Sesiune</Text>
-                            <TouchableOpacity onPress={() => setShowNotificationsModal(false)} style={styles.closeBtn}>
+                            <TouchableOpacity onPress={() => { markAlertsAsRead(); setShowNotificationsModal(false); }} style={styles.closeBtn}>
                                 <Text style={{ color: colors.text.primary, fontWeight: typography.weights.bold }}>✕</Text>
                             </TouchableOpacity>
                         </View>
@@ -718,9 +735,27 @@ const styles = StyleSheet.create({
     },
     badgeText: { color: '#FFFFFF', fontSize: typography.sizes.micro - 1, fontWeight: typography.weights.heavy },
     statusDot: { paddingHorizontal: spacing[2], paddingVertical: spacing[1], borderRadius: radii.full, borderWidth: 1 },
-    statusOnline:  { backgroundColor: colors.tint.good,     borderColor: colors.status.good     },
-    statusOffline: { backgroundColor: colors.tint.critical,  borderColor: colors.status.critical },
+    statusOnline:       { backgroundColor: colors.tint.good,     borderColor: colors.status.good     },
+    statusOffline:      { backgroundColor: colors.tint.critical,  borderColor: colors.status.critical },
+    statusReconnecting: { backgroundColor: colors.tint.monitor,  borderColor: colors.status.monitor  },
     statusText: { fontSize: typography.sizes.micro, fontWeight: typography.weights.bold },
+
+    reconnectBanner: {
+        backgroundColor: colors.tint?.monitor || 'rgba(255,159,10,0.15)',
+        borderBottomWidth: 1,
+        borderBottomColor: colors.status.monitor,
+        paddingVertical: spacing[1] + 2,
+        alignItems: 'center',
+    },
+    reconnectBannerOffline: {
+        backgroundColor: colors.tint?.critical || 'rgba(255,59,48,0.1)',
+        borderBottomColor: colors.status.critical,
+    },
+    reconnectText: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
+    },
 
     // ── View Toggle ───────────────────────────────────────────────────────────
     viewToggle: {

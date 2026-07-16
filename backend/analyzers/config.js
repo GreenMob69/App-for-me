@@ -99,9 +99,16 @@ const THRESHOLDS = {
     // -- limitare goluri de timp (reconectare MQTT, pauză simulator etc.) --
     MAX_DT_SECONDS: 10,
 
-    // -- cost & emisii (Audi A6 C4 2.5 TDI = diesel) — ajustează la nevoie --
-    DIESEL_PRICE_PER_LITER: 7.5,   // RON/litru
-    DIESEL_CO2_KG_PER_LITER: 2.68  // factor standard de emisie motorină
+    // -- cost & emisii per tip combustibil (RON/litru și kg CO₂/litru) --
+    DIESEL_PRICE_PER_LITER:   7.50,
+    BENZINA_PRICE_PER_LITER:  7.20,
+    GPL_PRICE_PER_LITER:      3.80,
+    HYBRID_PRICE_PER_LITER:   7.20,   // benzină hibrid
+
+    DIESEL_CO2_KG_PER_LITER:  2.68,   // factor standard motorină
+    BENZINA_CO2_KG_PER_LITER: 2.31,   // factor standard benzină
+    GPL_CO2_KG_PER_LITER:     1.65,   // factor standard GPL
+    HYBRID_CO2_KG_PER_LITER:  2.31
 };
 
 module.exports = { FIELD_MAP, PID_CONFIG, THRESHOLD_CONFIG, THRESHOLDS };

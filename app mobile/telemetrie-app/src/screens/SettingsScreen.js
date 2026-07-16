@@ -6,6 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { getActiveServerUrl, setCustomServerUrl, getVin, setVin } from '../utils/config';
+import { Linking } from 'react-native';
 import api from '../services/api';
 import socketService from '../services/socket';
 import { colors, typography, radii, spacing, layout } from '../theme';
@@ -81,6 +82,14 @@ const SettingsScreen = () => {
     // ── Notifications toggle (stored, read by AlertContext)
     const [notifsEnabled, setNotifsEnabled] = useState(true);
 
+    // ── Realimentare
+    const [refuels,         setRefuels]         = useState([]);
+    const [showRefuelForm,  setShowRefuelForm]   = useState(false);
+    const [refuelLitri,     setRefuelLitri]      = useState('');
+    const [refuelPret,      setRefuelPret]       = useState('');
+    const [refuelKm,        setRefuelKm]         = useState('');
+    const [savingRefuel,    setSavingRefuel]      = useState(false);
+
     // ─── Load ─────────────────────────────────────────────────────────────────
 
     const checkConnection = useCallback(async () => {
@@ -113,12 +122,14 @@ const SettingsScreen = () => {
             } catch {}
 
             try {
-                const [statsRes, vehiclesRes] = await Promise.all([
+                const [statsRes, vehiclesRes, refuelsRes] = await Promise.all([
                     api.get(`/vehicul/${getVin()}/statistici`),
                     api.get('/vehicule/list', { timeout: 4000 }),
+                    api.get(`/vehicul/${getVin()}/realimentari?limit=5`),
                 ]);
                 if (statsRes.data) setStats(statsRes.data);
                 if (vehiclesRes.data && Array.isArray(vehiclesRes.data)) setVehicles(vehiclesRes.data);
+                if (Array.isArray(refuelsRes.data)) setRefuels(refuelsRes.data);
             } catch {}
         };
 
@@ -200,6 +211,31 @@ const SettingsScreen = () => {
         );
     };
 
+    const handleSaveRefuel = async () => {
+        const litri = parseFloat(refuelLitri);
+        if (!litri || litri <= 0) return Alert.alert('Eroare', 'Introdu un volum valid (litri).');
+        setSavingRefuel(true);
+        try {
+            await api.post(`/vehicul/${getVin()}/realimentare`, {
+                litri,
+                pret_pe_litru: parseFloat(refuelPret || 0),
+                odometru_km:   parseFloat(refuelKm || 0),
+            });
+            const res = await api.get(`/vehicul/${getVin()}/realimentari?limit=5`);
+            if (Array.isArray(res.data)) setRefuels(res.data);
+            setRefuelLitri(''); setRefuelPret(''); setRefuelKm('');
+            setShowRefuelForm(false);
+            Alert.alert('Salvat', `${litri} L adăugate în istoric.`);
+        } catch { Alert.alert('Eroare', 'Nu s-a putut salva realimentarea.'); }
+        finally { setSavingRefuel(false); }
+    };
+
+    const handleExportJSON = async () => {
+        const url = `${getActiveServerUrl()}/api/export?vin=${getVin()}`;
+        try { await Linking.openURL(url); }
+        catch { Alert.alert('Eroare', 'Nu s-a putut deschide exportul.'); }
+    };
+
     // ─── Derived ──────────────────────────────────────────────────────────────
 
     const connColor = STATUS_COLORS[connStatus];
@@ -237,7 +273,7 @@ const SettingsScreen = () => {
             {/* ── Profil Vehicul ─────────────────────────────────────────── */}
             <View style={styles.card}>
                 <SectionTitle>Profil Vehicul</SectionTitle>
-                <Row label="Model"   value={activeVehicle?.model || 'Audi A6 C4 2.5 TDI'} />
+                <Row label="Model"   value={activeVehicle?.model || '—'} />
                 <Row label="VIN"     value={activeVehicle?.vin   || activeVin} />
                 <Row label="Rezervor" value={activeVehicle?.capacitate_rezervor_l
                     ? `${activeVehicle.capacitate_rezervor_l} L`
@@ -440,6 +476,95 @@ const SettingsScreen = () => {
                         <Text style={styles.outlineBtn2Text}>Aplică</Text>
                     </TouchableOpacity>
                 </View>
+            </View>
+
+            {/* ── Realimentare ───────────────────────────────────────────── */}
+            <View style={styles.card}>
+                <View style={styles.cardHeaderRow}>
+                    <SectionTitle>Realimentare</SectionTitle>
+                    <TouchableOpacity
+                        style={styles.outlineSmBtn}
+                        onPress={() => setShowRefuelForm(v => !v)}
+                    >
+                        <Text style={styles.outlineSmBtnText}>{showRefuelForm ? '✕ Anulează' : '+ Adaugă'}</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {showRefuelForm && (
+                    <View style={styles.refuelForm}>
+                        <View style={styles.refuelRow}>
+                            <TextInput
+                                style={[styles.input, { flex: 1 }]}
+                                placeholder="Litri *"
+                                placeholderTextColor={colors.text.disabled}
+                                keyboardType="decimal-pad"
+                                value={refuelLitri}
+                                onChangeText={setRefuelLitri}
+                            />
+                            <TextInput
+                                style={[styles.input, { flex: 1 }]}
+                                placeholder="RON/L"
+                                placeholderTextColor={colors.text.disabled}
+                                keyboardType="decimal-pad"
+                                value={refuelPret}
+                                onChangeText={setRefuelPret}
+                            />
+                            <TextInput
+                                style={[styles.input, { flex: 1 }]}
+                                placeholder="Km odometru"
+                                placeholderTextColor={colors.text.disabled}
+                                keyboardType="decimal-pad"
+                                value={refuelKm}
+                                onChangeText={setRefuelKm}
+                            />
+                        </View>
+                        <TouchableOpacity
+                            style={[styles.outlineBtn, savingRefuel && { opacity: 0.5 }]}
+                            onPress={handleSaveRefuel}
+                            disabled={savingRefuel}
+                        >
+                            <Text style={styles.outlineBtnText}>
+                                {savingRefuel ? 'Se salvează...' : 'Salvează'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {refuels.length > 0 ? refuels.map((r, i) => (
+                    <View key={r.id} style={[styles.row, i === refuels.length - 1 && styles.rowLast]}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.rowLabel}>
+                                {new Date(r.timestamp).toLocaleDateString('ro-RO')}
+                                {r.odometru_km > 0 ? `  ·  ${r.odometru_km.toLocaleString()} km` : ''}
+                            </Text>
+                            {r.consum_real_100km && (
+                                <Text style={styles.refuelConsum}>
+                                    Consum real: {r.consum_real_100km} L/100km
+                                </Text>
+                            )}
+                        </View>
+                        <Text style={styles.rowValue}>
+                            {r.litri} L
+                            {r.pret_pe_litru > 0 ? `  ·  ${(r.litri * r.pret_pe_litru).toFixed(0)} RON` : ''}
+                        </Text>
+                    </View>
+                )) : (
+                    <Text style={[styles.desc, { marginTop: spacing[2] }]}>
+                        Niciun istoric realimentare. Adaugă prima înregistrare.
+                    </Text>
+                )}
+            </View>
+
+            {/* ── Export date ────────────────────────────────────────────── */}
+            <View style={styles.card}>
+                <SectionTitle>Export Date</SectionTitle>
+                <Text style={styles.desc}>
+                    Descarcă toate cursele și analizele ca fișier JSON.
+                    Util pentru analiză în Python, Excel sau MATLAB.
+                </Text>
+                <TouchableOpacity style={styles.outlineBtn} onPress={handleExportJSON}>
+                    <Text style={styles.outlineBtnText}>Export JSON complet →</Text>
+                </TouchableOpacity>
             </View>
 
             {/* ── Zona Periculoasă ───────────────────────────────────────── */}
@@ -721,6 +846,21 @@ const styles = StyleSheet.create({
         borderColor: colors.border.default,
     },
     outlineBtn2Text: { color: colors.accent.default, fontWeight: typography.weights.bold, fontSize: typography.sizes.label2 },
+
+    // ── Refuel ────────────────────────────────────────────────────────────────
+    refuelForm: {
+        marginTop: spacing[3],
+        gap: spacing[2],
+    },
+    refuelRow: {
+        flexDirection: 'row',
+        gap: spacing[2],
+    },
+    refuelConsum: {
+        fontSize: typography.sizes.caption,
+        color: colors.status.good,
+        marginTop: 2,
+    },
 
     // ── Danger ────────────────────────────────────────────────────────────────
     dangerCard: { borderColor: colors.status.critical },

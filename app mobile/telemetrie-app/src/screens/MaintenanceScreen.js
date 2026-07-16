@@ -15,6 +15,8 @@ import {
     ScrollView,
     RefreshControl,
     Animated,
+    TouchableOpacity,
+    Alert,
     Platform,
     StatusBar,
     Linking,
@@ -22,8 +24,10 @@ import {
 } from 'react-native';
 import { useScreenFadeIn } from '../utils/animations';
 import { useNavigation } from '@react-navigation/native';
+import api from '../services/api';
 import { fetchMaintenanceData, fetchDocuments } from '../services/vehicleService';
-import { getVin } from '../utils/config';
+import { getVin, getVehicleLabel } from '../utils/config';
+import { getDtcDescription, getDtcSeverityColor } from '../data/dtcCodes';
 import { t } from '../i18n';
 import { colors, typography, spacing, layout } from '../theme';
 
@@ -218,6 +222,7 @@ const MaintenanceScreen = () => {
     const [documents,  setDocuments]    = useState([]);
     const [showAllUrgent, setShowAllUrgent]   = useState(false);
     const [showAllHistory, setShowAllHistory] = useState(false);
+    const [dtcData, setDtcData] = useState(null);
 
     const screenFadeStyle = useScreenFadeIn(screenState);
 
@@ -242,7 +247,10 @@ const MaintenanceScreen = () => {
         }
     }, []);
 
-    useEffect(() => { loadMaintenance(); }, []);
+    useEffect(() => {
+        loadMaintenance();
+        api.get(`/vehicul/${getVin()}/diagnoza`).then(r => setDtcData(r.data)).catch(() => {});
+    }, []);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -368,7 +376,7 @@ const MaintenanceScreen = () => {
                         showBadge={false}
                     />
                     <View style={styles.identityInfo}>
-                        <Text style={styles.identityModel}>Audi A6 C4</Text>
+                        <Text style={styles.identityModel}>{getVehicleLabel() || getVin().slice(-6)}</Text>
                         <Text style={styles.identityVin}>{getVin().slice(-6)}</Text>
                     </View>
                 </View>
@@ -588,7 +596,66 @@ const MaintenanceScreen = () => {
                     )}
                 </View>
 
-                {/* ── 8. WORKSHOP ──────────────────────────────────────── */}
+                {/* ── 8. DIAGNOSTICĂ DTC ───────────────────────────────── */}
+                {dtcData && (
+                    <View style={styles.section}>
+                        <SectionHeader title="Diagnostică OBD-II" size="sm" />
+                        {dtcData.coduri_dtc?.length > 0 ? (
+                            <>
+                                {dtcData.coduri_dtc.map((e, i) => {
+                                    const desc = e.descriere || getDtcDescription(e.cod) || 'Cod OBD-II detectat';
+                                    const color = getDtcSeverityColor(e.severitate);
+                                    return (
+                                        <View key={`dtc-${i}`} style={[styles.dtcRow, i > 0 && styles.dtcRowBorder]}>
+                                            <View style={[styles.dtcBullet, { backgroundColor: color }]} />
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.dtcCode}>{e.cod}</Text>
+                                                <Text style={styles.dtcDesc}>{desc}</Text>
+                                            </View>
+                                            <Text style={[styles.dtcSev, { color }]}>
+                                                {(e.severitate || 'INFO').toUpperCase()}
+                                            </Text>
+                                        </View>
+                                    );
+                                })}
+                                <TouchableOpacity
+                                    style={styles.dtcClearBtn}
+                                    onPress={() =>
+                                        Alert.alert(
+                                            'Șterge erori',
+                                            'Vrei să ștergi toate erorile OBD-II active?',
+                                            [
+                                                { text: 'Anulează', style: 'cancel' },
+                                                { text: 'Șterge', style: 'destructive', onPress: async () => {
+                                                    try {
+                                                        await api.post(`/vehicul/${getVin()}/stergere-erori`);
+                                                        setDtcData(d => ({ ...d, coduri_dtc: [], total_erori: 0 }));
+                                                    } catch {
+                                                        Alert.alert('Eroare', 'Nu s-a putut șterge.');
+                                                    }
+                                                }},
+                                            ]
+                                        )
+                                    }
+                                >
+                                    <Text style={styles.dtcClearBtnText}>Șterge erori active</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <Card padding="md">
+                                <Text style={styles.calmText}>
+                                    Niciun cod DTC activ — sistemul este curat.
+                                </Text>
+                                <Text style={[styles.calmText, { marginTop: spacing[1] }]}>
+                                    Tensiune: {dtcData.sistem_electric?.voltaj_curent?.toFixed(1)} V
+                                    {' · '}Alternator: {dtcData.sistem_electric?.stare_alternator === 'OPTIM' ? '✓ Optim' : '⚠ Verificați'}
+                                </Text>
+                            </Card>
+                        )}
+                    </View>
+                )}
+
+                {/* ── 9. WORKSHOP ──────────────────────────────────────── */}
                 {workshop ? (
                     <View style={styles.section}>
                         <SectionHeader
@@ -753,6 +820,59 @@ const styles = StyleSheet.create({
         color: colors.text.secondary,
         lineHeight: typography.lineHeights.body2,
         textAlign: 'center',
+    },
+
+    // ── DTC ──────────────────────────────────────────────────────────────
+    dtcRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        paddingVertical: spacing[3],
+        backgroundColor: colors.bg[1],
+        paddingHorizontal: spacing[4],
+        gap: spacing[3],
+    },
+    dtcRowBorder: {
+        borderTopWidth: 1,
+        borderTopColor: colors.border.subtle,
+    },
+    dtcBullet: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginTop: 5,
+        flexShrink: 0,
+    },
+    dtcCode: {
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    dtcDesc: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        marginTop: 2,
+        lineHeight: 16,
+    },
+    dtcSev: {
+        fontSize: 9,
+        fontWeight: typography.weights.bold,
+        letterSpacing: 0.5,
+        marginTop: 3,
+    },
+    dtcClearBtn: {
+        marginTop: spacing[2],
+        paddingVertical: spacing[3],
+        paddingHorizontal: spacing[4],
+        borderTopWidth: 1,
+        borderTopColor: colors.border.subtle,
+        alignItems: 'center',
+        backgroundColor: colors.bg[1],
+    },
+    dtcClearBtnText: {
+        fontSize: typography.sizes.label2,
+        color: colors.status.critical,
+        fontWeight: typography.weights.semibold,
     },
 
     // ── Footer ───────────────────────────────────────────────────────────

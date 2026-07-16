@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { useScreenFadeIn } from '../utils/animations';
 import { fetchFullStatus } from '../services/vehicleService';
-import { getVin } from '../utils/config';
+import { getVin, getVehicleLabel } from '../utils/config';
 import { mapStatusData } from '../mappers/statusMapper';
 import { t } from '../i18n';
 import { colors, typography, spacing, layout, radii, motion } from '../theme';
@@ -317,7 +317,7 @@ const StatusScreen = ({ navigation }) => {
                         showBadge={false}
                     />
                     <View style={styles.identityInfo}>
-                        <Text style={styles.identityModel}>Audi A6 C4</Text>
+                        <Text style={styles.identityModel}>{getVehicleLabel() || getVin().slice(-6)}</Text>
                         <Text style={styles.identityVin}>{getVin().slice(-6)}</Text>
                     </View>
                     <TouchableOpacity

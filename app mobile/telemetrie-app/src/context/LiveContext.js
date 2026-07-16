@@ -7,8 +7,9 @@ export const LiveContext = createContext();
 const RING_BUFFER_SIZE = 600;
 
 export const LiveProvider = ({ children }) => {
-    const [isConnected, setIsConnected] = useState(false);
-    const [liveData, setLiveData] = useState({});
+    const [isConnected,    setIsConnected]    = useState(false);
+    const [isReconnecting, setIsReconnecting] = useState(false);
+    const [liveData,       setLiveData]       = useState({});
     const { navigationRef, setTripReport } = useContext(AppContext);
 
     // Ring buffer: fixed-size array + write index, avoids array copy every second
@@ -38,8 +39,10 @@ export const LiveProvider = ({ children }) => {
     useEffect(() => {
         const socket = socketService.connect();
 
-        const onConnect = () => setIsConnected(true);
-        const onDisconnect = () => setIsConnected(false);
+        const onConnect    = () => { setIsConnected(true);  setIsReconnecting(false); };
+        const onDisconnect = () => { setIsConnected(false); setIsReconnecting(true);  };
+        const onReconnect  = () => { setIsConnected(true);  setIsReconnecting(false); };
+        const onReconnectFailed = () => setIsReconnecting(false);
 
         const onTelemetrie = (data) => {
             setLiveData(data);
@@ -79,22 +82,27 @@ export const LiveProvider = ({ children }) => {
             }
         };
 
-        socket.on('connect', onConnect);
-        socket.on('disconnect', onDisconnect);
-        socket.on('telemetrie_live', onTelemetrie);
-        socket.on('status_trip', onStatusTrip);
+        socket.on('connect',           onConnect);
+        socket.on('disconnect',        onDisconnect);
+        socket.on('reconnect',         onReconnect);
+        socket.on('reconnect_failed',  onReconnectFailed);
+        socket.on('telemetrie_live',   onTelemetrie);
+        socket.on('status_trip',       onStatusTrip);
 
         return () => {
-            socket.off('connect', onConnect);
-            socket.off('disconnect', onDisconnect);
-            socket.off('telemetrie_live', onTelemetrie);
-            socket.off('status_trip', onStatusTrip);
+            socket.off('connect',          onConnect);
+            socket.off('disconnect',       onDisconnect);
+            socket.off('reconnect',        onReconnect);
+            socket.off('reconnect_failed', onReconnectFailed);
+            socket.off('telemetrie_live',  onTelemetrie);
+            socket.off('status_trip',      onStatusTrip);
         };
     }, []);
 
     return (
         <LiveContext.Provider value={{
             isConnected,
+            isReconnecting,
             liveData,
             chartVersion,
             getChartHistory,

@@ -164,6 +164,16 @@ function registerVehicleProfileRoutes(app, db) {
                     mileage_km: data.purchase_mileage_km || null,
                 });
 
+                // Sync în tabelul `vehicule` folosit de pipeline-ul MQTT
+                // (INSERT OR IGNORE — dacă e deja acolo din MQTT, nu suprascrie)
+                const modelLabel = [vehicle.make, vehicle.model, vehicle.variant, vehicle.year]
+                    .filter(Boolean).join(' ') || 'Vehicul';
+                const fuelForMqtt = (vehicle.fuel_type || 'diesel').toLowerCase();
+                db.run(
+                    `INSERT OR IGNORE INTO vehicule (vin, model, tip_combustibil) VALUES (?, ?, ?)`,
+                    [vin, modelLabel, fuelForMqtt]
+                );
+
                 console.log(`[VEHICLE PROFILE] Vehicul creat: ${vin} (${vehicle.make} ${vehicle.model}) — ID ${vehicleId}`);
                 res.status(201).json({ id: vehicleId, ...vehicle, vin_decoded: decoded });
             }

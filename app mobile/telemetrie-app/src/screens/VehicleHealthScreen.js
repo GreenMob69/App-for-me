@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
-import { getVin } from '../utils/config';
+import { getVin, getVehicleLabel } from '../utils/config';
 import { t } from '../i18n';
 import { colors, typography, radii, spacing, layout } from '../theme';
 import { formatTimeAgo } from '../utils/formatters';
@@ -59,11 +59,26 @@ function tlEventType(category) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+const hashPred = (pred) => {
+    const s = `${pred.title || ''}${pred.category || ''}${pred.severity || ''}`;
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+    return Math.abs(h).toString(16).slice(0, 12);
+};
+
+const ecoBarColor = (v) => {
+    if (v >= 85) return colors.status.good;
+    if (v >= 65) return colors.status.monitor;
+    return colors.status.caution;
+};
+
 const VehicleHealthScreen = ({ navigation }) => {
     const [healthData, setHealthData] = useState(null);
     const [loading, setLoading]       = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError]           = useState(null);
+    const [trendData,    setTrendData]    = useState(null);
+    const [resolvedPreds, setResolvedPreds] = useState(new Set());
 
     const loadCachedData = async () => {
         try {
@@ -92,6 +107,12 @@ const VehicleHealthScreen = ({ navigation }) => {
 
     useEffect(() => {
         loadCachedData().then(() => fetchHealth());
+        api.get(`/vehicul/${getVin()}/trend-eco?weeks=8`).then(r => {
+            if (r.data?.weeks) setTrendData(r.data.weeks);
+        }).catch(() => {});
+        api.get(`/vehicul/${getVin()}/predictii/active`).then(r => {
+            if (Array.isArray(r.data)) setResolvedPreds(new Set(r.data));
+        }).catch(() => {});
     }, []);
 
     const onRefresh = () => {
@@ -104,6 +125,18 @@ const VehicleHealthScreen = ({ navigation }) => {
             navigation.navigate('SubsystemDetail', { system: systemKey, vin: getVin() });
         }
     }, [navigation]);
+
+    const handleMarkPrediction = useCallback(async (pred, status) => {
+        const hash = hashPred(pred);
+        try {
+            await api.post(`/vehicul/${getVin()}/predictii/valideaza`, {
+                prediction_hash: hash,
+                titlu: pred.title || pred.component || '',
+                status,
+            });
+            setResolvedPreds(prev => new Set([...prev, hash]));
+        } catch {}
+    }, []);
 
     const handlePredictionPress = useCallback((prediction) => {
         const categoryToSystem = {
@@ -216,7 +249,7 @@ const VehicleHealthScreen = ({ navigation }) => {
                 {/* ── Header ──────────────────────────────────────────────── */}
                 <View style={styles.header}>
                     <View>
-                        <Text style={styles.vehicleName}>Audi A6 C4 · 2.5 TDI</Text>
+                        <Text style={styles.vehicleName}>{getVehicleLabel() || getVin().slice(-6)}</Text>
                         <Text style={styles.lastUpdate}>{formatTimeAgo(lastUpdated)}</Text>
                     </View>
                     <View style={styles.headerBadges}>
@@ -304,6 +337,36 @@ const VehicleHealthScreen = ({ navigation }) => {
                     </>
                 )}
 
+                {/* ── Trend scor eco (8 săptămâni) ─────────────────────── */}
+                {trendData && trendData.some(w => w.avg_eco != null) && (
+                    <>
+                        <SectionHeader title="Trend scor eco (8 săptămâni)" style={styles.sectionHeader} />
+                        <View style={styles.trendCard}>
+                            <View style={styles.trendBars}>
+                                {trendData.map((w, i) => {
+                                    const val = w.avg_eco;
+                                    const barH = val != null ? Math.max(4, (val / 100) * 72) : 4;
+                                    const color = val != null ? ecoBarColor(val) : colors.border.default;
+                                    return (
+                                        <View key={i} style={styles.trendBarWrap}>
+                                            <View style={styles.trendBarTrack}>
+                                                <View style={[styles.trendBarFill, { height: barH, backgroundColor: color }]} />
+                                            </View>
+                                            <Text style={styles.trendBarLabel}>
+                                                {val != null ? Math.round(val) : '—'}
+                                            </Text>
+                                            <Text style={styles.trendBarWeek}>S{i + 1}</Text>
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                            <Text style={styles.trendNote}>
+                                Medie scor eco pe fiecare săptămână · barele goale = fără date
+                            </Text>
+                        </View>
+                    </>
+                )}
+
                 {/* ── Predictions ──────────────────────────────────────────── */}
                 {predictions && predictions.length > 0 && (
                     <>
@@ -311,20 +374,46 @@ const VehicleHealthScreen = ({ navigation }) => {
                             title={isCritical ? 'Atenție — Risc ridicat' : 'Predicții'}
                             style={styles.sectionHeader}
                         />
-                        {predictions.slice(0, 2).map((pred, idx) => (
-                            <PredictionCard
-                                key={idx}
-                                title={pred.component || pred.category || 'Predicție'}
-                                prediction={pred.recommendation || pred.description || pred.component || '—'}
-                                confidence={predConfidence(pred.probability)}
-                                timeframe={pred.estimatedRemainingKm
-                                    ? `~${Math.round(pred.estimatedRemainingKm)} km`
-                                    : undefined}
-                                status={predStatus(pred.severity)}
-                                onPress={() => handlePredictionPress(pred)}
-                                style={idx > 0 ? styles.cardGap : undefined}
-                            />
-                        ))}
+                        {predictions.slice(0, 2).map((pred, idx) => {
+                            const hash = hashPred(pred);
+                            const isResolved = resolvedPreds.has(hash);
+                            return (
+                                <View key={idx} style={idx > 0 ? styles.cardGap : undefined}>
+                                    <PredictionCard
+                                        title={pred.component || pred.category || 'Predicție'}
+                                        prediction={pred.recommendation || pred.description || pred.component || '—'}
+                                        confidence={predConfidence(pred.probability)}
+                                        timeframe={pred.estimatedRemainingKm
+                                            ? `~${Math.round(pred.estimatedRemainingKm)} km`
+                                            : undefined}
+                                        status={isResolved ? 'good' : predStatus(pred.severity)}
+                                        onPress={() => handlePredictionPress(pred)}
+                                    />
+                                    {!isResolved ? (
+                                        <View style={styles.predActionsRow}>
+                                            <TouchableOpacity
+                                                style={styles.predActionBtn}
+                                                onPress={() => handleMarkPrediction(pred, 'REZOLVATA')}
+                                            >
+                                                <Text style={[styles.predActionText, { color: colors.status.good }]}>
+                                                    ✓ Rezolvat
+                                                </Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={styles.predActionBtn}
+                                                onPress={() => handleMarkPrediction(pred, 'FALSA')}
+                                            >
+                                                <Text style={[styles.predActionText, { color: colors.text.disabled }]}>
+                                                    ✕ Fals pozitiv
+                                                </Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    ) : (
+                                        <Text style={styles.predResolvedLabel}>✓ Marcat ca rezolvat</Text>
+                                    )}
+                                </View>
+                            );
+                        })}
                         {predictions.length > 2 && (
                             <Text style={styles.moreText}>+{predictions.length - 2} monitorizate</Text>
                         )}
@@ -400,7 +489,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bg[0],
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 44,
+        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 40) + 10 : 44,
     },
     center: { justifyContent: 'center', alignItems: 'center' },
     scroll: { flex: 1 },
@@ -533,6 +622,79 @@ const styles = StyleSheet.create({
     },
 
     cardGap: { marginTop: spacing[2] },
+
+    // ── Eco Trend ─────────────────────────────────────────────────────────────
+    trendCard: {
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        padding: spacing[4],
+    },
+    trendBars: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        gap: spacing[2],
+        height: 88,
+    },
+    trendBarWrap: {
+        flex: 1,
+        alignItems: 'center',
+        gap: 2,
+    },
+    trendBarTrack: {
+        width: '100%',
+        height: 72,
+        justifyContent: 'flex-end',
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.xs,
+        overflow: 'hidden',
+    },
+    trendBarFill: {
+        width: '100%',
+        borderRadius: radii.xs,
+    },
+    trendBarLabel: {
+        fontSize: 9,
+        color: colors.text.secondary,
+        fontVariant: ['tabular-nums'],
+        textAlign: 'center',
+    },
+    trendBarWeek: {
+        fontSize: 8,
+        color: colors.text.disabled,
+        textAlign: 'center',
+    },
+    trendNote: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.disabled,
+        marginTop: spacing[2],
+        textAlign: 'center',
+    },
+
+    // ── Prediction actions ────────────────────────────────────────────────────
+    predActionsRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: spacing[4],
+        paddingTop: spacing[2],
+        paddingHorizontal: spacing[1],
+    },
+    predActionBtn: {
+        paddingVertical: spacing[1],
+    },
+    predActionText: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.semibold,
+    },
+    predResolvedLabel: {
+        fontSize: typography.sizes.caption,
+        color: colors.status.good,
+        textAlign: 'right',
+        paddingTop: spacing[1],
+        paddingHorizontal: spacing[1],
+    },
+
     moreText: {
         fontSize: typography.sizes.caption,
         color: colors.text.secondary,

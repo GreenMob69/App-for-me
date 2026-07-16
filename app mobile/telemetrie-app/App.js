@@ -1,6 +1,7 @@
 import React, { useRef, useContext, useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -8,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TelemetryProvider } from './src/context/TelemetryContext';
 import { AppContext } from './src/context/AppContext';
 import { NotificationContext } from './src/context/NotificationContext';
-import { setCustomServerUrl, setVin } from './src/utils/config';
+import { setCustomServerUrl, setVin, setVehicleLabel, DEFAULT_VIN } from './src/utils/config';
 import api from './src/services/api';
 import socketService from './src/services/socket';
 import { colors, typography, layout, spacing } from './src/theme';
@@ -72,6 +73,9 @@ function TabNavigator() {
                 component={StatusStackScreen}
                 options={{
                     tabBarLabel: 'STARE',
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <Ionicons name={focused ? 'pulse' : 'pulse-outline'} size={size} color={color} />
+                    ),
                     tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
                     tabBarBadgeStyle: {
                         backgroundColor: colors.status.critical,
@@ -81,13 +85,37 @@ function TabNavigator() {
                     },
                 }}
             />
-            <Tab.Screen name="Live" options={{ tabBarLabel: 'LIVE' }}>
+            <Tab.Screen
+                name="Live"
+                options={{
+                    tabBarLabel: 'LIVE',
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <Ionicons name={focused ? 'radio' : 'radio-outline'} size={size} color={color} />
+                    ),
+                }}
+            >
                 {() => <ErrorBoundary><LiveDashboardScreen /></ErrorBoundary>}
             </Tab.Screen>
-            <Tab.Screen name="Istoric" options={{ tabBarLabel: 'CURSE' }}>
+            <Tab.Screen
+                name="Istoric"
+                options={{
+                    tabBarLabel: 'CURSE',
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <Ionicons name={focused ? 'car' : 'car-outline'} size={size} color={color} />
+                    ),
+                }}
+            >
                 {() => <ErrorBoundary><TripHistoryScreen /></ErrorBoundary>}
             </Tab.Screen>
-            <Tab.Screen name="Vehicul" options={{ tabBarLabel: 'VEHICUL' }}>
+            <Tab.Screen
+                name="Vehicul"
+                options={{
+                    tabBarLabel: 'VEHICUL',
+                    tabBarIcon: ({ color, size, focused }) => (
+                        <Ionicons name={focused ? 'construct' : 'construct-outline'} size={size} color={color} />
+                    ),
+                }}
+            >
                 {() => <ErrorBoundary><VehicleHubScreen /></ErrorBoundary>}
             </Tab.Screen>
         </Tab.Navigator>
@@ -154,6 +182,19 @@ export default function App() {
 
                 const savedVin = await AsyncStorage.getItem('@active_vin');
                 if (savedVin) setVin(savedVin);
+
+                // Încarcă label vehicul pentru afișare în subtitluri
+                try {
+                    const vin = savedVin || DEFAULT_VIN;
+                    const res = await api.get('/vehicule/list', { timeout: 4000 });
+                    if (Array.isArray(res.data) && res.data.length > 0) {
+                        const v = res.data.find(r => r.vin === vin) || res.data[0];
+                        const parts = [v.model].filter(Boolean);
+                        if (v.variant)    parts.push(v.variant);
+                        if (v.year)       parts.push(String(v.year));
+                        setVehicleLabel(parts.join(' · ') || v.vin || vin);
+                    }
+                } catch {}
             } catch (e) {}
 
             const vehicleId = await AsyncStorage.getItem('@vehicle_id');
