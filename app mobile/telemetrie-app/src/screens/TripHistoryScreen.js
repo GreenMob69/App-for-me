@@ -37,23 +37,33 @@ const MONTH_NAMES = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// toISOString() returnează UTC, ceea ce în România (UTC+3) înseamnă data de ieri.
+// Folosim getFullYear/getMonth/getDate pentru a obține data locală corectă.
+function localDateStr(date) {
+    return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+}
+
 function getFilterDates(filter) {
     const now   = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     switch (filter) {
         case 'TODAY': {
-            const s = today.toISOString().split('T')[0];
+            const s = localDateStr(today);
             return { startDate: s, endDate: s };
         }
         case 'WEEK': {
             const w = new Date(today);
             w.setDate(w.getDate() - 7);
-            return { startDate: w.toISOString().split('T')[0], endDate: null };
+            return { startDate: localDateStr(w), endDate: null };
         }
         case 'MONTH': {
             const m = new Date(today.getFullYear(), today.getMonth(), 1);
-            return { startDate: m.toISOString().split('T')[0], endDate: null };
+            return { startDate: localDateStr(m), endDate: null };
         }
         default:
             return { startDate: null, endDate: null };
@@ -284,6 +294,41 @@ const TripHistoryScreen = () => {
 
     const heroInfo = useMemo(() => buildHeroInfo(trips, stats), [trips, stats]);
 
+    // renderItem trebuie declarat ÎNAINTE de orice early return (Rules of Hooks)
+    const renderItem = useCallback(({ item: trip, index }) => {
+        const isFirst = index === 0;
+        const isLast  = index === filteredTrips.length - 1;
+        const badges  = buildTripBadges(trip);
+
+        return (
+            <View>
+                <TimelineCard
+                    title={buildTripTitle(trip)}
+                    description={buildTripDesc(trip)}
+                    date={formatTripDate(trip.timestamp_start)}
+                    time={formatTripTime(trip.timestamp_start)}
+                    type={getTripType(trip)}
+                    isFirst={isFirst}
+                    isLast={isLast}
+                    onPress={() => setSelectedTripId(trip.id_calatorie)}
+                />
+                {badges.length > 0 && (
+                    <View style={[styles.badgesRow, isLast && styles.badgesRowLast]}>
+                        {badges.map(b => (
+                            <StatusBadge
+                                key={b.label}
+                                status={b.status}
+                                label={b.label}
+                                variant="filled"
+                                size="sm"
+                            />
+                        ))}
+                    </View>
+                )}
+            </View>
+        );
+    }, [filteredTrips]);
+
     // ─── Trip Detail (inline rendering — navigation prepare in Sprint 3.5) ───
     if (selectedTripId !== null) {
         return (
@@ -351,7 +396,7 @@ const TripHistoryScreen = () => {
         Share.share({ message: text, title: `Raport ${monthName} ${yr}` });
     };
 
-    // ─── FlatList helpers ─────────────────────────────────────────────────────
+    // ─── Non-hook helpers (după early returns) ───────────────────────────────
     const [yr, mo] = reportMonth.split('-');
     const monthLabel = (mo && yr)
         ? `${MONTH_NAMES[parseInt(mo, 10) - 1] || mo} ${yr}`
@@ -413,40 +458,6 @@ const TripHistoryScreen = () => {
             style={styles.emptyState}
         />
     );
-
-    const renderItem = useCallback(({ item: trip, index }) => {
-        const isFirst = index === 0;
-        const isLast  = index === filteredTrips.length - 1;
-        const badges  = buildTripBadges(trip);
-
-        return (
-            <View>
-                <TimelineCard
-                    title={buildTripTitle(trip)}
-                    description={buildTripDesc(trip)}
-                    date={formatTripDate(trip.timestamp_start)}
-                    time={formatTripTime(trip.timestamp_start)}
-                    type={getTripType(trip)}
-                    isFirst={isFirst}
-                    isLast={isLast}
-                    onPress={() => setSelectedTripId(trip.id_calatorie)}
-                />
-                {badges.length > 0 && (
-                    <View style={[styles.badgesRow, isLast && styles.badgesRowLast]}>
-                        {badges.map(b => (
-                            <StatusBadge
-                                key={b.label}
-                                status={b.status}
-                                label={b.label}
-                                variant="filled"
-                                size="sm"
-                            />
-                        ))}
-                    </View>
-                )}
-            </View>
-        );
-    }, [filteredTrips, navigation]);
 
     // ─── Render ───────────────────────────────────────────────────────────────
     return (

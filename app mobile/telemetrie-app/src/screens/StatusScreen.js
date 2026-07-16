@@ -176,6 +176,41 @@ const StatusScreen = ({ navigation }) => {
         loadStatus(true);
     }, [loadStatus]);
 
+    // ── Date din model — trebuie ÎNAINTE de orice early return ─────────────
+    // statusModel poate fi null în loading/error, deci destructurăm || {}
+    const {
+        evaluation,
+        message,
+        subtitle,
+        observations,
+        comparison,
+        upcoming,
+        lastEvent,
+        longTripReady,
+        lastUpdated,
+        dataQuality,
+    } = statusModel || {};
+
+    const drive        = useMemo(() => DRIVEABILITY[evaluation] || DRIVEABILITY.GOOD, [evaluation]);
+    const primaryObs   = useMemo(() => observations?.[0], [observations]);
+    const secondaryObs = useMemo(() => observations?.slice(1) ?? [], [observations]);
+    const hasObs       = useMemo(() => (observations?.length || 0) > 0, [observations]);
+    const hasUpcoming  = useMemo(() => (upcoming?.length || 0) > 0, [upcoming]);
+    const trendStyle   = useMemo(
+        () => comparison ? (TREND_INDICATORS[comparison.trend] || TREND_INDICATORS.stable) : null,
+        [comparison],
+    );
+    const qualityInfo  = useMemo(
+        () => dataQuality ? (DATA_QUALITY[dataQuality] || DATA_QUALITY.MEDIUM) : null,
+        [dataQuality],
+    );
+    const hasFooter    = useMemo(() => !!(lastUpdated || dataQuality), [lastUpdated, dataQuality]);
+    const visiblePreds = useMemo(
+        () => showAllPreds ? secondaryObs : secondaryObs.slice(0, 2),
+        [showAllPreds, secondaryObs],
+    );
+    const hiddenCount  = useMemo(() => secondaryObs.length - 2, [secondaryObs]);
+
     // ── Stati speciale ───────────────────────────────────────────────────────
 
     if (screenState === 'loading') {
@@ -218,32 +253,6 @@ const StatusScreen = ({ navigation }) => {
             </View>
         );
     }
-
-    // ── Date din model ───────────────────────────────────────────────────────
-
-    const {
-        evaluation,
-        message,
-        subtitle,
-        observations,
-        comparison,
-        upcoming,
-        lastEvent,
-        longTripReady,
-        lastUpdated,
-        dataQuality,
-    } = statusModel;
-
-    const drive = useMemo(() => DRIVEABILITY[evaluation] || DRIVEABILITY.GOOD, [evaluation]);
-    const primaryObs   = useMemo(() => observations?.[0], [observations]);
-    const secondaryObs = useMemo(() => observations?.slice(1) ?? [], [observations]);
-    const hasObs       = useMemo(() => (observations?.length || 0) > 0, [observations]);
-    const hasUpcoming  = useMemo(() => (upcoming?.length || 0) > 0, [upcoming]);
-    const trendStyle   = useMemo(() => comparison ? (TREND_INDICATORS[comparison.trend] || TREND_INDICATORS.stable) : null, [comparison]);
-    const qualityInfo  = useMemo(() => dataQuality ? (DATA_QUALITY[dataQuality] || DATA_QUALITY.MEDIUM) : null, [dataQuality]);
-    const hasFooter    = useMemo(() => !!(lastUpdated || dataQuality), [lastUpdated, dataQuality]);
-    const visiblePreds = useMemo(() => showAllPreds ? secondaryObs : secondaryObs.slice(0, 2), [showAllPreds, secondaryObs]);
-    const hiddenCount  = useMemo(() => secondaryObs.length - 2, [secondaryObs]);
 
     // Descrierea cardului principal: motivul specific dacă există, altfel subtitle
     const heroDescription = longTripReady?.detail || null;

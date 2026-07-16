@@ -354,11 +354,14 @@ client.on('message', async (topic, message) => {
         db.run(`UPDATE calatorii SET timestamp_end = ?, km_parcursi = ?, consum_total_l = ?, consum_mediu_100km = ?, scor_eco = ? WHERE id_calatorie = ?`, 
             [pachet.timestamp, trip.km.toFixed(2), trip.consum_l.toFixed(2), consum_mediu.toFixed(1), scor_final, trip.id_calatorie], () => {
 
+            const litriTotali = rezultatAnaliza
+                ? (rezultatAnaliza.summary.fuel.idleLiters + rezultatAnaliza.summary.fuel.movingLiters)
+                : 0;
+            const cost = litriTotali * THRESHOLDS.DIESEL_PRICE_PER_LITER;
+            const co2  = litriTotali * THRESHOLDS.DIESEL_CO2_KG_PER_LITER;
+
             if (rezultatAnaliza) {
                 const { summary, health, ai } = rezultatAnaliza;
-                const litriTotali = summary.fuel.idleLiters + summary.fuel.movingLiters;
-                const cost = litriTotali * THRESHOLDS.DIESEL_PRICE_PER_LITER;
-                const co2 = litriTotali * THRESHOLDS.DIESEL_CO2_KG_PER_LITER;
 
                 db.run(`INSERT INTO trip_summary (
                     id_calatorie, durata_secunde, timp_relanti_sec, timp_mers_sec,
@@ -461,6 +464,8 @@ client.on('message', async (topic, message) => {
     }
 });
 
+app.get('/api/ping', (req, res) => res.json({ ok: true }));
+
 app.get('/api/calatorii', (req, res) => {
     db.all(`SELECT * FROM calatorii ORDER BY id_calatorie DESC`, [], (err, rows) => res.json(rows || []));
 });
@@ -479,11 +484,12 @@ app.get('/api/calatorii/filtrate', (req, res) => {
     const params = [];
 
     if (startDate) {
+        // 'T00:00:00' fără timezone → Node.js parsează ca oră locală (nu UTC)
         query += ` AND c.timestamp_start >= ?`;
-        params.push(new Date(startDate).getTime());
+        params.push(new Date(startDate + 'T00:00:00').getTime());
     }
     if (endDate) {
-        const endTs = new Date(endDate);
+        const endTs = new Date(endDate + 'T00:00:00');
         endTs.setHours(23, 59, 59, 999);
         query += ` AND c.timestamp_start <= ?`;
         params.push(endTs.getTime());
