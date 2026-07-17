@@ -1,0 +1,162 @@
+'use strict';
+
+const DTC_DESCRIPTIONS = {
+    // MAF / Aer admisie
+    P0100: 'Circuit senzor debit masic aer (MAF) — defect',
+    P0101: 'Senzor MAF — valoare în afara domeniului',
+    P0102: 'Senzor MAF — semnal prea jos',
+    P0103: 'Senzor MAF — semnal prea sus',
+    P0104: 'Senzor MAF — circuit intermitent',
+    P0110: 'Senzor temperatură aer admisie (IAT) — circuit',
+    P0112: 'Senzor IAT — semnal prea jos',
+    P0113: 'Senzor IAT — semnal prea sus',
+    // Temperatură răcire
+    P0115: 'Senzor temperatură lichid răcire — circuit',
+    P0116: 'Senzor temperatură răcire — valoare incorectă',
+    P0117: 'Senzor temperatură răcire — semnal prea jos',
+    P0118: 'Senzor temperatură răcire — semnal prea sus',
+    // Poziție accelerator / papion
+    P0120: 'Senzor poziție clapetă (TPS) — circuit A',
+    P0121: 'Senzor TPS A — valoare în afara domeniului',
+    P0122: 'Senzor TPS A — semnal prea jos',
+    P0123: 'Senzor TPS A — semnal prea sus',
+    // Sonde lambda / O2
+    P0130: 'Sondă lambda — bancul 1, senzor 1 (înainte catalizator)',
+    P0131: 'Sondă O2 B1S1 — tensiune prea mică',
+    P0132: 'Sondă O2 B1S1 — tensiune prea mare',
+    P0133: 'Sondă O2 B1S1 — răspuns lent',
+    P0134: 'Sondă O2 B1S1 — fără activitate',
+    P0135: 'Sondă O2 B1S1 — încălzitor circuit',
+    P0136: 'Sondă lambda B1S2 — circuit (după catalizator)',
+    P0137: 'Sondă O2 B1S2 — tensiune prea mică',
+    P0138: 'Sondă O2 B1S2 — tensiune prea mare',
+    P0141: 'Sondă O2 B1S2 — încălzitor circuit',
+    P0150: 'Sondă lambda B2S1 — circuit',
+    P0171: 'Sistem combustibil prea sărac — bancul 1',
+    P0172: 'Sistem combustibil prea bogat — bancul 1',
+    P0174: 'Sistem combustibil prea sărac — bancul 2',
+    P0175: 'Sistem combustibil prea bogat — bancul 2',
+    // Presiune combustibil
+    P0190: 'Senzor presiune combustibil — circuit',
+    P0191: 'Senzor presiune combustibil — valoare incorectă',
+    P0192: 'Senzor presiune combustibil — semnal prea jos',
+    P0193: 'Senzor presiune combustibil — semnal prea sus',
+    // Injectoare
+    P0200: 'Circuit injector — defect general',
+    P0201: 'Injector cilindru 1 — circuit',
+    P0202: 'Injector cilindru 2 — circuit',
+    P0203: 'Injector cilindru 3 — circuit',
+    P0204: 'Injector cilindru 4 — circuit',
+    P0205: 'Injector cilindru 5 — circuit',
+    P0206: 'Injector cilindru 6 — circuit',
+    // Rateu aprindere / Misfire
+    P0300: 'Rateu aprindere aleator detectat (misfire)',
+    P0301: 'Rateu aprindere — cilindrul 1',
+    P0302: 'Rateu aprindere — cilindrul 2',
+    P0303: 'Rateu aprindere — cilindrul 3',
+    P0304: 'Rateu aprindere — cilindrul 4',
+    P0305: 'Rateu aprindere — cilindrul 5',
+    P0306: 'Rateu aprindere — cilindrul 6',
+    // Senzor arbore cotit / camă
+    P0335: 'Senzor poziție arbore cotit (CKP) — circuit A',
+    P0336: 'Senzor CKP A — valoare în afara domeniului',
+    P0340: 'Senzor poziție arbore cu came (CMP) — circuit bancul 1',
+    P0341: 'Senzor CMP B1 — valoare în afara domeniului',
+    P0345: 'Senzor CMP bancul 2 — circuit',
+    // Bujii incandescenţă (diesel)
+    P0380: 'Circuit bujii incandescenţă — grup A',
+    P0381: 'Indicator bujii incandescenţă — circuit',
+    P0382: 'Circuit bujii incandescenţă — grup B',
+    // EGR
+    P0400: 'Debit recirculare gaze ardere (EGR) — insuficient',
+    P0401: 'EGR — debit prea mic detectat',
+    P0402: 'EGR — debit excesiv detectat',
+    P0403: 'EGR — circuit supapă',
+    P0404: 'EGR — valoare în afara domeniului',
+    P0405: 'Senzor poziție EGR A — semnal prea jos',
+    P0406: 'Senzor poziție EGR A — semnal prea sus',
+    // Catalizator
+    P0420: 'Eficiență catalizator sub limita — bancul 1',
+    P0421: 'Eficiență catalizator degradată — bancul 1',
+    P0430: 'Eficiență catalizator sub limita — bancul 2',
+    // EVAP / Vapori combustibil
+    P0440: 'Sistem control vapori combustibil (EVAP) — defect',
+    P0441: 'EVAP — debit purjare incorect',
+    P0442: 'EVAP — scurgere mică detectată',
+    P0443: 'EVAP — supapă purjare canister — circuit',
+    P0455: 'EVAP — scurgere mare detectată',
+    P0457: 'EVAP — scurgere — bușon rezervor slab strâns',
+    // Ventilatoare răcire
+    P0480: 'Ventilator răcire 1 — circuit comandă',
+    P0481: 'Ventilator răcire 2 — circuit comandă',
+    // Viteză vehicul
+    P0500: 'Senzor viteză vehicul (VSS) — defect',
+    P0501: 'Senzor VSS — valoare în afara domeniului',
+    P0502: 'Senzor VSS — semnal prea jos',
+    P0503: 'Senzor VSS — semnal intermitent',
+    // Relanti / Control ralanti
+    P0505: 'Sistem control relanti (IAC) — defect',
+    P0506: 'Control relanti — tura prea mică',
+    P0507: 'Control relanti — tura prea mare',
+    // Tensiune baterie / Circuit electric
+    P0560: 'Circuit tensiune sistem — defect general',
+    P0561: 'Tensiune sistem — instabilă',
+    P0562: 'Tensiune sistem — prea mică',
+    P0563: 'Tensiune sistem — prea mare',
+    // Memorie / ECU
+    P0600: 'Legătură serială ECU — defect',
+    P0601: 'Memorie internă ECU — eroare checksum',
+    P0602: 'Modul comandă — programare eronată',
+    P0603: 'ECU — memorie KAM eșec la ștergere',
+    P0604: 'ECU — eroare memorie RAM',
+    P0605: 'ECU — eroare memorie ROM',
+    P0606: 'Procesor ECU — eroare',
+    P0607: 'ECU — performanță modul',
+    P0630: 'VIN nestocat în ECU',
+    // Turbo / Supraalimentare
+    P0299: 'Presiune supraatmosferică insuficientă (turbo sub-boost)',
+    P0234: 'Supraîncărcare turbo excesivă (over-boost)',
+    P0235: 'Senzor presiune turbo — circuit bancul 1',
+    P0236: 'Senzor presiune turbo — valoare incorectă',
+    P0237: 'Senzor presiune turbo — semnal prea jos',
+    P0238: 'Senzor presiune turbo — semnal prea sus',
+    P0243: 'Supapă waste-gate turbo — circuit',
+    P0245: 'Supapă waste-gate — circuit semnal prea jos',
+    P0246: 'Supapă waste-gate — circuit semnal prea sus',
+    // Transmisie automată
+    P0700: 'Sistem de comandă transmisie automată — defect',
+    P0701: 'Control transmisie — valoare în afara domeniului',
+    P0705: 'Senzor selector poziție transmisie — circuit',
+    P0710: 'Senzor temperatură ulei transmisie — circuit',
+    P0715: 'Senzor viteză turbină intrare — circuit A',
+    P0720: 'Senzor viteză ieșire transmisie — circuit',
+    P0730: 'Raport transmisie incorect',
+    P0731: 'Raport 1 incorect',
+    P0732: 'Raport 2 incorect',
+    // Frână / ABS
+    C0020: 'Frână față dreapta — circuit motor',
+    C0040: 'Frână față stânga — circuit motor',
+    C0060: 'Frână spate dreapta — circuit motor',
+    C0080: 'Frână spate stânga — circuit motor',
+    C0110: 'Pompă ABS — circuit motor',
+    C0121: 'Supapă ABS — circuit',
+    // Airbag / SRS
+    B0001: 'Airbag șofer — circuit declanșare',
+    B0002: 'Airbag pasager — circuit declanșare',
+    B0010: 'Airbag cortina stânga — circuit',
+    B0011: 'Airbag cortina dreapta — circuit',
+    B0051: 'Centură pretensionator stânga — circuit',
+    // VAG specifice (U-codes)
+    U0001: 'Bus CAN viteză mare — comunicare',
+    U0100: 'Pierdere comunicare ECM/PCM',
+    U0101: 'Pierdere comunicare TCM (transmisie)',
+    U0121: 'Pierdere comunicare modul ABS',
+    U0140: 'Pierdere comunicare BCM (modul caroserie)',
+    U0155: 'Pierdere comunicare tablou bord (cluster)',
+};
+
+// Mutable singleton — populat din MQTT, golit la stergere-erori
+// Folosește .splice(0) pentru golire (nu reasignare), altfel referința externă se pierde
+const eroriActiveDTC = [];
+
+module.exports = { DTC_DESCRIPTIONS, eroriActiveDTC };

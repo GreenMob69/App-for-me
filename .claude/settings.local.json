@@ -20,7 +20,8 @@
       "Bash(grep -v \"// \")",
       "Bash(grep -n \"app\\\\.get\\\\|app\\\\.post\\\\|\\\\/mentenanta\\\\|\\\\/timeline\\\\|\\\\/events\\\\|\\\\/service\\\\|\\\\/maintenance\\\\|\\\\/vehicul\\\\|dataCompleteness\\\\|data_completeness\\\\|ultima_analiza\\\\|last_analysis\" \"C:/Users/tfl/Desktop/telemetrie-licenta/backend.js\")",
       "WebFetch(domain:docs.expo.dev)",
-      "Bash(kill %1)"
+      "Bash(kill %1)",
+      "Bash(npm uninstall *)"
     ]
   }
 }
