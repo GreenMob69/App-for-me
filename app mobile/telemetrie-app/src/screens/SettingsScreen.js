@@ -82,6 +82,13 @@ const SettingsScreen = () => {
     // ── Notifications toggle (stored, read by AlertContext)
     const [notifsEnabled, setNotifsEnabled] = useState(true);
 
+    // ── Vehicle profile inline editing
+    const [editTankCap,   setEditTankCap]   = useState(false);
+    const [tankCapVal,    setTankCapVal]    = useState('');
+    const [editOdo,       setEditOdo]       = useState(false);
+    const [odoVal,        setOdoVal]        = useState('');
+    const [savingVehicle, setSavingVehicle] = useState(false);
+
     // ── Realimentare
     const [refuels,         setRefuels]         = useState([]);
     const [showRefuelForm,  setShowRefuelForm]   = useState(false);
@@ -230,6 +237,31 @@ const SettingsScreen = () => {
         finally { setSavingRefuel(false); }
     };
 
+    const handleSaveVehicleField = async (field, rawVal) => {
+        const num = parseFloat(rawVal);
+        if (isNaN(num) || num < 0) return;
+        setSavingVehicle(true);
+        try {
+            await api.patch(`/vehicul/${getVin()}/profil`, { [field]: num });
+            setVehicles(prev => prev.map(v =>
+                v.vin === getVin() ? { ...v, [field]: num } : v
+            ));
+        } catch {
+            Alert.alert('Eroare', 'Nu s-a putut salva.');
+        } finally {
+            setSavingVehicle(false);
+        }
+    };
+
+    const handleResetThresholds = async () => {
+        setThresholds({ ...DEFAULT_THRESHOLDS });
+        try {
+            await AsyncStorage.setItem('@alert_thresholds', JSON.stringify(DEFAULT_THRESHOLDS));
+            setThrSaved(true);
+            setTimeout(() => setThrSaved(false), 2000);
+        } catch {}
+    };
+
     const handleExportJSON = async () => {
         const url = `${getActiveServerUrl()}/api/export?vin=${getVin()}`;
         try { await Linking.openURL(url); }
@@ -273,14 +305,83 @@ const SettingsScreen = () => {
             {/* ── Profil Vehicul ─────────────────────────────────────────── */}
             <View style={styles.card}>
                 <SectionTitle>Profil Vehicul</SectionTitle>
-                <Row label="Model"   value={activeVehicle?.model || '—'} />
-                <Row label="VIN"     value={activeVehicle?.vin   || activeVin} />
-                <Row label="Rezervor" value={activeVehicle?.capacitate_rezervor_l
-                    ? `${activeVehicle.capacitate_rezervor_l} L`
-                    : '80 L'} />
+                <Row label="Model" value={activeVehicle?.model || '—'} />
+                <Row label="VIN"   value={activeVehicle?.vin   || activeVin} />
+
+                {/* Rezervor — editabil */}
+                {editTankCap ? (
+                    <View style={styles.row}>
+                        <Text style={styles.rowLabel}>Rezervor</Text>
+                        <View style={styles.thrEditRow}>
+                            <TextInput
+                                style={styles.thrInput}
+                                value={tankCapVal}
+                                onChangeText={setTankCapVal}
+                                keyboardType="numeric"
+                                autoFocus
+                                onBlur={async () => {
+                                    await handleSaveVehicleField('capacitate_rezervor_l', tankCapVal);
+                                    setEditTankCap(false);
+                                }}
+                            />
+                            <Text style={styles.thrUnit}>L</Text>
+                        </View>
+                    </View>
+                ) : (
+                    <TouchableOpacity
+                        style={styles.row}
+                        onPress={() => { setTankCapVal(String(activeVehicle?.capacitate_rezervor_l || 80)); setEditTankCap(true); }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.rowLabel}>Rezervor</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={styles.rowValue}>{activeVehicle?.capacitate_rezervor_l || 80} L</Text>
+                            <Text style={styles.editHint}>✎</Text>
+                        </View>
+                    </TouchableOpacity>
+                )}
+
                 <Row label="Combustibil" value={activeVehicle?.tip_combustibil
                     ? activeVehicle.tip_combustibil.charAt(0).toUpperCase() + activeVehicle.tip_combustibil.slice(1)
-                    : 'Diesel'} last />
+                    : 'Diesel'} />
+
+                {/* Odometru calibrat — editabil */}
+                {editOdo ? (
+                    <View style={[styles.row, styles.rowLast]}>
+                        <Text style={styles.rowLabel}>Odometru calibrat</Text>
+                        <View style={styles.thrEditRow}>
+                            <TextInput
+                                style={[styles.thrInput, { width: 90 }]}
+                                value={odoVal}
+                                onChangeText={setOdoVal}
+                                keyboardType="numeric"
+                                autoFocus
+                                onBlur={async () => {
+                                    await handleSaveVehicleField('odometru_calibrat_km', odoVal);
+                                    setEditOdo(false);
+                                }}
+                            />
+                            <Text style={styles.thrUnit}>km</Text>
+                        </View>
+                    </View>
+                ) : (
+                    <TouchableOpacity
+                        style={[styles.row, styles.rowLast]}
+                        onPress={() => { setOdoVal(String(activeVehicle?.odometru_calibrat_km > 0 ? activeVehicle.odometru_calibrat_km : '')); setEditOdo(true); }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.rowLabel}>Odometru calibrat</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={activeVehicle?.odometru_calibrat_km > 0 ? styles.rowValue : styles.editHintMain}>
+                                {activeVehicle?.odometru_calibrat_km > 0
+                                    ? `${activeVehicle.odometru_calibrat_km.toLocaleString('ro-RO')} km`
+                                    : 'Introdu ✎'}
+                            </Text>
+                            {activeVehicle?.odometru_calibrat_km > 0 && <Text style={styles.editHint}>✎</Text>}
+                        </View>
+                    </TouchableOpacity>
+                )}
+
                 <TouchableOpacity
                     style={styles.outlineBtn}
                     onPress={() => navigation.navigate('VehicleProfile')}
@@ -419,6 +520,9 @@ const SettingsScreen = () => {
                         )}
                     </View>
                 ))}
+                <TouchableOpacity style={styles.resetThreshBtn} onPress={handleResetThresholds}>
+                    <Text style={styles.resetThreshText}>Resetează la valorile implicite</Text>
+                </TouchableOpacity>
             </View>
 
             {/* ── Notificări ─────────────────────────────────────────────── */}
@@ -860,6 +964,30 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.caption,
         color: colors.status.good,
         marginTop: 2,
+    },
+
+    // ── Editable vehicle fields ───────────────────────────────────────────────
+    editHint: {
+        fontSize: typography.sizes.caption,
+        color: colors.accent.default,
+        opacity: 0.7,
+    },
+    editHintMain: {
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.semibold,
+        color: colors.accent.default,
+    },
+
+    // ── Reset thresholds ──────────────────────────────────────────────────────
+    resetThreshBtn: {
+        marginTop: spacing[3],
+        paddingVertical: spacing[1] + 2,
+        alignItems: 'center',
+    },
+    resetThreshText: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.tertiary,
+        textDecorationLine: 'underline',
     },
 
     // ── Danger ────────────────────────────────────────────────────────────────

@@ -85,11 +85,18 @@ function buildContextualAlert(liveData, latestAlert) {
         description: `Tensiunea de încărcare: ${volt.toFixed(1)}V. Posibilă problemă cu alternatorul sau bateria.`,
         priority: 'high',
     };
-    if (latestAlert) return {
-        title: latestAlert.tip || 'Eveniment de condus',
-        description: `Eco Score: ${latestAlert.scor_curent ?? '—'}/100`,
-        priority: 'medium',
-    };
+    if (latestAlert) {
+        const TIP_LABELS = {
+            OVERSPEED:     `Viteză excesivă${latestAlert.viteza ? ` — ${Math.round(latestAlert.viteza)} km/h` : ''}`,
+            FRANARE_BRUSCA: 'Frânare bruscă detectată',
+            DTC_DETECTAT:  `Cod DTC: ${latestAlert.cod || ''}`,
+        };
+        return {
+            title: TIP_LABELS[latestAlert.tip] || (latestAlert.tip || 'Eveniment de condus').replace(/_/g, ' '),
+            description: `Eco Score: ${latestAlert.scor_curent ?? '—'}/100`,
+            priority: 'medium',
+        };
+    }
     return null;
 }
 

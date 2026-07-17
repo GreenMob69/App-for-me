@@ -352,6 +352,7 @@ const TripHistoryScreen = () => {
     const [showReport,     setShowReport]     = useState(false);
     const [monthlyData,    setMonthlyData]    = useState(null);
     const [reportLoading,  setReportLoading]  = useState(false);
+    const [reportError,    setReportError]    = useState(null);
     const [fromCache,      setFromCache]      = useState(false);
     const [cacheAgeMin,    setCacheAgeMin]    = useState(null);
     const [hasMore,        setHasMore]        = useState(false);
@@ -453,11 +454,12 @@ const TripHistoryScreen = () => {
         if (!year || !month) return;
         setReportLoading(true);
         setMonthlyData(null);
+        setReportError(null);
         try {
             const res = await api.get(`/rapoarte/lunar/${year}/${month}`);
             setMonthlyData(res.data);
         } catch {
-            setMonthlyData(null);
+            setReportError('Nu s-a putut încărca raportul. Verifică conexiunea.');
         } finally {
             setReportLoading(false);
         }
@@ -789,8 +791,9 @@ const TripHistoryScreen = () => {
                             })}
                         </ScrollView>
                         <TouchableOpacity
-                            style={[styles.iconBtn, styles.iconBtnAccent, { marginLeft: spacing[2] }]}
+                            style={[styles.iconBtn, styles.iconBtnAccent, { marginLeft: spacing[2], opacity: reportLoading ? 0.5 : 1 }]}
                             onPress={fetchMonthlyReport}
+                            disabled={reportLoading}
                             accessibilityRole="button"
                             accessibilityLabel={reportLoading ? 'Se generează raportul' : 'Generează raportul lunar'}
                         >
@@ -835,7 +838,13 @@ const TripHistoryScreen = () => {
                                 )}
                             </View>
                         )}
-                        {!monthlyData && !reportLoading && (
+                        {reportLoading && (
+                            <ActivityIndicator color={colors.accent.default} style={{ marginTop: spacing[6] }} />
+                        )}
+                        {reportError && !reportLoading && (
+                            <EmptyState title="Eroare" subtitle={reportError} style={styles.reportEmpty} />
+                        )}
+                        {!monthlyData && !reportLoading && !reportError && (
                             <EmptyState title="Selectează o lună." subtitle="Apasă 'Vezi' pentru a genera raportul lunar." style={styles.reportEmpty} />
                         )}
                         {monthlyData && monthlyData.totalTrips === 0 && (

@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TelemetryProvider } from './src/context/TelemetryContext';
 import { AppContext } from './src/context/AppContext';
 import { NotificationContext } from './src/context/NotificationContext';
-import { setCustomServerUrl, setVin, setVehicleLabel, DEFAULT_VIN } from './src/utils/config';
+import { setCustomServerUrl, setVin, setVehicleLabel, setFuelType, DEFAULT_VIN } from './src/utils/config';
 import api from './src/services/api';
 import socketService from './src/services/socket';
 import { colors, typography, layout, spacing } from './src/theme';
@@ -193,6 +193,7 @@ export default function App() {
                         if (v.variant)    parts.push(v.variant);
                         if (v.year)       parts.push(String(v.year));
                         setVehicleLabel(parts.join(' · ') || v.vin || vin);
+                        if (v.tip_combustibil) setFuelType(v.tip_combustibil);
                     }
                 } catch {}
             } catch (e) {}

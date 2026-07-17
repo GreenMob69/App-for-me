@@ -19,7 +19,8 @@
       "Bash(grep -rn \"#[0-9a-fA-F]\\\\{3,8\\\\}\" --include=\"*.js\" --exclude-dir=node_modules --exclude-dir=.git App.js)",
       "Bash(grep -v \"// \")",
       "Bash(grep -n \"app\\\\.get\\\\|app\\\\.post\\\\|\\\\/mentenanta\\\\|\\\\/timeline\\\\|\\\\/events\\\\|\\\\/service\\\\|\\\\/maintenance\\\\|\\\\/vehicul\\\\|dataCompleteness\\\\|data_completeness\\\\|ultima_analiza\\\\|last_analysis\" \"C:/Users/tfl/Desktop/telemetrie-licenta/backend.js\")",
-      "WebFetch(domain:docs.expo.dev)"
+      "WebFetch(domain:docs.expo.dev)",
+      "Bash(kill %1)"
     ]
   }
 }

@@ -421,16 +421,22 @@ function handleElectric(q, ctx) {
 }
 
 function handleCooling(q, ctx) {
-    const motorSub   = ctx.health?.subsystems?.motor;
+    const racireSub   = ctx.health?.subsystems?.racire;
+    const motorSub    = ctx.health?.subsystems?.motor;
+    const activeSub   = racireSub || null;
     const coolingPred = (ctx.predictions || []).find(p => p.failureId === 'COOLING_SYSTEM_FAILURE');
-    const devs       = ctx.baselineDeviations || {};
+    const devs        = ctx.baselineDeviations || {};
 
-    let answer = motorSub
-        ? `Sistem răcire: ${motorSub.status || ''} — scor motor ${motorSub.score}/100. `
+    let answer = activeSub
+        ? `Sistem răcire: ${activeSub.status || ''} — scor ${activeSub.score}/100. `
         : 'Sistem răcire: ';
 
     if (devs.coolant != null && Math.abs(devs.coolant) > 3) {
         answer += `Temperatură coolant față de baseline: ${devs.coolant > 0 ? '+' : ''}${devs.coolant.toFixed(1)}%. `;
+    }
+
+    if (!activeSub && motorSub && (motorSub.score ?? 100) < 75) {
+        answer += `Motorul prezintă potențiale probleme termice (scor motor ${motorSub.score}/100). `;
     }
 
     if (coolingPred) {
@@ -441,7 +447,7 @@ function handleCooling(q, ctx) {
         answer += 'Niciun risc de supraîncălzire detectat.';
     }
 
-    return reply(answer.trim(), (motorSub || coolingPred) ? 'HIGH' : 'MEDIUM', 'COOLING',
+    return reply(answer.trim(), (activeSub || coolingPred) ? 'HIGH' : 'MEDIUM', 'COOLING',
         ['HealthEngine', 'FaultPredictionEngine'],
         ['Cum e motorul?', 'Pot face un drum lung?']);
 }

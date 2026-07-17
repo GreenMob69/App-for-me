@@ -1,3 +1,4 @@
+require('dotenv').config();
 const mqtt = require('mqtt');
 const sqlite3 = require('sqlite3').verbose();
 const express = require('express');
@@ -19,6 +20,7 @@ const { loadRules } = require('./backend/knowledge/KnowledgeBase');
 const { initVehicleProfile } = require('./backend/vehicle-profile');
 const { DigitalTwinSnapshot, DigitalTwinSerializer } = require('./backend/digitalTwin');
 const { answerWithContext, buildSuggestedQuestions } = require('./backend/intelligence/ExpertQueryEngine');
+const { enhanceWithGemini } = require('./backend/intelligence/GeminiService');
 const { PDFReportGenerator } = require('./backend/pdf/PDFReportGenerator');
 
 const app = express();
@@ -43,6 +45,7 @@ const db = new sqlite3.Database('./telemetrie_industriala.db', (err) => {
         db.run(`CREATE TABLE IF NOT EXISTS vehicule (
             vin TEXT PRIMARY KEY, model TEXT NOT NULL, tip_combustibil TEXT DEFAULT 'diesel', capacitate_rezervor_l REAL DEFAULT 80
         )`);
+        db.run(`ALTER TABLE vehicule ADD COLUMN odometru_calibrat_km REAL DEFAULT 0`, () => {});
 
         db.run(`CREATE TABLE IF NOT EXISTS calatorii (
             id_calatorie INTEGER PRIMARY KEY AUTOINCREMENT, vin TEXT NOT NULL, timestamp_start INTEGER NOT NULL, timestamp_end INTEGER,
@@ -374,7 +377,7 @@ client.on('message', async (topic, message) => {
                                               // ===============================
                                               analysis: createAnalysis()
                     };
-                    console.log(`[TRIP START] Sesiunea #${this.lastID} a început pentru Audi A6 C4!`);
+                    console.log(`[TRIP START] Sesiunea #${this.lastID} a început pentru ${vin}!`);
                     io.emit('status_trip', { status: 'START', id_calatorie: this.lastID });
                 }
             });
@@ -415,8 +418,10 @@ client.on('message', async (topic, message) => {
         // decelerare rapidă) și KPI-uri.
         // =======================================================
         const hardBrakesInainte = trip.analysis.events.hardBrakes;
+        const overspeedsInainte = trip.analysis.events.overspeeds;
         updateAnalyzer(trip, pachet);
         const tocmaiAFostFranareBrusca = trip.analysis.events.hardBrakes > hardBrakesInainte;
+        const tocmaiAFostOverspeed     = trip.analysis.events.overspeeds > overspeedsInainte;
 
         // Scorul eco "live" rămâne simplu și rapid, pentru feedback instant pe telefon
         // (analiza completă cu 4 scoruri + Overall Health se calculează o singură
@@ -431,6 +436,15 @@ client.on('message', async (topic, message) => {
             db.run(`INSERT INTO evenimente_alerte (id_calatorie, timestamp, tip_eveniment, valoare_masurata, severitate, descriere)
                     VALUES (?, ?, ?, ?, ?, ?)`, [trip.id_calatorie, pachet.timestamp, 'FRANARE_BRUSCA', m.accel_g, 'WARNING', 'Frânare agresivă (-0.4G depășit)']);
             io.emit('alerta_live', { tip: 'FRANARE_BRUSCA', g: m.accel_g, scor_curent: Math.max(0, 100 - trip.penalizari_eco) });
+        }
+
+        if (tocmaiAFostOverspeed) {
+            trip.alerts++;
+            trip.penalizari_eco += 4;
+            const speedRounded = Math.round(m.speed || 0);
+            db.run(`INSERT INTO evenimente_alerte (id_calatorie, timestamp, tip_eveniment, valoare_masurata, severitate, descriere)
+                    VALUES (?, ?, ?, ?, ?, ?)`, [trip.id_calatorie, pachet.timestamp, 'OVERSPEED', m.speed, 'WARNING', `Viteză excesivă — ${speedRounded} km/h (>130 km/h)`]);
+            io.emit('alerta_live', { tip: 'OVERSPEED', viteza: m.speed, descriere: `Viteză excesivă — ${speedRounded} km/h`, scor_curent: Math.max(0, 100 - trip.penalizari_eco) });
         }
 
         // Broadcast integral către telefon cu toți cei ~90 parametri organizați
@@ -448,7 +462,7 @@ client.on('message', async (topic, message) => {
     if (eveniment_motor === "OPRIRE" && calatoriiActive[vin]) {
         const trip = calatoriiActive[vin];
         const scor_final = Math.max(0, 100 - trip.penalizari_eco);
-        const consum_mediu = trip.km > 0.01 ? (trip.consum_l / trip.km) * 100 : 0;
+        const consum_mediu = trip.km > 0.01 ? (trip.consum_l / trip.km) * 100 : null;
 
         // =======================================================
         // TRIP ANALYZER — Nivel 4 + 5 + 6 (pipeline complet, o singură dată)
@@ -475,7 +489,7 @@ client.on('message', async (topic, message) => {
         const rezultatAnaliza = await rezultatAnalizaPromise;
 
         db.run(`UPDATE calatorii SET timestamp_end = ?, km_parcursi = ?, consum_total_l = ?, consum_mediu_100km = ?, scor_eco = ? WHERE id_calatorie = ?`,
-            [pachet.timestamp, trip.km.toFixed(2), trip.consum_l.toFixed(2), consum_mediu.toFixed(1), scor_final, trip.id_calatorie], async () => {
+            [pachet.timestamp, trip.km.toFixed(2), trip.consum_l.toFixed(2), consum_mediu != null ? consum_mediu.toFixed(1) : null, scor_final, trip.id_calatorie], async () => {
 
             const litriTotali = rezultatAnaliza
                 ? (rezultatAnaliza.summary.fuel.idleLiters + rezultatAnaliza.summary.fuel.movingLiters)
@@ -536,7 +550,7 @@ client.on('message', async (topic, message) => {
                     distanceKm: Number(trip.km.toFixed(2)),
                     durationMin: Math.round((rezultatAnaliza.summary.duration.totalSeconds || 0) / 60),
                     fuelLiters: Number(litriTotali.toFixed(2)),
-                    consumptionPer100: trip.km > 0.1 ? Number((litriTotali / trip.km * 100).toFixed(1)) : 0,
+                    consumptionPer100: trip.km > 0.1 ? Number((litriTotali / trip.km * 100).toFixed(1)) : null,
                     costRON: Number(cost.toFixed(2)),
                     co2Kg: Number(co2.toFixed(2)),
                     ecoScore: scor_final
@@ -1488,6 +1502,15 @@ app.post('/api/ai/expert/query', async (req, res) => {
         });
         context.documents = documents;
         const result = answerWithContext(question, context, history || []);
+
+        const aiAnswer = await enhanceWithGemini(question, context, result.answer, result.intent, history || []);
+        if (aiAnswer) {
+            result.answer      = aiAnswer;
+            result.aiEnhanced  = true;
+        } else {
+            result.aiEnhanced  = false;
+        }
+
         res.json({ ...result, twinSavedAt: snapshot.savedAt });
     } catch (err) {
         console.error('[/api/ai/expert/query]', err.message);
@@ -1745,6 +1768,7 @@ app.get('/api/vehicule/list', (req, res) => {
             COALESCE(vp.make || ' ' || vp.model, v.model) AS model,
             COALESCE(vp.fuel_type, v.tip_combustibil)     AS tip_combustibil,
             COALESCE(vp.fuel_tank_liters, v.capacitate_rezervor_l) AS capacitate_rezervor_l,
+            v.odometru_calibrat_km,
             vp.year,
             vp.variant,
             vp.power_hp,
@@ -1759,6 +1783,27 @@ app.get('/api/vehicule/list', (req, res) => {
     });
 });
 
+app.patch('/api/vehicul/:vin/profil', (req, res) => {
+    const { vin } = req.params;
+    const { capacitate_rezervor_l, odometru_calibrat_km } = req.body;
+    const updates = [];
+    const params  = [];
+    if (capacitate_rezervor_l != null && !isNaN(capacitate_rezervor_l)) {
+        updates.push('capacitate_rezervor_l = ?');
+        params.push(Number(capacitate_rezervor_l));
+    }
+    if (odometru_calibrat_km != null && !isNaN(odometru_calibrat_km)) {
+        updates.push('odometru_calibrat_km = ?');
+        params.push(Number(odometru_calibrat_km));
+    }
+    if (updates.length === 0) return res.status(400).json({ eroare: 'Niciun câmp de actualizat.' });
+    params.push(vin);
+    db.run(`UPDATE vehicule SET ${updates.join(', ')} WHERE vin = ?`, params, function(err) {
+        if (err) return res.status(500).json({ eroare: err.message });
+        res.json({ ok: true, changes: this.changes });
+    });
+});
+
 // ===============================================================
 // PDF PER CURSĂ — generează și trimite raportul ca fișier PDF
 // ===============================================================
@@ -1770,9 +1815,11 @@ app.get('/api/calatorii/:id/report/pdf', (req, res) => {
                    ts.health_score, ts.durata_secunde, ts.viteza_max, ts.rpm_max,
                    ts.coolant_max, ts.boost_max, ts.voltaj_min, ts.voltaj_max,
                    ts.hard_brakes, ts.hard_accelerations, ts.cost_combustibil,
-                   ts.emisii_co2, ts.raport_ai_json
+                   ts.emisii_co2, ts.raport_ai_json,
+                   COALESCE(v.model, 'Vehicul') AS model_vehicul
             FROM calatorii c
             LEFT JOIN trip_summary ts ON c.id_calatorie = ts.id_calatorie
+            LEFT JOIN vehicule v ON c.vin = v.vin
             WHERE c.id_calatorie = ?`, [id], (err, row) => {
         if (err || !row) return res.status(404).json({ eroare: 'Cursa nu există.' });
 
@@ -1858,7 +1905,7 @@ app.get('/api/calatorii/:id/report/pdf', (req, res) => {
             doc.moveDown(2);
 
             doc.fillColor('#AAAAAA').fontSize(8)
-                .text(`Generat de OBD-II Monitor  |  VIN: ${row.vin || '-'}  |  Audi A6 C4`, { align: 'center' });
+                .text(`Generat de OBD-II Monitor  |  VIN: ${row.vin || '-'}  |  ${row.model_vehicul || '-'}`, { align: 'center' });
 
             doc.end();
         } catch (pdfErr) {

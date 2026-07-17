@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { useScreenFadeIn } from '../utils/animations';
 import { fetchFullStatus } from '../services/vehicleService';
-import { getVin, getVehicleLabel } from '../utils/config';
+import { getVin, getVehicleLabel, getFuelType } from '../utils/config';
 import { mapStatusData } from '../mappers/statusMapper';
 import { t } from '../i18n';
 import { colors, typography, spacing, layout, radii, motion } from '../theme';
@@ -142,11 +142,17 @@ const StatusScreen = ({ navigation }) => {
 
     // Navigate to parent RootStack screens
     const openNotifications = useCallback(() => {
-        navigation?.getParent()?.navigate('Notifications');
+        navigation?.getParent()?.getParent()?.navigate('Notifications');
     }, [navigation]);
 
     const openSearch = useCallback(() => {
-        navigation?.getParent()?.navigate('GlobalSearch');
+        try {
+            const root = navigation?.getParent()?.getParent();
+            console.log('[openSearch] root navigator:', root ? 'found' : 'null');
+            root?.navigate('GlobalSearch');
+        } catch (e) {
+            console.error('[openSearch] crash:', e.message);
+        }
     }, [navigation]);
 
     const loadStatus = useCallback(async (isRefresh = false) => {
@@ -312,7 +318,7 @@ const StatusScreen = ({ navigation }) => {
                 <View style={styles.identityStrip}>
                     <VehicleAvatar
                         status={drive.status}
-                        fuelType="DIESEL"
+                        fuelType={getFuelType()}
                         size="sm"
                         showBadge={false}
                     />

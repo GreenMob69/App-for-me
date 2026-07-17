@@ -59,6 +59,23 @@ function tlEventType(category) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+const SUBSYSTEM_LABELS = {
+    motor:       'Motor',       engine:      'Motor',
+    electric:    'Electric',    battery:     'Baterie',
+    turbo:       'Turbo',
+    combustibil: 'Combustibil', fuel:        'Combustibil',
+    stil_condus: 'Stil condus', driving:     'Stil condus',
+    racire:      'Răcire',      cooling:     'Răcire',
+    dpf:         'Filtru DPF',
+    egr:         'Sistem EGR',
+    transmisie:  'Transmisie',  transmission: 'Transmisie',
+    frane:       'Frâne',       brakes:      'Frâne',
+    safety:      'Siguranță',
+};
+const subsystemLabel = (key) =>
+    SUBSYSTEM_LABELS[key] ||
+    key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
 const hashPred = (pred) => {
     const s = `${pred.title || ''}${pred.category || ''}${pred.severity || ''}`;
     let h = 5381;
@@ -77,14 +94,20 @@ const VehicleHealthScreen = ({ navigation }) => {
     const [loading, setLoading]       = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError]           = useState(null);
-    const [trendData,    setTrendData]    = useState(null);
+    const [trendData,     setTrendData]     = useState(null);
     const [resolvedPreds, setResolvedPreds] = useState(new Set());
+    const [showAllPreds,  setShowAllPreds]  = useState(false);
+    const [cacheAge,      setCacheAge]      = useState(null);
 
     const loadCachedData = async () => {
         try {
-            const cached = await AsyncStorage.getItem(CACHE_KEY);
-            if (cached) {
-                setHealthData(JSON.parse(cached));
+            const raw = await AsyncStorage.getItem(CACHE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                // Support both old format (plain data) and new format ({data, cachedAt})
+                const { data, cachedAt } = parsed?.cachedAt ? parsed : { data: parsed, cachedAt: null };
+                setHealthData(data);
+                if (cachedAt) setCacheAge(cachedAt);
                 setLoading(false);
             }
         } catch {}
@@ -96,9 +119,12 @@ const VehicleHealthScreen = ({ navigation }) => {
             const data = response.data;
             setHealthData(data);
             setError(null);
-            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
+            setCacheAge(Date.now());
+            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ data, cachedAt: Date.now() }));
         } catch (err) {
-            if (!healthData) setError('Nu s-a putut conecta la server');
+            // Always set error — isOffline logic (error && healthData) handles
+            // whether to show the error screen or just the OFFLINE badge.
+            setError('Nu s-a putut conecta la server');
         } finally {
             setLoading(false);
             if (isRefresh) setRefreshing(false);
@@ -128,14 +154,22 @@ const VehicleHealthScreen = ({ navigation }) => {
 
     const handleMarkPrediction = useCallback(async (pred, status) => {
         const hash = hashPred(pred);
+        // Optimistic update
+        setResolvedPreds(prev => new Set([...prev, hash]));
         try {
             await api.post(`/vehicul/${getVin()}/predictii/valideaza`, {
                 prediction_hash: hash,
                 titlu: pred.title || pred.component || '',
                 status,
             });
-            setResolvedPreds(prev => new Set([...prev, hash]));
-        } catch {}
+        } catch {
+            // Revert on failure
+            setResolvedPreds(prev => {
+                const next = new Set(prev);
+                next.delete(hash);
+                return next;
+            });
+        }
     }, []);
 
     const handlePredictionPress = useCallback((prediction) => {
@@ -255,7 +289,11 @@ const VehicleHealthScreen = ({ navigation }) => {
                     <View style={styles.headerBadges}>
                         {isOffline && (
                             <View style={styles.offlineBadge}>
-                                <Text style={styles.offlineBadgeText}>OFFLINE</Text>
+                                <Text style={styles.offlineBadgeText}>
+                                    {cacheAge && (Date.now() - cacheAge) > 3_600_000
+                                        ? `DATE DIN ${formatTimeAgo(cacheAge)}`
+                                        : 'OFFLINE'}
+                                </Text>
                             </View>
                         )}
                         {dataQuality && dataQuality !== 'HIGH' && !isOffline && (
@@ -323,7 +361,7 @@ const VehicleHealthScreen = ({ navigation }) => {
                                 >
                                     <View style={[styles.subsystemDot, { backgroundColor: getSubsystemColor(data.score) }]} />
                                     <Text style={styles.subsystemName} numberOfLines={1}>
-                                        {key.replace(/_/g, ' ').toUpperCase()}
+                                        {subsystemLabel(key).toUpperCase()}
                                     </Text>
                                     <Text style={[styles.subsystemScore, { color: getSubsystemColor(data.score) }]}>
                                         {data.score != null ? Math.round(data.score) : '—'}
@@ -374,7 +412,7 @@ const VehicleHealthScreen = ({ navigation }) => {
                             title={isCritical ? 'Atenție — Risc ridicat' : 'Predicții'}
                             style={styles.sectionHeader}
                         />
-                        {predictions.slice(0, 2).map((pred, idx) => {
+                        {(showAllPreds ? predictions : predictions.slice(0, 2)).map((pred, idx) => {
                             const hash = hashPred(pred);
                             const isResolved = resolvedPreds.has(hash);
                             return (
@@ -415,7 +453,16 @@ const VehicleHealthScreen = ({ navigation }) => {
                             );
                         })}
                         {predictions.length > 2 && (
-                            <Text style={styles.moreText}>+{predictions.length - 2} monitorizate</Text>
+                            <TouchableOpacity
+                                style={styles.showMoreBtn}
+                                onPress={() => setShowAllPreds(v => !v)}
+                            >
+                                <Text style={styles.showMoreText}>
+                                    {showAllPreds
+                                        ? 'Restrânge ↑'
+                                        : `Arată toate ${predictions.length} predicțiile →`}
+                                </Text>
+                            </TouchableOpacity>
                         )}
                     </>
                 )}
@@ -695,11 +742,17 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing[1],
     },
 
-    moreText: {
+    showMoreBtn: {
+        marginTop: spacing[3],
+        paddingVertical: spacing[2],
+        alignItems: 'center',
+        borderTopWidth: 1,
+        borderTopColor: colors.border.subtle,
+    },
+    showMoreText: {
         fontSize: typography.sizes.caption,
-        color: colors.text.secondary,
-        textAlign: 'right',
-        marginTop: spacing[2],
+        color: colors.accent.default,
+        fontWeight: typography.weights.semibold,
     },
 
     // ── Last trip ─────────────────────────────────────────────────────────────

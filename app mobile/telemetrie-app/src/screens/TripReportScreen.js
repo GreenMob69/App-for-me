@@ -145,7 +145,7 @@ const TripReportScreen = ({ route, navigation }) => {
                           color: stats.ecoScore >= 80 ? colors.status.good : colors.status.monitor },
                     ].map((s, i) => (
                         <View key={i} style={styles.statCard}>
-                            <Text style={[styles.statValue, s.color && { color: s.color }]}>{s.value}</Text>
+                            <Text style={[styles.statValue, s.color && { color: s.color }]}>{s.value ?? '—'}</Text>
                             <Text style={styles.statUnit}>{s.unit}</Text>
                             <Text style={styles.statLabel}>{s.label}</Text>
                         </View>

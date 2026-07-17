@@ -43,3 +43,9 @@ let _vehicleLabel = '';
 
 export const getVehicleLabel = () => _vehicleLabel;
 export const setVehicleLabel = (label) => { _vehicleLabel = label; };
+
+// --- Vehicle fuel type (loaded at startup) ---
+let _fuelType = 'DIESEL';
+
+export const getFuelType   = () => _fuelType;
+export const setFuelType   = (type) => { _fuelType = (type || 'diesel').toUpperCase(); };
