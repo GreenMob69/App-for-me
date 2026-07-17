@@ -26,7 +26,8 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => console.log(`[WEBSOCKET] Client deconectat (${socket.id})`));
 });
 
-const db = new sqlite3.Database('./telemetrie_industriala.db', (err) => {
+const DB_PATH = process.env.DB_PATH || './telemetrie_industriala.db';
+const db = new sqlite3.Database(DB_PATH, (err) => {
     if (err) return console.error('[EROARE DB]', err.message);
     console.log('[DB] Conectat.');
     db.run('PRAGMA foreign_keys = ON;');
@@ -126,4 +127,5 @@ app.use('/api',  require('./routes/reports')(db));
 app.use('/api',  require('./routes/ai')(db));
 app.use('/admin', require('./routes/admin')(db));
 
-server.listen(3000, () => console.log('[API REST & WS] Server pornit pe http://localhost:3000'));
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`[API REST & WS] Server pornit pe http://localhost:${PORT}`));
