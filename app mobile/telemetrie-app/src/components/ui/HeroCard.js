@@ -21,6 +21,7 @@ import React, { useRef, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing, layout, motion } from '../../theme';
 import Skeleton from './Skeleton';
+import PropTypes from 'prop-types';
 
 const STATUS_BORDER = {
     optimal:  colors.status.optimal,
@@ -222,3 +223,16 @@ const styles = StyleSheet.create({
 });
 
 export default HeroCard;
+
+HeroCard.propTypes = {
+    value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    unit: PropTypes.string,
+    title: PropTypes.string,
+    subtitle: PropTypes.string,
+    description: PropTypes.string,
+    status: PropTypes.string,
+    icon: PropTypes.oneOfType([PropTypes.string, PropTypes.node]),
+    onPress: PropTypes.func,
+    loading: PropTypes.bool,
+    style: PropTypes.object,
+};

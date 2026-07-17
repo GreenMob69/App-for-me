@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { t } from '../i18n';
 import { colors, typography, radii, spacing } from '../theme';
 import { getSubsystemColor, TREND_INDICATORS } from '../utils/statusUtils';
+import PropTypes from 'prop-types';
 
 const getTrendInfo = (trend) => {
     if (!trend) return TREND_INDICATORS.stable;
@@ -100,3 +101,14 @@ const styles = StyleSheet.create({
 });
 
 export default SubsystemCard;
+
+SubsystemCard.propTypes = {
+    systemKey: PropTypes.string.isRequired,
+    data: PropTypes.shape({
+        score: PropTypes.number,
+        status: PropTypes.string,
+        trend: PropTypes.string,
+        prediction: PropTypes.object,
+    }).isRequired,
+    onPress: PropTypes.func,
+};

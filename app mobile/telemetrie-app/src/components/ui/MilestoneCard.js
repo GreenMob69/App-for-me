@@ -20,6 +20,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing, layout } from '../../theme';
 import Skeleton from './Skeleton';
+import PropTypes from 'prop-types';
 
 const MilestoneCard = React.memo(({
     title,
@@ -239,3 +240,15 @@ const styles = StyleSheet.create({
 });
 
 export default MilestoneCard;
+
+MilestoneCard.propTypes = {
+    title: PropTypes.string.isRequired,
+    description: PropTypes.string,
+    achieved: PropTypes.bool,
+    icon: PropTypes.oneOfType([PropTypes.string, PropTypes.node]),
+    achievedDate: PropTypes.string,
+    target: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    progress: PropTypes.number,
+    loading: PropTypes.bool,
+    style: PropTypes.object,
+};

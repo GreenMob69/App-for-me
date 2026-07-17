@@ -18,6 +18,7 @@
 import React, { useRef, useCallback } from 'react';
 import { View, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { colors, radii, spacing, motion } from '../../theme';
+import PropTypes from 'prop-types';
 
 const Card = React.memo(({
     variant = 'default',
@@ -128,5 +129,17 @@ const styles = StyleSheet.create({
     // ── State ──────────────────────────────────────────────────────────────
     disabled: { opacity: 0.45 },
 });
+
+Card.propTypes = {
+    variant: PropTypes.string,
+    status: PropTypes.string,
+    padding: PropTypes.string,
+    onPress: PropTypes.func,
+    disabled: PropTypes.bool,
+    style: PropTypes.object,
+    children: PropTypes.node,
+    testID: PropTypes.string,
+    accessibilityLabel: PropTypes.string,
+};
 
 export default Card;

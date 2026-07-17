@@ -19,6 +19,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, TextInput, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing } from '../../theme';
+import PropTypes from 'prop-types';
 
 const SearchBar = React.memo(({
     value,
@@ -150,5 +151,17 @@ const styles = StyleSheet.create({
         color: colors.accent.default,
     },
 });
+
+SearchBar.propTypes = {
+    value: PropTypes.string.isRequired,
+    onChangeText: PropTypes.func.isRequired,
+    placeholder: PropTypes.string,
+    onClear: PropTypes.func,
+    onFilter: PropTypes.func,
+    autoFocus: PropTypes.bool,
+    filterActive: PropTypes.bool,
+    style: PropTypes.object,
+    testID: PropTypes.string,
+};
 
 export default SearchBar;

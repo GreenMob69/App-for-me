@@ -4,6 +4,7 @@ import { LineChart } from 'react-native-gifted-charts';
 import { t } from '../i18n';
 import { colors, typography, radii, spacing, layout } from '../theme';
 import { getSubsystemColor } from '../utils/statusUtils';
+import PropTypes from 'prop-types';
 
 const HealthTimeline = ({ timeline }) => {
     const { width: screenWidth } = useWindowDimensions();
@@ -133,3 +134,10 @@ const styles = StyleSheet.create({
 });
 
 export default HealthTimeline;
+
+HealthTimeline.propTypes = {
+    timeline: PropTypes.arrayOf(PropTypes.shape({
+        health: PropTypes.number,
+        date: PropTypes.string,
+    })),
+};

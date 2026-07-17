@@ -18,6 +18,7 @@ import React, { useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing, layout, motion } from '../../theme';
 import Skeleton from './Skeleton';
+import PropTypes from 'prop-types';
 
 const DOC_TYPE_STYLES = {
     pdf:   { icon: '📄', color: colors.status.critical, bg: colors.tint.critical,  label: 'PDF' },
@@ -154,3 +155,14 @@ const styles = StyleSheet.create({
 });
 
 export default DocumentCard;
+
+DocumentCard.propTypes = {
+    title: PropTypes.string.isRequired,
+    documentType: PropTypes.string,
+    fileSize: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    date: PropTypes.string,
+    category: PropTypes.string,
+    onPress: PropTypes.func,
+    loading: PropTypes.bool,
+    style: PropTypes.object,
+};

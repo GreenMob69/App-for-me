@@ -21,6 +21,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native
 import { colors, typography, radii, spacing, layout, motion } from '../../theme';
 import Skeleton from './Skeleton';
 import Divider from './Divider';
+import PropTypes from 'prop-types';
 
 const CostCard = React.memo(({
     title,
@@ -255,3 +256,15 @@ const styles = StyleSheet.create({
 });
 
 export default CostCard;
+
+CostCard.propTypes = {
+    title: PropTypes.string.isRequired,
+    amount: PropTypes.number.isRequired,
+    currency: PropTypes.string,
+    period: PropTypes.string,
+    trend: PropTypes.number,
+    trendInverse: PropTypes.bool,
+    breakdown: PropTypes.arrayOf(PropTypes.shape({ label: PropTypes.string, amount: PropTypes.number, icon: PropTypes.string })),
+    loading: PropTypes.bool,
+    style: PropTypes.object,
+};

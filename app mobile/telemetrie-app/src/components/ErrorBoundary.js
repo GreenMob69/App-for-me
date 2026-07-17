@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { t } from '../i18n';
 import { colors, typography, radii, spacing } from '../theme';
+import PropTypes from 'prop-types';
 
 class ErrorBoundary extends React.Component {
     constructor(props) {
@@ -75,3 +76,7 @@ const styles = StyleSheet.create({
 });
 
 export default ErrorBoundary;
+
+ErrorBoundary.propTypes = {
+    children: PropTypes.node.isRequired,
+};

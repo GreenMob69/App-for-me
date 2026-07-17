@@ -14,6 +14,7 @@ import {
     HealthGauge, MetricCard, SectionHeader, PredictionCard,
     TimelineCard, Skeleton, EmptyState,
 } from '../components/ui';
+import PropTypes from 'prop-types';
 
 const CACHE_KEY = '@health_cache';
 
@@ -797,3 +798,7 @@ const styles = StyleSheet.create({
 });
 
 export default VehicleHealthScreen;
+
+VehicleHealthScreen.propTypes = {
+    navigation: PropTypes.object.isRequired,
+};

@@ -15,6 +15,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
 import { colors, radii, spacing, motion } from '../../theme';
+import PropTypes from 'prop-types';
 
 const DEFAULT_HEIGHT = {
     text:   14,
@@ -101,5 +102,14 @@ const styles = StyleSheet.create({
         backgroundColor: colors.bg[3],
     },
 });
+
+Skeleton.propTypes = {
+    variant: PropTypes.string,
+    width: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    height: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    lines: PropTypes.number,
+    animate: PropTypes.bool,
+    style: PropTypes.object,
+};
 
 export default Skeleton;

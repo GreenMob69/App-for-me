@@ -22,6 +22,7 @@ import React, { useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing, layout, motion } from '../../theme';
 import Skeleton from './Skeleton';
+import PropTypes from 'prop-types';
 
 const WorkshopCard = React.memo(({
     name,
@@ -249,3 +250,17 @@ const styles = StyleSheet.create({
 });
 
 export default WorkshopCard;
+
+WorkshopCard.propTypes = {
+    name: PropTypes.string.isRequired,
+    address: PropTypes.string,
+    rating: PropTypes.number,
+    reviewCount: PropTypes.number,
+    distance: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    phone: PropTypes.string,
+    certified: PropTypes.bool,
+    onPress: PropTypes.func,
+    onCallPress: PropTypes.func,
+    loading: PropTypes.bool,
+    style: PropTypes.object,
+};

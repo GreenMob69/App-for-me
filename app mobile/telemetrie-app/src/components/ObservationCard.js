@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { colors, typography, radii, spacing, motion } from '../theme';
 import { SEVERITY_COLORS } from '../utils/statusUtils';
 import ConfidenceBadge from './ConfidenceBadge';
+import PropTypes from 'prop-types';
 
 const ObservationCard = ({
     title,
@@ -156,3 +157,17 @@ const styles = StyleSheet.create({
 });
 
 export default ObservationCard;
+
+ObservationCard.propTypes = {
+    title: PropTypes.string.isRequired,
+    evidence: PropTypes.string,
+    explanation: PropTypes.string,
+    action: PropTypes.string,
+    urgency: PropTypes.string,
+    confidence: PropTypes.string,
+    severity: PropTypes.string,
+    estimateKm: PropTypes.number,
+    estimateDays: PropTypes.number,
+    onDetailPress: PropTypes.func,
+    index: PropTypes.number,
+};

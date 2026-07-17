@@ -16,6 +16,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors, typography, spacing } from '../../theme';
+import PropTypes from 'prop-types';
 
 const SectionHeader = React.memo(({
     title,
@@ -91,5 +92,14 @@ const styles = StyleSheet.create({
         fontWeight: typography.weights.semibold,
     },
 });
+
+SectionHeader.propTypes = {
+    title: PropTypes.string.isRequired,
+    subtitle: PropTypes.string,
+    action: PropTypes.shape({ label: PropTypes.string, onPress: PropTypes.func }),
+    size: PropTypes.string,
+    uppercase: PropTypes.bool,
+    style: PropTypes.object,
+};
 
 export default SectionHeader;

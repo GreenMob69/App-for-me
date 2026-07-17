@@ -23,6 +23,7 @@ import React, { useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing, layout, motion } from '../../theme';
 import Skeleton from './Skeleton';
+import PropTypes from 'prop-types';
 
 const STATUS_COLOR = {
     optimal:  colors.status.optimal,
@@ -220,3 +221,18 @@ const styles = StyleSheet.create({
 });
 
 export default MetricCard;
+
+MetricCard.propTypes = {
+    value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    label: PropTypes.string.isRequired,
+    unit: PropTypes.string,
+    trend: PropTypes.number,
+    trendInverse: PropTypes.bool,
+    trendLabel: PropTypes.string,
+    status: PropTypes.string,
+    icon: PropTypes.oneOfType([PropTypes.string, PropTypes.node]),
+    size: PropTypes.string,
+    onPress: PropTypes.func,
+    loading: PropTypes.bool,
+    style: PropTypes.object,
+};

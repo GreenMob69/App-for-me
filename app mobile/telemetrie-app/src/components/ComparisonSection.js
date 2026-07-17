@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Animated } from 'react-native';
 import { t } from '../i18n';
 import { colors, typography, radii, spacing, motion } from '../theme';
 import { TREND_INDICATORS } from '../utils/statusUtils';
+import PropTypes from 'prop-types';
 
 const ComparisonSection = ({ comparison }) => {
     const opacity = useRef(new Animated.Value(0)).current;
@@ -81,3 +82,11 @@ const styles = StyleSheet.create({
 });
 
 export default ComparisonSection;
+
+ComparisonSection.propTypes = {
+    comparison: PropTypes.shape({
+        trend: PropTypes.string,
+        summary: PropTypes.string,
+        detail: PropTypes.string,
+    }),
+};

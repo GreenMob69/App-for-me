@@ -7,6 +7,7 @@ import { colors, typography, radii, spacing, layout, motion } from '../theme';
 import { getSubsystemColor } from '../utils/statusUtils';
 import { buildDetailExplanation } from '../engine/MessageEngine';
 import { Skeleton, EmptyState } from '../components/ui';
+import PropTypes from 'prop-types';
 
 const SubsystemDetailScreen = ({ route, navigation }) => {
     const { system, vin } = route.params;
@@ -519,3 +520,8 @@ const styles = StyleSheet.create({
 });
 
 export default SubsystemDetailScreen;
+
+SubsystemDetailScreen.propTypes = {
+    route: PropTypes.shape({ params: PropTypes.shape({ system: PropTypes.string, vin: PropTypes.string }) }).isRequired,
+    navigation: PropTypes.object.isRequired,
+};

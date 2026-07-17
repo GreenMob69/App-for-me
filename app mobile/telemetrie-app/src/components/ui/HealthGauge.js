@@ -22,6 +22,7 @@ import Svg, { Path } from 'react-native-svg';
 import { colors, typography, spacing, motion } from '../../theme';
 import { getHealthColor } from '../../utils/statusUtils';
 import Skeleton from './Skeleton';
+import PropTypes from 'prop-types';
 
 const SIZES = {
     sm: { total: 120, stroke: 8  },
@@ -192,3 +193,13 @@ const styles = StyleSheet.create({
 });
 
 export default HealthGauge;
+
+HealthGauge.propTypes = {
+    score: PropTypes.number.isRequired,
+    label: PropTypes.string,
+    subtitle: PropTypes.string,
+    size: PropTypes.string,
+    animate: PropTypes.bool,
+    loading: PropTypes.bool,
+    style: PropTypes.object,
+};

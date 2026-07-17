@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { t } from '../i18n';
 import { colors, typography, radii, spacing, motion } from '../theme';
+import PropTypes from 'prop-types';
 
 const CalmState = ({ lastTrip }) => {
     const opacity = useRef(new Animated.Value(0)).current;
@@ -64,3 +65,9 @@ const styles = StyleSheet.create({
 });
 
 export default CalmState;
+
+CalmState.propTypes = {
+    lastTrip: PropTypes.shape({
+        text: PropTypes.string,
+    }),
+};

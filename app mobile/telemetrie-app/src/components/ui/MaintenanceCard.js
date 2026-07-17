@@ -22,6 +22,7 @@ import React, { useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing, layout, motion } from '../../theme';
 import Skeleton from './Skeleton';
+import PropTypes from 'prop-types';
 
 const STATUS_STYLES = {
     upcoming: { border: colors.accent.border,    tint: colors.accent.muted,    text: colors.accent.default, label: 'Programat' },
@@ -252,3 +253,17 @@ const styles = StyleSheet.create({
 });
 
 export default MaintenanceCard;
+
+MaintenanceCard.propTypes = {
+    title: PropTypes.string.isRequired,
+    subtitle: PropTypes.string,
+    dueKm: PropTypes.number,
+    dueDate: PropTypes.string,
+    estimatedCost: PropTypes.number,
+    currency: PropTypes.string,
+    status: PropTypes.string,
+    urgency: PropTypes.string,
+    onPress: PropTypes.func,
+    loading: PropTypes.bool,
+    style: PropTypes.object,
+};

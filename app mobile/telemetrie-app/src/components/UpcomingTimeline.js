@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { colors, typography, radii, spacing, motion } from '../theme';
 import { SEVERITY_COLORS } from '../utils/statusUtils';
 import ConfidenceBadge from './ConfidenceBadge';
+import PropTypes from 'prop-types';
 
 const UpcomingTimeline = ({ items }) => {
     const opacity = useRef(new Animated.Value(0)).current;
@@ -154,3 +155,15 @@ const styles = StyleSheet.create({
 });
 
 export default UpcomingTimeline;
+
+UpcomingTimeline.propTypes = {
+    items: PropTypes.arrayOf(PropTypes.shape({
+        component: PropTypes.string,
+        timeframe: PropTypes.string,
+        urgency: PropTypes.string,
+        reason: PropTypes.string,
+        recommendation: PropTypes.string,
+        confidence: PropTypes.string,
+        severity: PropTypes.string,
+    })),
+};

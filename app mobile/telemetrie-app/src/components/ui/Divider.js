@@ -14,6 +14,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors, typography, spacing as s } from '../../theme';
+import PropTypes from 'prop-types';
 
 const BORDER_COLOR = {
     subtle:  colors.border.subtle,
@@ -86,5 +87,13 @@ const styles = StyleSheet.create({
         letterSpacing: 0.8,
     },
 });
+
+Divider.propTypes = {
+    orientation: PropTypes.string,
+    label: PropTypes.string,
+    strength: PropTypes.string,
+    spacing: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+    style: PropTypes.object,
+};
 
 export default Divider;

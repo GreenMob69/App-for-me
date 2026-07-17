@@ -31,6 +31,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing } from '../../theme';
+import PropTypes from 'prop-types';
 
 const Input = React.memo(({
     value,
@@ -210,5 +211,29 @@ const styles = StyleSheet.create({
         marginTop: spacing[1],
     },
 });
+
+Input.propTypes = {
+    value: PropTypes.string.isRequired,
+    onChangeText: PropTypes.func.isRequired,
+    label: PropTypes.string,
+    placeholder: PropTypes.string,
+    error: PropTypes.string,
+    helper: PropTypes.string,
+    disabled: PropTypes.bool,
+    multiline: PropTypes.bool,
+    numberOfLines: PropTypes.number,
+    keyboardType: PropTypes.string,
+    secureTextEntry: PropTypes.bool,
+    leftIcon: PropTypes.node,
+    rightIcon: PropTypes.node,
+    onSubmitEditing: PropTypes.func,
+    onFocus: PropTypes.func,
+    onBlur: PropTypes.func,
+    returnKeyType: PropTypes.string,
+    style: PropTypes.object,
+    inputStyle: PropTypes.object,
+    testID: PropTypes.string,
+    accessibilityLabel: PropTypes.string,
+};
 
 export default Input;

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { t } from '../i18n';
 import { colors, typography, radii, spacing } from '../theme';
+import PropTypes from 'prop-types';
 
 const getSeverityStyle = (severity) => {
     if (severity === 'HIGH') return {
@@ -137,3 +138,15 @@ const styles = StyleSheet.create({
 });
 
 export default PredictionCard;
+
+PredictionCard.propTypes = {
+    prediction: PropTypes.shape({
+        component: PropTypes.string,
+        probability: PropTypes.number,
+        confidence: PropTypes.number,
+        severity: PropTypes.string,
+        estimatedRemainingKm: PropTypes.number,
+        recommendation: PropTypes.string,
+    }).isRequired,
+    onPress: PropTypes.func,
+};

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { t } from '../i18n';
 import { colors, typography, radii, spacing } from '../theme';
 import { EVALUATION_STYLES } from '../utils/statusUtils';
+import PropTypes from 'prop-types';
 
 const StatusHeader = ({ evaluation = 'EXCELLENT', message = '', subtitle = '' }) => {
     const style = EVALUATION_STYLES[evaluation] || EVALUATION_STYLES.EXCELLENT;
@@ -64,3 +65,9 @@ const styles = StyleSheet.create({
 });
 
 export default StatusHeader;
+
+StatusHeader.propTypes = {
+    evaluation: PropTypes.string,
+    message: PropTypes.string,
+    subtitle: PropTypes.string,
+};

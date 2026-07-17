@@ -22,6 +22,7 @@ import { colors, typography, radii, spacing, layout, motion } from '../../theme'
 import { CONFIDENCE_STYLES } from '../../utils/statusUtils';
 import Skeleton from './Skeleton';
 import StatusBadge from './StatusBadge';
+import PropTypes from 'prop-types';
 
 const CONFIDENCE_LABEL = {
     low:    'Confidență scăzută',
@@ -223,3 +224,15 @@ const styles = StyleSheet.create({
 });
 
 export default PredictionCard;
+
+PredictionCard.propTypes = {
+    title: PropTypes.string.isRequired,
+    prediction: PropTypes.string.isRequired,
+    confidence: PropTypes.string,
+    timeframe: PropTypes.string,
+    status: PropTypes.string,
+    icon: PropTypes.oneOfType([PropTypes.string, PropTypes.node]),
+    onPress: PropTypes.func,
+    loading: PropTypes.bool,
+    style: PropTypes.object,
+};

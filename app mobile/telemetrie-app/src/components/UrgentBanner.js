@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { t } from '../i18n';
 import { colors, typography, radii, spacing, motion } from '../theme';
+import PropTypes from 'prop-types';
 
 const SEVERITY_MAP = {
     PROBLEM:  { bg: colors.tint.caution,  border: colors.status.caution,  dot: colors.status.caution },
@@ -106,3 +107,12 @@ const styles = StyleSheet.create({
 });
 
 export default UrgentBanner;
+
+UrgentBanner.propTypes = {
+    evaluation: PropTypes.string,
+    primaryObservation: PropTypes.shape({
+        title: PropTypes.string,
+        evidence: PropTypes.string,
+        action: PropTypes.string,
+    }),
+};

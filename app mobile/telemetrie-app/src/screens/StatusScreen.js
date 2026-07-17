@@ -41,6 +41,7 @@ import {
     StatusBadge,
     VehicleAvatar,
 } from '../components/ui';
+import PropTypes from 'prop-types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mapări semantice
@@ -792,3 +793,7 @@ const styles = StyleSheet.create({
 });
 
 export default StatusScreen;
+
+StatusScreen.propTypes = {
+    navigation: PropTypes.object.isRequired,
+};

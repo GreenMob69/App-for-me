@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { colors, typography, spacing } from '../theme';
+import PropTypes from 'prop-types';
 
 const CircularGauge = ({ label, value, unit, min = 0, max = 100, color = colors.accent.default, size = 130 }) => {
     const strokeWidth = 12;
@@ -79,3 +80,13 @@ const styles = StyleSheet.create({
 });
 
 export default CircularGauge;
+
+CircularGauge.propTypes = {
+    label: PropTypes.string.isRequired,
+    value: PropTypes.number.isRequired,
+    unit: PropTypes.string.isRequired,
+    min: PropTypes.number,
+    max: PropTypes.number,
+    color: PropTypes.string,
+    size: PropTypes.number,
+};

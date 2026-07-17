@@ -19,6 +19,7 @@
 import React, { useRef, useCallback } from 'react';
 import { Text, TouchableOpacity, Animated, View, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing, motion } from '../../theme';
+import PropTypes from 'prop-types';
 
 const SIZE_DIMENSIONS = {
     xs: 28,
@@ -162,5 +163,18 @@ const styles = StyleSheet.create({
     disabled: { opacity: 0.4 },
     iconText: { includeFontPadding: false },
 });
+
+IconButton.propTypes = {
+    icon: PropTypes.oneOfType([PropTypes.string, PropTypes.node]).isRequired,
+    onPress: PropTypes.func.isRequired,
+    variant: PropTypes.string,
+    size: PropTypes.string,
+    badge: PropTypes.oneOfType([PropTypes.number, PropTypes.bool]),
+    disabled: PropTypes.bool,
+    shape: PropTypes.string,
+    style: PropTypes.object,
+    accessibilityLabel: PropTypes.string,
+    testID: PropTypes.string,
+};
 
 export default IconButton;

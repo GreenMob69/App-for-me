@@ -17,6 +17,7 @@ import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { colors, typography, spacing, motion } from '../../theme';
 import Button from './Button';
+import PropTypes from 'prop-types';
 
 const EmptyState = React.memo(({
     icon,
@@ -128,3 +129,12 @@ const styles = StyleSheet.create({
 });
 
 export default EmptyState;
+
+EmptyState.propTypes = {
+    icon: PropTypes.oneOfType([PropTypes.string, PropTypes.node]),
+    title: PropTypes.string.isRequired,
+    subtitle: PropTypes.string,
+    action: PropTypes.shape({ label: PropTypes.string, onPress: PropTypes.func }),
+    size: PropTypes.string,
+    style: PropTypes.object,
+};

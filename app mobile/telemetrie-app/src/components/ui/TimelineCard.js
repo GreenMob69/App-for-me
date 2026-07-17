@@ -21,6 +21,7 @@ import React, { useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing, motion } from '../../theme';
 import Skeleton from './Skeleton';
+import PropTypes from 'prop-types';
 
 const TYPE_STYLES = {
     event:       { color: colors.accent.default,   icon: '◆', bg: colors.accent.muted },
@@ -187,3 +188,16 @@ const styles = StyleSheet.create({
 });
 
 export default TimelineCard;
+
+TimelineCard.propTypes = {
+    title: PropTypes.string.isRequired,
+    description: PropTypes.string,
+    date: PropTypes.string,
+    time: PropTypes.string,
+    type: PropTypes.string,
+    isFirst: PropTypes.bool,
+    isLast: PropTypes.bool,
+    onPress: PropTypes.func,
+    loading: PropTypes.bool,
+    style: PropTypes.object,
+};

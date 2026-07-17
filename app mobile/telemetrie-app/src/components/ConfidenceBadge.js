@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { t } from '../i18n';
 import { typography, radii, spacing } from '../theme';
 import { CONFIDENCE_STYLES } from '../utils/statusUtils';
+import PropTypes from 'prop-types';
 
 const ConfidenceBadge = ({ level = 'MEDIUM' }) => {
     const style = CONFIDENCE_STYLES[level] || CONFIDENCE_STYLES.MEDIUM;
@@ -39,3 +40,7 @@ const styles = StyleSheet.create({
 });
 
 export default ConfidenceBadge;
+
+ConfidenceBadge.propTypes = {
+    level: PropTypes.string,
+};

@@ -4,6 +4,7 @@ import Svg, { Path } from 'react-native-svg';
 import { t } from '../i18n';
 import { colors, typography, spacing, motion } from '../theme';
 import { getHealthColor } from '../utils/statusUtils';
+import PropTypes from 'prop-types';
 
 const getHealthMessage = (score, subsystems) => {
     if (score === null) return t('states.loading');
@@ -128,3 +129,9 @@ const styles = StyleSheet.create({
 });
 
 export default HealthGauge;
+
+HealthGauge.propTypes = {
+    score: PropTypes.number,
+    subsystems: PropTypes.object,
+    size: PropTypes.number,
+};

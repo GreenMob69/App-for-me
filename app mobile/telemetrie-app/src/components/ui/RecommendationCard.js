@@ -18,6 +18,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing, layout, motion } from '../../theme';
 import Skeleton from './Skeleton';
+import PropTypes from 'prop-types';
 
 const PRIORITY_STYLES = {
     low: {
@@ -241,3 +242,14 @@ const styles = StyleSheet.create({
 });
 
 export default RecommendationCard;
+
+RecommendationCard.propTypes = {
+    title: PropTypes.string.isRequired,
+    description: PropTypes.string,
+    priority: PropTypes.string,
+    icon: PropTypes.oneOfType([PropTypes.string, PropTypes.node]),
+    action: PropTypes.shape({ label: PropTypes.string, onPress: PropTypes.func }),
+    onDismiss: PropTypes.func,
+    loading: PropTypes.bool,
+    style: PropTypes.object,
+};

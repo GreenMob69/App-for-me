@@ -5,6 +5,7 @@ import {
     Platform, Dimensions,
 } from 'react-native';
 import { colors, typography, radii, spacing } from '../../theme';
+import PropTypes from 'prop-types';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -152,3 +153,11 @@ const styles = StyleSheet.create({
 });
 
 export default BottomSheet;
+
+BottomSheet.propTypes = {
+    visible: PropTypes.bool.isRequired,
+    onClose: PropTypes.func.isRequired,
+    title: PropTypes.string,
+    children: PropTypes.node,
+    maxHeight: PropTypes.number,
+};

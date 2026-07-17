@@ -22,6 +22,7 @@
 import React, { useRef, useCallback } from 'react';
 import { Text, TouchableOpacity, Animated, ActivityIndicator, View, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing, motion } from '../../theme';
+import PropTypes from 'prop-types';
 
 // Culoarea spinnerului per variantă
 const SPINNER_COLOR = {
@@ -204,5 +205,20 @@ const styles = StyleSheet.create({
     iconLeft:  { marginRight: spacing[2] },
     iconRight: { marginLeft: spacing[2] },
 });
+
+Button.propTypes = {
+    label: PropTypes.string.isRequired,
+    onPress: PropTypes.func.isRequired,
+    variant: PropTypes.string,
+    size: PropTypes.string,
+    loading: PropTypes.bool,
+    disabled: PropTypes.bool,
+    leftIcon: PropTypes.node,
+    rightIcon: PropTypes.node,
+    fullWidth: PropTypes.bool,
+    style: PropTypes.object,
+    testID: PropTypes.string,
+    accessibilityLabel: PropTypes.string,
+};
 
 export default Button;

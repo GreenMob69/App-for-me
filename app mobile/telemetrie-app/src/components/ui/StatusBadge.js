@@ -15,6 +15,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { colors, typography, radii, spacing, motion } from '../../theme';
+import PropTypes from 'prop-types';
 
 const STATUS_COLOR = {
     optimal: colors.status.optimal,
@@ -141,5 +142,14 @@ const styles = StyleSheet.create({
     label_md: { fontSize: typography.sizes.caption },
     label_lg: { fontSize: typography.sizes.label2 },
 });
+
+StatusBadge.propTypes = {
+    status: PropTypes.string,
+    label: PropTypes.string,
+    variant: PropTypes.string,
+    size: PropTypes.string,
+    pulse: PropTypes.bool,
+    style: PropTypes.object,
+};
 
 export default StatusBadge;

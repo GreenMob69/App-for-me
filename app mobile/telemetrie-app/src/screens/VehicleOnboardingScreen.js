@@ -6,6 +6,7 @@ import {
 import api from '../services/api';
 import { DEFAULT_VIN } from '../utils/config';
 import { colors, typography, radii, spacing, motion } from '../theme';
+import PropTypes from 'prop-types';
 
 const STEPS = ['Bun venit', 'VIN', 'Confirmare'];
 
@@ -634,3 +635,7 @@ const styles = StyleSheet.create({
 });
 
 export default VehicleOnboardingScreen;
+
+VehicleOnboardingScreen.propTypes = {
+    onComplete: PropTypes.func.isRequired,
+};

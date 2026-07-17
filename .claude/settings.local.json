@@ -21,7 +21,10 @@
       "Bash(grep -n \"app\\\\.get\\\\|app\\\\.post\\\\|\\\\/mentenanta\\\\|\\\\/timeline\\\\|\\\\/events\\\\|\\\\/service\\\\|\\\\/maintenance\\\\|\\\\/vehicul\\\\|dataCompleteness\\\\|data_completeness\\\\|ultima_analiza\\\\|last_analysis\" \"C:/Users/tfl/Desktop/telemetrie-licenta/backend.js\")",
       "WebFetch(domain:docs.expo.dev)",
       "Bash(kill %1)",
-      "Bash(npm uninstall *)"
+      "Bash(npm uninstall *)",
+      "Bash(xargs grep -l \"PropTypes\")",
+      "Bash(xargs grep -l \"prop-types\")",
+      "Bash(./gradlew.bat app:assembleDebug -x lint -x test --configure-on-demand --build-cache -PreactNativeDevServerPort=8081 -PreactNativeArchitectures=arm64-v8a)"
     ]
   }
 }

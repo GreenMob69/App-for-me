@@ -15,6 +15,7 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { colors, radii, spacing, typography, motion } from '../../theme';
+import PropTypes from 'prop-types';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -172,3 +173,11 @@ const styles = StyleSheet.create({
 });
 
 export default VehicleAvatar;
+
+VehicleAvatar.propTypes = {
+    status: PropTypes.string,
+    fuelType: PropTypes.string,
+    size: PropTypes.string,
+    showBadge: PropTypes.bool,
+    style: PropTypes.object,
+};
