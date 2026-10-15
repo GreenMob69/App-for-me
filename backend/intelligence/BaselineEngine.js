@@ -9,6 +9,8 @@
  * -----------------------------------------------------------------------
  */
 
+const { computeVirtualSensors } = require('../analyzers/PhysicsEngine');
+
 function initVehicleProfileTable(db) {
     db.run(`CREATE TABLE IF NOT EXISTS vehicle_profile (
         vin TEXT PRIMARY KEY, model TEXT,
@@ -20,14 +22,17 @@ function initVehicleProfileTable(db) {
 }
 
 // ── Determinare celulă 2D (0..2 RPM, 0..2 Load) ──────────────────────────────
-function getCellKey(rpm, load) {
-    let rIdx = 0; // Low
-    if (rpm >= 2500) rIdx = 2; // High
-    else if (rpm >= 1500) rIdx = 1; // Mid
+function getCellKey(rpmInput, loadInput) {
+    const rpm = Number(rpmInput) || 0;
+    const load = Number(loadInput) || 0;
 
-    let lIdx = 0; // Low
-    if (load >= 70) lIdx = 2; // High
-    else if (load >= 30) lIdx = 1; // Mid
+    let rIdx = 0; // Low (<1500 RPM)
+    if (rpm >= 2500) rIdx = 2; // High (>=2500 RPM)
+    else if (rpm >= 1500) rIdx = 1; // Mid (1500-2499 RPM)
+
+    let lIdx = 0; // Low (<30% Load)
+    if (load >= 70) lIdx = 2; // High (>=70% Load)
+    else if (load >= 30) lIdx = 1; // Mid (30-69% Load)
 
     return `r${rIdx}_l${lIdx}`;
 }
@@ -62,17 +67,18 @@ function computeTripMatrix(packets = []) {
     }
 
     packets.forEach(p => {
-        const rpm = p.motor?.rpm || 0;
-        const load = p.motor?.load || 0;
+        const rpm = Number(p.motor?.rpm) || 0;
+        const load = Number(p.motor?.load) || 0;
         if (rpm < 500) return; // ignorăm motor oprit
 
+        const virtual = p.virtual || computeVirtualSensors(p, { cylinders: 5, displacement_l: 2.461 });
         const key = getCellKey(rpm, load);
         const cell = matrix[key];
         cell.samples++;
-        cell.sumMaf += (p.aer?.maf || p.virtual?.filteredMaf || 0);
+        cell.sumMaf += (p.aer?.maf || virtual?.filteredMaf || 0);
         cell.sumMap += (p.aer?.map || 101);
-        cell.sumVe  += (p.virtual?.volumetricEfficiencyPct || 0);
-        cell.sumPower += (p.virtual?.powerHp || 0);
+        cell.sumVe  += (virtual?.volumetricEfficiencyPct || 0);
+        cell.sumPower += (virtual?.powerHp || 0);
     });
 
     const result = {};

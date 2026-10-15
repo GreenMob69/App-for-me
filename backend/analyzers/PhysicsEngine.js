@@ -131,8 +131,12 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     }
 
     // ── 2. Eficiența Volumetrică (ηv %) ──────────────────────────────────────
+    // Manifold Volumetric Efficiency raportat la densitatea reală din galeria de admisie:
+    // ρ = MAP / (R * T_intake), unde R_aer = 287.05 J/(kg·K).
+    // Preluăm IAT (Intake Air Temperature) după intercooler dacă există; fallback ambient + 10°C.
     let volumetricEfficiencyPct = 0;
-    const tempIntakeK = tempAmbient + 273.15;
+    const tempIntakeC = Number(t.iat ?? t.intake ?? (tempAmbient + 10));
+    const tempIntakeK = Math.max(250, tempIntakeC + 273.15);
     const airDensityKgM3 = (mapKpa * 1000) / (287.05 * tempIntakeK);
 
     if (rpm > 400 && airDensityKgM3 > 0.1) {
@@ -142,13 +146,18 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         }
     }
 
-    // ── 3. Virtual Dyno (Cai Putere CP & Cuplu Nm) ───────────────────────────
-    // A. Termodinamic (din motorină injectată, randament ~42%, putere calorică diesel 42.6 MJ/kg)
+    // ── 3. Virtual Dyno (Cai Putere CP & Cuplu Nm la Volantă / BHP) ──────────
+    // A. Termodinamic la volantă (Brake Horsepower - BHP):
+    // Randament indicat în cilindru: η_i ≈ 0.42.
+    // Randament mecanic (pierderi frecare segmenți, cuzineți, pompă injecție Bosch): η_m ≈ 0.87.
+    // Randament efectiv la volantă (Brake Thermal Efficiency): η_eff = η_i * η_m ≈ 0.365.
+    // Putere calorică motorină: 42.6 MJ/kg.
+    const ETA_BRAKE_EFFECTIVE = 0.365;
     let powerHpThermo = 0;
     let torqueNmThermo = 0;
     if (rpm > 400 && injQtyMg > 0) {
         const fuelRateGPerS = (injQtyMg * cylinders * (rpm / 120)) / 1000;
-        const powerKwThermo = fuelRateGPerS * 42.6 * 0.42;
+        const powerKwThermo = fuelRateGPerS * 42.6 * ETA_BRAKE_EFFECTIVE;
         powerHpThermo = Number((powerKwThermo * 1.35962).toFixed(1));
         torqueNmThermo = Number(((powerKwThermo * 9549) / rpm).toFixed(1));
     }
@@ -192,17 +201,25 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     }
 
     // ── 5. Indicele de Permeabilitate DPF (R_dpf) ─────────────────────────────
+    // Legea Darcy-Forchheimer normalizată cu debitul real volumetric al gazelor:
+    // Q_vol (m³/h) = MAF (kg/h) / ρ_exh (kg/m³)
+    // ρ_exh (kg/m³) = P_exh / (R * T_exh_K) ≈ 352.9 / (T_cat1 + 273.15)
+    // R_dpf = (ΔP_mbar / Q_vol_m3h) * 100  [mbar per 100 m³/h debit volumetric]
     let dpfResistanceIndex = 0;
     let dpfStatus = 'CLEAN';
 
     if (filteredMaf > 2.0) {
-        const qVol = filteredMaf * ((tempCat1 + 273.15) / 298.15);
-        if (qVol > 0.5) {
-            dpfResistanceIndex = Number((diffPressMbar / qVol).toFixed(2));
-            if (dpfResistanceIndex < 0.8)       dpfStatus = 'CLEAN';
-            else if (dpfResistanceIndex < 1.5)  dpfStatus = 'NORMAL';
-            else if (dpfResistanceIndex < 2.2)  dpfStatus = 'WARNING_SOOT';
-            else                                dpfStatus = 'CRITICAL_CLOGGED';
+        const tCatK = Math.max(273.15, tempCat1 + 273.15);
+        const rhoExhaust = 352.9 / tCatK; // ~0.615 kg/m³ la 300°C
+        const mafKgH = filteredMaf * 3.6; // kg/h
+        const qVolM3H = rhoExhaust > 0.05 ? (mafKgH / rhoExhaust) : 100; // m³/h
+
+        if (qVolM3H > 20 && diffPressMbar >= 0) {
+            dpfResistanceIndex = Number(((diffPressMbar / qVolM3H) * 100).toFixed(2));
+            if (dpfResistanceIndex < 5.0)       dpfStatus = 'CLEAN';             // R_raw < 0.05
+            else if (dpfResistanceIndex < 10.0) dpfStatus = 'NORMAL';            // R_raw < 0.10
+            else if (dpfResistanceIndex < 18.0) dpfStatus = 'WARNING_SOOT';       // R_raw < 0.18
+            else                                dpfStatus = 'CRITICAL_CLOGGED';  // R_raw >= 0.18
         }
     }
 
