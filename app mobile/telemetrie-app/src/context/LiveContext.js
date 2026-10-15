@@ -65,6 +65,7 @@ export const LiveProvider = ({ children }) => {
                 ...(data.vvt || {}),
                 ...(data.transmisie || {}),
                 ...(data.presiuni || {}),
+                ...(data.virtual || {}),
             };
 
             writeIndexRef.current = (idx + 1) % RING_BUFFER_SIZE;

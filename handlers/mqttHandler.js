@@ -3,6 +3,7 @@
 const mqtt = require('mqtt');
 const { createAnalysis, updateAnalyzer, finalizeTripAnalysis } = require('../backend/analyzers');
 const { THRESHOLDS } = require('../backend/analyzers/config');
+const { computeVirtualSensors } = require('../backend/analyzers/PhysicsEngine');
 const { vehicleEventBus }  = require('../backend/vehicle-profile');
 const { buildTripInsights } = require('../services/tripInsights');
 const calatoriiActive       = require('../services/activeTrips');
@@ -121,6 +122,13 @@ function createMqttClient(db, io) {
                 trip.consum_l += (c.inst_cons  || 0) * timp_scurs_ore;
             }
             trip.ultimul_timestamp = pachet.timestamp;
+
+            // Calcul senzori virtuali (AFR, Lambda, Dyno HP/Cuplu, Slip %, DPF R, Turbo Boost Error)
+            pachet.virtual = computeVirtualSensors(pachet, {
+                cylinders: 5,
+                displacement_l: 2.461,
+                mass_kg: 1550
+            });
 
             // Eșantionare uniformă în RAM (max 600 pachete) pentru a evita blocarea Event Loop-ului la OPRIRE
             trip.packetCount = (trip.packetCount || 0) + 1;

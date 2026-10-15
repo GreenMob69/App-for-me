@@ -134,16 +134,16 @@ client.on('connect', () => {
                 accel_g: acc_g
             },
             temperaturi: {
-                coolant: t_cool, iat: +((t_amb + (map - 100) * 0.15)).toFixed(1), ambient: t_amb, oil: t_oil,
+                coolant: t_cool, iat: +((t_amb + (map - 100) * 0.15)).toFixed(1), ambient: t_amb, oil: t_oil, cat1: t_cat1,
                 cat_b1s1: t_cat1, cat_b1s2: t_cat2, cat_b2s1: +(t_cat1 * 0.98).toFixed(1), cat_b2s2: +(t_cat2 * 0.98).toFixed(1)
             },
             aer: {
-                maf: maf, map: map, baro: 101, intake_press: map, vacuum: spd === 0 ? 65 : 15,
+                maf: maf, map: map, map_cmd: map_cmd, baro: 101, intake_press: map, vacuum: spd === 0 ? 65 : 15,
                 boost_turbo: +((map - 100) / 100).toFixed(2), boost_cmd: +((map_cmd - 100) / 100).toFixed(2), boost_actual: +((map - 100) / 100).toFixed(2)
             },
             combustibil: {
                 level: fuel_lvl, press: 350, rail_press: rail_press, rail_gauge: rail_press - 100, cmd_press: rail_press,
-                inj_timing: +(2.5 + (rpm / 1000) * 1.8).toFixed(1), inj_qty: inj_qty, fuel_rate: cons, inst_cons: cons, avg_cons: 6.8,
+                inj_timing: +(2.5 + (rpm / 1000) * 1.8).toFixed(1), inj_qty: inj_qty, inj_qty_mg: inj_qty, fuel_rate: cons, inst_cons: cons, avg_cons: 6.8,
                 sft_b1: +(Math.random() * 4 - 2).toFixed(1), lft_b1: 1.2, sft_b2: +(Math.random() * 4 - 2).toFixed(1), lft_b2: 1.1
             },
             lambda: {
@@ -152,8 +152,8 @@ client.on('connect', () => {
             },
             aprindere: { timing_adv: +(6.5 + (rpm / 800) * 2.1).toFixed(1), ign_timing: +(6.0 + (rpm / 800) * 2.0).toFixed(1), knock_retard: 0.0 },
             emisii: { egr_cmd: load > 30 ? 15 : 65, egr_error: 0.5, evap_press: -1.2, evap_purge: 12.0, sec_air: "OFF", cat_mon: "PASSED", misfire_mon: "PASSED", readiness: "OK / READY" },
-            baterie: { ecu_volt: volt_ecu, bat_volt: volt_bat },
-            dpf: { diff_press: dpf_diff, soot_load: dpf_soot, regen_status: "PASSIVE / OFF", egt1: t_cat1, egt2: +(t_cat1 * 0.9).toFixed(1), egt3: +(t_cat1 * 0.8).toFixed(1), egt4: +(t_cat1 * 0.7).toFixed(1) },
+            baterie: { ecu_volt: volt_ecu, bat_volt: volt_bat, battery_volt: volt_bat },
+            dpf: { diff_pressure_mbar: dpf_diff, diff_press: dpf_diff, soot_load: dpf_soot, regen_status: "PASSIVE / OFF", egt1: t_cat1, egt2: +(t_cat1 * 0.9).toFixed(1), egt3: +(t_cat1 * 0.8).toFixed(1), egt4: +(t_cat1 * 0.7).toFixed(1) },
             vvt: { cam_intake: +(12.0 + (rpm / 1000) * 4).toFixed(1), cam_exhaust: +(-8.0 - (rpm / 1000) * 2).toFixed(1), cmd_vvt: 12.0 },
             transmisie: { trans_temp: +(t_cool * 0.85).toFixed(1), gear: gear, slip: gear === 1 ? 120 : 15 },
             presiuni: { abs_fuel: 450, oil_press: +(1.8 + (rpm / 1000) * 1.2).toFixed(1), exhaust_press: +(110 + (load * 0.8)).toFixed(1), intake_press_alt: map },

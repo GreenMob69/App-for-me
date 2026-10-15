@@ -156,7 +156,7 @@ async function finalizeTripAnalysis(trip, opts = {}) {
     // PASUL 11: Baseline adaptiv (necesită DB — async)
     // ═══════════════════════════════════════════════════════════════════
     if (ctx.db && ctx.vin) {
-        ctx.baseline = await updateAndCompareBaseline(ctx.db, ctx.vin, ctx.summary);
+        ctx.baseline = await updateAndCompareBaseline(ctx.db, ctx.vin, ctx.summary, rawPackets);
     }
     ctx.stepsExecuted.push(PIPELINE_STEPS.BASELINE);
 

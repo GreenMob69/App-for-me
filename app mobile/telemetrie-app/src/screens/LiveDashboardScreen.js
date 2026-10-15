@@ -3,6 +3,7 @@ import React, { useContext, useState, useMemo, useRef } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView,
     useWindowDimensions, Modal, Platform, StatusBar, PanResponder,
+    Animated,
 } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import { LiveContext }  from '../context/LiveContext';
@@ -11,6 +12,7 @@ import { AppContext }   from '../context/AppContext';
 import { getVehicleLabel } from '../utils/config';
 import RecommendationCard from '../components/ui/RecommendationCard';
 import { colors, typography, radii, spacing, layout } from '../theme';
+import { useSmoothedTelemetry } from '../hooks/useSmoothedTelemetry';
 
 // ─── AI assistant ─────────────────────────────────────────────────────────────
 
@@ -52,14 +54,15 @@ function buildContextualAlert(liveData, latestAlert) {
 // ─── Params data ──────────────────────────────────────────────────────────────
 
 const PARAM_CATEGORIES = [
-    { id: 'MOTOR',  label: 'Motor'  },
-    { id: 'TEMP',   label: 'Temp'   },
-    { id: 'AER',    label: 'Aer'    },
-    { id: 'COMB',   label: 'Carb'   },
-    { id: 'LAMBDA', label: 'O₂'     },
-    { id: 'EMISII', label: 'DPF'    },
-    { id: 'TRANS',  label: 'Trans'  },
-    { id: 'ECU',    label: 'ECU'    },
+    { id: 'MOTOR',   label: 'Motor'   },
+    { id: 'VIRTUAL', label: 'Virtual' },
+    { id: 'TEMP',    label: 'Temp'    },
+    { id: 'AER',     label: 'Aer'     },
+    { id: 'COMB',    label: 'Carb'    },
+    { id: 'LAMBDA',  label: 'O₂'      },
+    { id: 'EMISII',  label: 'DPF'     },
+    { id: 'TRANS',   label: 'Trans'   },
+    { id: 'ECU',     label: 'ECU'     },
 ];
 
 function buildParams(cat, d) {
@@ -77,6 +80,7 @@ function buildParams(cat, d) {
     const pr   = d.presiuni     || {};
     const tim  = d.timp         || {};
     const meta = d.consum_meta  || {};
+    const v    = d.virtual      || {};
 
     switch (cat) {
         case 'MOTOR': return [
@@ -88,6 +92,18 @@ function buildParams(cat, d) {
             { label: 'Cuplu Motor',   val: m.torque_engine || 0,   unit: 'Nm',   max: 400,  color: colors.status.good },
             { label: 'Cuplu Cerut',   val: m.torque_driver || 0,   unit: 'Nm',   max: 400,  color: colors.status.monitor },
             { label: 'Cuplu Frecare', val: m.torque_friction || 0, unit: 'Nm',   max: 100,  color: colors.status.critical },
+        ];
+        case 'VIRTUAL': return [
+            { label: 'Putere Dyno',       val: v.powerHp || 0,                 unit: 'CP',   max: 150,  color: colors.status.good },
+            { label: 'Cuplu Dyno',        val: v.torqueNm || 0,                unit: 'Nm',   max: 350,  color: colors.status.good },
+            { label: 'Eficiență Volum.',  val: v.volumetricEfficiencyPct || 0, unit: '%',    max: 120,  color: colors.accent.default },
+            { label: 'Lambda Virtual',    val: v.lambda ? v.lambda.toFixed(2) : 1, unit: 'λ', max: 2,   color: colors.status.good },
+            { label: 'AFR Real',          val: v.afr ? v.afr.toFixed(1) : 14.5, unit: ':1',  max: 25,   color: colors.status.monitor },
+            { label: 'Alunecare Ambreiaj',val: v.clutchSlipPct || 0,           unit: '%',    max: 100,  color: (v.clutchSlipPct||0) > 10 ? colors.status.critical : colors.status.good },
+            { label: 'Rezistență DPF',    val: v.dpfResistanceIndex || 0,      unit: 'idx',  max: 200,  color: colors.status.monitor },
+            { label: 'Delta Ulei-Apă',    val: v.deltaOilWaterC || 0,          unit: '°C',   max: 40,   color: (v.deltaOilWaterC||0) > 22 ? colors.status.caution : colors.status.good },
+            { label: 'Cădere Tensiune',   val: v.voltageDropV || 0,            unit: 'V',    max: 2,    color: (v.voltageDropV||0) > 0.4 ? colors.status.caution : colors.status.good },
+            { label: 'Eroare Boost',      val: v.boostErrorKpa || 0,           unit: 'kPa',  max: 100,  color: colors.accent.default },
         ];
         case 'TEMP': return [
             { label: 'Lichid Răcire', val: tem.coolant || 0,  unit: '°C', max: 110, color: (tem.coolant||0)>95 ? colors.status.critical : colors.status.good },
@@ -152,14 +168,15 @@ function buildParams(cat, d) {
 // ─── Oscilloscope metrics ─────────────────────────────────────────────────────
 
 const SCOPE_METRICS = [
-    { id: 'rpm',       label: 'RPM',   color: colors.text.primary,    unit: 'RPM',  defaultMax: 5000 },
-    { id: 'speed',     label: 'Km/h',  color: colors.status.good,     unit: 'km/h', defaultMax: 220  },
-    { id: 'map',       label: 'MAP',   color: colors.accent.default,  unit: 'kPa',  defaultMax: 250  },
-    { id: 'maf',       label: 'MAF',   color: colors.status.monitor,  unit: 'g/s',  defaultMax: 150  },
-    { id: 'inst_cons', label: 'Cons',  color: colors.status.critical, unit: 'L/h',  defaultMax: 20   },
-    { id: 'coolant',   label: 'Temp',  color: colors.status.caution,  unit: '°C',   defaultMax: 110  },
-    { id: 'ecu_volt',  label: 'Volt',  color: colors.status.good,     unit: 'V',    defaultMax: 16   },
-    { id: 'accel_g',   label: 'G',     color: colors.status.critical, unit: 'G',    defaultMax: 1.5  },
+    { id: 'rpm',       label: 'RPM',     color: colors.text.primary,    unit: 'RPM',  defaultMax: 5000 },
+    { id: 'speed',     label: 'Km/h',    color: colors.status.good,     unit: 'km/h', defaultMax: 220  },
+    { id: 'powerHp',   label: 'Dyno CP', color: colors.status.good,     unit: 'CP',   defaultMax: 150  },
+    { id: 'map',       label: 'MAP',     color: colors.accent.default,  unit: 'kPa',  defaultMax: 250  },
+    { id: 'maf',       label: 'MAF',     color: colors.status.monitor,  unit: 'g/s',  defaultMax: 150  },
+    { id: 'inst_cons', label: 'Cons',    color: colors.status.critical, unit: 'L/h',  defaultMax: 20   },
+    { id: 'coolant',   label: 'Temp',    color: colors.status.caution,  unit: '°C',   defaultMax: 110  },
+    { id: 'ecu_volt',  label: 'Volt',    color: colors.status.good,     unit: 'V',    defaultMax: 16   },
+    { id: 'accel_g',   label: 'G',       color: colors.status.critical, unit: 'G',    defaultMax: 1.5  },
 ];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -198,6 +215,9 @@ const LiveDashboardScreen = () => {
     const { isConnected, isReconnecting, liveData, chartVersion, getChartHistory } = useContext(LiveContext);
     const { latestAlert, alertsList, unreadCount, markAlertsAsRead } = useContext(AlertContext);
     const { selectedMetric, setSelectedMetric } = useContext(AppContext);
+
+    // ── 60 FPS Smoothed Telemetry ─────────────────────────────────────────────
+    const { animated, numeric } = useSmoothedTelemetry(liveData);
 
     const [tab,        setTab]        = useState('LIVE');
     const [category,   setCategory]   = useState('MOTOR');
@@ -244,6 +264,7 @@ const LiveDashboardScreen = () => {
     const bat = liveData.baterie      || {};
     const dpf = liveData.dpf          || {};
     const tr  = liveData.transmisie   || {};
+    const v   = liveData.virtual      || {};
 
     const assistantMsg    = useMemo(() => buildAssistantMsg(liveData, isConnected),    [liveData, isConnected]);
     const contextualAlert = useMemo(() => buildContextualAlert(liveData, latestAlert), [liveData, latestAlert]);
@@ -256,14 +277,21 @@ const LiveDashboardScreen = () => {
     // ─── LIVE tab ─────────────────────────────────────────────────────────────
 
     const renderLive = () => {
-        const rpm   = m.rpm ?? 0;
-        const speed = m.speed ?? 0;
-        const cool  = tem.coolant ?? 0;
-        const volt  = bat.ecu_volt ?? 0;
-        const boost = a.boost_actual ?? 0;
-        const cons  = c.inst_cons ?? 0;
-        const gear  = tr.gear;
-        const eco   = liveData.scor_eco ?? 100;
+        const rpm         = numeric.rpm ?? (m.rpm ?? 0);
+        const speed       = numeric.speed ?? (m.speed ?? 0);
+        const cool        = numeric.coolant ?? (tem.coolant ?? 0);
+        const volt        = bat.ecu_volt ?? 0;
+        const boost       = numeric.boost ?? (a.boost_actual ?? 0);
+        const targetBoost = numeric.targetBoost ?? (a.boost_cmd ?? 0);
+        const cons        = c.inst_cons ?? 0;
+        const gear        = tr.gear;
+        const eco         = liveData.scor_eco ?? 100;
+
+        const powerHp     = numeric.powerHp ?? (v.powerHp || 0);
+        const torqueNm    = v.torqueNm ?? (powerHp > 0 ? Math.round(powerHp * 2.2) : 0);
+        const vePct       = v.volumetricEfficiencyPct ?? (a.maf ? Math.round((a.maf * 120 / ((rpm || 800) * 2.461 * 1.25)) * 100) : 88);
+        const lambda      = v.lambda ?? 1.15;
+        const afr         = v.afr ?? 16.8;
 
         // Redline dinamic în funcție de temperatura motorului (răcire / ulei)
         let dynamicRedline = 4500;
@@ -300,11 +328,20 @@ const LiveDashboardScreen = () => {
         const consColor  = cons > 15 ? colors.status.caution : cons > 10 ? colors.status.monitor : colors.text.primary;
         const boostColor = boost > 1.8 ? colors.status.caution : colors.text.primary;
 
+        const ambientGlowColor = cool > 95
+            ? 'rgba(239, 68, 68, 0.20)'
+            : cool < 65
+                ? 'rgba(0, 180, 216, 0.20)'
+                : 'rgba(16, 185, 129, 0.15)';
+
         const aiColorMap = { critical: colors.status.critical, serious: colors.status.caution, warning: colors.status.monitor, info: colors.accent.default, normal: colors.text.secondary, neutral: colors.text.tertiary ?? colors.text.secondary };
         const aiColor = aiColorMap[assistantMsg.level] ?? colors.text.secondary;
 
         return (
             <View style={styles.liveContainer}>
+                {/* ── Ambient Radial Glow ─────────────────────────── */}
+                <View style={[styles.ambientGlow, { backgroundColor: ambientGlowColor }]} />
+
                 {/* ── Speed hero ──────────────────────────────────── */}
                 <View style={styles.speedHero}>
                     <Text style={styles.speedNum}>{speed}</Text>
@@ -338,6 +375,96 @@ const LiveDashboardScreen = () => {
                         <Text style={styles.dpfText}>♻  Regenerare DPF — drum lung recomandat</Text>
                     </View>
                 )}
+
+                {/* ── Virtual Dyno & ECU Glass Card ──────────────── */}
+                <View style={styles.dynoCard}>
+                    <View style={styles.dynoHeader}>
+                        <View style={styles.dynoBadgeRow}>
+                            <View style={styles.dynoTag}>
+                                <Text style={styles.dynoTagText}>⚡ VIRTUAL DYNO (ECU MATH)</Text>
+                            </View>
+                            {v.smokeRisk ? (
+                                <View style={[styles.dynoTag, { backgroundColor: 'rgba(239,68,68,0.18)', borderColor: colors.status.critical }]}>
+                                    <Text style={[styles.dynoTagText, { color: colors.status.critical }]}>⚠ RISC FUM NEGRU</Text>
+                                </View>
+                            ) : (
+                                <View style={[styles.dynoTag, { backgroundColor: 'rgba(16,185,129,0.14)', borderColor: colors.status.good }]}>
+                                    <Text style={[styles.dynoTagText, { color: colors.status.good }]}>✓ LIMITĂ FUM SIGURĂ</Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+
+                    <View style={styles.dynoGrid}>
+                        {/* Putere CP */}
+                        <View style={styles.dynoCell}>
+                            <Text style={styles.dynoLabel}>PUTERE REALĂ</Text>
+                            <Text style={styles.dynoValue}>{powerHp} <Text style={styles.dynoUnit}>CP</Text></Text>
+                            <View style={styles.dynoMiniBar}>
+                                <View style={[styles.dynoMiniFill, { width: `${Math.min((powerHp / 140) * 100, 100)}%`, backgroundColor: colors.status.good }]} />
+                            </View>
+                        </View>
+
+                        {/* Cuplu Nm */}
+                        <View style={styles.dynoCell}>
+                            <Text style={styles.dynoLabel}>CUPLU MOTOR</Text>
+                            <Text style={styles.dynoValue}>{torqueNm} <Text style={styles.dynoUnit}>Nm</Text></Text>
+                            <View style={styles.dynoMiniBar}>
+                                <View style={[styles.dynoMiniFill, { width: `${Math.min((torqueNm / 300) * 100, 100)}%`, backgroundColor: colors.accent.default }]} />
+                            </View>
+                        </View>
+
+                        {/* Volumetric Efficiency η_v */}
+                        <View style={styles.dynoCell}>
+                            <Text style={styles.dynoLabel}>EFICIENȚĂ VOL. (η_v)</Text>
+                            <Text style={styles.dynoValue}>{vePct}%</Text>
+                            <Text style={styles.dynoSub}>{vePct >= 85 ? 'Admisie optimă' : 'Restricție debit'}</Text>
+                        </View>
+
+                        {/* Lambda / AFR */}
+                        <View style={styles.dynoCell}>
+                            <Text style={styles.dynoLabel}>LAMBDA / AFR</Text>
+                            <Text style={styles.dynoValue}>λ {typeof lambda === 'number' ? lambda.toFixed(2) : lambda}</Text>
+                            <Text style={styles.dynoSub}>{typeof afr === 'number' ? `${afr.toFixed(1)}:1 AFR` : 'AFR'}</Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* ── Dual Boost Indicator (Target vs Actual) ───── */}
+                <View style={styles.boostCard}>
+                    <View style={styles.boostHeader}>
+                        <Text style={styles.boostTitle}>TURBO BOOST (COMANDAT vs EFECTIV)</Text>
+                        <Text style={[styles.boostDelta, { color: Math.abs(boost - targetBoost) > 0.3 ? colors.status.caution : colors.status.good }]}>
+                            Δ {((boost - targetBoost) > 0 ? '+' : '') + (boost - targetBoost).toFixed(2)} bar
+                        </Text>
+                    </View>
+                    <View style={styles.boostBarsWrap}>
+                        <View style={styles.boostBarRow}>
+                            <Text style={styles.boostBarLbl}>Cmd</Text>
+                            <View style={styles.boostBarTrack}>
+                                <View style={[styles.boostBarFill, { width: `${Math.min((targetBoost / 2.5) * 100, 100)}%`, backgroundColor: colors.status.monitor }]} />
+                            </View>
+                            <Text style={styles.boostBarVal}>{targetBoost.toFixed(2)} bar</Text>
+                        </View>
+                        <View style={styles.boostBarRow}>
+                            <Text style={styles.boostBarLbl}>Act</Text>
+                            <View style={styles.boostBarTrack}>
+                                <View style={[styles.boostBarFill, { width: `${Math.min((boost / 2.5) * 100, 100)}%`, backgroundColor: boostColor }]} />
+                            </View>
+                            <Text style={styles.boostBarVal}>{boost.toFixed(2)} bar</Text>
+                        </View>
+                    </View>
+                    {v.turboDiagnostic && (
+                        <View style={styles.turboDiagPill}>
+                            <Text style={styles.turboDiagText}>
+                                {v.turboDiagnostic === 'VNT_N75_SPIKE' ? '⚡ Spike suprapresiune VNT / electrovalvă N75' :
+                                 v.turboDiagnostic === 'INTERCOOLER_BOOST_LEAK' ? '⚠ Pierdere presiune admisie / intercooler' :
+                                 v.turboDiagnostic === 'TURBO_UNDERBOOST_WEAR' ? 'ℹ Subpresiune constantă — verificare geometrie' :
+                                 v.turboDiagnostic}
+                            </Text>
+                        </View>
+                    )}
+                </View>
 
                 {/* ── 2×3 metric tiles ────────────────────────────── */}
                 <View style={styles.tileGrid}>
@@ -676,7 +803,16 @@ const styles = StyleSheet.create({
     },
 
     // ── LIVE: Speed hero ─────────────────────────────────────────────────────
-    liveContainer: { paddingTop: spacing[5] },
+    liveContainer: { paddingTop: spacing[5], position: 'relative' },
+    ambientGlow: {
+        position: 'absolute',
+        top: -30,
+        left: '15%',
+        right: '15%',
+        height: 120,
+        borderRadius: radii.full,
+        opacity: 0.85,
+    },
     speedHero: { alignItems: 'center', paddingBottom: spacing[1] },
     speedNum: {
         fontSize: 88,
@@ -765,6 +901,165 @@ const styles = StyleSheet.create({
         marginBottom: spacing[3],
     },
     dpfText: { color: colors.status.monitor, fontSize: typography.sizes.caption, fontWeight: typography.weights.bold },
+
+    // ── LIVE: Virtual Dyno ───────────────────────────────────────────────────
+    dynoCard: {
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[3],
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        marginBottom: spacing[3],
+    },
+    dynoHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing[2],
+    },
+    dynoBadgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[2],
+        flexWrap: 'wrap',
+    },
+    dynoTag: {
+        backgroundColor: colors.bg[2],
+        paddingHorizontal: spacing[2],
+        paddingVertical: 3,
+        borderRadius: radii.xs,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+    },
+    dynoTagText: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.secondary,
+        letterSpacing: 0.5,
+    },
+    dynoGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing[2],
+    },
+    dynoCell: {
+        flex: 1,
+        minWidth: 130,
+        backgroundColor: colors.bg[0],
+        borderRadius: radii.sm,
+        padding: spacing[2],
+        borderWidth: 1,
+        borderColor: colors.border.subtle ?? colors.bg[2],
+    },
+    dynoLabel: {
+        fontSize: 8,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.heavy,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        marginBottom: 2,
+    },
+    dynoValue: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    dynoUnit: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+    },
+    dynoMiniBar: {
+        height: 3,
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.full,
+        marginTop: 4,
+        overflow: 'hidden',
+    },
+    dynoMiniFill: {
+        height: '100%',
+        borderRadius: radii.full,
+    },
+    dynoSub: {
+        fontSize: 9,
+        color: colors.text.secondary,
+        marginTop: 2,
+    },
+
+    // ── LIVE: Dual Boost ─────────────────────────────────────────────────────
+    boostCard: {
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[3],
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        marginBottom: spacing[3],
+    },
+    boostHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing[2],
+    },
+    boostTitle: {
+        fontSize: 9,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.7,
+        textTransform: 'uppercase',
+    },
+    boostDelta: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        fontVariant: ['tabular-nums'],
+    },
+    boostBarsWrap: {
+        gap: spacing[2],
+    },
+    boostBarRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[2],
+    },
+    boostBarLbl: {
+        width: 32,
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.bold,
+    },
+    boostBarTrack: {
+        flex: 1,
+        height: 6,
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.full,
+        overflow: 'hidden',
+    },
+    boostBarFill: {
+        height: '100%',
+        borderRadius: radii.full,
+    },
+    boostBarVal: {
+        width: 60,
+        textAlign: 'right',
+        fontSize: typography.sizes.caption,
+        color: colors.text.primary,
+        fontWeight: typography.weights.bold,
+        fontVariant: ['tabular-nums'],
+    },
+    turboDiagPill: {
+        marginTop: spacing[2],
+        paddingVertical: spacing[1],
+        paddingHorizontal: spacing[2],
+        backgroundColor: 'rgba(255, 159, 10, 0.12)',
+        borderRadius: radii.xs,
+        borderWidth: 1,
+        borderColor: colors.status.monitor,
+    },
+    turboDiagText: {
+        fontSize: 10,
+        color: colors.status.monitor,
+        fontWeight: typography.weights.semibold,
+    },
 
     // ── LIVE: 2×3 tiles ──────────────────────────────────────────────────────
     tileGrid: {

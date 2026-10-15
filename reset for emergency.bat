@@ -1,0 +1,1 @@
+git reset --hard v1.0-licenta-final

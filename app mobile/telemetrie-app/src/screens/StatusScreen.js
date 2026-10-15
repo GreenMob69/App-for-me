@@ -41,10 +41,93 @@ import {
     EmptyState,
     StatusBadge,
     VehicleAvatar,
+    BottomSheet,
+    DriveModeBanner,
 } from '../components/ui';
 import PropTypes from 'prop-types';
 import { useRefreshOnOnline } from '../hooks/useRefreshOnOnline';
 import { getRootNavigation } from '../utils/navigation';
+
+const SUBSYSTEM_PEEK_DATA = {
+    motor: {
+        name: 'Motor & Injecție',
+        key: 'motor',
+        score: 92,
+        status: 'optimal',
+        statusText: 'Eficiență volumetrică 92% · Injecție optimă',
+        metrics: [
+            { label: 'Lambda / AFR', val: 'λ 1.18 (17.1:1)' },
+            { label: 'Eficiență Vol.', val: '92.4%' },
+            { label: 'Compresie/Stare', val: 'Cilindri echilibrați' },
+        ],
+        desc: 'Sistemul de injecție AEL funcționează în parametri nominali. Nu s-a detectat amestec bogat sau risc de fum negru.',
+    },
+    turbo: {
+        name: 'Turbosuflantă & VNT',
+        key: 'turbo',
+        score: 88,
+        status: 'good',
+        statusText: 'Presiune stabilă · VNT fără blocaje',
+        metrics: [
+            { label: 'Boost efectiv', val: '1.15 bar' },
+            { label: 'Răspuns N75', val: 'Normal (<120ms)' },
+            { label: 'Pierderi traseu', val: '0 bar (Etanș)' },
+        ],
+        desc: 'Curba de presiune efectivă urmărește fidel cererea ECU. Nu există semne de oboseală pe ax sau scăpări de vacuum.',
+    },
+    racire: {
+        name: 'Răcire & Termodinamică',
+        key: 'racire',
+        score: 94,
+        status: 'optimal',
+        statusText: 'Termostat funcțional · Delta Ulei-Apă optim',
+        metrics: [
+            { label: 'Temp. Lichid', val: '88°C (Stabil)' },
+            { label: 'Delta Ulei-Apă', val: '11°C (<22°C)' },
+            { label: 'Termostat', val: 'Deschide la 87°C' },
+        ],
+        desc: 'Schimbătorul de căldură ulei-apă asigură transfer termic eficient. Motorul atinge temperatura optimă în timpi ideali.',
+    },
+    dpf: {
+        name: 'Filtru Particule / Emisii',
+        key: 'dpf',
+        score: 86,
+        status: 'good',
+        statusText: 'Permeabilitate optimă · Fără contrapresiune',
+        metrics: [
+            { label: 'Rezistență R_dpf', val: '0.048 (Optim)' },
+            { label: 'Pres. diferențială', val: '4.2 mbar' },
+            { label: 'Stare funingine', val: 'Încărcare redusă' },
+        ],
+        desc: 'Indicele de permeabilitate normalizat cu debitul arată o celulă ceramică curată, fără colmatare de cenușă.',
+    },
+    electric: {
+        name: 'Sistem Electric & Baterie',
+        key: 'electric',
+        score: 95,
+        status: 'optimal',
+        statusText: 'Alternator stabil · Cădere masă neglijabilă',
+        metrics: [
+            { label: 'Tensiune încărcare', val: '14.2 V' },
+            { label: 'Cădere masă (Drop)', val: '0.12 V (<0.4V)' },
+            { label: 'Stare alternator', val: 'Regulator stabil' },
+        ],
+        desc: 'Puntea redresoare și regulatorul alternatorului mențin tensiunea stabilă chiar și la pornirea consumatorilor grei.',
+    },
+    transmisie: {
+        name: 'Transmisie & Ambreiaj',
+        key: 'transmisie',
+        score: 90,
+        status: 'optimal',
+        statusText: 'Fără patinare · Raport trepte confirmat',
+        metrics: [
+            { label: 'Alunecare ambreiaj', val: '0.8% (<5%)' },
+            { label: 'Sincronizare', val: 'Exactă (K_gear)' },
+            { label: 'Volant masă dublă', val: 'Vibrații minime' },
+        ],
+        desc: 'Cuplajul discului de ambreiaj este ferm. Raportul turație/viteză confirmă aderență completă sub sarcină.',
+    },
+};
 
 const STATUS_CACHE_KEY = '@status_cache';
 
@@ -142,6 +225,7 @@ const StatusScreen = ({ navigation }) => {
     const [statusModel, setStatusModel] = useState(null);
     const [showAllPreds, setShowAllPreds] = useState(false);
     const [fromCache,    setFromCache]    = useState(false);
+    const [selectedSubsystem, setSelectedSubsystem] = useState(null);
 
     const { unreadCount, syncFromSummary } = useContext(NotificationContext);
     const { activeVin, vehicleLabel, fuelType } = useVehicle();
@@ -320,6 +404,7 @@ const StatusScreen = ({ navigation }) => {
 
     return (
         <Animated.View style={[styles.container, screenFadeStyle]}>
+            <DriveModeBanner navigation={navigation} />
             <ScrollView
                 style={styles.scroll}
                 contentContainerStyle={styles.content}
@@ -440,6 +525,35 @@ const StatusScreen = ({ navigation }) => {
                         <Text style={styles.aiText}>{subtitle}</Text>
                     </Card>
                 ) : null}
+
+                {/* ── 2b. X-RAY SUBSISTEME (Progressive Disclosure: Peek) ── */}
+                <View style={styles.section}>
+                    <SectionHeader
+                        title="STARE SUBSISTEME (PEEK DIRECȚIONAT)"
+                        size="sm"
+                    />
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.subsystemRow}
+                    >
+                        {Object.entries(SUBSYSTEM_PEEK_DATA).map(([key, item]) => (
+                            <TouchableOpacity
+                                key={key}
+                                style={styles.subsystemChip}
+                                activeOpacity={0.8}
+                                onPress={() => setSelectedSubsystem(item)}
+                            >
+                                <View style={styles.subsystemChipTop}>
+                                    <View style={[styles.subsystemDot, { backgroundColor: item.status === 'optimal' ? colors.status.good : item.status === 'good' ? colors.accent.default : colors.status.caution }]} />
+                                    <Text style={styles.subsystemScore}>{item.score}%</Text>
+                                </View>
+                                <Text style={styles.subsystemName} numberOfLines={1}>{item.name}</Text>
+                                <Text style={styles.subsystemPeekAction}>Atinge pt. detalii ›</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
 
                 {/* ── 3. RECOMANDAREA PRINCIPALĂ ───────────────────────── */}
                 {hasObs && primaryObs ? (
@@ -604,6 +718,49 @@ const StatusScreen = ({ navigation }) => {
                 ) : null}
 
             </ScrollView>
+
+            {/* ── 9. BOTTOM SHEET PEEK (Progressive Disclosure) ───────── */}
+            <BottomSheet
+                visible={!!selectedSubsystem}
+                onClose={() => setSelectedSubsystem(null)}
+                title={selectedSubsystem?.name}
+            >
+                {selectedSubsystem && (
+                    <View style={styles.sheetContent}>
+                        <View style={styles.sheetScoreRow}>
+                            <StatusBadge
+                                label={`Scor: ${selectedSubsystem.score}/100`}
+                                status={selectedSubsystem.status}
+                                size="md"
+                            />
+                            <Text style={styles.sheetStatusText}>{selectedSubsystem.statusText}</Text>
+                        </View>
+                        <Text style={styles.sheetDesc}>{selectedSubsystem.desc}</Text>
+                        <View style={styles.sheetMetricsGrid}>
+                            {selectedSubsystem.metrics.map((m, idx) => (
+                                <View key={idx} style={styles.sheetMetricBox}>
+                                    <Text style={styles.sheetMetricLbl}>{m.label}</Text>
+                                    <Text style={styles.sheetMetricVal}>{m.val}</Text>
+                                </View>
+                            ))}
+                        </View>
+                        <Button
+                            label="Vezi diagnoza completă (Deep Dive) ❯"
+                            variant="primary"
+                            size="md"
+                            onPress={() => {
+                                const sys = selectedSubsystem.key;
+                                setSelectedSubsystem(null);
+                                navigation?.navigate('SubsystemDetail', {
+                                    system: sys,
+                                    vin: activeVin,
+                                });
+                            }}
+                            style={{ marginTop: spacing[4], marginBottom: spacing[2] }}
+                        />
+                    </View>
+                )}
+            </BottomSheet>
         </Animated.View>
     );
 };
@@ -747,6 +904,98 @@ const styles = StyleSheet.create({
     // ── Sections ──────────────────────────────────────────────────────────
     section: {
         marginTop: layout.interSectionGap - spacing[2],
+    },
+    subsystemRow: {
+        gap: spacing[2],
+        paddingVertical: spacing[1],
+    },
+    subsystemChip: {
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[3],
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        width: 145,
+        justifyContent: 'space-between',
+    },
+    subsystemChipTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: spacing[1],
+    },
+    subsystemDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    subsystemScore: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    subsystemName: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+        marginBottom: 2,
+    },
+    subsystemPeekAction: {
+        fontSize: 9,
+        color: colors.accent.default,
+        fontWeight: typography.weights.semibold,
+    },
+
+    // ── Bottom Sheet Peek ─────────────────────────────────────────────────
+    sheetContent: {
+        paddingHorizontal: spacing[4],
+        paddingTop: spacing[2],
+        paddingBottom: spacing[4],
+    },
+    sheetScoreRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[2],
+        marginBottom: spacing[2],
+        flexWrap: 'wrap',
+    },
+    sheetStatusText: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
+    },
+    sheetDesc: {
+        fontSize: typography.sizes.body2,
+        color: colors.text.secondary,
+        lineHeight: typography.lineHeights.body2,
+        marginBottom: spacing[3],
+    },
+    sheetMetricsGrid: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        marginBottom: spacing[2],
+    },
+    sheetMetricBox: {
+        flex: 1,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.sm,
+        padding: spacing[2],
+        borderWidth: 1,
+        borderColor: colors.border.default,
+    },
+    sheetMetricLbl: {
+        fontSize: 8,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.bold,
+        textTransform: 'uppercase',
+        marginBottom: 2,
+    },
+    sheetMetricVal: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
     },
     sectionNoHeader: {
         marginTop: spacing[2],
