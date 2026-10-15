@@ -11,7 +11,7 @@ import { upsertTrips, queryTrips } from '../services/localDB';
 import {
     HeroCard, SearchBar, StatusBadge,
     MetricCard, CostCard, EmptyState,
-    SectionHeader, Button,
+    SectionHeader, Button, BottomSheet,
 } from '../components/ui';
 import TripDetailScreen from './TripDetailScreen';
 import { colors, typography, radii, spacing, layout } from '../theme';
@@ -351,7 +351,8 @@ const TripHistoryScreen = () => {
     const [stats,          setStats]          = useState({});
     const [search,         setSearch]         = useState('');
     const [activeFilter,   setActiveFilter]   = useState('ALL');
-    const [selectedTripId, setSelectedTripId] = useState(null);
+    const [selectedTripId,      setSelectedTripId]      = useState(null);
+    const [selectedTripForPeek, setSelectedTripForPeek] = useState(null);
     const [showReport,     setShowReport]     = useState(false);
     const [monthlyData,    setMonthlyData]    = useState(null);
     const [reportLoading,  setReportLoading]  = useState(false);
@@ -573,7 +574,7 @@ const TripHistoryScreen = () => {
     const renderItem = useCallback(({ item: trip }) => (
         <TripRow
             trip={trip}
-            onPress={() => setSelectedTripId(trip.id_calatorie)}
+            onPress={() => setSelectedTripForPeek(trip)}
         />
     ), []);
 
@@ -820,6 +821,160 @@ const TripHistoryScreen = () => {
                     />
                 }
             />
+
+            {/* ── Progressive Disclosure: Trip Peek BottomSheet ───────────── */}
+            <BottomSheet
+                visible={!!selectedTripForPeek}
+                onClose={() => setSelectedTripForPeek(null)}
+                title="Rezumat Cursă"
+            >
+                {selectedTripForPeek && (
+                    <ScrollView
+                        style={styles.peekScroll}
+                        contentContainerStyle={styles.peekScrollContent}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {/* Header Row */}
+                        <View style={styles.peekHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.peekTitle} numberOfLines={1}>
+                                    {buildTripTitle(selectedTripForPeek)}
+                                </Text>
+                                <Text style={styles.peekSubtitle}>
+                                    {formatTripDate(selectedTripForPeek.timestamp_start)} · {formatTripTime(selectedTripForPeek.timestamp_start)}
+                                </Text>
+                            </View>
+                            <View style={[
+                                styles.peekEcoBadge,
+                                {
+                                    borderColor: (selectedTripForPeek.scor_eco ?? 100) >= 85
+                                        ? colors.status.good
+                                        : (selectedTripForPeek.scor_eco ?? 100) >= 65
+                                        ? colors.status.monitor
+                                        : colors.status.caution
+                                }
+                            ]}>
+                                <Text style={[
+                                    styles.peekEcoScore,
+                                    {
+                                        color: (selectedTripForPeek.scor_eco ?? 100) >= 85
+                                        ? colors.status.good
+                                        : (selectedTripForPeek.scor_eco ?? 100) >= 65
+                                        ? colors.status.monitor
+                                        : colors.status.caution
+                                    }
+                                ]}>
+                                    {selectedTripForPeek.scor_eco ?? 100}
+                                </Text>
+                                <Text style={styles.peekEcoLabel}>ECO</Text>
+                            </View>
+                        </View>
+
+                        {/* Status Badges */}
+                        <View style={styles.peekBadgesRow}>
+                            {buildTripBadges(selectedTripForPeek).map(b => (
+                                <StatusBadge key={b.label} status={b.status} label={b.label} variant="filled" size="sm" />
+                            ))}
+                        </View>
+
+                        {/* 4 Metric Cards */}
+                        <View style={styles.peekMetricGrid}>
+                            <View style={styles.peekMetricCard}>
+                                <Text style={styles.peekMetricLabel}>DISTANȚĂ</Text>
+                                <Text style={styles.peekMetricVal}>
+                                    {parseFloat(selectedTripForPeek.km_parcursi || 0).toFixed(1)} <Text style={styles.peekMetricUnit}>km</Text>
+                                </Text>
+                            </View>
+
+                            <View style={styles.peekMetricCard}>
+                                <Text style={styles.peekMetricLabel}>DURATĂ</Text>
+                                <Text style={styles.peekMetricVal}>
+                                    {(selectedTripForPeek.timestamp_end && selectedTripForPeek.timestamp_start)
+                                        ? Math.round((selectedTripForPeek.timestamp_end - selectedTripForPeek.timestamp_start) / 60000)
+                                        : 0} <Text style={styles.peekMetricUnit}>min</Text>
+                                </Text>
+                            </View>
+
+                            <View style={styles.peekMetricCard}>
+                                <Text style={styles.peekMetricLabel}>CONSUM MEDIU</Text>
+                                <Text style={styles.peekMetricVal}>
+                                    {parseFloat(selectedTripForPeek.consum_mediu_100km || 0).toFixed(1)} <Text style={styles.peekMetricUnit}>L/100</Text>
+                                </Text>
+                            </View>
+
+                            <View style={styles.peekMetricCard}>
+                                <Text style={styles.peekMetricLabel}>VITEZĂ MEDIE</Text>
+                                <Text style={styles.peekMetricVal}>
+                                    {Math.round(selectedTripForPeek.viteza_medie || 0)} <Text style={styles.peekMetricUnit}>km/h</Text>
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Telemetry Breakdown Details */}
+                        <View style={styles.peekStatsBox}>
+                            <View style={styles.peekStatRow}>
+                                <Text style={styles.peekStatLabel}>Temp. Răcire Max</Text>
+                                <Text style={[
+                                    styles.peekStatVal,
+                                    { color: (selectedTripForPeek.coolant_max > 100) ? colors.status.critical : colors.text.primary }
+                                ]}>
+                                    {selectedTripForPeek.coolant_max ? `${Math.round(selectedTripForPeek.coolant_max)} °C` : '—'}
+                                </Text>
+                            </View>
+                            <View style={styles.peekStatRow}>
+                                <Text style={styles.peekStatLabel}>Viteză Maximă</Text>
+                                <Text style={styles.peekStatVal}>
+                                    {selectedTripForPeek.viteza_max ? `${Math.round(selectedTripForPeek.viteza_max)} km/h` : '—'}
+                                </Text>
+                            </View>
+                            <View style={styles.peekStatRow}>
+                                <Text style={styles.peekStatLabel}>Cost Estimat Carburant</Text>
+                                <Text style={[styles.peekStatVal, { color: colors.status.good }]}>
+                                    {(((selectedTripForPeek.km_parcursi || 0) * (selectedTripForPeek.consum_mediu_100km || 0) / 100) * 7.5).toFixed(1)} RON
+                                </Text>
+                            </View>
+                            <View style={[styles.peekStatRow, { borderBottomWidth: 0 }]}>
+                                <Text style={styles.peekStatLabel}>Erori OBD-II / DTC</Text>
+                                <Text style={[
+                                    styles.peekStatVal,
+                                    { color: (selectedTripForPeek.nr_dtc > 0) ? colors.status.critical : colors.status.good }
+                                ]}>
+                                    {selectedTripForPeek.nr_dtc > 0 ? `${selectedTripForPeek.nr_dtc} erori detectate` : 'Curat (0 erori)'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Actions */}
+                        <View style={styles.peekActionRow}>
+                            <Button
+                                variant="primary"
+                                label="Deschide analiza completă (Deep Dive) ❯"
+                                onPress={() => {
+                                    const tripId = selectedTripForPeek.id_calatorie;
+                                    setSelectedTripForPeek(null);
+                                    setSelectedTripId(tripId);
+                                }}
+                                style={styles.peekPrimaryBtn}
+                            />
+                            <Button
+                                variant="ghost"
+                                label="Partajează rezumat cursă"
+                                onPress={() => {
+                                    const trip = selectedTripForPeek;
+                                    const text = `Cursă ${buildTripTitle(trip)}\n` +
+                                        `Data: ${formatTripDate(trip.timestamp_start)} ${formatTripTime(trip.timestamp_start)}\n` +
+                                        `Distanță: ${parseFloat(trip.km_parcursi || 0).toFixed(1)} km\n` +
+                                        `Consum: ${parseFloat(trip.consum_mediu_100km || 0).toFixed(1)} L/100km\n` +
+                                        `Scor Eco: ${trip.scor_eco ?? 100}/100\n` +
+                                        `Generat de Antigravity OBD-II Telemetry`;
+                                    Share.share({ message: text });
+                                }}
+                                style={styles.peekSecondaryBtn}
+                            />
+                        </View>
+                    </ScrollView>
+                )}
+            </BottomSheet>
 
             {/* ── Monthly Report — Full-screen Modal ────────────────────────── */}
             <Modal
@@ -1236,6 +1391,127 @@ const styles = StyleSheet.create({
     },
     reportEmpty: { marginVertical: spacing[6] },
     shareBtn:    { marginBottom: spacing[6] },
+
+    // ── Trip Peek BottomSheet Styles ──────────────────────────────────────────
+    peekScroll: {
+        maxHeight: 520,
+    },
+    peekScrollContent: {
+        paddingHorizontal: spacing[5],
+        paddingBottom: spacing[5],
+    },
+    peekHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        marginBottom: spacing[3],
+    },
+    peekTitle: {
+        fontSize: typography.sizes.title3,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+        marginBottom: 2,
+    },
+    peekSubtitle: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+    },
+    peekEcoBadge: {
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.bg[1],
+        marginLeft: spacing[3],
+    },
+    peekEcoScore: {
+        fontSize: typography.sizes.headline,
+        fontWeight: typography.weights.bold,
+        fontVariant: ['tabular-nums'],
+    },
+    peekEcoLabel: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
+        color: colors.text.tertiary,
+        letterSpacing: 0.5,
+    },
+    peekBadgesRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing[2],
+        marginBottom: spacing[4],
+    },
+    peekMetricGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing[2],
+        marginBottom: spacing[4],
+    },
+    peekMetricCard: {
+        flex: 1,
+        minWidth: '46%',
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        padding: spacing[3],
+    },
+    peekMetricLabel: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.tertiary,
+        fontWeight: typography.weights.bold,
+        letterSpacing: 0.5,
+        marginBottom: 4,
+    },
+    peekMetricVal: {
+        fontSize: typography.sizes.headline,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    peekMetricUnit: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.regular,
+        color: colors.text.secondary,
+    },
+    peekStatsBox: {
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[2],
+        marginBottom: spacing[4],
+    },
+    peekStatRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: spacing[2],
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border.subtle,
+    },
+    peekStatLabel: {
+        fontSize: typography.sizes.body2,
+        color: colors.text.secondary,
+    },
+    peekStatVal: {
+        fontSize: typography.sizes.body2,
+        fontWeight: typography.weights.semibold,
+        fontVariant: ['tabular-nums'],
+    },
+    peekActionRow: {
+        gap: spacing[2],
+        marginTop: spacing[2],
+    },
+    peekPrimaryBtn: {
+        width: '100%',
+    },
+    peekSecondaryBtn: {
+        width: '100%',
+    },
 });
 
 export default TripHistoryScreen;

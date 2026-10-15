@@ -375,6 +375,7 @@ const styles = StyleSheet.create({
     factorValue: {
         fontWeight: typography.weights.semibold,
         color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
     },
     factorImpact: {
         fontSize: typography.sizes.label2,
@@ -410,6 +411,7 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.label1,
         fontWeight: typography.weights.semibold,
         color: colors.text.secondary,
+        fontVariant: ['tabular-nums'],
     },
     baselineDeviation: {
         color: colors.status.monitor,

@@ -45,6 +45,8 @@ import {
     HealthGauge,
     EmptyState,
     VehicleAvatar,
+    BottomSheet,
+    StatusBadge,
 } from '../components/ui';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,6 +226,8 @@ const MaintenanceScreen = () => {
     const [showAllUrgent, setShowAllUrgent]   = useState(false);
     const [showAllHistory, setShowAllHistory] = useState(false);
     const [dtcData, setDtcData] = useState(null);
+    const [peekMaintItem, setPeekMaintItem]     = useState(null);
+    const [peekHistoryItem, setPeekHistoryItem] = useState(null);
 
     const screenFadeStyle = useScreenFadeIn(screenState);
 
@@ -408,6 +412,7 @@ const MaintenanceScreen = () => {
                                 dueDate={buildDueDate(item)}
                                 status={mapItemStatus(item.status)}
                                 urgency={mapItemUrgency(item)}
+                                onPress={() => setPeekMaintItem(item)}
                                 style={i > 0 ? styles.cardGap : undefined}
                             />
                         ))}
@@ -441,6 +446,7 @@ const MaintenanceScreen = () => {
                                 dueDate={buildDueDate(item)}
                                 status="upcoming"
                                 urgency={mapItemUrgency(item)}
+                                onPress={() => setPeekMaintItem(item)}
                                 style={i > 0 ? styles.cardGap : undefined}
                             />
                         ))}
@@ -576,6 +582,7 @@ const MaintenanceScreen = () => {
                                     type="maintenance"
                                     isFirst={i === 0}
                                     isLast={i === historyVisible.length - 1}
+                                    onPress={() => setPeekHistoryItem(session)}
                                 />
                             ))}
                             {historyHidden > 0 ? (
@@ -703,6 +710,182 @@ const MaintenanceScreen = () => {
                 </Card>
 
             </ScrollView>
+
+            {/* ── Progressive Disclosure: Maintenance Item Peek Sheet ─────── */}
+            <BottomSheet
+                visible={!!peekMaintItem}
+                onClose={() => setPeekMaintItem(null)}
+                title="Detalii Lucrare Service"
+            >
+                {peekMaintItem && (
+                    <ScrollView
+                        style={styles.peekScroll}
+                        contentContainerStyle={styles.peekScrollContent}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {/* Header */}
+                        <View style={styles.peekHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.peekTitle}>{peekMaintItem.item_name}</Text>
+                                <Text style={styles.peekSubtitle}>
+                                    {buildItemSubtitle(peekMaintItem)}
+                                </Text>
+                            </View>
+                            <StatusBadge
+                                status={peekMaintItem.status === 'OVERDUE' ? 'critical' : 'monitor'}
+                                label={peekMaintItem.status === 'OVERDUE' ? 'DEPĂȘIT' : 'PROGRAMAT'}
+                                variant="filled"
+                                size="sm"
+                            />
+                        </View>
+
+                        {/* Due status banner */}
+                        <View style={[
+                            styles.peekAlertBox,
+                            peekMaintItem.status === 'OVERDUE'
+                                ? { backgroundColor: 'rgba(235, 87, 87, 0.1)', borderColor: 'rgba(235, 87, 87, 0.3)' }
+                                : { backgroundColor: 'rgba(77, 142, 245, 0.1)', borderColor: 'rgba(77, 142, 245, 0.3)' }
+                        ]}>
+                            <Text style={styles.peekAlertLabel}>Scadență / Rulaj rămas:</Text>
+                            <Text style={[
+                                styles.peekAlertVal,
+                                { color: peekMaintItem.status === 'OVERDUE' ? colors.status.critical : colors.accent.default }
+                            ]}>
+                                {buildDueDate(peekMaintItem) || 'Conform planificării'}
+                            </Text>
+                        </View>
+
+                        {/* 2x2 Metric Grid */}
+                        <View style={styles.peekMetricsGrid}>
+                            <View style={styles.peekMetricCard}>
+                                <Text style={styles.peekMetricLabel}>KILOMETRAJ SCADENT</Text>
+                                <Text style={styles.peekMetricVal}>
+                                    {formatKm(peekMaintItem.next_due_km)}
+                                </Text>
+                            </View>
+
+                            <View style={styles.peekMetricCard}>
+                                <Text style={styles.peekMetricLabel}>ESTIMARE COST</Text>
+                                <Text style={styles.peekMetricVal}>
+                                    {peekMaintItem.estimated_cost ? `${peekMaintItem.estimated_cost} RON` : '~300 - 500 RON'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Technical OE info */}
+                        <View style={styles.peekDescBox}>
+                            <Text style={styles.peekDescTitle}>RECOMANDARE TEHNICĂ & SPECIFICAȚIE OE</Text>
+                            <Text style={styles.peekDescText}>
+                                {peekMaintItem.item_name?.toLowerCase().includes('ulei')
+                                    ? 'Normă VW 505.00 / 505.01 (Synthetic 5W-40). Capacitate baie: ~4.5L. Înlocuiți obligatoriu și filtrul de ulei + șaiba de cupru la bușon.'
+                                    : peekMaintItem.item_name?.toLowerCase().includes('frân')
+                                    ? 'Grosime minimă garnituri de fricțiune: 3.0 mm. Verificați și nivelul / umiditatea lichidului de frână DOT 4.'
+                                    : peekMaintItem.item_name?.toLowerCase().includes('distribu')
+                                    ? 'Kit complet curea dințată + rolă întinzătoare + pompă de apă. Risc mecanic ridicat în caz de depășire a intervalului!'
+                                    : 'Utilizați doar piese omologate conform specificațiilor producătorului pentru menținerea fiabilității.'}
+                            </Text>
+                        </View>
+
+                        {/* Actions */}
+                        <View style={styles.peekActions}>
+                            <Button
+                                variant="primary"
+                                label="Consultă AI Expert pentru procedură & piese 💬"
+                                onPress={() => {
+                                    const itm = peekMaintItem;
+                                    setPeekMaintItem(null);
+                                    navigation?.navigate('AIExpert', {
+                                        initialPrompt: `Am de efectuat lucrarea de mentenanță "${itm.item_name}". Ce coduri de piese OE, specificații tehnice și sfaturi de montaj recomanzi?`,
+                                    });
+                                }}
+                                style={styles.peekBtn}
+                            />
+                            {workshop?.phone ? (
+                                <Button
+                                    variant="secondary"
+                                    label={`Sună la ${workshop.name || 'Service'} 📞`}
+                                    onPress={() => {
+                                        Linking.openURL(`tel:${workshop.phone}`);
+                                    }}
+                                    style={styles.peekBtn}
+                                />
+                            ) : null}
+                        </View>
+                    </ScrollView>
+                )}
+            </BottomSheet>
+
+            {/* ── Progressive Disclosure: History Item Peek Sheet ─────────── */}
+            <BottomSheet
+                visible={!!peekHistoryItem}
+                onClose={() => setPeekHistoryItem(null)}
+                title="Detalii Intervenție Trecută"
+            >
+                {peekHistoryItem && (
+                    <ScrollView
+                        style={styles.peekScroll}
+                        contentContainerStyle={styles.peekScrollContent}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <View style={styles.peekHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.peekTitle}>{buildServiceTitle(peekHistoryItem)}</Text>
+                                <Text style={styles.peekSubtitle}>
+                                    Data: {formatServiceDate(peekHistoryItem.performed_at)}
+                                </Text>
+                            </View>
+                            <StatusBadge
+                                status="good"
+                                label="FINALIZAT"
+                                variant="filled"
+                                size="sm"
+                            />
+                        </View>
+
+                        <View style={styles.peekMetricsGrid}>
+                            <View style={styles.peekMetricCard}>
+                                <Text style={styles.peekMetricLabel}>RULAJ LA SERVICE</Text>
+                                <Text style={styles.peekMetricVal}>
+                                    {formatKm(peekHistoryItem.mileage_km)}
+                                </Text>
+                            </View>
+
+                            <View style={styles.peekMetricCard}>
+                                <Text style={styles.peekMetricLabel}>TOTAL ACHITAT</Text>
+                                <Text style={[styles.peekMetricVal, { color: colors.status.good }]}>
+                                    {peekHistoryItem.cost_total ? `${peekHistoryItem.cost_total.toLocaleString()} RON` : 'Neînregistrat'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.peekDescBox}>
+                            <Text style={styles.peekDescTitle}>ATELIER & DETALII INTERVENȚIE</Text>
+                            <Text style={styles.peekDescText}>
+                                {peekHistoryItem.workshop_name
+                                    ? `Efectuat la: ${peekHistoryItem.workshop_name}`
+                                    : 'Efectuat în regie proprie sau service autorizat.'}
+                                {'\n\n'}
+                                {peekHistoryItem.notes || 'Intervenție validată în carnetul electronic de service.'}
+                            </Text>
+                        </View>
+
+                        <View style={styles.peekActions}>
+                            <Button
+                                variant="primary"
+                                label="Întreabă AI când trebuie repetată 💬"
+                                onPress={() => {
+                                    const s = peekHistoryItem;
+                                    setPeekHistoryItem(null);
+                                    navigation?.navigate('AIExpert', {
+                                        initialPrompt: `Am efectuat lucrarea "${buildServiceTitle(s)}" la kilometrajul ${s.mileage_km || 'curent'}. Când este recomandat să o repet și la ce semne să fiu atent?`,
+                                    });
+                                }}
+                                style={styles.peekBtn}
+                            />
+                        </View>
+                    </ScrollView>
+                )}
+            </BottomSheet>
         </Animated.View>
     );
 };
@@ -908,6 +1091,102 @@ const styles = StyleSheet.create({
         lineHeight: typography.lineHeights.caption,
     },
     tabular: { fontVariant: ['tabular-nums'] },
+
+    // ── Peek BottomSheet Styles ───────────────────────────────────────────────
+    peekScroll: {
+        maxHeight: 520,
+    },
+    peekScrollContent: {
+        paddingHorizontal: spacing[5],
+        paddingBottom: spacing[5],
+    },
+    peekHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: spacing[3],
+    },
+    peekTitle: {
+        fontSize: typography.sizes.title3,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+        marginBottom: 2,
+    },
+    peekSubtitle: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+    },
+    peekAlertBox: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderRadius: radii.md,
+        padding: spacing[3],
+        marginBottom: spacing[4],
+    },
+    peekAlertLabel: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+    },
+    peekAlertVal: {
+        fontSize: typography.sizes.body1,
+        fontWeight: typography.weights.bold,
+        fontVariant: ['tabular-nums'],
+    },
+    peekMetricsGrid: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        marginBottom: spacing[4],
+    },
+    peekMetricCard: {
+        flex: 1,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        padding: spacing[3],
+    },
+    peekMetricLabel: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.tertiary,
+        fontWeight: typography.weights.bold,
+        letterSpacing: 0.5,
+        marginBottom: 4,
+    },
+    peekMetricVal: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    peekDescBox: {
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        padding: spacing[4],
+        marginBottom: spacing[4],
+    },
+    peekDescTitle: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
+        color: colors.text.tertiary,
+        letterSpacing: 0.8,
+        marginBottom: spacing[1],
+    },
+    peekDescText: {
+        fontSize: typography.sizes.body2,
+        color: colors.text.primary,
+        lineHeight: 20,
+    },
+    peekActions: {
+        gap: spacing[2],
+        marginTop: spacing[2],
+    },
+    peekBtn: {
+        width: '100%',
+    },
 });
 
 export default MaintenanceScreen;

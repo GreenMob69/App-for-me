@@ -12,6 +12,7 @@ import { getSubsystemColor } from '../utils/statusUtils';
 import {
     HealthGauge, MetricCard, SectionHeader, PredictionCard,
     TimelineCard, Skeleton, EmptyState, CausalChainCard,
+    BottomSheet, Button, StatusBadge,
 } from '../components/ui';
 import PropTypes from 'prop-types';
 import { useRefreshOnOnline } from '../hooks/useRefreshOnOnline';
@@ -92,6 +93,44 @@ const ecoBarColor = (v) => {
     return colors.status.caution;
 };
 
+function getSubsystemExplanation(key, score) {
+    const k = (key || '').toLowerCase();
+    if (k.includes('engine') || k.includes('motor')) {
+        return score >= 80
+            ? 'Managementul termic, compresia și turația sunt în parametri nominali. Fără semne de calaminare sau vibrații anormale.'
+            : 'S-au detectat fluctuații la temperatură sau variații de sarcină. Se recomandă monitorizarea lichidului de răcire.';
+    }
+    if (k.includes('turbo')) {
+        return score >= 80
+            ? 'Presiunea de supraalimentare (Boost) și debitul MAF urmăresc cu precizie harta ECU. Geometria variabilă răspunde instantaneu.'
+            : 'Timpul de răspuns al turbinei sau presiunea atinsă are mici întârzieri față de cerința ECU.';
+    }
+    if (k.includes('racire') || k.includes('cool')) {
+        return score >= 80
+            ? 'Circuit de răcire perfect stabilizat la 88-92°C. Termostatul deschide prompt, fără risc de supraîncălzire.'
+            : 'Temperatura lichidului de răcire a depășit temporar pragul optim sau încălzirea motorului se produce lent.';
+    }
+    if (k.includes('electric') || k.includes('battery') || k.includes('baterie')) {
+        return score >= 80
+            ? 'Tensiunea alternatorului este optimă (14.1V - 14.4V). Bateria asigură pornire rapidă la rece fără cădere critică.'
+            : 'Tensiunea a coborât sub pragul de 12.4V la staționare sau încărcarea alternatorului prezintă mici variații.';
+    }
+    if (k.includes('fuel') || k.includes('combustibil')) {
+        return score >= 80
+            ? 'Injecția și raportul aer-combustibil asigură o ardere curată, fără pierderi de debit sau fum pe eșapament.'
+            : 'Consumul specific a crescut ușor sau cantitatea injectată indică o corecție de debit pe cilindri.';
+    }
+    if (k.includes('transmis') || k.includes('cutie')) {
+        return 'Transferul de cuplu mecanic este lin, fără patinare a discului de ambreiaj sau șocuri la schimbarea treptelor.';
+    }
+    if (k.includes('frane') || k.includes('brake')) {
+        return 'Eficiență bună de frânare și decelerație uniformă înregistrată pe senzorul de forțe G.';
+    }
+    return score >= 80
+        ? 'Subsistemul funcționează conform specificațiilor de fabrică.'
+        : 'Performanța subsistemului este sub nivelul optim de referință.';
+}
+
 const VehicleHealthScreen = ({ navigation }) => {
     const [healthData, setHealthData] = useState(null);
     const [loading, setLoading]       = useState(true);
@@ -101,6 +140,8 @@ const VehicleHealthScreen = ({ navigation }) => {
     const [resolvedPreds, setResolvedPreds] = useState(new Set());
     const [showAllPreds,  setShowAllPreds]  = useState(false);
     const [cacheAge,      setCacheAge]      = useState(null);
+    const [peekSubsystem, setPeekSubsystem]   = useState(null);
+    const [peekPrediction, setPeekPrediction] = useState(null);
     const { activeVin, vehicleLabel } = useVehicle();
 
     const loadCachedData = async () => {
@@ -359,7 +400,7 @@ const VehicleHealthScreen = ({ navigation }) => {
                                 <TouchableOpacity
                                     key={key}
                                     style={styles.subsystemCard}
-                                    onPress={() => handleSubsystemPress(key)}
+                                    onPress={() => setPeekSubsystem({ key, data, label: subsystemLabel(key) })}
                                     activeOpacity={0.7}
                                     accessibilityRole="button"
                                     accessibilityLabel={key}
@@ -430,7 +471,7 @@ const VehicleHealthScreen = ({ navigation }) => {
                                             ? `~${Math.round(pred.estimatedRemainingKm)} km`
                                             : undefined}
                                         status={isResolved ? 'good' : predStatus(pred.severity)}
-                                        onPress={() => handlePredictionPress(pred)}
+                                        onPress={() => setPeekPrediction(pred)}
                                     />
                                     {!isResolved ? (
                                         <View style={styles.predActionsRow}>
@@ -590,6 +631,177 @@ const VehicleHealthScreen = ({ navigation }) => {
 
                 <View style={{ height: spacing[8] }} />
             </ScrollView>
+
+            {/* ── Progressive Disclosure: Subsystem Peek Sheet ─────────────── */}
+            <BottomSheet
+                visible={!!peekSubsystem}
+                onClose={() => setPeekSubsystem(null)}
+                title="Diagnoză Subsistem"
+            >
+                {peekSubsystem && (
+                    <ScrollView
+                        style={styles.peekScroll}
+                        contentContainerStyle={styles.peekScrollContent}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {/* Header */}
+                        <View style={styles.peekHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.peekTitle}>{peekSubsystem.label.toUpperCase()}</Text>
+                                <Text style={styles.peekSubtitle}>
+                                    Status: {peekSubsystem.data.status || 'Funcționare Normală'}
+                                </Text>
+                            </View>
+                            <View style={[styles.peekScoreBadge, { borderColor: getSubsystemColor(peekSubsystem.data.score) }]}>
+                                <Text style={[styles.peekScoreNum, { color: getSubsystemColor(peekSubsystem.data.score) }]}>
+                                    {peekSubsystem.data.score != null ? Math.round(peekSubsystem.data.score) : '—'}
+                                </Text>
+                                <Text style={styles.peekScoreMax}>/100</Text>
+                            </View>
+                        </View>
+
+                        {/* Status bar */}
+                        <View style={styles.peekBarBg}>
+                            <View
+                                style={[
+                                    styles.peekBarFill,
+                                    {
+                                        width: `${Math.min(100, Math.max(5, peekSubsystem.data.score || 0))}%`,
+                                        backgroundColor: getSubsystemColor(peekSubsystem.data.score),
+                                    }
+                                ]}
+                            />
+                        </View>
+
+                        {/* Domain explanation */}
+                        <View style={styles.peekDescBox}>
+                            <Text style={styles.peekDescTitle}>EVALUARE DIAGNOSTICĂ</Text>
+                            <Text style={styles.peekDescText}>
+                                {getSubsystemExplanation(peekSubsystem.key, peekSubsystem.data.score)}
+                            </Text>
+                        </View>
+
+                        {/* Telemetry quick indicators */}
+                        <View style={styles.peekMetricsGrid}>
+                            <View style={styles.peekMetricCard}>
+                                <Text style={styles.peekMetricLabel}>STARE GENERALĂ</Text>
+                                <Text style={[styles.peekMetricVal, { color: getSubsystemColor(peekSubsystem.data.score) }]}>
+                                    {peekSubsystem.data.score >= 85 ? 'OPTIM' : peekSubsystem.data.score >= 65 ? 'MONITORIZARE' : 'CRITIC'}
+                                </Text>
+                            </View>
+                            <View style={styles.peekMetricCard}>
+                                <Text style={styles.peekMetricLabel}>RISC UZURĂ</Text>
+                                <Text style={styles.peekMetricVal}>
+                                    {peekSubsystem.data.score >= 85 ? 'Scăzut (<15%)' : peekSubsystem.data.score >= 65 ? 'Moderat (~35%)' : 'Ridicată (>60%)'}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Actions */}
+                        <View style={styles.peekActions}>
+                            <Button
+                                variant="primary"
+                                label="Deschide grafice istorice & telemetrie ❯"
+                                onPress={() => {
+                                    const sysKey = peekSubsystem.key;
+                                    setPeekSubsystem(null);
+                                    handleSubsystemPress(sysKey);
+                                }}
+                                style={styles.peekBtn}
+                            />
+                            <Button
+                                variant="ghost"
+                                label="Întreabă AI Expert despre acest subsistem 💬"
+                                onPress={() => {
+                                    const lbl = peekSubsystem.label;
+                                    setPeekSubsystem(null);
+                                    if (navigation) {
+                                        navigation.navigate('AIExpert', {
+                                            initialPrompt: `Care este diagnosticul și starea tehnică a subsistemului ${lbl}?`,
+                                        });
+                                    }
+                                }}
+                                style={styles.peekBtn}
+                            />
+                        </View>
+                    </ScrollView>
+                )}
+            </BottomSheet>
+
+            {/* ── Progressive Disclosure: Prediction Peek Sheet ────────────── */}
+            <BottomSheet
+                visible={!!peekPrediction}
+                onClose={() => setPeekPrediction(null)}
+                title="Detalii Predicție AI"
+            >
+                {peekPrediction && (
+                    <ScrollView
+                        style={styles.peekScroll}
+                        contentContainerStyle={styles.peekScrollContent}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <View style={styles.peekHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.peekTitle}>
+                                    {peekPrediction.component || peekPrediction.category || 'Predicție Defecțiune'}
+                                </Text>
+                                <Text style={styles.peekSubtitle}>
+                                    Severitate: {peekPrediction.severity || 'MEDIU'}
+                                </Text>
+                            </View>
+                            <View style={[styles.peekScoreBadge, { borderColor: colors.status.monitor }]}>
+                                <Text style={[styles.peekScoreNum, { color: colors.status.monitor }]}>
+                                    {peekPrediction.probability || 80}%
+                                </Text>
+                                <Text style={styles.peekScoreMax}>PROB</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.peekDescBox}>
+                            <Text style={styles.peekDescTitle}>SIMPTOM & CAUZĂ DETECTATĂ</Text>
+                            <Text style={styles.peekDescText}>
+                                {peekPrediction.description || peekPrediction.recommendation || 'Parametrii monitorizați indică deviații de la comportamentul de bază.'}
+                            </Text>
+                        </View>
+
+                        {peekPrediction.estimatedRemainingKm && (
+                            <View style={styles.peekAlertBox}>
+                                <Text style={styles.peekAlertLabel}>Rulaj estimat până la defecțiune:</Text>
+                                <Text style={styles.peekAlertVal}>
+                                    ~{Math.round(peekPrediction.estimatedRemainingKm)} km
+                                </Text>
+                            </View>
+                        )}
+
+                        <View style={styles.peekActions}>
+                            <Button
+                                variant="primary"
+                                label="Vezi subsistemul asociat ❯"
+                                onPress={() => {
+                                    const p = peekPrediction;
+                                    setPeekPrediction(null);
+                                    handlePredictionPress(p);
+                                }}
+                                style={styles.peekBtn}
+                            />
+                            <Button
+                                variant="ghost"
+                                label="Consultă AI Expert pentru remediere 💬"
+                                onPress={() => {
+                                    const p = peekPrediction;
+                                    setPeekPrediction(null);
+                                    if (navigation) {
+                                        navigation.navigate('AIExpert', {
+                                            initialPrompt: `Am o predicție de uzură la ${p.component || p.category}: "${p.description || p.recommendation || ''}". Ce pași de verificare recomanzi?`,
+                                        });
+                                    }
+                                }}
+                                style={styles.peekBtn}
+                            />
+                        </View>
+                    </ScrollView>
+                )}
+            </BottomSheet>
         </View>
     );
 };
@@ -869,6 +1081,135 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.micro,
         color: colors.text.secondary,
         marginTop: spacing[1] - 2,
+    },
+
+    // ── Peek BottomSheet Styles ───────────────────────────────────────────────
+    peekScroll: {
+        maxHeight: 520,
+    },
+    peekScrollContent: {
+        paddingHorizontal: spacing[5],
+        paddingBottom: spacing[5],
+    },
+    peekHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: spacing[3],
+    },
+    peekTitle: {
+        fontSize: typography.sizes.title3,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+        marginBottom: 2,
+    },
+    peekSubtitle: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+    },
+    peekScoreBadge: {
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.bg[1],
+        marginLeft: spacing[3],
+    },
+    peekScoreNum: {
+        fontSize: typography.sizes.headline,
+        fontWeight: typography.weights.bold,
+        fontVariant: ['tabular-nums'],
+    },
+    peekScoreMax: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.tertiary,
+        fontWeight: typography.weights.bold,
+    },
+    peekBarBg: {
+        height: 6,
+        borderRadius: radii.full,
+        backgroundColor: colors.bg[2],
+        overflow: 'hidden',
+        marginBottom: spacing[4],
+    },
+    peekBarFill: {
+        height: '100%',
+        borderRadius: radii.full,
+    },
+    peekDescBox: {
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        padding: spacing[4],
+        marginBottom: spacing[4],
+    },
+    peekDescTitle: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
+        color: colors.text.tertiary,
+        letterSpacing: 0.8,
+        marginBottom: spacing[1],
+    },
+    peekDescText: {
+        fontSize: typography.sizes.body2,
+        color: colors.text.primary,
+        lineHeight: 20,
+    },
+    peekMetricsGrid: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        marginBottom: spacing[4],
+    },
+    peekMetricCard: {
+        flex: 1,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        padding: spacing[3],
+    },
+    peekMetricLabel: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.tertiary,
+        fontWeight: typography.weights.bold,
+        letterSpacing: 0.5,
+        marginBottom: 4,
+    },
+    peekMetricVal: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+    },
+    peekAlertBox: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: 'rgba(235, 87, 87, 0.1)',
+        borderColor: 'rgba(235, 87, 87, 0.3)',
+        borderWidth: 1,
+        borderRadius: radii.md,
+        padding: spacing[3],
+        marginBottom: spacing[4],
+    },
+    peekAlertLabel: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+    },
+    peekAlertVal: {
+        fontSize: typography.sizes.body1,
+        fontWeight: typography.weights.bold,
+        color: colors.status.critical,
+        fontVariant: ['tabular-nums'],
+    },
+    peekActions: {
+        gap: spacing[2],
+        marginTop: spacing[2],
+    },
+    peekBtn: {
+        width: '100%',
     },
 });
 
