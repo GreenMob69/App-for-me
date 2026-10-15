@@ -156,6 +156,10 @@ const StatusScreen = ({ navigation }) => {
         getRootNavigation(navigation)?.navigate('GlobalSearch');
     }, [navigation]);
 
+    const openSettings = useCallback(() => {
+        getRootNavigation(navigation)?.navigate('Settings');
+    }, [navigation]);
+
     const loadCachedStatus = useCallback(async () => {
         try {
             const raw = await AsyncStorage.getItem(STATUS_CACHE_KEY);
@@ -363,6 +367,14 @@ const StatusScreen = ({ navigation }) => {
                                 </Text>
                             </View>
                         )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.headerIconBtn}
+                        onPress={openSettings}
+                        accessibilityRole="button"
+                        accessibilityLabel="Setări vehicul și aplicație"
+                    >
+                        <Text style={styles.headerIconBtnText}>⚙️</Text>
                     </TouchableOpacity>
                 </View>
 

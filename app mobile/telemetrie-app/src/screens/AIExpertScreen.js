@@ -53,9 +53,12 @@ function fmtTwinAge(savedAt) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const AIExpertScreen = () => {
+const AIExpertScreen = ({ route, navigation } = {}) => {
     const flatListRef = useRef(null);
     const { activeVin } = useVehicle();
+
+    const initialPrompt = route?.params?.initialPrompt || route?.params?.initialQuestion;
+    const handledInitialPrompt = useRef(false);
 
     const [twinState,         setTwinState]         = useState('loading');
     const [twinMeta,          setTwinMeta]           = useState(null);
@@ -142,6 +145,14 @@ const AIExpertScreen = () => {
             setIsQuerying(false);
         }
     }, [input, isQuerying, twinState, activeVin]);
+
+    // ── Auto-query initialPrompt from navigation params ──────────────────
+    useEffect(() => {
+        if (initialPrompt && (twinState === 'ok' || twinState === 'no_data') && !handledInitialPrompt.current) {
+            handledInitialPrompt.current = true;
+            sendQuestion(initialPrompt);
+        }
+    }, [initialPrompt, twinState, sendQuestion]);
 
     // ── Render message ───────────────────────────────────────────────────
     const renderMessage = ({ item: msg }) => {
@@ -262,6 +273,16 @@ const AIExpertScreen = () => {
         <View style={styles.main}>
             {/* ── Header ────────────────────────────────────────────── */}
             <View style={styles.header}>
+                {navigation?.canGoBack() && (
+                    <TouchableOpacity
+                        style={styles.backBtn}
+                        onPress={() => navigation.goBack()}
+                        accessibilityRole="button"
+                        accessibilityLabel="Înapoi"
+                    >
+                        <Text style={styles.backBtnText}>←</Text>
+                    </TouchableOpacity>
+                )}
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>AI Expert</Text>
                     <Text style={styles.subtitle}>Vehicle Digital Twin · Q&A</Text>
@@ -395,6 +416,21 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: colors.border.default,
         gap: spacing[3],
+    },
+    backBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: radii.full,
+        backgroundColor: colors.bg[1],
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    backBtnText: {
+        color: colors.text.primary,
+        fontSize: typography.sizes.body,
+        fontWeight: typography.weights.bold,
     },
     title:    { fontSize: typography.sizes.title3, fontWeight: typography.weights.bold, color: colors.text.primary },
     subtitle: { fontSize: typography.sizes.caption, color: colors.text.secondary, marginTop: 2 },

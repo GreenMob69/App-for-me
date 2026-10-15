@@ -11,11 +11,12 @@ import { formatTimeAgo } from '../utils/formatters';
 import { getSubsystemColor } from '../utils/statusUtils';
 import {
     HealthGauge, MetricCard, SectionHeader, PredictionCard,
-    TimelineCard, Skeleton, EmptyState,
+    TimelineCard, Skeleton, EmptyState, CausalChainCard,
 } from '../components/ui';
 import PropTypes from 'prop-types';
 import { useRefreshOnOnline } from '../hooks/useRefreshOnOnline';
 import { useVehicle } from '../context/VehicleContext';
+import { getRootNavigation } from '../utils/navigation';
 
 const CACHE_KEY = '@health_cache';
 
@@ -449,6 +450,17 @@ const VehicleHealthScreen = ({ navigation }) => {
                                                     ✕ Fals pozitiv
                                                 </Text>
                                             </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[styles.predActionBtn, styles.predAiBtn]}
+                                                onPress={() => {
+                                                    const q = `Ce măsuri recomanzi pentru problema la ${pred.component || pred.category || 'subsistem'}: "${pred.recommendation || pred.description || ''}"?`;
+                                                    getRootNavigation(navigation)?.navigate('AIExpert', { initialPrompt: q });
+                                                }}
+                                                accessibilityRole="button"
+                                                accessibilityLabel="Întreabă Inginerul AI"
+                                            >
+                                                <Text style={styles.predAiBtnText}>✨ Întreabă AI</Text>
+                                            </TouchableOpacity>
                                         </View>
                                     ) : (
                                         <Text style={styles.predResolvedLabel}>✓ Marcat ca rezolvat</Text>
@@ -468,6 +480,52 @@ const VehicleHealthScreen = ({ navigation }) => {
                                 </Text>
                             </TouchableOpacity>
                         )}
+
+                        {/* ── Causal Chain Diagram (Reasoning Engine / Top Issue) ─── */}
+                        {(() => {
+                            const top = predictions[0];
+                            const comp = (top.component || top.category || '').toLowerCase();
+
+                            let rootCause = { title: 'Uzură / deviație mecanică', detail: `Anomalie detectată la ${top.component || 'componentă'}` };
+                            let interEffect = { title: 'Compensare parametrii ECU', detail: 'Modificarea timpilor de injecție și a presiunii de lucru' };
+                            let obsSymptom = { title: top.recommendation || top.description || 'Simptom înregistrat', detail: `Probabilitate de apariție ${top.probability || 70}%` };
+
+                            if (comp.includes('turbo') || comp.includes('boost')) {
+                                rootCause = { title: 'Scurgere vacuum / uzură VNT', detail: 'Pierdere presiune pe circuitul de comandă vacuum' };
+                                interEffect = { title: 'Întârziere răspuns turbosuflantă (Turbo Lag)', detail: 'Presiunea măsurată deviază cu peste 250 mbar față de target' };
+                                obsSymptom = { title: 'Putere redusă și fum la accelerare', detail: 'ECU limitează cuplul motor pentru protecție termică' };
+                            } else if (comp.includes('racire') || comp.includes('coolant') || comp.includes('temp')) {
+                                rootCause = { title: 'Termostat blocat parțial pe deschis', detail: 'Circulație anormală lichid de răcire la pornire' };
+                                interEffect = { title: 'Regim termic instabil în sarcină', detail: 'Temperatura lichidului depășește ecartul nominal' };
+                                obsSymptom = { title: 'Eficiență termică scăzută (+12% consum)', detail: 'Motorul rămâne mai mult timp în ciclul de încălzire' };
+                            } else if (comp.includes('egr') || comp.includes('carbon')) {
+                                rootCause = { title: 'Depuneri de calamină pe supapa EGR', detail: 'Mecanismul de acționare culisează cu frecare crescută' };
+                                interEffect = { title: 'Recirculare defectuoasă a gazelor', detail: 'Deviație între debitul de aer MAF măsurat și cel calculat' };
+                                obsSymptom = { title: 'Ralanti instabil și ezitări la accelerare', detail: 'Amestec aer-combustibil neomogen la turații joase' };
+                            } else if (comp.includes('baterie') || comp.includes('electric') || comp.includes('volt')) {
+                                rootCause = { title: 'Rezistență internă ridicată celule baterie', detail: 'Cădere de tensiune la pornirea la rece' };
+                                interEffect = { title: 'Regulatorul lucrează la limită', detail: 'Tensiunea scade sub 12.2V la consumatori activi' };
+                                obsSymptom = { title: 'Încărcare lentă și erori module ECU', detail: 'Risc de descărcare profundă la staționare' };
+                            }
+
+                            return (
+                                <View style={{ marginTop: spacing[3] }}>
+                                    <SectionHeader title="Analiză Cauzală & Propagare" style={styles.sectionHeader} />
+                                    <CausalChainCard
+                                        title="PROPAGARE DEFECT (AI REASONING)"
+                                        confidence={top.probability || 85}
+                                        rootCause={rootCause}
+                                        intermediateEffect={interEffect}
+                                        observedSymptom={obsSymptom}
+                                        recommendation={top.recommendation}
+                                        onAskAI={() => {
+                                            const q = `Analizează lanțul cauzal pentru ${top.component || 'vehicul'}: Cauză [${rootCause.title}] -> Efect [${interEffect.title}] -> Simptom [${obsSymptom.title}]. Ce pași de diagnostic fizic recomanzi?`;
+                                            getRootNavigation(navigation)?.navigate('AIExpert', { initialPrompt: q });
+                                        }}
+                                    />
+                                </View>
+                            );
+                        })()}
                     </>
                 )}
 
@@ -733,10 +791,24 @@ const styles = StyleSheet.create({
     },
     predActionBtn: {
         paddingVertical: spacing[1],
+        paddingHorizontal: spacing[2],
+        borderRadius: radii.xs,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     predActionText: {
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.semibold,
+    },
+    predAiBtn: {
+        backgroundColor: colors.accent.default + '18',
+        borderWidth: 1,
+        borderColor: colors.accent.default,
+    },
+    predAiBtnText: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        color: colors.accent.default,
     },
     predResolvedLabel: {
         fontSize: typography.sizes.caption,

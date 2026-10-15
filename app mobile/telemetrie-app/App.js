@@ -32,6 +32,7 @@ import VehicleHubScreen     from './src/screens/VehicleHubScreen';
 import AIExpertScreen       from './src/screens/AIExpertScreen';
 import NotificationScreen   from './src/screens/NotificationScreen';
 import GlobalSearchScreen   from './src/screens/GlobalSearchScreen';
+import UIPlaygroundScreen  from './src/screens/UIPlaygroundScreen';
 import ErrorBoundary        from './src/components/ErrorBoundary';
 
 const Tab       = createBottomTabNavigator();
@@ -171,6 +172,21 @@ function AppNavigator() {
                 >
                     {() => <ErrorBoundary><GlobalSearchScreen /></ErrorBoundary>}
                 </RootStack.Screen>
+                <RootStack.Screen
+                    name="Settings"
+                    component={SettingsScreen}
+                    options={{ animation: 'slide_from_right' }}
+                />
+                <RootStack.Screen
+                    name="AIExpert"
+                    component={AIExpertScreen}
+                    options={{ animation: 'slide_from_right' }}
+                />
+                <RootStack.Screen
+                    name="UIPlayground"
+                    component={UIPlaygroundScreen}
+                    options={{ animation: 'slide_from_right' }}
+                />
             </RootStack.Navigator>
         </NavigationContainer>
     );

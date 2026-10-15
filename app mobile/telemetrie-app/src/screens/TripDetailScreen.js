@@ -4,14 +4,16 @@ import {
     useWindowDimensions, Platform, StatusBar, Alert, Linking,
 } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
+import { useNavigation } from '@react-navigation/native';
 import api from '../services/api';
 import { t } from '../i18n';
 import { getActiveServerUrl } from '../utils/config';
 import { useVehicle } from '../context/VehicleContext';
+import { getRootNavigation } from '../utils/navigation';
 import { colors, typography, radii, spacing, layout } from '../theme';
 import { getSubsystemColor } from '../utils/statusUtils';
 import {
-    Skeleton, MetricCard, PredictionCard, SectionHeader, EmptyState,
+    Skeleton, MetricCard, PredictionCard, SectionHeader, EmptyState, CausalChainCard,
 } from '../components/ui';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -81,7 +83,10 @@ const CHART_CONFIGS = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TripDetailScreen = ({ tripId, onBack }) => {
+const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
+    const nav = useNavigation();
+    const effectiveTripId = propTripId || route?.params?.tripId;
+    const handleBack = onBack || (() => nav.goBack());
     const { width: screenWidth } = useWindowDimensions();
     const { activeVin } = useVehicle();
     const [loading,     setLoading]     = useState(true);
@@ -97,21 +102,25 @@ const TripDetailScreen = ({ tripId, onBack }) => {
         if (sharing) return;
         setSharing(true);
         try {
-            const url = `${getActiveServerUrl()}/api/calatorii/${tripId}/export/csv`;
+            const url = `${getActiveServerUrl()}/api/calatorii/${effectiveTripId}/export/csv`;
             await Linking.openURL(url);
         } catch (e) {
             Alert.alert('Eroare CSV', `Nu s-a putut descărca exportul: ${e.message}`);
         } finally {
             setSharing(false);
         }
-    }, [tripId, sharing]);
+    }, [effectiveTripId, sharing]);
 
     useEffect(() => {
         const load = async () => {
+            if (!effectiveTripId) {
+                setLoading(false);
+                return;
+            }
             try {
                 const [detailRes, analizaRes] = await Promise.allSettled([
-                    api.get(`/calatorii/${tripId}`),
-                    api.get(`/calatorii/${tripId}/analiza`),
+                    api.get(`/calatorii/${effectiveTripId}`),
+                    api.get(`/calatorii/${effectiveTripId}/analiza`),
                 ]);
 
                 if (detailRes.status === 'fulfilled' && detailRes.value.data) {
@@ -183,7 +192,7 @@ const TripDetailScreen = ({ tripId, onBack }) => {
         return (
             <View style={styles.container}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityRole="button">
+                    <TouchableOpacity onPress={handleBack} style={styles.backBtn} accessibilityRole="button">
                         <Text style={styles.backBtnText}>{t('detail.back')}</Text>
                     </TouchableOpacity>
                 </View>
@@ -192,7 +201,7 @@ const TripDetailScreen = ({ tripId, onBack }) => {
                         icon="⊘"
                         title="Date indisponibile"
                         subtitle="Nu s-au putut încărca datele cursei."
-                        action={{ label: t('detail.back'), onPress: onBack }}
+                        action={{ label: t('detail.back'), onPress: handleBack }}
                         size="lg"
                     />
                 </View>
@@ -208,14 +217,14 @@ const TripDetailScreen = ({ tripId, onBack }) => {
     ).slice(0, 3);
     const tripDateLabel = trip.timestamp_start
         ? new Date(trip.timestamp_start).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' })
-        : `#${tripId}`;
+        : `#${effectiveTripId}`;
 
     return (
         <View style={styles.container}>
             {/* ── Header ──────────────────────────────────────────────────── */}
             <View style={styles.header}>
                 <TouchableOpacity
-                    onPress={onBack}
+                    onPress={handleBack}
                     style={styles.backBtn}
                     accessibilityRole="button"
                     accessibilityLabel="Înapoi la jurnal"
@@ -327,20 +336,69 @@ const TripDetailScreen = ({ tripId, onBack }) => {
                     <>
                         <SectionHeader title="Predicții detectate" style={styles.sectionHeader} />
                         {predictions.map((pred, i) => (
-                            <PredictionCard
-                                key={i}
-                                title={pred.component || pred.category || 'Componentă'}
-                                prediction={pred.recommendation || pred.prediction || '—'}
-                                confidence={predConfidence(pred.probability)}
-                                timeframe={pred.estimatedRemainingKm
-                                    ? `~${Math.round(pred.estimatedRemainingKm)} km`
-                                    : pred.estimatedRemainingDays
-                                        ? `~${pred.estimatedRemainingDays} zile`
-                                        : undefined}
-                                status={predStatus(pred.severity)}
-                                style={i > 0 ? { marginTop: spacing[2] } : undefined}
-                            />
+                            <View key={i} style={i > 0 ? { marginTop: spacing[3] } : undefined}>
+                                <PredictionCard
+                                    title={pred.component || pred.category || 'Componentă'}
+                                    prediction={pred.recommendation || pred.prediction || '—'}
+                                    confidence={predConfidence(pred.probability)}
+                                    timeframe={pred.estimatedRemainingKm
+                                        ? `~${Math.round(pred.estimatedRemainingKm)} km`
+                                        : pred.estimatedRemainingDays
+                                            ? `~${pred.estimatedRemainingDays} zile`
+                                            : undefined}
+                                    status={predStatus(pred.severity)}
+                                />
+                                <TouchableOpacity
+                                    style={styles.aiAskBtn}
+                                    onPress={() => {
+                                        const q = `În cursa #${effectiveTripId}, s-a detectat la ${pred.component || pred.category}: "${pred.recommendation || pred.prediction || ''}". Ce măsuri recomanzi?`;
+                                        getRootNavigation(nav)?.navigate('AIExpert', { initialPrompt: q });
+                                    }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Întreabă Inginerul AI"
+                                >
+                                    <Text style={styles.aiAskBtnText}>✨ Întreabă Inginerul AI</Text>
+                                </TouchableOpacity>
+                            </View>
                         ))}
+
+                        {/* ── Causal Chain Diagram ─────────────────────────── */}
+                        {(() => {
+                            const top = predictions[0];
+                            const comp = (top.component || top.category || '').toLowerCase();
+
+                            let rootCause = { title: 'Uzură / solicitare în sarcină', detail: `Anomalie la ${top.component || 'componentă'}` };
+                            let interEffect = { title: 'Comportament dinamic modificat', detail: 'Deviație înregistrată în timpul cursei' };
+                            let obsSymptom = { title: top.recommendation || top.prediction || 'Comportament anormal detectat', detail: `Probabilitate de confirmare ${top.probability || 75}%` };
+
+                            if (comp.includes('turbo') || comp.includes('boost')) {
+                                rootCause = { title: 'Scăpare presiune furtun intercooler / vacuum', detail: 'Pierdere etanșeitate pe circuitul de admisie' };
+                                interEffect = { title: 'Turbosuflanta compensează prin supraviteză', detail: 'Presiune măsurată sub valoarea cerută în sarcină' };
+                                obsSymptom = { title: 'Putere redusă și consum crescut', detail: 'ECU a limitat cantitatea injectată pentru protecție' };
+                            } else if (comp.includes('racire') || comp.includes('temp')) {
+                                rootCause = { title: 'Termostat blocat / debit răcire redus', detail: 'Circulație restricționată lichid de răcire' };
+                                interEffect = { title: 'Variație anormală temperatură motor', detail: 'Temperatura a depășit regimul optim pe autostradă' };
+                                obsSymptom = { title: 'Risc de supraîncălzire la drum lung', detail: 'Se recomandă verificarea nivelului și a termostatului' };
+                            }
+
+                            return (
+                                <View style={{ marginTop: spacing[3] }}>
+                                    <SectionHeader title="Lanț Cauzal Cursă (AI Reasoning)" style={styles.sectionHeader} />
+                                    <CausalChainCard
+                                        title="PROPAGARE DEFECT DETECTAT"
+                                        confidence={top.probability || 80}
+                                        rootCause={rootCause}
+                                        intermediateEffect={interEffect}
+                                        observedSymptom={obsSymptom}
+                                        recommendation={top.recommendation}
+                                        onAskAI={() => {
+                                            const q = `În cursa #${effectiveTripId}, explică detaliat lanțul cauzal: [${rootCause.title}] -> [${interEffect.title}] -> [${obsSymptom.title}]. Ce riscuri există dacă continui să circul?`;
+                                            getRootNavigation(nav)?.navigate('AIExpert', { initialPrompt: q });
+                                        }}
+                                    />
+                                </View>
+                            );
+                        })()}
                     </>
                 )}
 
@@ -759,6 +817,22 @@ const styles = StyleSheet.create({
         fontVariant: ['tabular-nums'],
         minWidth: 52,
         textAlign: 'right',
+    },
+    aiAskBtn: {
+        marginTop: spacing[2],
+        backgroundColor: colors.accent.default + '18',
+        borderWidth: 1,
+        borderColor: colors.accent.default,
+        borderRadius: radii.sm,
+        paddingVertical: spacing[2],
+        paddingHorizontal: spacing[3],
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    aiAskBtnText: {
+        color: colors.accent.default,
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
     },
 });
 

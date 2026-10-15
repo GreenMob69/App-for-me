@@ -265,8 +265,34 @@ const LiveDashboardScreen = () => {
         const gear  = tr.gear;
         const eco   = liveData.scor_eco ?? 100;
 
+        // Redline dinamic în funcție de temperatura motorului (răcire / ulei)
+        let dynamicRedline = 4500;
+        let engineTempStatus = 'optimal'; // 'cold', 'warming', 'optimal'
+        let tempBadgeText = null;
+
+        const oilTemp = tem.oil;
+        const coolTemp = cool;
+
+        if ((coolTemp > 0 && coolTemp < 65) || (oilTemp != null && oilTemp > 0 && oilTemp < 60)) {
+            dynamicRedline = 2500;
+            engineTempStatus = 'cold';
+            tempBadgeText = '❄️ Motor rece (Redline dinamic: 2500 RPM)';
+        } else if (coolTemp >= 65 && coolTemp < 80) {
+            dynamicRedline = 3200;
+            engineTempStatus = 'warming';
+            tempBadgeText = '🌡️ În încălzire (Redline dinamic: 3200 RPM)';
+        } else {
+            dynamicRedline = 4500;
+            engineTempStatus = 'optimal';
+        }
+
+        const redlinePct = (dynamicRedline / 5000) * 100;
         const rpmPct   = `${Math.min((rpm / 5000) * 100, 100)}%`;
-        const rpmColor = rpm > 4200 ? colors.status.critical : rpm > 3500 ? colors.status.caution : colors.accent.default;
+        const rpmColor = rpm > dynamicRedline
+            ? colors.status.critical
+            : rpm > (dynamicRedline - 400)
+                ? colors.status.caution
+                : colors.accent.default;
 
         const coolColor  = cool > 105 ? colors.status.critical : cool > 95 ? colors.status.caution : cool > 60 ? colors.status.good : colors.text.secondary;
         const voltColor  = volt > 0 && volt < 13.0 ? colors.status.critical : volt > 0 && volt < 13.5 ? colors.status.monitor : volt > 0 ? colors.status.good : colors.text.secondary;
@@ -285,16 +311,26 @@ const LiveDashboardScreen = () => {
                     <Text style={styles.speedUnit}>km/h</Text>
                 </View>
 
-                {/* ── RPM bar ─────────────────────────────────────── */}
+                {/* ── RPM bar cu Redline Dinamic ─────────────────── */}
                 <View style={styles.rpmSection}>
                     <Text style={[styles.rpmNum, { color: rpmColor }]}>
                         {typeof rpm === 'number' ? rpm.toLocaleString('ro-RO') : rpm}
                     </Text>
                     <View style={styles.rpmTrack}>
+                        <View style={[styles.redlineMarker, { left: `${redlinePct}%` }]} />
                         <View style={[styles.rpmFill, { width: rpmPct, backgroundColor: rpmColor }]} />
                     </View>
                     <Text style={styles.rpmLabel}>RPM</Text>
                 </View>
+
+                {/* ── Badge Motor Rece / În încălzire ────────────── */}
+                {tempBadgeText && (
+                    <View style={[styles.coldBadge, engineTempStatus === 'cold' ? styles.coldBadgeActive : styles.warmingBadgeActive]}>
+                        <Text style={[styles.coldBadgeText, { color: engineTempStatus === 'cold' ? '#5AC8FA' : colors.status.monitor }]}>
+                            {tempBadgeText}
+                        </Text>
+                    </View>
+                )}
 
                 {/* ── DPF regen banner ────────────────────────────── */}
                 {(dpf.regen_status === 'ACTIVE' || dpf.regen_status === 'ON') && (
@@ -664,7 +700,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: spacing[2],
         marginTop: spacing[3],
-        marginBottom: spacing[4],
+        marginBottom: spacing[2],
     },
     rpmNum: {
         width: 54,
@@ -675,12 +711,46 @@ const styles = StyleSheet.create({
     },
     rpmTrack: {
         flex: 1,
-        height: 6,
+        height: 8,
         backgroundColor: colors.bg[2],
         borderRadius: radii.full,
         overflow: 'hidden',
+        position: 'relative',
     },
     rpmFill:  { height: '100%', borderRadius: radii.full },
+    redlineMarker: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        right: 0,
+        backgroundColor: 'rgba(255, 69, 58, 0.28)',
+        borderLeftWidth: 2,
+        borderLeftColor: colors.status.critical,
+    },
+    coldBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 159, 10, 0.12)',
+        borderWidth: 1,
+        borderColor: colors.status.monitor,
+        borderRadius: radii.xs,
+        paddingVertical: 3,
+        paddingHorizontal: spacing[2],
+        marginBottom: spacing[3],
+        alignSelf: 'center',
+    },
+    coldBadgeActive: {
+        backgroundColor: 'rgba(90, 200, 250, 0.12)',
+        borderColor: '#5AC8FA',
+    },
+    warmingBadgeActive: {
+        backgroundColor: 'rgba(255, 159, 10, 0.12)',
+        borderColor: colors.status.monitor,
+    },
+    coldBadgeText: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+    },
     rpmLabel: { fontSize: typography.sizes.micro, color: colors.text.secondary, fontWeight: typography.weights.bold, width: 30 },
 
     // ── LIVE: DPF banner ─────────────────────────────────────────────────────

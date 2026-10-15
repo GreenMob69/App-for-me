@@ -153,3 +153,40 @@ node scripts/export_pdf.js
 start raport_cursa_9.pdf
 ```
 
+---
+
+## PARTEA 6: Refactorizarea UX & Arhitectura Navigării Mobile (Finalizată)
+
+### 📱 1. Reorganizarea Garajului Digital (`VehicleHubScreen.js` - Tab VEHICUL)
+- **Eliminarea `SettingsScreen` din sub-segmente**: Setările administrative ale serverului și resetarea bazei de date nu mai sunt amestecate cu întreținerea mașinii.
+- **Cele 3 sub-tab-uri 100% car-centrice**:
+  1. `1. MENTENANȚĂ` (`MaintenanceScreen`): Plan de revizii, consumabile, scadențe intervale.
+  2. `2. PROFIL & ACTE` (`VehicleProfileScreen`): Fostul ecran ascuns este acum integrat direct, afișând specificațiile tehnice, kilometrajul estimat, istoricul de posesie și expirarea actelor (ITP, RCA, Rovinietă, CASCO).
+  3. `3. ASISTENT AI` (`AIExpertScreen`): Chat tehnic direct conectat la Vehicle Digital Twin.
+
+### 🧭 2. Header Global & Acces Rapid la Utilitare
+- **Header unificat**: Adăugat butonul de Setări (`⚙️`) în bara superioară a ecranelor principale (`StatusScreen` și `VehicleHubScreen`), alături de Căutare Globală (`🔍`) și Notificări (`🔔`).
+- **Înregistrare în `RootStack.Navigator` (`App.js`)**: `Settings`, `AIExpert`, și `UIPlayground` sunt acum rute de nivel superior în RootStack, accesibile de oriunde din aplicație fără navigare imbricată.
+- **Opțiuni Dezvoltator în `SettingsScreen.js`**: Acces discret la `UIPlaygroundScreen` pentru testarea bibliotecii de componente.
+
+### 🔗 3. Deep-Linking Contextual: „✨ Întreabă Inginerul AI”
+- `AIExpertScreen.js` acceptă `route.params?.initialPrompt || route.params?.initialQuestion` și trimite automat întrebarea odată ce Digital Twin-ul este încărcat în memorie.
+- Butonul `"✨ Întreabă Inginerul AI"` adăugat pe:
+  - Cardurile de predicție din `VehicleHealthScreen.js`
+  - Secțiunea de diagnostic din `SubsystemDetailScreen.js`
+  - Cardurile de predicție din `TripDetailScreen.js`
+
+### 🎨 4. Cele Două Elemente Grafice Enterprise
+1. **Dynamic Redline Tachometer** (`LiveDashboardScreen.js`):
+   - Zonă roșie calculată dinamic în funcție de temperaturile motorului:
+     - `coolant < 65°C` sau `oil < 60°C` $\rightarrow$ Limită 2500 RPM + insignă `❄️ Motor rece (Redline dinamic: 2500 RPM)`.
+     - `65°C <= coolant < 80°C` $\rightarrow$ Limită 3200 RPM + insignă `🌡️ În încălzire (Redline dinamic: 3200 RPM)`.
+     - `>= 80°C` $\rightarrow$ Limită standard 4500 RPM.
+   - Marcaj vizual pe banda de turație care delimitează zona de turație critică adaptivă.
+2. **Diagrama Vizuală Cauză ➔ Efect** (`CausalChainCard.js`):
+   - Componentă reutilizabilă în `src/components/ui/` cu schemă vizuală tripartită:
+     - `[🔴 Cauză Rădăcină]` (Root Cause)
+     - `➔ [🟠 Efect Intermediar]` (Intermediate Effect / Propagation)
+     - `➔ [🟡 Simptom Observat]` (Observed Symptom)
+   - Integrată în `VehicleHealthScreen.js`, `TripDetailScreen.js` și demonstrată în `UIPlaygroundScreen.js`.
+

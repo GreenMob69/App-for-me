@@ -19,7 +19,7 @@ import {
 import {
     HeroCard, MetricCard, HealthGauge, RecommendationCard,
     PredictionCard, TimelineCard, MaintenanceCard, DocumentCard,
-    WorkshopCard, CostCard, MilestoneCard,
+    WorkshopCard, CostCard, MilestoneCard, CausalChainCard,
 } from '../components/ui';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -560,6 +560,28 @@ export default function UIPlaygroundScreen() {
                     />
                     <Gap v={spacing[2]} />
                     <MilestoneCard title="Loading" achieved={false} loading />
+                </PGSection>
+
+                {/* ── CausalChainCard ────────────────────────────────── */}
+                <PGSection title="CausalChainCard (Lanț Cauzal AI)">
+                    <CausalChainCard
+                        title="PROPAGARE DEFECT (AI REASONING)"
+                        confidence={88}
+                        rootCause={{
+                            title: "Scurgere vacuum / furtun intercooler fisurat",
+                            detail: "Pierdere etanșeitate pe circuitul de comandă vacuum la VNT"
+                        }}
+                        intermediateEffect={{
+                            title: "Turbosuflanta compensează prin supraviteză",
+                            detail: "Presiunea de boost deviază cu -380 mbar față de cerința ECU"
+                        }}
+                        observedSymptom={{
+                            title: "Putere redusă și consum crescut cu 18%",
+                            detail: "ECU limitează cuplul motor pentru protecție termică"
+                        }}
+                        recommendation="Verifică integritatea furtunurilor de vacuum și a electrovalvei N75 înainte de înlocuirea turbinei."
+                        onAskAI={() => {}}
+                    />
                 </PGSection>
 
                 <View style={pg.footer}>

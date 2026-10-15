@@ -7,6 +7,7 @@ import { colors, typography, radii, spacing, layout, motion } from '../theme';
 import { getSubsystemColor } from '../utils/statusUtils';
 import { buildDetailExplanation } from '../engine/MessageEngine';
 import { Skeleton, EmptyState } from '../components/ui';
+import { getRootNavigation } from '../utils/navigation';
 import PropTypes from 'prop-types';
 
 const SubsystemDetailScreen = ({ route, navigation }) => {
@@ -257,6 +258,20 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                         )}
                     </View>
                 )}
+
+                {/* ── Ask AI Engineer Button ───────────────────────── */}
+                <TouchableOpacity
+                    style={styles.aiAskBtn}
+                    onPress={() => {
+                        const rec = explanation?.recommendation || explanation?.conclusion || '';
+                        const q = `Sunt în ecranul de detalii pentru subsistemul "${t(`detail.systems.${system}`)}" al vehiculului. Sistemul indică: "${rec}". Ce diagnoză aprofundată și verificări la fața locului recomanzi?`;
+                        getRootNavigation(navigation)?.navigate('AIExpert', { initialPrompt: q });
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Întreabă Inginerul AI despre acest subsistem"
+                >
+                    <Text style={styles.aiAskBtnText}>✨ Întreabă Inginerul AI despre acest subsistem</Text>
+                </TouchableOpacity>
 
                 <View style={{ height: spacing[10] }} />
             </Animated.ScrollView>
@@ -516,6 +531,22 @@ const styles = StyleSheet.create({
         fontWeight: typography.weights.semibold,
         width: 30,
         textAlign: 'right',
+    },
+    aiAskBtn: {
+        marginTop: spacing[4],
+        backgroundColor: colors.accent.default + '18',
+        borderWidth: 1,
+        borderColor: colors.accent.default,
+        borderRadius: radii.sm,
+        paddingVertical: spacing[3],
+        paddingHorizontal: spacing[3],
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    aiAskBtnText: {
+        color: colors.accent.default,
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.bold,
     },
 });
 

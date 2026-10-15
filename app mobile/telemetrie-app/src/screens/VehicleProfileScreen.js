@@ -127,7 +127,7 @@ const InfoRow = ({ label, value, last }) => (
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const VehicleProfileScreen = () => {
+const VehicleProfileScreen = ({ showBack = true } = {}) => {
     const navigation = useNavigation();
     const { syncFromSummary } = useContext(NotificationContext);
     const { activeVin, vehicleLabel } = useVehicle();
@@ -185,9 +185,11 @@ const VehicleProfileScreen = () => {
         return (
             <View style={styles.main}>
                 <View style={styles.header}>
-                    <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                        <Text style={styles.backBtnText}>←</Text>
-                    </TouchableOpacity>
+                    {showBack && (
+                        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                            <Text style={styles.backBtnText}>←</Text>
+                        </TouchableOpacity>
+                    )}
                     <View style={{ flex: 1 }}>
                         <Text style={styles.title}>Profilul meu</Text>
                         <Text style={styles.subtitle}>{vehicleLabel || 'Logbook'}</Text>
@@ -205,9 +207,11 @@ const VehicleProfileScreen = () => {
         return (
             <View style={[styles.main, styles.center]}>
                 <View style={styles.header}>
-                    <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                        <Text style={styles.backBtnText}>←</Text>
-                    </TouchableOpacity>
+                    {showBack && (
+                        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                            <Text style={styles.backBtnText}>←</Text>
+                        </TouchableOpacity>
+                    )}
                     <Text style={styles.title}>Profilul meu</Text>
                 </View>
                 <EmptyState
@@ -261,9 +265,11 @@ const VehicleProfileScreen = () => {
         <View style={styles.main}>
             {/* ── Header ────────────────────────────────────────────────────── */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                    <Text style={styles.backBtnText}>←</Text>
-                </TouchableOpacity>
+                {showBack && (
+                    <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+                        <Text style={styles.backBtnText}>←</Text>
+                    </TouchableOpacity>
+                )}
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>Profilul meu</Text>
                     <Text style={styles.subtitle}>

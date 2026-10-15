@@ -234,23 +234,25 @@
   - `NotificationContext.js`: Tracks unread notification badges.
   - `AppContext.js`: Top-level app connectivity state and navigation references.
 - **`src/screens/`** (17 screens):
-  - `LiveDashboardScreen.js`: Real-time instrument cluster with SVG CircularGauge, RPM, Boost, Temperatures, and live line charts.
-  - `StatusScreen.js`: The "Driver Assistant" screen. Shows a single natural language verdict ("Mașina ta este în formă excelentă"), health score, and calm state.
-  - `VehicleHealthScreen.js`: Subsystem health cards (Engine, Cooling, Turbo, DPF, Electrical), active fault predictions, and baseline deviations.
-  - `SubsystemDetailScreen.js`: Deep dive into a specific subsystem's sensor values, rules, and history.
+  - `LiveDashboardScreen.js`: Real-time instrument cluster with dynamic redline tachometer (temperature-adaptive: 2500 RPM on cold engine with `❄️ Motor rece` badge, 3200 RPM during warm-up, 4500 RPM optimal), SVG CircularGauge, RPM, Boost, Temperatures, and live line charts.
+  - `StatusScreen.js`: The "Driver Assistant" screen. Shows a single natural language verdict ("Mașina ta este în formă excelentă"), health score, calm state, and global header with Search (`🔍`), Notifications (`🔔`), and Settings (`⚙️`).
+  - `VehicleHealthScreen.js`: Subsystem health cards (Engine, Cooling, Turbo, DPF, Electrical), active fault predictions with `"✨ Întreabă AI"` deep-linking, and `CausalChainCard` visual root-cause-to-symptom diagram.
+  - `SubsystemDetailScreen.js`: Deep dive into a specific subsystem's sensor values, rules, history, and contextual `"✨ Întreabă Inginerul AI"` consultation button.
   - `TripHistoryScreen.js`: Paginated logbook of past trips with offline SQLite caching, search, and filtering.
-  - `TripDetailScreen.js`: Detailed analysis of a single trip: map route stats, eco score, driving style breakdown, and events timeline.
+  - `TripDetailScreen.js`: Detailed analysis of a single trip: map route stats, eco score, driving style breakdown, events timeline, prediction cards with `"✨ Întreabă AI"`, and `CausalChainCard` cause-and-effect propagation diagram.
   - `TripReportScreen.js`: Modal report displayed immediately upon engine shutdown (`OPRIRE`).
-  - `VehicleHubScreen.js`: Hub screen with 3 segmented sub-views: `MaintenanceScreen`, `AIExpertScreen`, and `SettingsScreen`.
+  - `VehicleHubScreen.js`: 100% car-centric Digital Garage with top header bar (Search, Notifications, Settings) and 3 segmented sub-views: `MaintenanceScreen` (Mentenanță), `VehicleProfileScreen` (Profil & Acte), and `AIExpertScreen` (Asistent AI).
   - `MaintenanceScreen.js`: Visual countdowns for service items (oil change, timing belt, brake pads, filters) with color-coded urgency.
-  - `VehicleProfileScreen.js`: Vehicle technical specifications, odometer history log, and legal documents expiration tracker.
-  - `AIExpertScreen.js`: Interactive conversational diagnostic chat with the AI expert.
+  - `VehicleProfileScreen.js`: Vehicle technical specifications, odometer history log, and legal documents expiration tracker (ITP, RCA, Rovinietă, CASCO).
+  - `AIExpertScreen.js`: Interactive conversational diagnostic chat with the AI expert, supporting contextual deep-linking with auto-query from prediction/diagnostic cards.
   - `LockScreen.js`: Biometric FaceID/Fingerprint authentication screen with numeric PIN keypad.
-  - `SettingsScreen.js`: Server URL configuration, biometric security settings, and database reset button.
+  - `SettingsScreen.js`: Server URL configuration, biometric security settings, developer access to `UIPlaygroundScreen`, and database reset button. Accessed via top bar header (`⚙️`) across main screens.
   - `NotificationScreen.js`: Full-screen notification center for warnings, DTCs, and service reminders.
   - `GlobalSearchScreen.js`: Unified search across trips, DTC codes, maintenance records, and documentation.
   - `VehicleOnboardingScreen.js`: First-launch wizard for decoding VIN and adding a new vehicle.
-  - `UIPlaygroundScreen.js`: Component showcase and testing canvas.
+  - `UIPlaygroundScreen.js`: Component showcase and testing canvas, displaying all foundational and vehicle UI components including `CausalChainCard`.
+- **`src/components/ui/`**:
+  - `CausalChainCard.js`: Reusable 3-stage visual diagram `[🔴 Cauză Rădăcină]` ➔ `[🟠 Efect Intermediar]` ➔ `[🟡 Simptom Observat]` with confidence badge, recommendation, and AI action trigger.
 - **`src/services/`**:
   - `api.js`: Axios instance with interceptors, dynamic base URL, and timeout.
   - `socket.js`: Socket.IO client singleton with auto-reconnection.

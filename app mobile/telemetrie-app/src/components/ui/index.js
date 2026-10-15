@@ -26,3 +26,4 @@ export { default as DocumentCard }      from './DocumentCard';
 export { default as WorkshopCard }      from './WorkshopCard';
 export { default as CostCard }          from './CostCard';
 export { default as MilestoneCard }     from './MilestoneCard';
+export { default as CausalChainCard }   from './CausalChainCard';

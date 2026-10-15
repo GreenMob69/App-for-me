@@ -349,8 +349,22 @@ const SettingsScreen = () => {
         >
             {/* ── Header ─────────────────────────────────────────────────── */}
             <View style={styles.header}>
-                <Text style={styles.title}>Setări</Text>
-                <Text style={styles.subtitle}>Configurare · Vehicul · Preferințe</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[3] }}>
+                    {navigation?.canGoBack() && (
+                        <TouchableOpacity
+                            style={styles.backBtn}
+                            onPress={() => navigation.goBack()}
+                            accessibilityRole="button"
+                            accessibilityLabel="Înapoi"
+                        >
+                            <Text style={styles.backBtnText}>←</Text>
+                        </TouchableOpacity>
+                    )}
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.title}>Setări</Text>
+                        <Text style={styles.subtitle}>Configurare · Vehicul · Preferințe</Text>
+                    </View>
+                </View>
             </View>
 
             {/* ── Profil Vehicul ─────────────────────────────────────────── */}
@@ -825,6 +839,22 @@ const SettingsScreen = () => {
                 </TouchableOpacity>
             </View>
 
+            {/* ── Opțiuni Dezvoltator / Proiect ─────────────────────────── */}
+            <View style={styles.card}>
+                <SectionTitle>Opțiuni Dezvoltator</SectionTitle>
+                <Text style={styles.desc}>
+                    Acces la biblioteca completă de componente UI și playground pentru testarea elementelor grafice ale aplicației.
+                </Text>
+                <TouchableOpacity
+                    style={styles.outlineBtn}
+                    onPress={() => navigation.navigate('UIPlayground')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Deschide UI Playground"
+                >
+                    <Text style={styles.outlineBtnText}>🎨 Biblioteca Componente UI (Playground) →</Text>
+                </TouchableOpacity>
+            </View>
+
             {/* ── Zona Periculoasă ───────────────────────────────────────── */}
             <View style={[styles.card, styles.dangerCard]}>
                 <SectionTitle style={{ color: colors.status.critical }}>Zona Periculoasă</SectionTitle>
@@ -857,6 +887,21 @@ const styles = StyleSheet.create({
         paddingBottom: spacing[3],
         borderBottomWidth: 1,
         borderBottomColor: colors.border.subtle,
+    },
+    backBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: radii.full,
+        backgroundColor: colors.bg[1],
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    backBtnText: {
+        color: colors.text.primary,
+        fontSize: typography.sizes.body,
+        fontWeight: typography.weights.bold,
     },
     title: {
         fontSize: typography.sizes.title2,
