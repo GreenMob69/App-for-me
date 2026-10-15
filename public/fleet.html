@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VAG Telematics Cloud — B2B Fleet Command Center</title>
+    <!-- Tailwind CSS CDN pentru layout rapid și curat -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Socket.IO Client -->
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            background-color: #070b12;
+            color: #e2e8f0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        .card {
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(51, 65, 85, 0.6);
+            border-radius: 12px;
+            backdrop-filter: blur(12px);
+        }
+        .card-glow-emerald {
+            box-shadow: 0 0 20px -5px rgba(16, 185, 129, 0.15);
+        }
+        .matrix-cell {
+            transition: all 0.25s ease;
+        }
+        .matrix-cell.active {
+            border-color: #10b981 !important;
+            background: rgba(16, 185, 129, 0.2) !important;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+            transform: scale(1.02);
+        }
+        .pulse-dot {
+            animation: pulseGlow 1.5s infinite;
+        }
+        @keyframes pulseGlow {
+            0% { transform: scale(0.95); opacity: 0.6; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.6; }
+        }
+    </style>
+</head>
+<body class="p-4 lg:p-6 space-y-5">
+
+    <!-- ── 1. HEADER INDUSTRIAL & B2B DISPATCH STATUS ──────────────────────── -->
+    <header class="card card-glow-emerald p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-l-4 border-emerald-500">
+        <div class="flex items-center space-x-3">
+            <div class="w-3.5 h-3.5 rounded-full bg-emerald-400 pulse-dot"></div>
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h1 class="text-xl font-bold tracking-wider text-white">VAG FLEET COMMAND CENTER</h1>
+                    <span class="text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-mono font-semibold">ENTERPRISE TIER-1</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-0.5 font-mono">
+                    DIGITAL TWIN & PREDICTIVE TELEMETRY • VIN: <span class="text-slate-200 font-semibold" id="vinLabel">WAUZZZ4A1RN000000</span> (Audi A6 C4 2.5 TDI)
+                </p>
+            </div>
+        </div>
+
+        <!-- Indicator conexiune & protocol -->
+        <div class="flex flex-wrap items-center gap-2 text-xs font-mono">
+            <span class="bg-slate-800 text-slate-300 px-2.5 py-1 rounded border border-slate-700">PROTO: <b class="text-emerald-400">SAE J1979 / UDS</b></span>
+            <span class="bg-slate-800 text-slate-300 px-2.5 py-1 rounded border border-slate-700">TRANSPORT: <b class="text-sky-400">M2M Protobuf (96B)</b></span>
+            <span id="connBadge" class="bg-emerald-950 text-emerald-400 px-2.5 py-1 rounded border border-emerald-700 font-bold flex items-center gap-1.5">
+                <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span> LIVE 1Hz STREAM
+            </span>
+        </div>
+    </header>
+
+    <!-- ── 2. TOP KPI BAR: ECONOMIE B2B, WEIBULL ROI & M2M TELECOM ──────────── -->
+    <section class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <!-- KPI 1: Telecom Savings -->
+        <div class="card p-3 border-sky-900/50">
+            <div class="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Trafic M2M per Pachet</div>
+            <div class="flex items-baseline space-x-2 mt-1">
+                <span class="text-2xl font-bold text-sky-400 font-mono" id="kpiBinarySize">96</span>
+                <span class="text-xs text-slate-400">Bytes</span>
+                <span class="text-[10px] bg-sky-950 text-sky-300 px-1.5 py-0.5 rounded font-bold ml-auto">-93.4%</span>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-1">vs 1.45 KB JSON (<span class="text-sky-300 font-mono">58 MB/lună</span>)</div>
+        </div>
+
+        <!-- KPI 2: SIM Telecom Cost Savings -->
+        <div class="card p-3 border-emerald-900/50">
+            <div class="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Economie SIM M2M</div>
+            <div class="flex items-baseline space-x-2 mt-1">
+                <span class="text-2xl font-bold text-emerald-400 font-mono" id="kpiSimSavings">14.50</span>
+                <span class="text-xs text-slate-400">€ / vehicul / lună</span>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-1">Plan 100MB vs 1GB+ M2M clasic</div>
+        </div>
+
+        <!-- KPI 3: B2B Fleet ROI -->
+        <div class="card p-3 border-amber-900/50">
+            <div class="text-[11px] uppercase tracking-wider text-slate-400 font-medium">ROI Prevenție Defecțiuni</div>
+            <div class="flex items-baseline space-x-2 mt-1">
+                <span class="text-2xl font-bold text-amber-400 font-mono" id="kpiFleetRoi">1.689</span>
+                <span class="text-xs text-slate-400">€ / an</span>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-1">Prevenire avarii majore DPF/Ulei/Turbo</div>
+        </div>
+
+        <!-- KPI 4: BSFC Engine Sweet Spot -->
+        <div class="card p-3 border-emerald-900/50">
+            <div class="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Consum Specific (BSFC)</div>
+            <div class="flex items-baseline space-x-2 mt-1">
+                <span class="text-2xl font-bold text-emerald-300 font-mono" id="kpiBsfc">212</span>
+                <span class="text-xs text-slate-400">g/kWh</span>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-1">Eficiență efectivă: <b class="text-emerald-400 font-mono" id="kpiEff">36.5%</b></div>
+        </div>
+
+        <!-- KPI 5: Fleet Health Score -->
+        <div class="card p-3 border-purple-900/50 col-span-2 md:col-span-4 lg:col-span-1">
+            <div class="text-[11px] uppercase tracking-wider text-slate-400 font-medium">Sănătate Mecanică Flotă</div>
+            <div class="flex items-baseline space-x-2 mt-1">
+                <span class="text-2xl font-bold text-purple-400 font-mono" id="kpiHealthScore">94</span>
+                <span class="text-xs text-slate-400">/ 100</span>
+                <span class="text-[10px] bg-purple-950 text-purple-300 px-1.5 py-0.5 rounded font-bold ml-auto">WEIBULL OK</span>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-1">Analiză fiabilitate pe 5 subsisteme</div>
+        </div>
+    </section>
+
+    <!-- ── 3. ZONA CENTRALĂ: OSCILOSCOP LIVE + HARTĂ 2D RPM x LOAD ─────────── -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        
+        <!-- STÂNGA: OSCILOSCOP DE DISPECERAT (Canvas 60 FPS) -->
+        <div class="card p-4 lg:col-span-2 flex flex-col">
+            <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-800">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span>
+                    <h2 class="text-sm font-bold tracking-wider text-white uppercase">Osciloscop Multi-Canal Live (60 FPS)</h2>
+                </div>
+                <!-- Legenda canalelor -->
+                <div class="flex flex-wrap items-center gap-3 text-xs font-mono">
+                    <span class="flex items-center gap-1.5 text-emerald-400"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> RPM (<span id="valRpm">0</span>)</span>
+                    <span class="flex items-center gap-1.5 text-sky-400"><span class="w-2 h-2 rounded-full bg-sky-400"></span> Boost (<span id="valBoost">0.00</span> bar)</span>
+                    <span class="flex items-center gap-1.5 text-amber-400"><span class="w-2 h-2 rounded-full bg-amber-400"></span> BSFC (<span id="valBsfc">0</span> g/kWh)</span>
+                    <span class="flex items-center gap-1.5 text-red-400"><span class="w-2 h-2 rounded-full bg-red-400"></span> EGT Cat1 (<span id="valEgt">0</span>°C)</span>
+                </div>
+            </div>
+
+            <!-- Canvas container -->
+            <div class="relative w-full h-64 bg-slate-950/70 rounded-lg border border-slate-800/80 overflow-hidden flex-1">
+                <canvas id="scopeCanvas" class="w-full h-full block"></canvas>
+            </div>
+
+            <div class="flex items-center justify-between mt-3 text-[11px] text-slate-400 font-mono">
+                <span>FEREASTRĂ: 40 SECUNDE (EȘANTIONARE 1Hz)</span>
+                <span id="fpsCounter" class="text-emerald-400">RENDER: 60 FPS CANVAS ACCELERAT</span>
+            </div>
+        </div>
+
+        <!-- DREAPTA: MATRICEA 2D RPM x LOAD (Amprenta ECU Bosch EDC15) -->
+        <div class="card p-4 flex flex-col">
+            <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                    <h2 class="text-sm font-bold tracking-wider text-white uppercase">Harta Termică 2D (RPM × Load)</h2>
+                </div>
+                <span class="text-xs text-slate-400 font-mono">ECU BUCKETING</span>
+            </div>
+
+            <p class="text-xs text-slate-400 mb-3">
+                Agregare pe 9 celule din dinamica motorului. Celula activă se aprinde verde la tranziția de sarcină:
+            </p>
+
+            <!-- Grilă 3x3 -->
+            <div class="grid grid-cols-3 gap-2 flex-1 text-center font-mono text-xs">
+                <!-- Row 2: High RPM (>=2500) -->
+                <div id="cell_r2_l0" class="matrix-cell p-2 rounded border border-slate-800 bg-slate-900/60 flex flex-col justify-center">
+                    <div class="text-[10px] text-slate-400">r2_l0 (Frână Tur.)</div>
+                    <div class="font-bold text-slate-200 mt-1">&gt;2500, &lt;30%</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5 samples-count">0 eșantioane</div>
+                </div>
+                <div id="cell_r2_l1" class="matrix-cell p-2 rounded border border-slate-800 bg-slate-900/60 flex flex-col justify-center">
+                    <div class="text-[10px] text-slate-400">r2_l1 (Depășire)</div>
+                    <div class="font-bold text-slate-200 mt-1">&gt;2500, 30-70%</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5 samples-count">0 eșantioane</div>
+                </div>
+                <div id="cell_r2_l2" class="matrix-cell p-2 rounded border border-slate-800 bg-slate-900/60 flex flex-col justify-center">
+                    <div class="text-[10px] text-slate-400">r2_l2 (WOT Max)</div>
+                    <div class="font-bold text-slate-200 mt-1">&gt;2500, &gt;70%</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5 samples-count">0 eșantioane</div>
+                </div>
+
+                <!-- Row 1: Mid RPM (1500-2499) -->
+                <div id="cell_r1_l0" class="matrix-cell p-2 rounded border border-slate-800 bg-slate-900/60 flex flex-col justify-center">
+                    <div class="text-[10px] text-slate-400">r1_l0 (Cruising)</div>
+                    <div class="font-bold text-slate-200 mt-1">1500-2500, &lt;30%</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5 samples-count">0 eșantioane</div>
+                </div>
+                <div id="cell_r1_l1" class="matrix-cell p-2 rounded border border-slate-800 bg-slate-900/60 flex flex-col justify-center">
+                    <div class="text-[10px] text-slate-400">r1_l1 (Drum Întins)</div>
+                    <div class="font-bold text-slate-200 mt-1">1500-2500, 30-70%</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5 samples-count">0 eșantioane</div>
+                </div>
+                <div id="cell_r1_l2" class="matrix-cell p-2 rounded border border-slate-800 bg-slate-900/60 flex flex-col justify-center">
+                    <div class="text-[10px] text-slate-400">r1_l2 (Cuplu Plin)</div>
+                    <div class="font-bold text-slate-200 mt-1">1500-2500, &gt;70%</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5 samples-count">0 eșantioane</div>
+                </div>
+
+                <!-- Row 0: Low RPM (<1500) -->
+                <div id="cell_r0_l0" class="matrix-cell p-2 rounded border border-slate-800 bg-slate-900/60 flex flex-col justify-center active">
+                    <div class="text-[10px] text-emerald-400 font-bold">r0_l0 (Ralanti)</div>
+                    <div class="font-bold text-white mt-1">&lt;1500, &lt;30%</div>
+                    <div class="text-[10px] text-emerald-300 mt-0.5 samples-count">ACTIV LIVE</div>
+                </div>
+                <div id="cell_r0_l1" class="matrix-cell p-2 rounded border border-slate-800 bg-slate-900/60 flex flex-col justify-center">
+                    <div class="text-[10px] text-slate-400">r0_l1 (Urban)</div>
+                    <div class="font-bold text-slate-200 mt-1">&lt;1500, 30-70%</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5 samples-count">0 eșantioane</div>
+                </div>
+                <div id="cell_r0_l2" class="matrix-cell p-2 rounded border border-slate-800 bg-slate-900/60 flex flex-col justify-center">
+                    <div class="text-[10px] text-slate-400">r0_l2 (Sarcină Jos)</div>
+                    <div class="font-bold text-slate-200 mt-1">&lt;1500, &gt;70%</div>
+                    <div class="text-[10px] text-slate-500 mt-0.5 samples-count">0 eșantioane</div>
+                </div>
+            </div>
+
+            <div class="mt-3 text-[11px] text-slate-400 flex justify-between font-mono">
+                <span>VOLUMETRIC EFF (VE): <b class="text-sky-300" id="matrixVe">79.0%</b></span>
+                <span>LAMBDA: <b class="text-emerald-300" id="matrixLambda">1.77 λ</b></span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── 4. ZONA INFERIOARĂ: WEIBULL RELIABILITY & LIVE DIAGNOSTICS ──────── -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        <!-- STÂNGA: ANALIZA DE SUPRAVIEȚUIRE WEIBULL (5 SUBSISTEME) -->
+        <div class="card p-4 lg:col-span-2">
+            <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                    <h2 class="text-sm font-bold tracking-wider text-white uppercase">Fiabilitate Weibull 2-Parametri (Risc Cedare 3.000 km)</h2>
+                </div>
+                <span class="text-xs text-amber-400 font-mono font-semibold">PREDICTIVE MAINTENANCE</span>
+            </div>
+
+            <div class="space-y-3 font-mono text-xs">
+                <!-- 1. Ulei Motor -->
+                <div class="bg-slate-900/70 p-2.5 rounded border border-slate-800">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-slate-200 font-bold">1. Ulei Motor (Cinetica Arrhenius & Diluție)</span>
+                        <span class="text-amber-400 font-bold" id="weibullOilRisk">Risc Cedare: 27.5% (MEDIU)</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div id="weibullOilBar" class="bg-amber-400 h-full rounded-full" style="width: 27.5%"></div>
+                    </div>
+                    <div class="flex justify-between text-[11px] text-slate-400 mt-1">
+                        <span>Fiabilitate R(t): <b class="text-slate-200" id="weibullOilR">75.7%</b> (β=2.8, η=15.000 km)</span>
+                        <span class="text-emerald-400">Prevenție daună: 1.450 €</span>
+                    </div>
+                </div>
+
+                <!-- 2. Filtru DPF -->
+                <div class="bg-slate-900/70 p-2.5 rounded border border-slate-800">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-slate-200 font-bold">2. Filtru DPF (Rezistență Darcy-Forchheimer)</span>
+                        <span class="text-emerald-400 font-bold" id="weibullDpfRisk">Risc Cedare: 1.6% (SCĂZUT)</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div id="weibullDpfBar" class="bg-emerald-400 h-full rounded-full" style="width: 1.6%"></div>
+                    </div>
+                    <div class="flex justify-between text-[11px] text-slate-400 mt-1">
+                        <span>Fiabilitate R(t): <b class="text-slate-200" id="weibullDpfR">79.5%</b> (β=3.2, η=180.000 km)</span>
+                        <span class="text-emerald-400">Prevenție daună: 1.200 €</span>
+                    </div>
+                </div>
+
+                <!-- 3. Turbosuflantă -->
+                <div class="bg-slate-900/70 p-2.5 rounded border border-slate-800">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-slate-200 font-bold">3. Turbosuflantă & VNT (Stres Boost / EGT)</span>
+                        <span class="text-emerald-400 font-bold" id="weibullTurboRisk">Risc Cedare: 2.2% (SCĂZUT)</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div id="weibullTurboBar" class="bg-emerald-400 h-full rounded-full" style="width: 2.2%"></div>
+                    </div>
+                    <div class="flex justify-between text-[11px] text-slate-400 mt-1">
+                        <span>Fiabilitate R(t): <b class="text-slate-200" id="weibullTurboR">92.0%</b> (β=2.5, η=220.000 km)</span>
+                        <span class="text-emerald-400">Prevenție daună: 1.100 €</span>
+                    </div>
+                </div>
+
+                <!-- 4. Frâne (Archard) & Baterie -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                    <div class="bg-slate-900/70 p-2 rounded border border-slate-800">
+                        <div class="flex justify-between text-[11px] mb-1 font-bold">
+                            <span>4. Plăcuțe Frână</span>
+                            <span class="text-emerald-400" id="weibullBrakeRisk">1.2% Risc</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div id="weibullBrakeBar" class="bg-emerald-400 h-full rounded-full" style="width: 5%"></div>
+                        </div>
+                        <div class="text-[10px] text-slate-400 mt-1">Disipare: <b class="text-slate-200" id="kpiBrakeMj">0.21 MJ</b> | Archard</div>
+                    </div>
+
+                    <div class="bg-slate-900/70 p-2 rounded border border-slate-800">
+                        <div class="flex justify-between text-[11px] mb-1 font-bold">
+                            <span>5. Baterie & Alternator</span>
+                            <span class="text-emerald-400" id="weibullBatRisk">3.5% Risc</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div id="weibullBatBar" class="bg-emerald-400 h-full rounded-full" style="width: 10%"></div>
+                        </div>
+                        <div class="text-[10px] text-slate-400 mt-1">R_int: <b class="text-slate-200" id="kpiRint">5.3 mΩ</b> | SoH: <b class="text-emerald-400" id="kpiBatSoh">90%</b></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DREAPTA: PANOU ALERTE ACTIVE & CONTROL SIMULATOR PENTRU PROIECTOR -->
+        <div class="card p-4 flex flex-col justify-between">
+            <div>
+                <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
+                    <div class="flex items-center space-x-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-red-400"></span>
+                        <h2 class="text-sm font-bold tracking-wider text-white uppercase">Alerte Diagnoză Live</h2>
+                    </div>
+                    <span class="text-xs text-slate-400 font-mono">EDGE LOG</span>
+                </div>
+
+                <!-- Lista alerte active -->
+                <div id="alertBox" class="space-y-2 font-mono text-xs max-h-48 overflow-y-auto">
+                    <div class="p-2 rounded bg-emerald-950/40 border border-emerald-800/60 text-emerald-300">
+                        ✅ Sistem stabil. Parametri în toleranțe nominale.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Butoane Scenarii Demo pentru Prezentarea de Licență -->
+            <div class="mt-4 pt-3 border-t border-slate-800">
+                <div class="text-[11px] text-slate-400 uppercase tracking-wider font-semibold mb-2">Comenzi Demonstrație Comisie:</div>
+                <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+                    <button onclick="injectDemoScenario('cruise')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 py-1.5 px-2 rounded border border-slate-700 text-center">
+                        🚗 Cruising Optim
+                    </button>
+                    <button onclick="injectDemoScenario('dpf_regen')" class="bg-amber-950/60 hover:bg-amber-900/60 text-amber-300 py-1.5 px-2 rounded border border-amber-800/80 text-center">
+                        🔥 DPF Regen (625°C)
+                    </button>
+                    <button onclick="injectDemoScenario('drag_brake')" class="bg-rose-950/60 hover:bg-rose-900/60 text-rose-300 py-1.5 px-2 rounded border border-rose-800/80 text-center">
+                        ⚠️ Etrier Frână Blocat
+                    </button>
+                    <button onclick="injectDemoScenario('wot_power')" class="bg-sky-950/60 hover:bg-sky-900/60 text-sky-300 py-1.5 px-2 rounded border border-sky-800/80 text-center">
+                        ⚡ WOT Sarcină 100%
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── 5. MOTOR JAVASCRIPT: OSCILOSCOP CANVAS 60 FPS & SOCKET.IO ───────── -->
+    <script>
+        // Conectare Socket.IO la backend-ul local sau la serverul din Oracle Cloud
+        const socket = io({
+            reconnectionAttempts: 10,
+            timeout: 5000
+        });
+
+        // Date istoric osciloscop (40 secunde la 1Hz = 40 puncte per canal)
+        const HISTORY_LEN = 40;
+        const scopeData = {
+            rpm:   new Array(HISTORY_LEN).fill(800),
+            boost: new Array(HISTORY_LEN).fill(0.1),
+            bsfc:  new Array(HISTORY_LEN).fill(210),
+            egt:   new Array(HISTORY_LEN).fill(220)
+        };
+
+        const canvas = document.getElementById('scopeCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Buclă de randare Canvas la 60 FPS
+        function drawOscilloscope() {
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            // Caroiaj grid fin (stil osciloscop industrial)
+            ctx.strokeStyle = 'rgba(51, 65, 85, 0.25)';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < w; x += w / 10) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+            }
+            for (let y = 0; y < h; y += h / 5) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+            }
+
+            // Funcție desenare canal cu scalare normalizată
+            function drawTrace(dataArray, minVal, maxVal, strokeColor, shadowColor) {
+                ctx.strokeStyle = strokeColor;
+                ctx.lineWidth = 2.0;
+                ctx.shadowColor = shadowColor;
+                ctx.shadowBlur = 6;
+                ctx.beginPath();
+
+                const stepX = w / (HISTORY_LEN - 1);
+                for (let i = 0; i < HISTORY_LEN; i++) {
+                    const norm = Math.max(0, Math.min(1, (dataArray[i] - minVal) / (maxVal - minVal)));
+                    const y = h - (norm * (h - 20) + 10);
+                    const x = i * stepX;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                ctx.shadowBlur = 0; // reset shadow
+            }
+
+            // 1. Canal Verde: RPM (0 .. 4500)
+            drawTrace(scopeData.rpm, 0, 4500, '#10b981', 'rgba(16, 185, 129, 0.5)');
+            // 2. Canal Albastru: Boost (0 .. 2.5 bar)
+            drawTrace(scopeData.boost, 0, 2.5, '#38bdf8', 'rgba(56, 189, 248, 0.5)');
+            // 3. Canal Portocaliu: BSFC (150 .. 450 g/kWh)
+            drawTrace(scopeData.bsfc, 150, 450, '#f59e0b', 'rgba(245, 158, 11, 0.5)');
+            // 4. Canal Roșu: EGT Cat1 (100 .. 700°C)
+            drawTrace(scopeData.egt, 100, 700, '#ef4444', 'rgba(239, 68, 68, 0.5)');
+
+            requestAnimationFrame(drawOscilloscope);
+        }
+        requestAnimationFrame(drawOscilloscope);
+
+        // Actualizare date din WebSocket
+        socket.on('connect', () => {
+            console.log('[WEBSOCKET FLEET] Conectat la server!');
+            document.getElementById('connBadge').className = 'bg-emerald-950 text-emerald-400 px-2.5 py-1 rounded border border-emerald-700 font-bold flex items-center gap-1.5';
+            document.getElementById('connBadge').innerHTML = '<span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span> LIVE 1Hz STREAM';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('connBadge').className = 'bg-rose-950 text-rose-400 px-2.5 py-1 rounded border border-rose-700 font-bold flex items-center gap-1.5';
+            document.getElementById('connBadge').innerHTML = '<span class="inline-block w-2 h-2 rounded-full bg-rose-400"></span> OFFLINE RECONNECTING';
+        });
+
+        socket.on('telemetrie_live', (pachet) => {
+            updateDashboardWithPacket(pachet);
+        });
+
+        function updateDashboardWithPacket(pachet) {
+            if (!pachet) return;
+            const m = pachet.motor || {};
+            const a = pachet.aer || {};
+            const t = pachet.temperaturi || {};
+            const v = pachet.virtual || {};
+            const w = v.weibullReliability || {};
+            const m2m = v.m2mTelemetry || {};
+            const roi = v.economicImpactEur || {};
+
+            // 1. Shift date osciloscop
+            const rpm = m.rpm || 0;
+            const boost = a.boost_actual || Math.max(0, ((a.map || 101) - 100) / 100);
+            const bsfc = v.bsfcGPerKwh || 210;
+            const cat1 = t.cat1 || 240;
+
+            scopeData.rpm.shift();   scopeData.rpm.push(rpm);
+            scopeData.boost.shift(); scopeData.boost.push(boost);
+            scopeData.bsfc.shift();  scopeData.bsfc.push(bsfc);
+            scopeData.egt.shift();   scopeData.egt.push(cat1);
+
+            // Actualizare cifre live osciloscop
+            document.getElementById('valRpm').innerText = Math.round(rpm);
+            document.getElementById('valBoost').innerText = boost.toFixed(2);
+            document.getElementById('valBsfc').innerText = Math.round(bsfc);
+            document.getElementById('valEgt').innerText = Math.round(cat1);
+
+            // 2. Actualizare KPI Bar
+            if (m2m.binaryBytes) document.getElementById('kpiBinarySize').innerText = m2m.binaryBytes;
+            if (m2m.monthlySimSavingsEur) document.getElementById('kpiSimSavings').innerText = m2m.monthlySimSavingsEur.toFixed(2);
+            if (roi.totalFleetRoiEur) document.getElementById('kpiFleetRoi').innerText = Math.round(roi.totalFleetRoiEur).toLocaleString();
+            document.getElementById('kpiBsfc').innerText = Math.round(bsfc);
+            if (v.engineEfficiencyPct) document.getElementById('kpiEff').innerText = v.engineEfficiencyPct + '%';
+
+            // 3. Actualizare Harta 2D RPM x Load
+            update2DMatrix(rpm, m.load || 0, v);
+
+            // 4. Actualizare Fiabilitate Weibull
+            if (w.oil) {
+                document.getElementById('weibullOilRisk').innerText = `Risc Cedare: ${w.oil.pFail3000kmPct}% (${w.oil.riskLevel})`;
+                document.getElementById('weibullOilRisk').className = w.oil.riskLevel === 'HIGH' ? 'text-rose-400 font-bold' : w.oil.riskLevel === 'MEDIUM' ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold';
+                document.getElementById('weibullOilBar').style.width = w.oil.pFail3000kmPct + '%';
+                document.getElementById('weibullOilR').innerText = w.oil.rReliabilityPct + '%';
+            }
+            if (w.dpf) {
+                document.getElementById('weibullDpfRisk').innerText = `Risc Cedare: ${w.dpf.pFail3000kmPct}% (${w.dpf.riskLevel})`;
+                document.getElementById('weibullDpfBar').style.width = Math.min(100, w.dpf.pFail3000kmPct * 4) + '%';
+                document.getElementById('weibullDpfR').innerText = w.dpf.rReliabilityPct + '%';
+            }
+            if (w.turbo) {
+                document.getElementById('weibullTurboRisk').innerText = `Risc: ${w.turbo.pFail3000kmPct}% (${w.turbo.riskLevel})`;
+                document.getElementById('weibullTurboBar').style.width = Math.min(100, w.turbo.pFail3000kmPct * 4) + '%';
+                document.getElementById('weibullTurboR').innerText = w.turbo.rReliabilityPct + '%';
+            }
+            if (v.brakeEnergyTripMj != null) document.getElementById('kpiBrakeMj').innerText = v.brakeEnergyTripMj + ' MJ';
+            if (v.batteryInternalResistanceMOhms != null) document.getElementById('kpiRint').innerText = v.batteryInternalResistanceMOhms + ' mΩ';
+            if (v.batterySoHPct != null) document.getElementById('kpiBatSoh').innerText = v.batterySoHPct + '%';
+
+            // 5. Alerte dinamice
+            updateAlertBox(v);
+        }
+
+        // Determinare și aprindere celulă 2D
+        function update2DMatrix(rpm, load, v) {
+            let rIdx = 0;
+            if (rpm >= 2500) rIdx = 2;
+            else if (rpm >= 1500) rIdx = 1;
+
+            let lIdx = 0;
+            if (load >= 70) lIdx = 2;
+            else if (load >= 30) lIdx = 1;
+
+            const targetKey = `cell_r${rIdx}_l${lIdx}`;
+            document.querySelectorAll('.matrix-cell').forEach(cell => {
+                if (cell.id === targetKey) {
+                    cell.classList.add('active');
+                } else {
+                    cell.classList.remove('active');
+                }
+            });
+
+            if (v.volumetricEfficiencyPct != null) document.getElementById('matrixVe').innerText = v.volumetricEfficiencyPct + '%';
+            if (v.lambda != null) document.getElementById('matrixLambda').innerText = v.lambda.toFixed(2) + ' λ';
+        }
+
+        function updateAlertBox(v) {
+            const box = document.getElementById('alertBox');
+            const alerts = [];
+
+            if (v.dpfRegenActive) {
+                alerts.push(`<div class="p-2 rounded bg-amber-950/70 border border-amber-600 text-amber-300 font-bold">
+                    🔥 REGENERARE ACTIVĂ DPF ÎN CURS! Temperatura > 550°C. Nu opriți motorul.
+                </div>`);
+            }
+            if (v.rollingDragAnomaly) {
+                alerts.push(`<div class="p-2 rounded bg-rose-950/70 border border-rose-600 text-rose-300 font-bold">
+                    ⚠️ ANOMALIE REZISTENȚĂ LA RULARE! Decelerare anormală în coast-down (etrier blocat).
+                </div>`);
+            }
+            if (v.smokeRisk) {
+                alerts.push(`<div class="p-2 rounded bg-orange-950/70 border border-orange-600 text-orange-300">
+                    💨 RISC FUM NEGRU: Raport AFR &lt; 16.5:1 în sarcină.
+                </div>`);
+            }
+            if (v.alternatorDiodeFault) {
+                alerts.push(`<div class="p-2 rounded bg-purple-950/70 border border-purple-600 text-purple-300">
+                    ⚡ RIPPLE ALTERNATOR DETECTAT: Diodă străpunsă în puntea redresoare (>0.35V RMS).
+                </div>`);
+            }
+
+            if (alerts.length === 0) {
+                box.innerHTML = `<div class="p-2 rounded bg-emerald-950/40 border border-emerald-800/60 text-emerald-300">
+                    ✅ Sistem stabil. Telemetrie 1Hz în parametri nominali.
+                </div>`;
+            } else {
+                box.innerHTML = alerts.join('');
+            }
+        }
+
+        // Demo injectare scenarii direct din interfață pentru comisie
+        function injectDemoScenario(type) {
+            let pachetDemo;
+            if (type === 'cruise') {
+                pachetDemo = {
+                    motor: { rpm: 1950, speed: 92, load: 55, accel_g: 0.01 },
+                    aer: { maf: 58.0, map: 165, boost_actual: 0.65 },
+                    combustibil: { inj_qty_mg: 28.0, inst_cons: 5.2 },
+                    temperaturi: { coolant: 88, oil: 92, cat1: 290, cat2: 285 },
+                    virtual: {
+                        powerHp: 48, torqueNm: 175, volumetricEfficiencyPct: 79.5, lambda: 1.77, bsfcGPerKwh: 212,
+                        engineEfficiencyPct: 36.5, oilLifeWearFactor: 1.0, brakeEnergyTripMj: 0.25,
+                        batteryInternalResistanceMOhms: 5.3, batterySoHPct: 90,
+                        weibullReliability: {
+                            oil: { pFail3000kmPct: 27.5, rReliabilityPct: 75.7, riskLevel: 'MEDIUM' },
+                            dpf: { pFail3000kmPct: 1.6, rReliabilityPct: 79.5, riskLevel: 'LOW' },
+                            turbo: { pFail3000kmPct: 2.2, rReliabilityPct: 92.0, riskLevel: 'LOW' }
+                        },
+                        economicImpactEur: { totalFleetRoiEur: 1689 },
+                        m2mTelemetry: { binaryBytes: 96, monthlySimSavingsEur: 14.50 }
+                    }
+                };
+            } else if (type === 'dpf_regen') {
+                pachetDemo = {
+                    motor: { rpm: 2200, speed: 110, load: 60, accel_g: 0.02 },
+                    aer: { maf: 72.0, map: 185, boost_actual: 0.85 },
+                    combustibil: { inj_qty_mg: 34.0, inst_cons: 6.8 },
+                    temperaturi: { coolant: 91, oil: 104, cat1: 585, cat2: 630 },
+                    virtual: {
+                        powerHp: 65, torqueNm: 210, volumetricEfficiencyPct: 82.0, lambda: 1.55, bsfcGPerKwh: 228,
+                        dpfRegenActive: true, engineEfficiencyPct: 35.0,
+                        weibullReliability: {
+                            oil: { pFail3000kmPct: 36.0, rReliabilityPct: 70.0, riskLevel: 'HIGH' },
+                            dpf: { pFail3000kmPct: 12.0, rReliabilityPct: 85.0, riskLevel: 'LOW' },
+                            turbo: { pFail3000kmPct: 4.5, rReliabilityPct: 90.0, riskLevel: 'LOW' }
+                        },
+                        economicImpactEur: { totalFleetRoiEur: 2850 },
+                        m2mTelemetry: { binaryBytes: 96, monthlySimSavingsEur: 14.50 }
+                    }
+                };
+            } else if (type === 'drag_brake') {
+                pachetDemo = {
+                    motor: { rpm: 1600, speed: 65, load: 5, accel_g: -0.24 },
+                    aer: { maf: 12.0, map: 101, boost_actual: 0.01 },
+                    combustibil: { inj_qty_mg: 0.0, inst_cons: 0.0 },
+                    temperaturi: { coolant: 88, oil: 90, cat1: 220, cat2: 210 },
+                    virtual: {
+                        rollingDragAnomaly: true, bsfcGPerKwh: 0, volumetricEfficiencyPct: 65.0, lambda: 3.5,
+                        weibullReliability: {
+                            oil: { pFail3000kmPct: 20.0, rReliabilityPct: 80.0, riskLevel: 'MEDIUM' },
+                            dpf: { pFail3000kmPct: 2.0, rReliabilityPct: 88.0, riskLevel: 'LOW' },
+                            turbo: { pFail3000kmPct: 2.0, rReliabilityPct: 92.0, riskLevel: 'LOW' }
+                        },
+                        economicImpactEur: { totalFleetRoiEur: 2069 },
+                        m2mTelemetry: { binaryBytes: 96, monthlySimSavingsEur: 14.50 }
+                    }
+                };
+            } else if (type === 'wot_power') {
+                pachetDemo = {
+                    motor: { rpm: 3200, speed: 135, load: 95, accel_g: 0.28 },
+                    aer: { maf: 110.0, map: 215, boost_actual: 1.15 },
+                    combustibil: { inj_qty_mg: 44.0, inst_cons: 14.5 },
+                    temperaturi: { coolant: 92, oil: 108, cat1: 490, cat2: 480 },
+                    virtual: {
+                        powerHp: 138, torqueNm: 305, volumetricEfficiencyPct: 88.0, lambda: 1.28, bsfcGPerKwh: 235,
+                        engineEfficiencyPct: 35.8,
+                        weibullReliability: {
+                            oil: { pFail3000kmPct: 30.0, rReliabilityPct: 72.0, riskLevel: 'MEDIUM' },
+                            dpf: { pFail3000kmPct: 3.0, rReliabilityPct: 85.0, riskLevel: 'LOW' },
+                            turbo: { pFail3000kmPct: 8.0, rReliabilityPct: 86.0, riskLevel: 'LOW' }
+                        },
+                        economicImpactEur: { totalFleetRoiEur: 1689 },
+                        m2mTelemetry: { binaryBytes: 96, monthlySimSavingsEur: 14.50 }
+                    }
+                };
+            }
+            updateDashboardWithPacket(pachetDemo);
+        }
+    </script>
+</body>
+</html>

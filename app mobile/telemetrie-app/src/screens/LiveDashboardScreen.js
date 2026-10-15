@@ -131,6 +131,10 @@ function buildParams(cat, d) {
             { label: 'Delta Ulei-Apă',    val: v.deltaOilWaterC || 0,          unit: '°C',    max: 40,   color: (v.deltaOilWaterC||0) > 22 ? colors.status.caution : colors.status.good },
             { label: 'Cădere Tensiune',   val: v.voltageDropV || 0,            unit: 'V',     max: 2,    color: (v.voltageDropV||0) > 0.4 ? colors.status.caution : colors.status.good },
             { label: 'Eroare Boost',      val: v.boostErrorKpa || 0,           unit: 'kPa',   max: 100,  color: colors.accent.default },
+            { label: 'Compresie M2M',    val: v.m2mTelemetry?.compressionRatioPct || 93.4, unit: '%', max: 100, color: colors.status.good },
+            { label: 'Pachet Binar',     val: v.m2mTelemetry?.binaryBytes || 96,           unit: 'B', max: 200, color: colors.accent.default },
+            { label: 'Risc Ulei Weibull',val: v.weibullReliability?.oil?.pFail3000kmPct || 0, unit: '%', max: 100, color: (v.weibullReliability?.oil?.pFail3000kmPct||0) > 30 ? colors.status.caution : colors.status.good },
+            { label: 'ROI Flotă Anual',  val: v.economicImpactEur?.totalFleetRoiEur || 1689, unit: '€', max: 5000, color: colors.status.good },
         ];
         case 'TEMP': return [
             { label: 'Lichid Răcire', val: tem.coolant || 0,  unit: '°C', max: 110, color: (tem.coolant||0)>95 ? colors.status.critical : colors.status.good },

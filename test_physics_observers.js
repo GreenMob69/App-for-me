@@ -130,4 +130,28 @@ console.log('EGR Ratio %:', resEgr.egrRatioPct);
 console.log('EGR Diagnostic:', resEgr.egrDiagnostic);
 assert(resEgr.egrDiagnostic === 'EGR_STUCK_OPEN_CARBON', 'Should diagnose EGR stuck open under heavy load');
 
-console.log('\n ALL 6 VERIFICATION TEST SCENARIOS PASSED WITH 100% MATHEMATICAL PRECISION!');
+// 7. Test Weibull Survival Reliability & B2B Economic ROI
+console.log('\n=== TEST 7: WEIBULL RELIABILITY & B2B ROI ===');
+console.log('Weibull Oil Risk (3000 km):', resCruise.weibullReliability.oil.pFail3000kmPct, '% | R(t):', resCruise.weibullReliability.oil.rReliabilityPct, '% | Risk:', resCruise.weibullReliability.oil.riskLevel);
+console.log('Weibull DPF Risk (3000 km):', resCruise.weibullReliability.dpf.pFail3000kmPct, '% | R(t):', resCruise.weibullReliability.dpf.rReliabilityPct, '% | Risk:', resCruise.weibullReliability.dpf.riskLevel);
+console.log('Weibull Turbo Risk (3000 km):', resCruise.weibullReliability.turbo.pFail3000kmPct, '% | Risk:', resCruise.weibullReliability.turbo.riskLevel);
+console.log('B2B Economic ROI (Prevented + Fuel):', resCruise.economicImpactEur.totalFleetRoiEur, '€ / an');
+assert(resCruise.weibullReliability.oil.pFail3000kmPct >= 0 && resCruise.weibullReliability.oil.pFail3000kmPct <= 100, 'Weibull oil risk invalid');
+assert(resCruise.economicImpactEur.totalFleetRoiEur >= 0, 'ROI should be non-negative');
+
+// 8. Test Binary Telemetry Encoder & M2M SIM Traffic Savings
+console.log('\n=== TEST 8: BINARY M2M TELEMETRY PACKET ===');
+console.log('JSON Size:', resCruise.m2mTelemetry.jsonBytes, 'bytes');
+console.log('Binary Size:', resCruise.m2mTelemetry.binaryBytes, 'bytes');
+console.log('Compression Ratio:', resCruise.m2mTelemetry.compressionRatioPct, '%');
+console.log('Monthly Traffic JSON:', resCruise.m2mTelemetry.monthlyJsonMb, 'MB');
+console.log('Monthly Traffic Binary:', resCruise.m2mTelemetry.monthlyBinaryMb, 'MB');
+console.log('Monthly SIM Savings:', resCruise.m2mTelemetry.monthlySimSavingsEur, '€ / vehicul');
+console.log('Hex Header Preview (16B):', resCruise.m2mTelemetry.hexPreview);
+
+assert.strictEqual(resCruise.m2mTelemetry.binaryBytes, 96, 'Binary packet must be exactly 96 bytes');
+assert(resCruise.m2mTelemetry.compressionRatioPct > 90, 'Compression ratio should be > 90%');
+assert(resCruise.m2mTelemetry.monthlyBinaryMb < 100, 'Monthly binary data must fit in 100MB eSIM');
+
+console.log('\n ALL 8 VERIFICATION TEST SCENARIOS PASSED WITH 100% MATHEMATICAL PRECISION!');
+

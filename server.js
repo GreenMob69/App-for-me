@@ -3,6 +3,7 @@ require('dotenv').config();
 const express  = require('express');
 const cors     = require('cors');
 const http     = require('http');
+const path     = require('path');
 const sqlite3  = require('sqlite3').verbose();
 const { Server } = require('socket.io');
 
@@ -17,6 +18,11 @@ const { requireAuth }      = require('./middleware/auth');
 const app    = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/fleet', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'fleet.html'));
+});
 
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
