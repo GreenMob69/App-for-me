@@ -27,10 +27,11 @@ let volt_bat = 12.6; let volt_ecu = 14.2; let dpf_soot = 12.4; let dpf_diff = 4.
 let rail_press = 35000; let km_total = 328450.0; let run_time = 0; let eng_hours = 4120.5;
 
 client.on('connect', () => {
+    const simStartTimestamp = Date.now();
     console.log(`[SIMULATOR PRO] Conectat la ${MQTT_BROKER_URL} [Topic: ${TOPIC}]`);
     console.log(`[CONFIG DEMO] Durată: ${DURATA}s | Viteză: ${SPEED_MULT}x | Scenariu: ${SCENARIO.toUpperCase()} | VIN: ${VIN}`);
     console.log('[SIMULATOR PRO] Trimit eveniment PORNIRE...');
-    client.publish(TOPIC, JSON.stringify({ ecu: { vin: VIN, model: 'Audi A6 C4 2.5 TDI AEL' }, stare_motor: "PORNIRE", timestamp: Date.now() }));
+    client.publish(TOPIC, JSON.stringify({ ecu: { vin: VIN, model: 'Audi A6 C4 2.5 TDI AEL' }, stare_motor: "PORNIRE", timestamp: simStartTimestamp }));
 
     const tickMs = Math.max(50, Math.floor(1000 / SPEED_MULT));
 
@@ -122,7 +123,7 @@ client.on('connect', () => {
         // MATRICEA EXHAUSTIVĂ (~90 PARAMETRI SAE J1979 & UDS VAG)
         // ====================================================================
         const pachetExhaustiv = {
-            stare_motor: "MERS", timestamp: Date.now(),
+            stare_motor: "MERS", timestamp: simStartTimestamp + (sec * 1000),
             motor: {
                 rpm: Math.floor(rpm), speed: Math.floor(spd), load: Math.floor(load),
                 calc_load: Math.floor(load * 0.98), abs_load: Math.floor(load * 1.05),
@@ -172,7 +173,7 @@ client.on('connect', () => {
         if (sec >= DURATA) {
             clearInterval(intv);
             setTimeout(() => {
-                client.publish(TOPIC, JSON.stringify({ ecu: { vin: VIN, model: 'Audi A6 C4 2.5 TDI AEL' }, stare_motor: "OPRIRE", timestamp: Date.now() }));
+                client.publish(TOPIC, JSON.stringify({ ecu: { vin: VIN, model: 'Audi A6 C4 2.5 TDI AEL' }, stare_motor: "OPRIRE", timestamp: simStartTimestamp + (DURATA * 1000) }));
                 console.log(`\n🏁 [${DURATA}s] CICLUL EXHAUSTIV FINALIZAT! Pachetul OPRIRE trimis.`);
                 client.end(false, () => {
                     console.log('[SIMULATOR PRO] Deconectat.');

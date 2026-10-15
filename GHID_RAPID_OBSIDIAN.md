@@ -182,3 +182,35 @@ npx eas build -p android --profile preview
 - **Porturile 3000 (Backend API/WS) sau 1883 (Mosquitto MQTT) blocate**:
   - În Oracle Cloud, verifică **Security List** (Ingress Rules) pentru Virtual Cloud Network (VCN): porturile `3000` (TCP) și `1883` (TCP) trebuie să aibă reguli Ingress deschise pentru `0.0.0.0/0`.
   - Pe instanța Ubuntu, verifică dacă firewall-ul permite traficul: `sudo iptables -L INPUT -n -v | grep 1883` (sau `sudo ufw status`). Dacă portul 1883 este blocat sau nu are regula de Ingress deschisă în Oracle Cloud, ESP32 și simulatorul de pe laptop nu se vor putea conecta la broker.
+
+---
+
+## 🎯 8. Comenzi Rapide pentru Susținerea Licenței (Live Demo)
+
+### 8.1. Simulare accelerată (10 minute comprimate în 20 secunde)
+În rădăcina proiectului (`c:\Users\tfl\Desktop\telemetrie-licenta`):
+
+```powershell
+# Cursa normală accelerată (15-30 secunde)
+node simulator.js --duration 600 --speed 20 --scenario default
+
+# Scenariu 1: Defect Turbină (underboost / N75) -> declanșează diagnosticul AI
+node simulator.js --duration 300 --speed 15 --scenario fault_turbo
+
+# Scenariu 2: Supraîncălzire Sistem Răcire (108°C) -> declanșează alerte critice
+node simulator.js --duration 300 --speed 15 --scenario fault_cooling
+
+# Scenariu 3: Defect Alternator (subîncărcare < 13.2V)
+node simulator.js --duration 300 --speed 15 --scenario fault_alternator
+
+# Scenariu 4: Condus Agresiv (frânări bruște ABS, kickdown, depășire viteză)
+node simulator.js --duration 300 --speed 15 --scenario aggressive
+```
+
+### 8.2. Generare instantă Raport PDF (pentru ultima cursă)
+
+```powershell
+node scripts/export_pdf.js
+```
+
+*(Generează automat fișierul `raport_cursa_<id>.pdf` în proiect, gata de deschis pe ecran în fața comisiei).*
