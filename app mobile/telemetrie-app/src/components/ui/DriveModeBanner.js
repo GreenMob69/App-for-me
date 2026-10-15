@@ -1,17 +1,17 @@
 import React, { useEffect, useRef, useContext } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, Animated, Platform,
+    View, Text, StyleSheet, TouchableOpacity, Animated,
 } from 'react-native';
 import { LiveContext } from '../../context/LiveContext';
 import { AppContext } from '../../context/AppContext';
 import { colors, typography, radii, spacing } from '../../theme';
 
 /**
- * DriveModeBanner — Dynamic Island Style Banner
+ * DriveModeBanner — Inline Dynamic Banner
  * -------------------------------------------------------------
- * Apare automat atunci când motorul este pornit (MERS / PORNIRE / RPM > 400),
- * afișând viteza, turația și puterea în timp real, oferind acces cu o atingere
- * la ecranul de telemetrie Live.
+ * Apare fluid între titlul mașinii și sumar atunci când motorul este pornit
+ * (MERS / PORNIRE / RPM > 400), afișând viteza, turația și puterea în timp real,
+ * oferind acces rapid la ecranul de telemetrie Live.
  */
 export default function DriveModeBanner({ navigation }) {
     const { isConnected, liveData } = useContext(LiveContext);
@@ -22,15 +22,14 @@ export default function DriveModeBanner({ navigation }) {
     const powerHp = liveData?.virtual?.powerHp ?? 0;
     const isEngineActive = isConnected && (rpm > 400 || liveData?.stare_motor === 'MERS' || liveData?.stare_motor === 'PORNIRE');
 
-    const translateY = useRef(new Animated.Value(-100)).current;
-    const pulseAnim  = useRef(new Animated.Value(1)).current;
+    const fadeAnim  = useRef(new Animated.Value(0)).current;
+    const pulseAnim = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
         if (isEngineActive) {
-            Animated.spring(translateY, {
-                toValue: 0,
-                friction: 8,
-                tension: 40,
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 300,
                 useNativeDriver: true,
             }).start();
 
@@ -45,9 +44,9 @@ export default function DriveModeBanner({ navigation }) {
 
             return () => pulseLoop.stop();
         } else {
-            Animated.timing(translateY, {
-                toValue: -100,
-                duration: 250,
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 200,
                 useNativeDriver: true,
             }).start();
         }
@@ -64,7 +63,7 @@ export default function DriveModeBanner({ navigation }) {
     if (!isEngineActive) return null;
 
     return (
-        <Animated.View style={[styles.container, { transform: [{ translateY }] }]}>
+        <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
             <TouchableOpacity
                 style={styles.pill}
                 activeOpacity={0.88}
@@ -74,10 +73,10 @@ export default function DriveModeBanner({ navigation }) {
             >
                 <View style={styles.leftSection}>
                     <Animated.View style={[styles.pulseDot, { opacity: pulseAnim }]} />
-                    <View>
-                        <Text style={styles.title}>MOTOR PORNIT</Text>
+                    <View style={styles.textWrap}>
+                        <Text style={styles.title}>MOTOR PORNIT · CURSĂ ÎN TIMP REAL</Text>
                         <Text style={styles.sub}>
-                            <Text style={styles.num}>{speed}</Text> km/h  ·  <Text style={styles.num}>{rpm}</Text> RPM{powerHp > 0 ? `  ·  ${powerHp} CP` : ''}
+                            <Text style={styles.num}>{speed}</Text> km/h   ·   <Text style={styles.num}>{rpm}</Text> RPM{powerHp > 0 ? `   ·   ${powerHp} CP` : ''}
                         </Text>
                     </View>
                 </View>
@@ -92,30 +91,25 @@ export default function DriveModeBanner({ navigation }) {
 
 const styles = StyleSheet.create({
     container: {
-        position: 'absolute',
-        top: Platform.OS === 'android' ? 12 : 10,
-        left: spacing[3],
-        right: spacing[3],
-        zIndex: 9999,
-        alignItems: 'center',
+        width: '100%',
+        marginBottom: spacing[3],
     },
     pill: {
         width: '100%',
-        maxWidth: 440,
-        backgroundColor: 'rgba(18, 22, 28, 0.94)',
+        backgroundColor: colors.bg[1],
         borderColor: 'rgba(16, 185, 129, 0.45)',
         borderWidth: 1.5,
-        borderRadius: radii.full,
-        paddingVertical: spacing[2],
+        borderRadius: radii.md,
+        paddingVertical: spacing[2] + 2,
         paddingHorizontal: spacing[3],
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        shadowColor: '#10B981',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
-        shadowRadius: 10,
-        elevation: 8,
+        shadowColor: colors.status.good,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
+        elevation: 4,
     },
     leftSection: {
         flexDirection: 'row',
@@ -132,6 +126,9 @@ const styles = StyleSheet.create({
         shadowRadius: 6,
         shadowOpacity: 0.8,
     },
+    textWrap: {
+        flex: 1,
+    },
     title: {
         color: colors.status.good,
         fontSize: typography.sizes.micro,
@@ -143,7 +140,7 @@ const styles = StyleSheet.create({
         color: colors.text.secondary,
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.semibold,
-        marginTop: 1,
+        marginTop: 2,
     },
     num: {
         color: colors.text.primary,
@@ -152,11 +149,12 @@ const styles = StyleSheet.create({
     },
     actionBtn: {
         backgroundColor: 'rgba(16, 185, 129, 0.16)',
-        paddingHorizontal: spacing[2] + 2,
-        paddingVertical: spacing[1],
+        paddingHorizontal: spacing[2] + 4,
+        paddingVertical: spacing[1] + 2,
         borderRadius: radii.full,
         borderWidth: 1,
         borderColor: colors.status.good,
+        marginLeft: spacing[2],
     },
     actionText: {
         color: colors.status.good,

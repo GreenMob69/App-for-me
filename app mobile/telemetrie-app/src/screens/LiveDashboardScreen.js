@@ -288,7 +288,9 @@ const LiveDashboardScreen = () => {
         const eco         = liveData.scor_eco ?? 100;
 
         const powerHp     = numeric.powerHp ?? (v.powerHp || 0);
-        const torqueNm    = v.torqueNm ?? (powerHp > 0 ? Math.round(powerHp * 2.2) : 0);
+        const torqueNm    = (v.torqueNm && v.torqueNm > 0)
+            ? v.torqueNm
+            : (powerHp > 0 && rpm > 400 ? Math.round((powerHp * 7120) / rpm) : 0);
         const vePct       = v.volumetricEfficiencyPct ?? (a.maf ? Math.round((a.maf * 120 / ((rpm || 800) * 2.461 * 1.25)) * 100) : 88);
         const lambda      = v.lambda ?? 1.15;
         const afr         = v.afr ?? 16.8;
@@ -328,20 +330,11 @@ const LiveDashboardScreen = () => {
         const consColor  = cons > 15 ? colors.status.caution : cons > 10 ? colors.status.monitor : colors.text.primary;
         const boostColor = boost > 1.8 ? colors.status.caution : colors.text.primary;
 
-        const ambientGlowColor = cool > 95
-            ? 'rgba(239, 68, 68, 0.20)'
-            : cool < 65
-                ? 'rgba(0, 180, 216, 0.20)'
-                : 'rgba(16, 185, 129, 0.15)';
-
         const aiColorMap = { critical: colors.status.critical, serious: colors.status.caution, warning: colors.status.monitor, info: colors.accent.default, normal: colors.text.secondary, neutral: colors.text.tertiary ?? colors.text.secondary };
         const aiColor = aiColorMap[assistantMsg.level] ?? colors.text.secondary;
 
         return (
             <View style={styles.liveContainer}>
-                {/* ── Ambient Radial Glow ─────────────────────────── */}
-                <View style={[styles.ambientGlow, { backgroundColor: ambientGlowColor }]} />
-
                 {/* ── Speed hero ──────────────────────────────────── */}
                 <View style={styles.speedHero}>
                     <Text style={styles.speedNum}>{speed}</Text>
@@ -379,20 +372,18 @@ const LiveDashboardScreen = () => {
                 {/* ── Virtual Dyno & ECU Glass Card ──────────────── */}
                 <View style={styles.dynoCard}>
                     <View style={styles.dynoHeader}>
-                        <View style={styles.dynoBadgeRow}>
-                            <View style={styles.dynoTag}>
-                                <Text style={styles.dynoTagText}>⚡ VIRTUAL DYNO (ECU MATH)</Text>
-                            </View>
-                            {v.smokeRisk ? (
-                                <View style={[styles.dynoTag, { backgroundColor: 'rgba(239,68,68,0.18)', borderColor: colors.status.critical }]}>
-                                    <Text style={[styles.dynoTagText, { color: colors.status.critical }]}>⚠ RISC FUM NEGRU</Text>
-                                </View>
-                            ) : (
-                                <View style={[styles.dynoTag, { backgroundColor: 'rgba(16,185,129,0.14)', borderColor: colors.status.good }]}>
-                                    <Text style={[styles.dynoTagText, { color: colors.status.good }]}>✓ LIMITĂ FUM SIGURĂ</Text>
-                                </View>
-                            )}
+                        <View style={styles.dynoTag}>
+                            <Text style={styles.dynoTagText}>⚡ VIRTUAL DYNO (ECU MATH)</Text>
                         </View>
+                        {v.smokeRisk ? (
+                            <View style={[styles.dynoTag, { backgroundColor: 'rgba(239,68,68,0.18)', borderColor: colors.status.critical }]}>
+                                <Text style={[styles.dynoTagText, { color: colors.status.critical }]}>⚠ RISC FUM NEGRU</Text>
+                            </View>
+                        ) : (
+                            <View style={[styles.dynoTag, { backgroundColor: 'rgba(16,185,129,0.14)', borderColor: colors.status.good }]}>
+                                <Text style={[styles.dynoTagText, { color: colors.status.good }]}>✓ LIMITĂ FUM OK</Text>
+                            </View>
+                        )}
                     </View>
 
                     <View style={styles.dynoGrid}>
@@ -414,11 +405,11 @@ const LiveDashboardScreen = () => {
                             </View>
                         </View>
 
-                        {/* Volumetric Efficiency η_v */}
+                        {/* Volumetric Efficiency */}
                         <View style={styles.dynoCell}>
-                            <Text style={styles.dynoLabel}>EFICIENȚĂ VOL. (η_v)</Text>
+                            <Text style={styles.dynoLabel}>EFICIENȚĂ VOLUMETRICĂ</Text>
                             <Text style={styles.dynoValue}>{vePct}%</Text>
-                            <Text style={styles.dynoSub}>{vePct >= 85 ? 'Admisie optimă' : 'Restricție debit'}</Text>
+                            <Text style={styles.dynoSub}>{m.load < 40 || rpm < 1600 ? 'Sarcină parțială' : (vePct >= 80 ? 'Admisie optimă' : 'Restricție debit')}</Text>
                         </View>
 
                         {/* Lambda / AFR */}
@@ -454,7 +445,7 @@ const LiveDashboardScreen = () => {
                             <Text style={styles.boostBarVal}>{boost.toFixed(2)} bar</Text>
                         </View>
                     </View>
-                    {v.turboDiagnostic && (
+                    {v.turboDiagnostic && v.turboDiagnostic !== 'NORMAL' && (
                         <View style={styles.turboDiagPill}>
                             <Text style={styles.turboDiagText}>
                                 {v.turboDiagnostic === 'VNT_N75_SPIKE' ? '⚡ Spike suprapresiune VNT / electrovalvă N75' :
@@ -803,16 +794,7 @@ const styles = StyleSheet.create({
     },
 
     // ── LIVE: Speed hero ─────────────────────────────────────────────────────
-    liveContainer: { paddingTop: spacing[5], position: 'relative' },
-    ambientGlow: {
-        position: 'absolute',
-        top: -30,
-        left: '15%',
-        right: '15%',
-        height: 120,
-        borderRadius: radii.full,
-        opacity: 0.85,
-    },
+    liveContainer: { paddingTop: spacing[4] },
     speedHero: { alignItems: 'center', paddingBottom: spacing[1] },
     speedNum: {
         fontSize: 88,

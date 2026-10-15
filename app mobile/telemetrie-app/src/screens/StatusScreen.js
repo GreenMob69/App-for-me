@@ -404,7 +404,6 @@ const StatusScreen = ({ navigation }) => {
 
     return (
         <Animated.View style={[styles.container, screenFadeStyle]}>
-            <DriveModeBanner navigation={navigation} />
             <ScrollView
                 style={styles.scroll}
                 contentContainerStyle={styles.content}
@@ -462,6 +461,9 @@ const StatusScreen = ({ navigation }) => {
                         <Text style={styles.headerIconBtnText}>⚙️</Text>
                     </TouchableOpacity>
                 </View>
+
+                {/* ── 0a. DRIVE MODE BANNER (Când motorul este pornit) ──── */}
+                <DriveModeBanner navigation={navigation} />
 
                 {/* ── 0b. DASHBOARD SUMMARY ─────────────────────────────── */}
                 <View style={styles.summaryStrip}>
