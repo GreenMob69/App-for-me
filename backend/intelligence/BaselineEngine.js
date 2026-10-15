@@ -61,7 +61,8 @@ function computeTripMatrix(packets = []) {
                 sumMaf: 0,
                 sumMap: 0,
                 sumVe: 0,
-                sumPower: 0
+                sumPower: 0,
+                sumBsfc: 0
             };
         }
     }
@@ -79,6 +80,7 @@ function computeTripMatrix(packets = []) {
         cell.sumMap += (p.aer?.map || 101);
         cell.sumVe  += (virtual?.volumetricEfficiencyPct || 0);
         cell.sumPower += (virtual?.powerHp || 0);
+        cell.sumBsfc  += (virtual?.bsfcGPerKwh || 0);
     });
 
     const result = {};
@@ -91,6 +93,7 @@ function computeTripMatrix(packets = []) {
                 avgMap: Number((c.sumMap / c.samples).toFixed(1)),
                 avgVe:  Number((c.sumVe  / c.samples).toFixed(1)),
                 avgPower: Number((c.sumPower / c.samples).toFixed(1)),
+                avgBsfc:  Number((c.sumBsfc  / c.samples).toFixed(1)),
                 regimeName: REGIME_NAMES[k]
             };
         }

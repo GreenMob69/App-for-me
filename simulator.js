@@ -134,7 +134,7 @@ client.on('connect', () => {
                 accel_g: acc_g
             },
             temperaturi: {
-                coolant: t_cool, iat: +((t_amb + (map - 100) * 0.15)).toFixed(1), ambient: t_amb, oil: t_oil, cat1: t_cat1,
+                coolant: t_cool, iat: +((t_amb + (map - 100) * 0.15)).toFixed(1), ambient: t_amb, oil: t_oil, cat1: t_cat1, cat2: t_cat2,
                 cat_b1s1: t_cat1, cat_b1s2: t_cat2, cat_b2s1: +(t_cat1 * 0.98).toFixed(1), cat_b2s2: +(t_cat2 * 0.98).toFixed(1)
             },
             aer: {
@@ -142,7 +142,7 @@ client.on('connect', () => {
                 boost_turbo: +((map - 100) / 100).toFixed(2), boost_cmd: +((map_cmd - 100) / 100).toFixed(2), boost_actual: +((map - 100) / 100).toFixed(2)
             },
             combustibil: {
-                level: fuel_lvl, press: 350, rail_press: rail_press, rail_gauge: rail_press - 100, cmd_press: rail_press,
+                level: fuel_lvl, press: 350, rail_press: rail_press, rail_press_bar: Math.round(rail_press / 100), rail_gauge: rail_press - 100, cmd_press: rail_press,
                 inj_timing: +(2.5 + (rpm / 1000) * 1.8).toFixed(1), inj_qty: inj_qty, inj_qty_mg: inj_qty, fuel_rate: cons, inst_cons: cons, avg_cons: 6.8,
                 sft_b1: +(Math.random() * 4 - 2).toFixed(1), lft_b1: 1.2, sft_b2: +(Math.random() * 4 - 2).toFixed(1), lft_b2: 1.1
             },

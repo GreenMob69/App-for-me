@@ -25,6 +25,9 @@ function buildAssistantMsg(liveData, isConnected) {
     const cons    = liveData.combustibil?.inst_cons ?? 0;
     const dpfRgn  = liveData.dpf?.regen_status;
 
+    const v       = liveData.virtual || {};
+    if (v.dpfRegenActive) return { text: v.dpfRegenNotice || 'Regenerare DPF în curs! Menține motorul pornit.', level: 'warning' };
+    if (v.rollingDragAnomaly) return { text: 'Rezistență anormală la rulare (posibil etrier frână blocat).', level: 'warning' };
     if (coolant > 105) return { text: 'Temperatura motorului este critică. Recomand oprirea imediată.', level: 'critical' };
     if (coolant > 95)  return { text: 'Temperatura motorului este ridicată. Dacă continuă să crească, oprește motorul.', level: 'serious' };
     if (volt > 0 && volt < 13.0) return { text: 'Tensiunea de la alternator este scăzută. Posibilă problemă electrică.', level: 'warning' };
@@ -41,6 +44,22 @@ function buildAssistantMsg(liveData, isConnected) {
 function buildContextualAlert(liveData, latestAlert) {
     const coolant = liveData.temperaturi?.coolant ?? 0;
     const volt    = liveData.baterie?.ecu_volt ?? 0;
+    const v       = liveData.virtual || {};
+
+    if (v.dpfRegenActive) {
+        return {
+            title: '🔥 Regenerare Activă DPF',
+            description: v.dpfRegenNotice || 'Temperatura filtrului >550°C. Nu opri motorul în următoarele minute!',
+            priority: 'high'
+        };
+    }
+    if (v.rollingDragAnomaly) {
+        return {
+            title: '⚠️ Rezistență la Rulare Depășită',
+            description: 'Decelerare anormală în coast-down (etrier de frână blocat sau pană de cauciuc).',
+            priority: 'high'
+        };
+    }
     if (coolant > 105) return { title: 'Supraîncălzire critică', description: 'Temperatura motorului depășește 105°C. Oprește motorul și verifică lichidul de răcire.', priority: 'critical' };
     if (coolant > 95)  return { title: 'Temperatură motor ridicată', description: `Temperatura actuală: ${coolant}°C. Dacă continuă să crească, oprește motorul.`, priority: 'high' };
     if (volt > 0 && volt < 13.0) return { title: 'Tensiune scăzută', description: `Tensiunea de încărcare: ${volt.toFixed(1)}V. Posibilă problemă cu alternatorul sau bateria.`, priority: 'high' };
@@ -94,16 +113,24 @@ function buildParams(cat, d) {
             { label: 'Cuplu Frecare', val: m.torque_friction || 0, unit: 'Nm',   max: 100,  color: colors.status.critical },
         ];
         case 'VIRTUAL': return [
-            { label: 'Putere Dyno',       val: v.powerHp || 0,                 unit: 'CP',   max: 150,  color: colors.status.good },
-            { label: 'Cuplu Dyno',        val: v.torqueNm || 0,                unit: 'Nm',   max: 350,  color: colors.status.good },
-            { label: 'Eficiență Volum.',  val: v.volumetricEfficiencyPct || 0, unit: '%',    max: 120,  color: colors.accent.default },
-            { label: 'Lambda Virtual',    val: v.lambda ? v.lambda.toFixed(2) : 1, unit: 'λ', max: 2,   color: colors.status.good },
-            { label: 'AFR Real',          val: v.afr ? v.afr.toFixed(1) : 14.5, unit: ':1',  max: 25,   color: colors.status.monitor },
-            { label: 'Alunecare Ambreiaj',val: v.clutchSlipPct || 0,           unit: '%',    max: 100,  color: (v.clutchSlipPct||0) > 10 ? colors.status.critical : colors.status.good },
-            { label: 'Rezistență DPF',    val: v.dpfResistanceIndex || 0,      unit: 'idx',  max: 200,  color: colors.status.monitor },
-            { label: 'Delta Ulei-Apă',    val: v.deltaOilWaterC || 0,          unit: '°C',   max: 40,   color: (v.deltaOilWaterC||0) > 22 ? colors.status.caution : colors.status.good },
-            { label: 'Cădere Tensiune',   val: v.voltageDropV || 0,            unit: 'V',    max: 2,    color: (v.voltageDropV||0) > 0.4 ? colors.status.caution : colors.status.good },
-            { label: 'Eroare Boost',      val: v.boostErrorKpa || 0,           unit: 'kPa',  max: 100,  color: colors.accent.default },
+            { label: 'Putere Dyno',       val: v.powerHp || 0,                 unit: 'CP',    max: 150,  color: colors.status.good },
+            { label: 'Cuplu Dyno',        val: v.torqueNm || 0,                unit: 'Nm',    max: 350,  color: colors.status.good },
+            { label: 'Consum Spec. BSFC', val: v.bsfcGPerKwh || 0,             unit: 'g/kWh', max: 450,  color: (v.bsfcGPerKwh||0) > 300 ? colors.status.caution : colors.status.good },
+            { label: 'Eficiență Volum.',  val: v.volumetricEfficiencyPct || 0, unit: '%',     max: 120,  color: colors.accent.default },
+            { label: 'Lambda Virtual',    val: v.lambda ? v.lambda.toFixed(2) : 1, unit: 'λ',  max: 2,    color: colors.status.good },
+            { label: 'AFR Real',          val: v.afr ? v.afr.toFixed(1) : 14.5, unit: ':1',   max: 25,   color: colors.status.monitor },
+            { label: 'Uzură Ulei Index',  val: v.oilLifeWearFactor || 1,       unit: 'x',     max: 4,    color: (v.oilLifeWearFactor||1) > 2.0 ? colors.status.critical : colors.status.good },
+            { label: 'Pantă Drum',        val: v.roadGradePct || 0,            unit: '%',     max: 20,   color: colors.accent.default },
+            { label: 'Sănătate Baterie',  val: v.batterySoHPct || 100,         unit: '%',     max: 100,  color: (v.batterySoHPct||100) < 70 ? colors.status.caution : colors.status.good },
+            { label: 'Rezistență Bat.',   val: v.batteryInternalResistanceMOhms || 0, unit: 'mΩ', max: 20, color: (v.batteryInternalResistanceMOhms||0) > 10 ? colors.status.critical : colors.status.good },
+            { label: 'Disipare Frâne',    val: v.brakeEnergyTripMj || 0,       unit: 'MJ',    max: 30,   color: colors.status.monitor },
+            { label: 'Recirculare EGR',   val: v.egrRatioPct || 0,             unit: '%',     max: 60,   color: colors.accent.default },
+            { label: 'Pres. Rail Țintă',  val: v.railPressTargetBar || 0,      unit: 'bar',   max: 1600, color: colors.status.monitor },
+            { label: 'Alunecare Ambreiaj',val: v.clutchSlipPct || 0,           unit: '%',     max: 100,  color: (v.clutchSlipPct||0) > 10 ? colors.status.critical : colors.status.good },
+            { label: 'Rezistență DPF',    val: v.dpfResistanceIndex || 0,      unit: 'idx',   max: 200,  color: colors.status.monitor },
+            { label: 'Delta Ulei-Apă',    val: v.deltaOilWaterC || 0,          unit: '°C',    max: 40,   color: (v.deltaOilWaterC||0) > 22 ? colors.status.caution : colors.status.good },
+            { label: 'Cădere Tensiune',   val: v.voltageDropV || 0,            unit: 'V',     max: 2,    color: (v.voltageDropV||0) > 0.4 ? colors.status.caution : colors.status.good },
+            { label: 'Eroare Boost',      val: v.boostErrorKpa || 0,           unit: 'kPa',   max: 100,  color: colors.accent.default },
         ];
         case 'TEMP': return [
             { label: 'Lichid Răcire', val: tem.coolant || 0,  unit: '°C', max: 110, color: (tem.coolant||0)>95 ? colors.status.critical : colors.status.good },
