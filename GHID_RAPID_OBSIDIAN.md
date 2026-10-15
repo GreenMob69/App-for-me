@@ -55,8 +55,8 @@ pm2 logs
 pm2 restart all
 
 # 4. Dacă serverul e oprit și vrei să-l pornești:
-cd /home/ubuntu/telemetrie-licenta   # sau calea unde ai clonat repo-ul
-pm2 start server.js --name "telemetrie-backend"
+cd /home/ubuntu/App-for-me
+pm2 start server.js --name "telemetrie"
 pm2 save
 
 # 5. Verifică dacă portul 3000 ascultă cereri:
@@ -147,13 +147,15 @@ npx eas build -p android --profile preview
   ```powershell
   ssh -i "C:\Users\tfl\.ssh\ssh-key-2026-07-17 (1).key" ubuntu@84.235.164.52
   ```
-- [ ] 4. Actualizezi codul pe server și repornești procesul:
+- [ ] 4. Actualizezi codul pe server și repornești procesul în siguranță:
   ```bash
-  cd /home/ubuntu/telemetrie-licenta
+  cd /home/ubuntu/App-for-me
+  git reset --hard HEAD
   git pull origin main
-  npm install              # doar dacă ai adăugat pachete noi în package.json
-  pm2 restart all          # repornește backend-ul cu noul cod
-  pm2 logs --lines 20      # verifică dacă a pornit fără erori
+  npm rebuild sqlite3
+  node scripts/seed_golden_demo.js
+  pm2 restart all
+  pm2 logs telemetrie --lines 20
   ```
 
 ---
