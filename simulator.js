@@ -1,11 +1,23 @@
 const mqtt = require('mqtt');
-const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://broker.emqx.io';
+
+// ── Argumente CLI pentru Demo Live și Comisie ────────────────────────────────
+const args = process.argv.slice(2);
+function getArg(name, fallback) {
+    const idx = args.indexOf(name);
+    if (idx !== -1 && args[idx + 1]) return args[idx + 1];
+    return fallback;
+}
+
+const DURATA = parseInt(getArg('--duration', getArg('-d', '600')), 10);
+const SPEED_MULT = Math.max(1, parseFloat(getArg('--speed', getArg('-s', '1'))));
+const SCENARIO = (getArg('--scenario', 'default')).toLowerCase();
+const VIN = getArg('--vin', 'WAUZZZ4A1RN000000');
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://84.235.164.52:1883';
 const TOPIC = process.env.MQTT_TOPIC || 'telemetrie/obd2';
+
 const client = mqtt.connect(MQTT_BROKER_URL);
-const VIN = "WAUZZZ4A1RN000000";
 
 let sec = 0;
-const DURATA = 600;
 
 // Stări fizice de bază
 let spd = 0; let rpm = 800; let gear = 1; let load = 15; let acc_g = 0; let thr = 0;
@@ -15,36 +27,52 @@ let volt_bat = 12.6; let volt_ecu = 14.2; let dpf_soot = 12.4; let dpf_diff = 4.
 let rail_press = 35000; let km_total = 328450.0; let run_time = 0; let eng_hours = 4120.5;
 
 client.on('connect', () => {
-    console.log('[SIMULATOR PRO] Conectat! Trimit matricea exhaustivă (90+ PID-uri OBD/VAG)...');
-    client.publish(TOPIC, JSON.stringify({ ecu: { vin: VIN }, stare_motor: "PORNIRE", timestamp: Date.now() }));
+    console.log(`[SIMULATOR PRO] Conectat la ${MQTT_BROKER_URL} [Topic: ${TOPIC}]`);
+    console.log(`[CONFIG DEMO] Durată: ${DURATA}s | Viteză: ${SPEED_MULT}x | Scenariu: ${SCENARIO.toUpperCase()} | VIN: ${VIN}`);
+    console.log('[SIMULATOR PRO] Trimit eveniment PORNIRE...');
+    client.publish(TOPIC, JSON.stringify({ ecu: { vin: VIN, model: 'Audi A6 C4 2.5 TDI AEL' }, stare_motor: "PORNIRE", timestamp: Date.now() }));
+
+    const tickMs = Math.max(50, Math.floor(1000 / SPEED_MULT));
 
     const intv = setInterval(() => {
         sec++; run_time++;
         acc_g = 0.05;
+        const progress = sec / DURATA;
 
-        // Ciclul de condus 10 minute
-        if (sec <= 60) {
-            if (sec < 15) { spd = 0; rpm = 950; load = 22; thr = 0; }
-            else { spd = Math.min(35, spd + 2); rpm = 1100 + (spd * 40); load = 45; thr = 35; acc_g = 0.18; gear = 2; }
-        } else if (sec <= 240) {
-            if (sec % 45 < 25) {
-                spd = Math.min(65, spd + 3); acc_g = 0.22; load = 68; thr = 55;
-                rpm = 1400 + ((sec % 12) * 130);
-                if (rpm > 2700) { rpm = 1600; gear = Math.min(4, gear + 1); }
+        // Ciclul de condus proporțional cu durata aleasă
+        if (progress <= 0.10) {
+            // Faza 1: Pornire și ralanti
+            spd = 0; rpm = 950; load = 22; thr = 0; gear = 1;
+        } else if (progress <= 0.40) {
+            // Faza 2: Trafic urban (accelerări și opriri la semafor)
+            if ((sec % 20) < 12) {
+                spd = Math.min(55, spd + 3); acc_g = 0.20; load = 55; thr = 45;
+                rpm = 1300 + ((sec % 10) * 110);
+                gear = spd > 35 ? 3 : 2;
             } else {
-                spd = Math.max(0, spd - 4); acc_g = -0.25; load = 10; thr = 0;
-                rpm = spd === 0 ? 800 : 1300; if (spd === 0) gear = 1;
+                spd = Math.max(0, spd - 4); acc_g = -0.22; load = 10; thr = 0;
+                rpm = spd === 0 ? 800 : 1200;
+                if (spd === 0) gear = 1;
             }
-        } else if (sec <= 480) {
-            gear = 6; spd = Math.min(135, spd + 2); rpm = 1800 + ((spd - 90) * 22);
-            load = 60; thr = 65; acc_g = 0.05;
-            if (sec === 310 || sec === 430) {
-                console.log(`\n🚨 [SEC ${sec}] FRÂNARE DE URGENȚĂ ABS!`);
-                spd -= 45; rpm = 1300; acc_g = -0.62; load = 8; thr = 0; gear = 4;
+        } else if (progress <= 0.80) {
+            // Faza 3: Traseu extraurban / Autostradă
+            gear = 5;
+            spd = Math.min(SCENARIO === 'aggressive' ? 142 : 125, spd + 2);
+            rpm = 1700 + ((spd - 70) * 22);
+            load = 65; thr = 60; acc_g = 0.05;
+
+            // Frânări bruște simulate
+            const triggerBrake1 = Math.floor(DURATA * 0.52);
+            const triggerBrake2 = Math.floor(DURATA * 0.72);
+            if (sec === triggerBrake1 || sec === triggerBrake2 || (SCENARIO === 'aggressive' && sec % 15 === 0)) {
+                console.log(`\n🚨 [SEC ${sec}/${DURATA}] FRÂNARE BRUȘCĂ ABS (-0.62G)!`);
+                spd = Math.max(25, spd - 40); rpm = 1300; acc_g = -0.62; load = 8; thr = 0; gear = 3;
             }
-        } else if (sec <= 580) {
-            spd = Math.max(15, spd - 2); rpm = 1100 + (spd * 18); load = 18; thr = 10; acc_g = -0.15; gear = 3;
+        } else if (progress <= 0.95) {
+            // Faza 4: Decelerare și răcire
+            spd = Math.max(15, spd - 3); rpm = 1100 + (spd * 15); load = 18; thr = 10; acc_g = -0.15; gear = 2;
         } else {
+            // Faza 5: Oprire finală
             spd = 0; rpm = 800; load = 15; thr = 0; acc_g = 0; gear = 1;
         }
 
@@ -62,6 +90,18 @@ client.on('connect', () => {
             map_cmd = 105; map = 105; rail_press = 35000;
         }
 
+        // ── Injectare Defecțiuni pe Scenarii Demo ──────────────────────────
+        if (SCENARIO === 'fault_turbo' && progress >= 0.40) {
+            // Deficit presiune turbo (Furtun intercooler fisurat / N75 blocat)
+            map = Math.floor(108 + (load * 0.25));
+        } else if (SCENARIO === 'fault_cooling' && progress >= 0.35) {
+            // Termostat blocat pe închis / supraîncălzire critică
+            t_cool = +(Math.min(108.5, t_cool + 0.35)).toFixed(1);
+        } else if (SCENARIO === 'fault_alternator' && progress >= 0.30) {
+            // Cădere regulator tensiune alternator sub sarcină
+            volt_ecu = +(12.2 + (Math.random() * 0.15)).toFixed(2);
+        }
+
         if (load < 12 && spd > 0) {
             inj_qty = 0.0; cons = 0.0; maf = +((rpm / 800) * 3.5).toFixed(2);
         } else {
@@ -72,7 +112,9 @@ client.on('connect', () => {
 
         km_total += (spd / 3600); eng_hours += (1 / 3600);
         fuel_lvl = +(Math.max(0, fuel_lvl - (cons / 3600))).toFixed(3);
-        volt_ecu = +(14.1 + (Math.random() * 0.15 - 0.07)).toFixed(2);
+        if (SCENARIO !== 'fault_alternator' || progress < 0.30) {
+            volt_ecu = +(14.1 + (Math.random() * 0.15 - 0.07)).toFixed(2);
+        }
         dpf_soot = +(dpf_soot + 0.001).toFixed(3);
         dpf_diff = +(4.0 + (maf * 0.15)).toFixed(1);
 
@@ -123,17 +165,20 @@ client.on('connect', () => {
 
         client.publish(TOPIC, JSON.stringify(pachetExhaustiv));
 
-        if (sec % 10 === 0 || acc_g <= -0.4) {
-            console.log(`[${sec}s/600s] ${Math.floor(spd)} km/h | ${Math.floor(rpm)} RPM | MAP: ${map} kPa | Rail: ${rail_press} kPa | DPF Soot: ${dpf_soot}g`);
+        if (sec % Math.max(1, Math.floor(DURATA / 10)) === 0 || acc_g <= -0.4) {
+            console.log(`[${sec}s/${DURATA}s] ${Math.floor(spd)} km/h | ${Math.floor(rpm)} RPM | MAP: ${map} kPa | Rail: ${rail_press} kPa | Coolant: ${t_cool}°C | Volt: ${volt_ecu}V`);
         }
 
         if (sec >= DURATA) {
             clearInterval(intv);
             setTimeout(() => {
-                client.publish(TOPIC, JSON.stringify({ ecu: { vin: VIN }, stare_motor: "OPRIRE", timestamp: Date.now() }));
-                console.log('\n🏁 [600s] CICLUL EXHAUSTIV FINALIZAT!');
-                client.end();
-            }, 1000);
+                client.publish(TOPIC, JSON.stringify({ ecu: { vin: VIN, model: 'Audi A6 C4 2.5 TDI AEL' }, stare_motor: "OPRIRE", timestamp: Date.now() }));
+                console.log(`\n🏁 [${DURATA}s] CICLUL EXHAUSTIV FINALIZAT! Pachetul OPRIRE trimis.`);
+                client.end(false, () => {
+                    console.log('[SIMULATOR PRO] Deconectat.');
+                    process.exit(0);
+                });
+            }, Math.min(1000, tickMs * 2));
         }
-    }, 1000);
+    }, tickMs);
 });

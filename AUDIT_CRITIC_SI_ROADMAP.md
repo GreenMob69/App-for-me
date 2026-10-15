@@ -88,10 +88,10 @@ Roadmap-ul este împărțit în 3 faze cronologice: **Faza I (Urgent / Înainte 
 - [x] **Pasul 2.2**: Optimizarea pipeline-ului la `OPRIRE`: utilizarea unui buffer eșantionat uniform în RAM (`trip.sampledPackets`, max 600 puncte) pentru `finalizeTripAnalysis()`, eliminând blocarea Event Loop-ului Node.js prin `SELECT *` și mii de `JSON.parse` sincrone. Sincronizarea automată a kilometrilor parcurși în odometru la final de cursă.
 - [x] **Pasul 2.3**: Verificarea offline cache-ului pe mobil: validarea fluxului când serverul este offline (`localDB.js` cu expo-sqlite async WAL mode, fallback robust în `TripHistoryScreen.js`).
 
-### 🌟 FAZA III: Finisare Prezentare & Demo Live (Zilele dinaintea susținerii)
-- [ ] **Pasul 3.1**: Script de demonstrație live: pregătirea simulatorului cu scenariul de 10 minute pentru a demonstra live în fața comisiei frânarea ABS, detecția defecțiunilor și generarea raportului AI la oprire.
-- [ ] **Pasul 3.2**: Export raport PDF complet generat pe loc pentru comisie (demonstrație a valorii adăugate dincolo de un scaner OBD clasic).
-- [ ] **Pasul 3.3**: Pregătirea discursului tehnic pe baza argumentelor din Partea 1 (cum ai conceput platforma să fie universală, deși ai validat hardware pe mașina familiei).
+### 🌟 FAZA III: Finisare Prezentare & Demo Live (Finalizat cu succes)
+- [x] **Pasul 3.1**: Script de demonstrație live: simulatorul (`simulator.js`) a fost echipat cu parametri CLI flexibili (`--duration <sec>`, `--speed <mult>`, `--scenario <fault_turbo|fault_cooling|fault_alternator|aggressive|default>`). Permite rularea unui ciclu complet de conducere cu frânare ABS și detecție defecțiuni în 10-30 de secunde pentru comisie.
+- [x] **Pasul 3.2**: Export raport PDF complet generat pe loc pentru comisie: creat utilitarul CLI [`scripts/export_pdf.js`](file:///c:/Users/tfl/Desktop/telemetrie-licenta/scripts/export_pdf.js) care generează instant un raport PDF oficial A4 cu statistici, scor de sănătate și concluzii AI direct pe disc.
+- [x] **Pasul 3.3**: Pregătirea discursului tehnic și a răspunsurilor la întrebările capcană ale comisiei (documentat în Partea 5 de mai jos).
 
 ---
 
@@ -101,15 +101,55 @@ Pentru a respecta cerința de a **păstra toate versiunile istorice** și a perm
 
 ```
 telemetrie-licenta/
-├── AI_MASTER_CONTEXT.md          # Punctul de intrare curent (Versiunea ACTIVĂ pentru AI)
+├── AI_MASTER_CONTEXT.md          # Punctul de intrare curent (Versiunea ACTIVĂ v3)
 ├── docs/
 │   └── context_versions/
 │       ├── AI_MASTER_CONTEXT_v1.md   # Versiunea inițială (Arhitectura originală)
 │       ├── AI_MASTER_CONTEXT_v2.md   # Versiunea extinsă (Cu scheme JSON, R5, reguli)
-│       └── AI_MASTER_CONTEXT_v3.md   # Versiunea viitoare (După Faza II și helper sync)
+│       └── AI_MASTER_CONTEXT_v3.md   # Versiunea curentă (Cu vehicleSyncService, OPRIRE optimizat)
 ```
 
-Astfel:
-1. `AI_MASTER_CONTEXT_v1.md` păstrează starea documentației la începutul auditului.
-2. `AI_MASTER_CONTEXT_v2.md` păstrează documentația complet corectată cu observațiile din acest audit.
-3. `AI_MASTER_CONTEXT.md` din rădăcină rămâne mereu fișierul principal (oglindă a celei mai recente versiuni) pe care îl dai oricărui asistent AI nou.
+---
+
+## PARTEA 5: Ghidul de Susținere & Răspunsuri la Întrebările Capcană ale Comisiei
+
+### 🎯 Discursul Introductiv Recomandat (2-3 minute)
+> *"Stimați membri ai comisiei, proiectul meu abordează o problemă critică a industriei auto: trecerea de la diagnoza reactivă (când martorul 'Check Engine' este deja aprins în bord) la o **diagnoză predictivă și proactivă**, accesibilă direct pe telefonul șoferului prin Edge Computing și Inteligență Artificială.*
+>
+> *Platforma este concepută după o arhitectură **hardware-agnostică și universală**. Pentru validarea fizică a achiziției de date la bord, am integrat un modul bazat pe microcontrolerul ESP32 pe un autoturism Audi A6 C4 echipat cu motorul diesel de 2.5 litri R5 (5 cilindri în linie, cod AEL). Alegerea a fost una deliberată: conectivitatea fizică prin K-Line la viteză redusă (protocolul VAG KWP1281 la 9600 bps) a demonstrat că modulul hardware poate achiziționa și salva fiabil telemetrie chiar și în cele mai restrictive medii legacy, folosind o arhitectură Offline-First pe card Micro-SD.*
+>
+> *În același timp, nucleul software al platformei gestionează matricea completă de peste 90 de PID-uri standardizate SAE J1979 și UDS (presiuni Common Rail, debitmetru MAF, sarcină DPF, voltaj baterie), validate prin simulatorul integrat și analizorul hibrid de inteligență artificială."*
+
+### 💡 Răspunsuri la Întrebările Posibile ale Comisiei
+
+#### 1. „De ce ați testat pe un model auto din 1996 și nu pe unul de generație recentă?”
+* **Răspuns**: *"Am abordat problema inginerește: mașina de test a fost vehiculul familiei, oferindu-mi libertate totală de testare în trafic real fără a depinde de disponibilitatea altor persoane. Din punct de vedere tehnic, dacă demonstrezi că poți extrage date pe o magistrală lentă K-Line din anii '90 și să asiguri sincronizare batch fără pierderi, trecerea la un CAN-bus modern la 500 kbps este mult mai facilă. Pentru mașini moderne, sistemul dispune de modulul `VehicleCapabilities.js` și simulatorul de 90+ PID-uri care validează comportamentul pe injecție modernă, DPF și turbosuflante cu geometrie variabilă."*
+
+#### 2. „Cum funcționează sistemul dacă șoferul se află într-o zonă fără semnal GSM / Internet?”
+* **Răspuns**: *"Sistemul a fost proiectat cu o filosofie **Offline-First pe două niveluri**:
+  1. **La nivel de hardware (ESP32)**: pachetele brute sunt salvate în timp real în fișiere CSV pe cardul Micro-SD în `/trips/`. În momentul în care dispozitivul detectează un hotspot WiFi cunoscut, modulul `SDSyncModule` trimite pachetele în calupuri securizate prin token către `/api/sync/obd`, marcând fișierele sincronizate în directorul `/done/`.
+  2. **La nivel de aplicație mobilă**: folosim o bază de date SQLite locală în mod WAL cu un ring buffer circular de 600 de puncte. Dacă backend-ul din cloud este temporar inaccesibil, aplicația nu îngheață, ci afișează istoricul și diagnoza instant din cache-ul local."*
+
+#### 3. „De ce ați folosit un Rule Engine determinist dacă aveați integrat un model LLM (Groq / Llama-3)?”
+* **Răspuns**: *"În ingineria auto și a sistemelor de siguranță, utilizarea exclusivă a unui LLM pentru diagnoză este riscantă din cauza halucinațiilor și a lipsei de determinism. De aceea, am implementat o arhitectură hibridă:
+  1. **Nucleul de inferență** (`RuleEngine.js`, `CorrelationEngine.js`) este 100% determinist și matematic, calculând coeficienți de corelație Pearson între senzori (ex. Boost vs. MAF) și evaluând reguli clare din fizica automobilului.
+  2. **Modelul de limbaj (Groq SDK)** acționează ca un 'Traducător Tehnic': primește verdictul matematic structurat și îl traduce într-o explicație clară, naturală, pentru șofer, formulând recomandări concrete de service."*
+
+---
+
+### 🚀 Comenzi Rapide pentru Demonstrația Live în Fața Comisiei
+
+```powershell
+# 1. Pornire simulare demonstrativă (Durată 30 secunde, viteză 4x, scenariu cu defect turbo):
+node simulator.js --duration 30 --speed 4 --scenario fault_turbo
+
+# 2. Pornire simulare demonstrativă cu supraîncălzire motor (termostat blocat):
+node simulator.js --duration 30 --speed 4 --scenario fault_cooling
+
+# 3. Export instant al raportului PDF oficial de cursă pe disc:
+node scripts/export_pdf.js
+
+# 4. Deschiderea raportului PDF generat:
+start raport_cursa_9.pdf
+```
+
