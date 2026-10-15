@@ -58,7 +58,7 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
     const { activeVin } = useVehicle();
 
     const initialPrompt = route?.params?.initialPrompt || route?.params?.initialQuestion;
-    const handledInitialPrompt = useRef(false);
+    const lastHandledPrompt = useRef(null);
 
     const [twinState,         setTwinState]         = useState('loading');
     const [twinMeta,          setTwinMeta]           = useState(null);
@@ -148,8 +148,8 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
 
     // ── Auto-query initialPrompt from navigation params ──────────────────
     useEffect(() => {
-        if (initialPrompt && (twinState === 'ok' || twinState === 'no_data') && !handledInitialPrompt.current) {
-            handledInitialPrompt.current = true;
+        if (initialPrompt && (twinState === 'ok' || twinState === 'no_data') && lastHandledPrompt.current !== initialPrompt) {
+            lastHandledPrompt.current = initialPrompt;
             sendQuestion(initialPrompt);
         }
     }, [initialPrompt, twinState, sendQuestion]);
