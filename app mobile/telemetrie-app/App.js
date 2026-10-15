@@ -1,6 +1,12 @@
 import React, { useRef, useContext, useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, LogBox } from 'react-native';
+
+LogBox.ignoreLogs([
+    '`expo-notifications` functionality is not fully supported in Expo Go',
+    'Push notifications (remote notifications) are unavailable in Expo Go',
+    'SafeAreaView has been deprecated',
+]);
 import { SecurityProvider, SecurityContext } from './src/context/SecurityContext';
 import LockScreen from './src/screens/LockScreen';
 import { Ionicons } from '@expo/vector-icons';

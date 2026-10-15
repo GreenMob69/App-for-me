@@ -19,7 +19,7 @@ try {
         });
     }
 } catch (e) {
-    console.warn('[AlertContext] setNotificationHandler warning:', e?.message);
+    // Silently ignore in Expo Go or non-supported environments
 }
 
 // ── Which alert types deserve a push notification
@@ -42,7 +42,7 @@ async function ensureAndroidChannel() {
             });
         }
     } catch (e) {
-        console.warn('[AlertContext] ensureAndroidChannel warning:', e?.message);
+        // In Expo Go, native NotificationsChannelsProvider is absent; ignore cleanly
     }
 }
 

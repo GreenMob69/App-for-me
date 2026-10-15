@@ -6,7 +6,8 @@
  */
 
 import React, { useState } from 'react';
-import { ScrollView, View, Text, SafeAreaView, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography, spacing, layout, radii } from '../theme';
 
 // Phase A
