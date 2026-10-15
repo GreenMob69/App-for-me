@@ -1,6 +1,8 @@
 import React, { useRef, useContext, useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import { SecurityProvider, SecurityContext } from './src/context/SecurityContext';
+import LockScreen from './src/screens/LockScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -9,7 +11,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TelemetryProvider } from './src/context/TelemetryContext';
 import { AppContext } from './src/context/AppContext';
 import { NotificationContext } from './src/context/NotificationContext';
-import { setCustomServerUrl, setVin, setVehicleLabel, setFuelType, DEFAULT_VIN } from './src/utils/config';
+import { setCustomServerUrl } from './src/utils/config';
+import { VehicleProvider, useVehicle } from './src/context/VehicleContext';
 import api from './src/services/api';
 import socketService from './src/services/socket';
 import { colors, typography, layout, spacing } from './src/theme';
@@ -122,6 +125,13 @@ function TabNavigator() {
     );
 }
 
+function SecurityGate({ children }) {
+    const { isLocked, securityEnabled, unlockApp, ready } = useContext(SecurityContext);
+    if (!ready) return null;
+    if (securityEnabled && isLocked) return <LockScreen onUnlock={unlockApp} />;
+    return children;
+}
+
 function AppNavigator() {
     const { setNavigationRef } = useContext(AppContext);
     const navigationRef = useRef(null);
@@ -157,63 +167,34 @@ function AppNavigator() {
                 />
                 <RootStack.Screen
                     name="GlobalSearch"
-                    component={GlobalSearchScreen}
-                    options={{ animation: 'slide_from_top' }}
-                />
+                    options={{ animation: 'fade' }}
+                >
+                    {() => <ErrorBoundary><GlobalSearchScreen /></ErrorBoundary>}
+                </RootStack.Screen>
             </RootStack.Navigator>
         </NavigationContainer>
     );
 }
 
-export default function App() {
-    const [ready, setReady]                   = useState(false);
-    const [needsOnboarding, setNeedsOnboarding] = useState(false);
+function AppRoot() {
+    const [serverReady, setServerReady] = useState(false);
+    const { ready: vehicleReady, activeVin, switchVehicle } = useVehicle();
 
     useEffect(() => {
-        const init = async () => {
-            try {
-                const savedUrl = await AsyncStorage.getItem('@custom_server_url');
+        AsyncStorage.getItem('@custom_server_url')
+            .then(savedUrl => {
                 if (savedUrl) {
                     setCustomServerUrl(savedUrl);
                     api.defaults.baseURL = `${savedUrl}/api`;
                     socketService.disconnect();
                     socketService.socket = null;
                 }
-
-                const savedVin = await AsyncStorage.getItem('@active_vin');
-                if (savedVin) setVin(savedVin);
-
-                // Încarcă label vehicul pentru afișare în subtitluri
-                try {
-                    const vin = savedVin || DEFAULT_VIN;
-                    const res = await api.get('/vehicule/list', { timeout: 4000 });
-                    if (Array.isArray(res.data) && res.data.length > 0) {
-                        const v = res.data.find(r => r.vin === vin) || res.data[0];
-                        const parts = [v.model].filter(Boolean);
-                        if (v.variant)    parts.push(v.variant);
-                        if (v.year)       parts.push(String(v.year));
-                        setVehicleLabel(parts.join(' · ') || v.vin || vin);
-                        if (v.tip_combustibil) setFuelType(v.tip_combustibil);
-                    }
-                } catch {}
-            } catch (e) {}
-
-            const vehicleId = await AsyncStorage.getItem('@vehicle_id');
-            if (!vehicleId) setNeedsOnboarding(true);
-
-            setReady(true);
-        };
-        init();
+            })
+            .catch(() => {})
+            .finally(() => setServerReady(true));
     }, []);
 
-    const handleOnboardingComplete = async (vehicle) => {
-        if (vehicle?.id) {
-            await AsyncStorage.setItem('@vehicle_id', String(vehicle.id));
-        }
-        setNeedsOnboarding(false);
-    };
-
-    if (!ready) {
+    if (!serverReady || !vehicleReady) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
                 <ActivityIndicator size="large" color={colors.accent.default} />
@@ -221,22 +202,37 @@ export default function App() {
         );
     }
 
-    if (needsOnboarding) {
+    if (!activeVin) {
         return (
             <View style={styles.container}>
                 <StatusBar style="light" backgroundColor={colors.bg[0]} />
-                <VehicleOnboardingScreen onComplete={handleOnboardingComplete} />
+                <VehicleOnboardingScreen onComplete={async (vehicle) => {
+                    if (vehicle?.id) await AsyncStorage.setItem('@vehicle_id', String(vehicle.id));
+                    if (vehicle?.vin) await switchVehicle(vehicle.vin);
+                }} />
             </View>
         );
     }
 
     return (
         <TelemetryProvider>
-            <View style={styles.container}>
-                <StatusBar style="light" backgroundColor={colors.bg[0]} />
-                <AppNavigator />
-            </View>
+            <SecurityProvider>
+                <View style={styles.container}>
+                    <StatusBar style="light" backgroundColor={colors.bg[0]} />
+                    <SecurityGate>
+                        <AppNavigator />
+                    </SecurityGate>
+                </View>
+            </SecurityProvider>
         </TelemetryProvider>
+    );
+}
+
+export default function App() {
+    return (
+        <VehicleProvider>
+            <AppRoot />
+        </VehicleProvider>
     );
 }
 

@@ -11,9 +11,9 @@ import {
 } from '../components/ui';
 import { fetchProfileSummary, fetchHealthStatus, fetchCostDashboard, exportPDFReport, fetchVehicleSummary, fetchDocuments } from '../services/vehicleService';
 import api from '../services/api';
-import { getVin, getVehicleLabel } from '../utils/config';
 import { computeEvaluation, buildHeaderMessage } from '../engine/MessageEngine';
 import { NotificationContext } from '../context/NotificationContext';
+import { useVehicle } from '../context/VehicleContext';
 import { colors, typography, radii, spacing, layout } from '../theme';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -130,6 +130,7 @@ const InfoRow = ({ label, value, last }) => (
 const VehicleProfileScreen = () => {
     const navigation = useNavigation();
     const { syncFromSummary } = useContext(NotificationContext);
+    const { activeVin, vehicleLabel } = useVehicle();
 
     const [screenState, setScreenState] = useState('loading');
     const [profile,     setProfile]     = useState(null);
@@ -148,7 +149,7 @@ const VehicleProfileScreen = () => {
                 fetchProfileSummary(),
                 fetchHealthStatus(),
                 fetchCostDashboard(year),
-                api.get(`/vehicul/${getVin()}/statistici`),
+                api.get(`/vehicul/${activeVin}/statistici`),
                 fetchDocuments(),
             ]);
             setProfile(profileRes.status === 'fulfilled' ? profileRes.value : null);
@@ -163,7 +164,7 @@ const VehicleProfileScreen = () => {
         } catch {
             setScreenState(prev => prev === 'success' ? prev : 'error');
         }
-    }, [syncFromSummary]);
+    }, [syncFromSummary, activeVin]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -189,7 +190,7 @@ const VehicleProfileScreen = () => {
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.title}>Profilul meu</Text>
-                        <Text style={styles.subtitle}>{getVehicleLabel() || 'Logbook'}</Text>
+                        <Text style={styles.subtitle}>{vehicleLabel || 'Logbook'}</Text>
                     </View>
                 </View>
                 <View style={styles.scrollContent}>

@@ -6,7 +6,8 @@ import {
 import { LineChart } from 'react-native-gifted-charts';
 import api from '../services/api';
 import { t } from '../i18n';
-import { getActiveServerUrl, getVin } from '../utils/config';
+import { getActiveServerUrl } from '../utils/config';
+import { useVehicle } from '../context/VehicleContext';
 import { colors, typography, radii, spacing, layout } from '../theme';
 import { getSubsystemColor } from '../utils/statusUtils';
 import {
@@ -82,6 +83,7 @@ const CHART_CONFIGS = {
 
 const TripDetailScreen = ({ tripId, onBack }) => {
     const { width: screenWidth } = useWindowDimensions();
+    const { activeVin } = useVehicle();
     const [loading,     setLoading]     = useState(true);
     const [trip,        setTrip]        = useState(null);
     const [alerte,      setAlerte]      = useState([]);
@@ -123,7 +125,7 @@ const TripDetailScreen = ({ tripId, onBack }) => {
                 }
 
                 try {
-                    const medieRes = await api.get(`/calatorii/comparatie?vin=${getVin()}`);
+                    const medieRes = await api.get(`/calatorii/comparatie?vin=${activeVin}`);
                     if (medieRes.data?.nr_curse > 0) setMedie(medieRes.data);
                 } catch {}
             } catch (e) {
@@ -133,7 +135,7 @@ const TripDetailScreen = ({ tripId, onBack }) => {
             }
         };
         load();
-    }, [tripId]);
+    }, [tripId, activeVin]);
 
     const chartWidth = screenWidth - layout.screenPaddingH * 2 - spacing[8];
 

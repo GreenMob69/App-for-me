@@ -24,9 +24,9 @@ import {
 } from 'react-native';
 import { useScreenFadeIn } from '../utils/animations';
 import { useNavigation } from '@react-navigation/native';
+import { useVehicle } from '../context/VehicleContext';
 import api from '../services/api';
 import { fetchMaintenanceData, fetchDocuments } from '../services/vehicleService';
-import { getVin, getVehicleLabel } from '../utils/config';
 import { getDtcDescription, getDtcSeverityColor } from '../data/dtcCodes';
 import { t } from '../i18n';
 import { colors, typography, spacing, layout } from '../theme';
@@ -216,6 +216,7 @@ const LoadingSkeleton = () => (
 
 const MaintenanceScreen = () => {
     const navigation = useNavigation();
+    const { activeVin, vehicleLabel } = useVehicle();
     const [screenState, setScreenState] = useState('loading');
     const [refreshing, setRefreshing]   = useState(false);
     const [maintData, setMaintData]     = useState(null);
@@ -249,8 +250,8 @@ const MaintenanceScreen = () => {
 
     useEffect(() => {
         loadMaintenance();
-        api.get(`/vehicul/${getVin()}/diagnoza`).then(r => setDtcData(r.data)).catch(() => {});
-    }, []);
+        api.get(`/vehicul/${activeVin}/diagnoza`).then(r => setDtcData(r.data)).catch(() => {});
+    }, [activeVin, loadMaintenance]);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -376,8 +377,8 @@ const MaintenanceScreen = () => {
                         showBadge={false}
                     />
                     <View style={styles.identityInfo}>
-                        <Text style={styles.identityModel}>{getVehicleLabel() || getVin().slice(-6)}</Text>
-                        <Text style={styles.identityVin}>{getVin().slice(-6)}</Text>
+                        <Text style={styles.identityModel}>{vehicleLabel || activeVin.slice(-6)}</Text>
+                        <Text style={styles.identityVin}>{activeVin.slice(-6)}</Text>
                     </View>
                 </View>
 
@@ -628,7 +629,7 @@ const MaintenanceScreen = () => {
                                                 { text: 'Anulează', style: 'cancel' },
                                                 { text: 'Șterge', style: 'destructive', onPress: async () => {
                                                     try {
-                                                        await api.post(`/vehicul/${getVin()}/stergere-erori`);
+                                                        await api.post(`/vehicul/${activeVin}/stergere-erori`);
                                                         setDtcData(d => ({ ...d, coduri_dtc: [], total_erori: 0 }));
                                                     } catch {
                                                         Alert.alert('Eroare', 'Nu s-a putut șterge.');

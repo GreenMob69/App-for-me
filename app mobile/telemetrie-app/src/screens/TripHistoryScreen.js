@@ -2,19 +2,21 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
     View, Text, StyleSheet, SectionList, ScrollView,
     TouchableOpacity, Share, RefreshControl, Platform, StatusBar,
-    ActivityIndicator, useWindowDimensions,
+    ActivityIndicator, useWindowDimensions, Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
-import { getVin, getVehicleLabel } from '../utils/config';
 import { writeCache } from '../utils/cache';
+import { upsertTrips, queryTrips } from '../services/localDB';
 import {
     HeroCard, SearchBar, StatusBadge,
     MetricCard, CostCard, EmptyState,
-    SectionHeader, Button, BottomSheet,
+    SectionHeader, Button,
 } from '../components/ui';
 import TripDetailScreen from './TripDetailScreen';
 import { colors, typography, radii, spacing, layout } from '../theme';
+import { useRefreshOnOnline } from '../hooks/useRefreshOnOnline';
+import { useVehicle } from '../context/VehicleContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -337,6 +339,7 @@ const TripRow = ({ trip, onPress }) => {
 
 const TripHistoryScreen = () => {
     const { width: screenWidth } = useWindowDimensions();
+    const { activeVin, vehicleLabel } = useVehicle();
     const metricCardStyle = useMemo(() => ({
         width:        screenWidth >= 600 ? '32%' : '48.5%',
         marginBottom: spacing[3],
@@ -364,7 +367,7 @@ const TripHistoryScreen = () => {
     });
 
     const loadData = useCallback(async (forceRefresh = false) => {
-        setScreenState(prev => prev === 'success' ? 'success' : 'loading');
+        setScreenState(prev => prev === 'success' ? prev : 'loading');
         setFromCache(false);
         setCacheAgeMin(null);
         offsetRef.current = 0;
@@ -374,31 +377,26 @@ const TripHistoryScreen = () => {
         if (startDate) params.startDate = startDate;
         if (endDate)   params.endDate   = endDate;
 
-        const tripsKey = `trips_${getVin()}_${activeFilter}`;
-        const statsKey = `stats_${getVin()}`;
+        const statsKey = `stats_${activeVin}`;
 
         try {
-            const tripsResult = await fetchWithOfflineFallback(
-                tripsKey,
-                () => api.get('/calatorii/filtrate', { params, timeout: 7000 }).then(r => r.data),
-                forceRefresh ? 0 : 30 * 60 * 1000,
-            );
-            // Backend returns { rows, total } — handle both old array format and new object
-            const rows  = Array.isArray(tripsResult.data) ? tripsResult.data : (tripsResult.data?.rows || []);
-            const total = tripsResult.data?.total ?? rows.length;
+            const res  = await api.get('/calatorii/filtrate', { params, timeout: 7000 });
+            const data = res.data;
+            const rows  = Array.isArray(data) ? data : (data?.rows || []);
+            const total = data?.total ?? rows.length;
+
+            // Salvează în SQLite pentru acces offline ulterior
+            await upsertTrips(activeVin, rows);
+
             setTrips(rows);
             setHasMore(rows.length < total);
             offsetRef.current = rows.length;
-
-            if (tripsResult.fromCache) {
-                setFromCache(true);
-                setCacheAgeMin(Math.floor(tripsResult.ageMs / 60000));
-            }
+            setFromCache(false);
 
             try {
                 const statsResult = await fetchWithOfflineFallback(
                     statsKey,
-                    () => api.get(`/vehicul/${getVin()}/statistici`, { timeout: 5000 }).then(r => r.data),
+                    () => api.get(`/vehicul/${activeVin}/statistici`, { timeout: 5000 }).then(r => r.data),
                     60 * 60 * 1000,
                 );
                 setStats(statsResult.data || {});
@@ -408,40 +406,97 @@ const TripHistoryScreen = () => {
 
             setScreenState('success');
         } catch {
-            setScreenState(prev => prev === 'success' ? prev : 'error');
+            // Offline: citește din SQLite local
+            try {
+                const local = await queryTrips(activeVin, { filter: activeFilter, limit: PAGE_SIZE, offset: 0 });
+                setTrips(local.rows);
+                setHasMore(local.rows.length < local.total);
+                offsetRef.current = local.rows.length;
+                setFromCache(true);
+                setCacheAgeMin(null);
+                if (local.rows.length > 0) {
+                    setScreenState('success');
+                } else {
+                    setScreenState(prev => prev === 'success' ? prev : 'error');
+                }
+            } catch {
+                setScreenState(prev => prev === 'success' ? prev : 'error');
+            }
         }
-    }, [activeFilter]);
+    }, [activeFilter, activeVin]);
 
     const loadMore = useCallback(async () => {
         if (loadingMore || !hasMore || search.trim()) return;
         setLoadingMore(true);
         try {
-            const { startDate, endDate } = getFilterDates(activeFilter);
-            const params = { limit: PAGE_SIZE, offset: offsetRef.current };
-            if (startDate) params.startDate = startDate;
-            if (endDate)   params.endDate   = endDate;
-
-            const res  = await api.get('/calatorii/filtrate', { params, timeout: 7000 });
-            const rows  = res.data?.rows || [];
-            const total = res.data?.total ?? 0;
-
-            if (rows.length > 0) {
-                setTrips(prev => {
-                    const existingIds = new Set(prev.map(t => t.id_calatorie));
-                    const fresh = rows.filter(t => !existingIds.has(t.id_calatorie));
-                    const merged = [...prev, ...fresh];
-                    offsetRef.current = merged.length;
-                    setHasMore(merged.length < total);
-                    return merged;
+            if (fromCache) {
+                // Offline: pagina următoare din SQLite
+                const local = await queryTrips(activeVin, {
+                    filter: activeFilter,
+                    limit: PAGE_SIZE,
+                    offset: offsetRef.current,
                 });
+                if (local.rows.length > 0) {
+                    setTrips(prev => {
+                        const existingIds = new Set(prev.map(t => t.id_calatorie));
+                        const fresh = local.rows.filter(t => !existingIds.has(t.id_calatorie));
+                        const merged = [...prev, ...fresh];
+                        offsetRef.current = merged.length;
+                        setHasMore(merged.length < local.total);
+                        return merged;
+                    });
+                } else {
+                    setHasMore(false);
+                }
             } else {
-                setHasMore(false);
+                const { startDate, endDate } = getFilterDates(activeFilter);
+                const params = { limit: PAGE_SIZE, offset: offsetRef.current };
+                if (startDate) params.startDate = startDate;
+                if (endDate)   params.endDate   = endDate;
+
+                const res   = await api.get('/calatorii/filtrate', { params, timeout: 7000 });
+                const rows  = res.data?.rows || [];
+                const total = res.data?.total ?? 0;
+
+                if (rows.length > 0) {
+                    await upsertTrips(activeVin, rows);
+                    setTrips(prev => {
+                        const existingIds = new Set(prev.map(t => t.id_calatorie));
+                        const fresh = rows.filter(t => !existingIds.has(t.id_calatorie));
+                        const merged = [...prev, ...fresh];
+                        offsetRef.current = merged.length;
+                        setHasMore(merged.length < total);
+                        return merged;
+                    });
+                } else {
+                    setHasMore(false);
+                }
             }
         } catch {}
         finally { setLoadingMore(false); }
-    }, [loadingMore, hasMore, search, activeFilter]);
+    }, [loadingMore, hasMore, search, activeFilter, fromCache, activeVin]);
 
     useEffect(() => { loadData(); }, [loadData]);
+
+    // Căutare offline: re-interogheaza SQLite la fiecare keystroke (debounced 300ms)
+    useEffect(() => {
+        if (!fromCache) return;
+        const timer = setTimeout(async () => {
+            try {
+                const local = await queryTrips(activeVin, {
+                    filter:  activeFilter,
+                    limit:   200,
+                    offset:  0,
+                    search:  search.trim() || null,
+                });
+                setTrips(local.rows);
+                setHasMore(!search.trim() && local.rows.length < local.total);
+                offsetRef.current = local.rows.length;
+            } catch {}
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search, fromCache, activeFilter, activeVin]);
+    useRefreshOnOnline(loadData);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -496,6 +551,8 @@ const TripHistoryScreen = () => {
     }, [trips]);
 
     const filteredTrips = useMemo(() => {
+        // Offline: SQLite a filtrat deja prin search_text; nu mai filtrăm in-memory
+        if (fromCache) return trips;
         if (!search.trim()) return trips;
         const q = search.toLowerCase();
         return trips.filter(trip => {
@@ -506,7 +563,7 @@ const TripHistoryScreen = () => {
             const bgs   = buildTripBadges(trip).map(b => b.label.toLowerCase()).join(' ');
             return title.includes(q) || date.includes(q) || km.includes(q) || cons.includes(q) || bgs.includes(q);
         });
-    }, [trips, search]);
+    }, [trips, search, fromCache]);
 
     // Group filtered trips into sections by date
     const sections = useMemo(() => groupTripsByDate(filteredTrips), [filteredTrips]);
@@ -535,7 +592,7 @@ const TripHistoryScreen = () => {
             <View style={styles.main}>
                 <View style={styles.header}>
                     <Text style={styles.title}>Jurnal</Text>
-                    <Text style={styles.subtitle}>{getVehicleLabel() || 'Logbook'}</Text>
+                    <Text style={styles.subtitle}>{vehicleLabel || 'Logbook'}</Text>
                 </View>
                 <View style={{ flex: 1, paddingHorizontal: layout.screenPaddingH, paddingTop: spacing[4] }}>
                     <HeroCard
@@ -571,7 +628,7 @@ const TripHistoryScreen = () => {
         const monthName = MONTH_NAMES[parseInt(mo, 10) - 1] || mo;
         const text = [
             `RAPORT LUNAR — ${monthName} ${yr}`,
-            getVehicleLabel() || 'Vehicul', '',
+            vehicleLabel || 'Vehicul', '',
             `Curse: ${monthlyData.totalTrips}`,
             `Distanță: ${monthlyData.totalKm} km`,
             `Combustibil: ${monthlyData.totalLitri} L`,
@@ -608,7 +665,7 @@ const TripHistoryScreen = () => {
             {fromCache && (
                 <View style={styles.cacheBar}>
                     <Text style={styles.cacheBarText}>
-                        Date din cache{cacheAgeMin != null ? ` · ${cacheAgeMin} min` : ''} — server indisponibil
+                        Date locale — server indisponibil
                     </Text>
                     <TouchableOpacity onPress={onRefresh}>
                         <Text style={styles.cacheBarRefresh}>↺ Reîncarcă</Text>
@@ -703,7 +760,7 @@ const TripHistoryScreen = () => {
             <View style={styles.header}>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>Jurnal</Text>
-                    <Text style={styles.subtitle}>{getVehicleLabel() || 'Logbook'}</Text>
+                    <Text style={styles.subtitle}>{vehicleLabel || 'Logbook'}</Text>
                 </View>
                 <View style={styles.headerActions}>
                     <TouchableOpacity
@@ -764,9 +821,25 @@ const TripHistoryScreen = () => {
                 }
             />
 
-            {/* ── Monthly Report — BottomSheet ─────────────────────────────── */}
-            <BottomSheet visible={showReport} onClose={() => setShowReport(false)} title="Raport Lunar">
-                <View style={styles.sheetContent}>
+            {/* ── Monthly Report — Full-screen Modal ────────────────────────── */}
+            <Modal
+                visible={showReport}
+                animationType="slide"
+                onRequestClose={() => setShowReport(false)}
+                statusBarTranslucent
+            >
+                <View style={styles.reportModal}>
+                    <View style={styles.reportModalHeader}>
+                        <Text style={styles.reportModalTitle}>Raport Lunar</Text>
+                        <TouchableOpacity
+                            onPress={() => setShowReport(false)}
+                            accessibilityRole="button"
+                            accessibilityLabel="Închide raportul"
+                        >
+                            <Text style={styles.reportModalClose}>Închide</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={[styles.sheetContent, { flex: 1 }]}>
                     <View style={styles.monthRow}>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
                             {[0, 1, 2, 3].map(offset => {
@@ -854,8 +927,9 @@ const TripHistoryScreen = () => {
                             <Button label="Descarcă / Trimite raportul" variant="primary" onPress={shareMonthly} style={styles.shareBtn} />
                         )}
                     </ScrollView>
+                    </View>
                 </View>
-            </BottomSheet>
+            </Modal>
         </View>
     );
 };
@@ -1123,7 +1197,34 @@ const styles = StyleSheet.create({
         fontWeight: typography.weights.semibold,
     },
 
-    // ── Monthly report BottomSheet ────────────────────────────────────────────
+    // ── Monthly report Modal ──────────────────────────────────────────────────
+    reportModal: {
+        flex: 1,
+        backgroundColor: colors.bg[0],
+    },
+    reportModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: layout.screenPaddingH,
+        paddingTop: Platform.OS === 'android'
+            ? (StatusBar.currentHeight || 24) + spacing[2]
+            : spacing[5],
+        paddingBottom: spacing[4],
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border?.default ?? colors.border,
+        backgroundColor: colors.bg[0],
+    },
+    reportModalTitle: {
+        fontSize: typography.sizes.title3,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+    },
+    reportModalClose: {
+        fontSize: typography.sizes.body1,
+        fontWeight: typography.weights.semibold,
+        color: colors.accent.default,
+    },
     sheetContent: { paddingHorizontal: spacing[5] },
     monthRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: spacing[4] },
     reportSection: { marginBottom: spacing[3] },

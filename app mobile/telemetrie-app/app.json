@@ -20,6 +20,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-local-authentication"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "45d708d4-8d53-48f3-a324-145672939873"
+      }
     }
   }
 }

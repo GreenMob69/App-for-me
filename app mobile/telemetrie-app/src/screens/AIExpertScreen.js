@@ -5,7 +5,7 @@ import {
     StatusBar, ScrollView, ActivityIndicator,
 } from 'react-native';
 import api from '../services/api';
-import { getVin } from '../utils/config';
+import { useVehicle } from '../context/VehicleContext';
 import { StatusBadge, EmptyState } from '../components/ui';
 import { colors, typography, radii, spacing, layout } from '../theme';
 
@@ -55,6 +55,7 @@ function fmtTwinAge(savedAt) {
 
 const AIExpertScreen = () => {
     const flatListRef = useRef(null);
+    const { activeVin } = useVehicle();
 
     const [twinState,         setTwinState]         = useState('loading');
     const [twinMeta,          setTwinMeta]           = useState(null);
@@ -70,7 +71,7 @@ const AIExpertScreen = () => {
     const loadTwin = useCallback(async () => {
         setTwinState('loading');
         try {
-            const res = await api.get(`/vehicul/${getVin()}/twin`);
+            const res = await api.get(`/vehicul/${activeVin}/twin`);
             if (res.data.status === 'NO_DATA') {
                 setTwinState('no_data');
                 setSuggestedQuestions(res.data.suggestedQuestions || []);
@@ -82,7 +83,7 @@ const AIExpertScreen = () => {
         } catch {
             setTwinState('error');
         }
-    }, []);
+    }, [activeVin]);
 
     useEffect(() => { loadTwin(); }, [loadTwin]);
 
@@ -114,7 +115,7 @@ const AIExpertScreen = () => {
                 intent:   m.intent   || null,
                 topicRef: m.topicRef || null,
             }));
-            const res = await api.post('/ai/expert/query', { vin: getVin(), question: q, history });
+            const res = await api.post('/ai/expert/query', { vin: activeVin, question: q, history });
             const d   = res.data;
             const aiMsg = {
                 id:               `a_${Date.now()}`,
@@ -140,7 +141,7 @@ const AIExpertScreen = () => {
         } finally {
             setIsQuerying(false);
         }
-    }, [input, isQuerying, twinState]);
+    }, [input, isQuerying, twinState, activeVin]);
 
     // ── Render message ───────────────────────────────────────────────────
     const renderMessage = ({ item: msg }) => {

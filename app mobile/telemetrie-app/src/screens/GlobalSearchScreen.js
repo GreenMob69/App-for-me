@@ -146,13 +146,15 @@ const GlobalSearchScreen = () => {
     const [query, setQuery]           = useState('');
     const [index, setIndex]           = useState([]);
     const [loadState, setLoadState]   = useState('loading'); // loading | ready | error
+    const [retryCount, setRetryCount] = useState(0);
     const debounceRef = useRef(null);
     const inputRef    = useRef(null);
     const screenFadeStyle = useScreenFadeIn('success');
 
-    // ── Load search data on mount ────────────────────────────────────────────
+    // ── Load search data on mount / retry ────────────────────────────────────
     useEffect(() => {
         let cancelled = false;
+        setLoadState('loading');
         const load = async () => {
             try {
                 const data = await fetchVehicleSummary();
@@ -165,10 +167,9 @@ const GlobalSearchScreen = () => {
             }
         };
         load();
-        // Auto-focus input after load
         setTimeout(() => inputRef.current?.focus(), 300);
         return () => { cancelled = true; };
-    }, []);
+    }, [retryCount]);
 
     // ── Debounced query ──────────────────────────────────────────────────────
     const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -259,7 +260,7 @@ const GlobalSearchScreen = () => {
                     icon="⚠"
                     title="Nu s-au putut incarca datele"
                     subtitle="Verifica conexiunea la server si incearca din nou."
-                    action={{ label: 'Reîncearcă', onPress: () => setLoadState('loading') }}
+                    action={{ label: 'Reîncearcă', onPress: () => setRetryCount(c => c + 1) }}
                     size="md"
                 />
             </View>

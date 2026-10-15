@@ -12,8 +12,8 @@ const getAutoServerUrl = () => {
         return `http://${laptopIp}:3000`;
     }
 
-    if (Platform.OS === 'android') return 'http://10.0.2.2:3000';
-    return 'http://localhost:3000';
+    if (Platform.OS === 'android') return 'http://84.235.164.52:3000';
+    return 'http://84.235.164.52:3000';
 };
 
 // Prioritate: Settings (AsyncStorage) > auto-detecție Metro > fallback emulator
@@ -30,9 +30,8 @@ export const setCustomServerUrl = (url) => {
 export const getActiveServerUrl = () => _serverUrl;
 export const getActiveApiUrl = () => `${_serverUrl}/api`;
 
-// --- Vehicle identity (single source of truth) ---
-export const DEFAULT_VIN = 'WAUZZZ4A1RN000000';
-let _vin = DEFAULT_VIN;
+// --- Vehicle identity (sync cache — kept in sync by VehicleContext) ---
+let _vin = null;
 
 export const getVin   = () => _vin;
 export const setVin   = (vin) => { _vin = vin; };

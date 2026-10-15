@@ -1,6 +1,7 @@
 const mqtt = require('mqtt');
-const client = mqtt.connect('mqtt://broker.emqx.io');
-const TOPIC = 'licenta/audi_a6_c4/telemetrie';
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://broker.emqx.io';
+const TOPIC = process.env.MQTT_TOPIC || 'telemetrie/obd2';
+const client = mqtt.connect(MQTT_BROKER_URL);
 const VIN = "WAUZZZ4A1RN000000";
 
 let sec = 0;

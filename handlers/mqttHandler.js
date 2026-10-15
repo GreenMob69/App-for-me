@@ -8,10 +8,11 @@ const { buildTripInsights } = require('../services/tripInsights');
 const calatoriiActive       = require('../services/activeTrips');
 const dtcService            = require('../services/dtcService');
 
-const TOPIC_TELEMETRIE = 'telemetrie/obd2';
+const TOPIC_TELEMETRIE = process.env.MQTT_TOPIC || 'telemetrie/obd2';
+const MQTT_BROKER_URL  = process.env.MQTT_BROKER_URL || 'mqtt://broker.emqx.io';
 
 function createMqttClient(db, io) {
-    const client = mqtt.connect('mqtt://broker.emqx.io');
+    const client = mqtt.connect(MQTT_BROKER_URL);
 
     client.on('connect', () => {
         console.log('[MQTT] Conectat la broker! Gata pentru receptia matricei OBD-II & UDS...');

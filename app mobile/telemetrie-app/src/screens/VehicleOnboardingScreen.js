@@ -4,7 +4,8 @@ import {
     Animated, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import api from '../services/api';
-import { DEFAULT_VIN } from '../utils/config';
+
+const DEFAULT_VIN = 'WAUZZZ4A1RN000000';
 import { colors, typography, radii, spacing, motion } from '../theme';
 import PropTypes from 'prop-types';
 

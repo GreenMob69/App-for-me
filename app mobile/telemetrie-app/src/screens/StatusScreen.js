@@ -18,14 +18,15 @@ import {
     StatusBar,
     StyleSheet,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useScreenFadeIn } from '../utils/animations';
 import { fetchFullStatus } from '../services/vehicleService';
-import { getVin, getVehicleLabel, getFuelType } from '../utils/config';
 import { mapStatusData } from '../mappers/statusMapper';
 import { t } from '../i18n';
 import { colors, typography, spacing, layout, radii, motion } from '../theme';
 import { TREND_INDICATORS } from '../utils/statusUtils';
 import { NotificationContext } from '../context/NotificationContext';
+import { useVehicle } from '../context/VehicleContext';
 
 import {
     Card,
@@ -42,6 +43,10 @@ import {
     VehicleAvatar,
 } from '../components/ui';
 import PropTypes from 'prop-types';
+import { useRefreshOnOnline } from '../hooks/useRefreshOnOnline';
+import { getRootNavigation } from '../utils/navigation';
+
+const STATUS_CACHE_KEY = '@status_cache';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mapări semantice
@@ -136,47 +141,56 @@ const StatusScreen = ({ navigation }) => {
     const [refreshing, setRefreshing]   = useState(false);
     const [statusModel, setStatusModel] = useState(null);
     const [showAllPreds, setShowAllPreds] = useState(false);
+    const [fromCache,    setFromCache]    = useState(false);
 
     const { unreadCount, syncFromSummary } = useContext(NotificationContext);
+    const { activeVin, vehicleLabel, fuelType } = useVehicle();
 
     const screenFadeStyle = useScreenFadeIn(screenState);
 
-    // Navigate to parent RootStack screens
     const openNotifications = useCallback(() => {
-        navigation?.getParent()?.getParent()?.navigate('Notifications');
+        getRootNavigation(navigation)?.navigate('Notifications');
     }, [navigation]);
 
     const openSearch = useCallback(() => {
-        try {
-            const root = navigation?.getParent()?.getParent();
-            console.log('[openSearch] root navigator:', root ? 'found' : 'null');
-            root?.navigate('GlobalSearch');
-        } catch (e) {
-            console.error('[openSearch] crash:', e.message);
-        }
+        getRootNavigation(navigation)?.navigate('GlobalSearch');
     }, [navigation]);
 
+    const loadCachedStatus = useCallback(async () => {
+        try {
+            const raw = await AsyncStorage.getItem(STATUS_CACHE_KEY);
+            if (raw) {
+                const entry = JSON.parse(raw);
+                const model = mapStatusData(entry.data?.health, entry.data?.trends);
+                setStatusModel(model);
+                setFromCache(true);
+                setScreenState(model.state === 'empty' ? 'empty' : 'success');
+            }
+        } catch {}
+    }, []);
+
     const loadStatus = useCallback(async (isRefresh = false) => {
-        if (!isRefresh) setScreenState('loading');
+        if (!isRefresh) setScreenState(prev => prev === 'success' ? prev : 'loading');
         try {
             const raw   = await fetchFullStatus();
+            await AsyncStorage.setItem(STATUS_CACHE_KEY, JSON.stringify({ data: raw, cachedAt: Date.now() }));
             const model = mapStatusData(raw.health, raw.trends);
             setStatusModel(model);
+            setFromCache(false);
             setShowAllPreds(false);
             setScreenState(model.state === 'empty' ? 'empty' : 'success');
-            // Feed health summary to NotificationContext (fire-and-forget)
             if (raw.health) {
                 syncFromSummary(raw.health).catch(() => {});
             }
         } catch {
-            // Nu suprascrie 'success' existent cu 'error' la refresh eșuat
             setScreenState(prev => prev === 'success' ? prev : 'error');
         } finally {
             setRefreshing(false);
         }
     }, [syncFromSummary]);
 
-    useEffect(() => { loadStatus(); }, []);
+    useEffect(() => { loadCachedStatus().then(() => loadStatus()); }, [activeVin, loadCachedStatus, loadStatus]);
+    useRefreshOnOnline(loadStatus);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -272,7 +286,7 @@ const StatusScreen = ({ navigation }) => {
                 label: 'Detalii tehnice',
                 onPress: () => navigation?.navigate('SubsystemDetail', {
                     system: obs.systemKey,
-                    vin: getVin(),
+                    vin: activeVin,
                 }),
             };
         }
@@ -319,13 +333,13 @@ const StatusScreen = ({ navigation }) => {
                 <View style={styles.identityStrip}>
                     <VehicleAvatar
                         status={drive.status}
-                        fuelType={getFuelType()}
+                        fuelType={fuelType}
                         size="sm"
                         showBadge={false}
                     />
                     <View style={styles.identityInfo}>
-                        <Text style={styles.identityModel}>{getVehicleLabel() || getVin().slice(-6)}</Text>
-                        <Text style={styles.identityVin}>{getVin().slice(-6)}</Text>
+                        <Text style={styles.identityModel}>{vehicleLabel || activeVin.slice(-6)}</Text>
+                        <Text style={styles.identityVin}>{activeVin.slice(-6)}</Text>
                     </View>
                     <TouchableOpacity
                         style={styles.headerIconBtn}
@@ -382,6 +396,16 @@ const StatusScreen = ({ navigation }) => {
                         <Text style={styles.summaryLabel}>NOTIFICĂRI</Text>
                     </TouchableOpacity>
                 </View>
+
+                {/* ── OFFLINE CACHE INDICATOR ──────────────────────────── */}
+                {fromCache && (
+                    <View style={styles.cacheBar}>
+                        <Text style={styles.cacheBarText}>Date din cache — server indisponibil</Text>
+                        <TouchableOpacity onPress={onRefresh}>
+                            <Text style={styles.cacheBarRefresh}>↺ Reîncarcă</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
 
                 {/* ── 1. HERO — răspuns direct la "Pot pleca?" ─────────── */}
                 <HeroCard
@@ -664,6 +688,31 @@ const styles = StyleSheet.create({
         backgroundColor: colors.border.subtle,
         alignSelf: 'stretch',
         marginVertical: spacing[2],
+    },
+
+    // ── Offline cache indicator ───────────────────────────────────────────
+    cacheBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: colors.tint.monitor,
+        borderWidth: 1,
+        borderColor: colors.status.monitor,
+        borderRadius: radii.xs,
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[2],
+        marginBottom: spacing[3],
+    },
+    cacheBarText: {
+        fontSize: typography.sizes.caption,
+        color: colors.status.monitor,
+        flex: 1,
+    },
+    cacheBarRefresh: {
+        fontSize: typography.sizes.caption,
+        color: colors.accent.default,
+        fontWeight: typography.weights.bold,
+        marginLeft: spacing[2],
     },
 
     // ── Hero ──────────────────────────────────────────────────────────────

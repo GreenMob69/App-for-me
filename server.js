@@ -125,6 +125,7 @@ app.use('/api',  require('./routes/trips')(db, io));
 app.use('/api',  require('./routes/vehicles')(db, io));
 app.use('/api',  require('./routes/reports')(db));
 app.use('/api',  require('./routes/ai')(db));
+app.use('/api',  require('./routes/sync')(db));
 app.use('/admin', require('./routes/admin')(db));
 
 const PORT = process.env.PORT || 3000;

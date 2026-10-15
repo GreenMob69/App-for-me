@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
-import { getVin, getVehicleLabel } from '../utils/config';
 import { t } from '../i18n';
 import { colors, typography, radii, spacing, layout } from '../theme';
 import { formatTimeAgo } from '../utils/formatters';
@@ -15,6 +14,8 @@ import {
     TimelineCard, Skeleton, EmptyState,
 } from '../components/ui';
 import PropTypes from 'prop-types';
+import { useRefreshOnOnline } from '../hooks/useRefreshOnOnline';
+import { useVehicle } from '../context/VehicleContext';
 
 const CACHE_KEY = '@health_cache';
 
@@ -99,6 +100,7 @@ const VehicleHealthScreen = ({ navigation }) => {
     const [resolvedPreds, setResolvedPreds] = useState(new Set());
     const [showAllPreds,  setShowAllPreds]  = useState(false);
     const [cacheAge,      setCacheAge]      = useState(null);
+    const { activeVin, vehicleLabel } = useVehicle();
 
     const loadCachedData = async () => {
         try {
@@ -116,7 +118,7 @@ const VehicleHealthScreen = ({ navigation }) => {
 
     const fetchHealth = async (isRefresh = false) => {
         try {
-            const response = await api.get(`/vehicul/${getVin()}/health`);
+            const response = await api.get(`/vehicul/${activeVin}/health`);
             const data = response.data;
             setHealthData(data);
             setError(null);
@@ -134,13 +136,14 @@ const VehicleHealthScreen = ({ navigation }) => {
 
     useEffect(() => {
         loadCachedData().then(() => fetchHealth());
-        api.get(`/vehicul/${getVin()}/trend-eco?weeks=8`).then(r => {
+        api.get(`/vehicul/${activeVin}/trend-eco?weeks=8`).then(r => {
             if (r.data?.weeks) setTrendData(r.data.weeks);
         }).catch(() => {});
-        api.get(`/vehicul/${getVin()}/predictii/active`).then(r => {
+        api.get(`/vehicul/${activeVin}/predictii/active`).then(r => {
             if (Array.isArray(r.data)) setResolvedPreds(new Set(r.data));
         }).catch(() => {});
-    }, []);
+    }, [activeVin]);
+    useRefreshOnOnline(fetchHealth);
 
     const onRefresh = () => {
         setRefreshing(true);
@@ -149,16 +152,16 @@ const VehicleHealthScreen = ({ navigation }) => {
 
     const handleSubsystemPress = useCallback((systemKey) => {
         if (navigation) {
-            navigation.navigate('SubsystemDetail', { system: systemKey, vin: getVin() });
+            navigation.navigate('SubsystemDetail', { system: systemKey, vin: activeVin });
         }
-    }, [navigation]);
+    }, [navigation, activeVin]);
 
     const handleMarkPrediction = useCallback(async (pred, status) => {
         const hash = hashPred(pred);
         // Optimistic update
         setResolvedPreds(prev => new Set([...prev, hash]));
         try {
-            await api.post(`/vehicul/${getVin()}/predictii/valideaza`, {
+            await api.post(`/vehicul/${activeVin}/predictii/valideaza`, {
                 prediction_hash: hash,
                 titlu: pred.title || pred.component || '',
                 status,
@@ -171,7 +174,7 @@ const VehicleHealthScreen = ({ navigation }) => {
                 return next;
             });
         }
-    }, []);
+    }, [activeVin]);
 
     const handlePredictionPress = useCallback((prediction) => {
         const categoryToSystem = {
@@ -180,9 +183,9 @@ const VehicleHealthScreen = ({ navigation }) => {
         };
         const system = categoryToSystem[prediction.category] || 'motor';
         if (navigation) {
-            navigation.navigate('SubsystemDetail', { system, vin: getVin() });
+            navigation.navigate('SubsystemDetail', { system, vin: activeVin });
         }
-    }, [navigation]);
+    }, [navigation, activeVin]);
 
     // ── Loading skeleton ──────────────────────────────────────────────────────
     if (loading && !healthData) {
@@ -284,7 +287,7 @@ const VehicleHealthScreen = ({ navigation }) => {
                 {/* ── Header ──────────────────────────────────────────────── */}
                 <View style={styles.header}>
                     <View>
-                        <Text style={styles.vehicleName}>{getVehicleLabel() || getVin().slice(-6)}</Text>
+                        <Text style={styles.vehicleName}>{vehicleLabel || activeVin.slice(-6)}</Text>
                         <Text style={styles.lastUpdate}>{formatTimeAgo(lastUpdated)}</Text>
                     </View>
                     <View style={styles.headerBadges}>

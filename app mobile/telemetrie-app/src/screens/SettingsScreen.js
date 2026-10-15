@@ -5,7 +5,10 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-import { getActiveServerUrl, setCustomServerUrl, getVin, setVin } from '../utils/config';
+import { useContext } from 'react';
+import { SecurityContext } from '../context/SecurityContext';
+import { getActiveServerUrl, setCustomServerUrl } from '../utils/config';
+import { useVehicle } from '../context/VehicleContext';
 import { Linking } from 'react-native';
 import api from '../services/api';
 import socketService from '../services/socket';
@@ -36,6 +39,34 @@ const DEFAULT_THRESHOLDS = {
     rpm_warn:      3500,
 };
 
+// ─── VIN validation ───────────────────────────────────────────────────────────
+
+const VIN_TRANS = {
+    A:1,B:2,C:3,D:4,E:5,F:6,G:7,H:8,
+    J:1,K:2,L:3,M:4,N:5,P:7,R:9,
+    S:2,T:3,U:4,V:5,W:6,X:7,Y:8,Z:9,
+};
+const VIN_WEIGHTS = [8,7,6,5,4,3,2,10,0,9,8,7,6,5,4,3,2];
+
+const getVinStatus = (raw) => {
+    if (!raw) return { ok: false, level: 'idle', msg: '' };
+    const v = raw.toUpperCase();
+    if (v.length < 17) return { ok: false, level: 'neutral', msg: `${v.length}/17 caractere` };
+    if (v.length > 17) return { ok: false, level: 'bad', msg: 'Prea lung (max 17 caractere)' };
+    if (/[IOQ]/.test(v)) return { ok: false, level: 'bad', msg: 'Conține litere interzise (I, O, Q)' };
+    if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(v)) return { ok: false, level: 'bad', msg: 'Caractere invalide detectate' };
+    let sum = 0;
+    for (let i = 0; i < 17; i++) {
+        const c = v[i];
+        const val = c >= '0' && c <= '9' ? parseInt(c) : VIN_TRANS[c];
+        sum += (val || 0) * VIN_WEIGHTS[i];
+    }
+    const rem = sum % 11;
+    const expected = rem === 10 ? 'X' : String(rem);
+    if (v[8] !== expected) return { ok: false, level: 'warn', msg: `Cifra de control greșită (așteptat: ${expected})` };
+    return { ok: true, level: 'ok', msg: 'VIN valid' };
+};
+
 // ─── Row helpers ──────────────────────────────────────────────────────────────
 
 const Row = ({ label, value, last }) => (
@@ -51,8 +82,16 @@ const SectionTitle = ({ children }) => (
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+const TIMEOUT_OPTIONS = [
+    { label: 'Imediat',  value: 0   },
+    { label: '1 minut',  value: 60  },
+    { label: '5 minute', value: 300 },
+];
+
 const SettingsScreen = () => {
     const navigation = useNavigation();
+    const { securityEnabled, lockTimeout, saveSettings } = useContext(SecurityContext);
+    const { activeVin, activeVehicle, vehicles, switchVehicle, refreshVehicles } = useVehicle();
 
     // ── Connection
     const [connStatus, setConnStatus]   = useState('checking');
@@ -69,10 +108,6 @@ const SettingsScreen = () => {
     // ── Custom server
     const [manualIp, setManualIp] = useState(getActiveServerUrl());
 
-    // ── Vehicles
-    const [vehicles,  setVehicles]  = useState([]);
-    const [activeVin, setActiveVin] = useState(getVin());
-
     // ── Alert thresholds
     const [thresholds, setThresholds]   = useState(DEFAULT_THRESHOLDS);
     const [editingKey, setEditingKey]   = useState(null);
@@ -88,6 +123,9 @@ const SettingsScreen = () => {
     const [editOdo,       setEditOdo]       = useState(false);
     const [odoVal,        setOdoVal]        = useState('');
     const [savingVehicle, setSavingVehicle] = useState(false);
+    const [editVin,       setEditVin]       = useState(false);
+    const [vinInputVal,   setVinInputVal]   = useState('');
+    const [savingVin,     setSavingVin]     = useState(false);
 
     // ── Realimentare
     const [refuels,         setRefuels]         = useState([]);
@@ -128,23 +166,23 @@ const SettingsScreen = () => {
                 if (savedNotifs !== null) setNotifsEnabled(savedNotifs === 'true');
             } catch {}
 
-            try {
-                const [statsRes, vehiclesRes, refuelsRes] = await Promise.all([
-                    api.get(`/vehicul/${getVin()}/statistici`),
-                    api.get('/vehicule/list', { timeout: 4000 }),
-                    api.get(`/vehicul/${getVin()}/realimentari?limit=5`),
-                ]);
-                if (statsRes.data) setStats(statsRes.data);
-                if (vehiclesRes.data && Array.isArray(vehiclesRes.data)) setVehicles(vehiclesRes.data);
-                if (Array.isArray(refuelsRes.data)) setRefuels(refuelsRes.data);
-            } catch {}
+            if (activeVin) {
+                try {
+                    const [statsRes, refuelsRes] = await Promise.all([
+                        api.get(`/vehicul/${activeVin}/statistici`),
+                        api.get(`/vehicul/${activeVin}/realimentari?limit=5`),
+                    ]);
+                    if (statsRes.data) setStats(statsRes.data);
+                    if (Array.isArray(refuelsRes.data)) setRefuels(refuelsRes.data);
+                } catch {}
+            }
         };
 
         load();
         checkConnection();
         pingRef.current = setInterval(checkConnection, 15000);
         return () => clearInterval(pingRef.current);
-    }, [checkConnection]);
+    }, [checkConnection, activeVin]);
 
     // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -181,14 +219,31 @@ const SettingsScreen = () => {
     };
 
     const handleSwitchVehicle = async (vin) => {
-        if (vin === activeVin) return;
-        setVin(vin);
-        setActiveVin(vin);
-        await AsyncStorage.setItem('@active_vin', vin);
+        await switchVehicle(vin);
         try {
             const res = await api.get(`/vehicul/${vin}/statistici`);
             if (res.data) setStats(res.data);
         } catch {}
+    };
+
+    const handleSaveVin = async () => {
+        const v = vinInputVal.toUpperCase().trim();
+        const status = getVinStatus(v);
+        if (!status.ok) return;
+        setSavingVin(true);
+        try {
+            await switchVehicle(v);
+            try {
+                const sRes = await api.get(`/vehicul/${v}/statistici`);
+                if (sRes.data) setStats(sRes.data);
+            } catch {}
+            setEditVin(false);
+            Alert.alert('Salvat', `VIN activat: ${v}`);
+        } catch {
+            Alert.alert('Eroare', 'Nu s-a putut salva VIN-ul.');
+        } finally {
+            setSavingVin(false);
+        }
     };
 
     const handleSaveThresholds = async () => {
@@ -223,12 +278,12 @@ const SettingsScreen = () => {
         if (!litri || litri <= 0) return Alert.alert('Eroare', 'Introdu un volum valid (litri).');
         setSavingRefuel(true);
         try {
-            await api.post(`/vehicul/${getVin()}/realimentare`, {
+            await api.post(`/vehicul/${activeVin}/realimentare`, {
                 litri,
                 pret_pe_litru: parseFloat(refuelPret || 0),
                 odometru_km:   parseFloat(refuelKm || 0),
             });
-            const res = await api.get(`/vehicul/${getVin()}/realimentari?limit=5`);
+            const res = await api.get(`/vehicul/${activeVin}/realimentari?limit=5`);
             if (Array.isArray(res.data)) setRefuels(res.data);
             setRefuelLitri(''); setRefuelPret(''); setRefuelKm('');
             setShowRefuelForm(false);
@@ -242,10 +297,8 @@ const SettingsScreen = () => {
         if (isNaN(num) || num < 0) return;
         setSavingVehicle(true);
         try {
-            await api.patch(`/vehicul/${getVin()}/profil`, { [field]: num });
-            setVehicles(prev => prev.map(v =>
-                v.vin === getVin() ? { ...v, [field]: num } : v
-            ));
+            await api.patch(`/vehicul/${activeVin}/profil`, { [field]: num });
+            await refreshVehicles();
         } catch {
             Alert.alert('Eroare', 'Nu s-a putut salva.');
         } finally {
@@ -263,7 +316,7 @@ const SettingsScreen = () => {
     };
 
     const handleExportJSON = async () => {
-        const url = `${getActiveServerUrl()}/api/export?vin=${getVin()}`;
+        const url = `${getActiveServerUrl()}/api/export?vin=${activeVin}`;
         try { await Linking.openURL(url); }
         catch { Alert.alert('Eroare', 'Nu s-a putut deschide exportul.'); }
     };
@@ -276,8 +329,6 @@ const SettingsScreen = () => {
     const avgCons   = stats?.total_km > 0 && stats?.total_combustibil > 0
         ? ((stats.total_combustibil / stats.total_km) * 100).toFixed(1)
         : null;
-
-    const activeVehicle = vehicles.find(v => v.vin === activeVin) || null;
 
     const THRESHOLD_FIELDS = [
         { key: 'coolant_warn',  label: 'Temp. răcire avertizare', unit: '°C',  min: 70,  max: 110 },
@@ -306,7 +357,62 @@ const SettingsScreen = () => {
             <View style={styles.card}>
                 <SectionTitle>Profil Vehicul</SectionTitle>
                 <Row label="Model" value={activeVehicle?.model || '—'} />
-                <Row label="VIN"   value={activeVehicle?.vin   || activeVin} />
+
+                {/* VIN — editabil cu validare */}
+                {editVin ? (
+                    <View style={styles.vinEditContainer}>
+                        <View style={styles.vinInputRow}>
+                            <TextInput
+                                style={styles.vinInput}
+                                value={vinInputVal}
+                                onChangeText={t => setVinInputVal(
+                                    t.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/gi, '').slice(0, 17)
+                                )}
+                                autoCapitalize="characters"
+                                autoCorrect={false}
+                                maxLength={17}
+                                placeholder="ex: WAUZZZ4A1RN000000"
+                                placeholderTextColor={colors.text.disabled}
+                                autoFocus
+                            />
+                            <Text style={styles.vinCounter}>{vinInputVal.length}/17</Text>
+                        </View>
+                        {vinInputVal.length > 0 && (() => {
+                            const s = getVinStatus(vinInputVal);
+                            const color = s.level === 'ok'      ? colors.status.good
+                                        : s.level === 'warn'    ? colors.status.monitor
+                                        : s.level === 'bad'     ? colors.status.critical
+                                        : colors.text.secondary;
+                            return <Text style={[styles.vinStatusMsg, { color }]}>{s.msg}</Text>;
+                        })()}
+                        <View style={styles.vinBtnRow}>
+                            <TouchableOpacity style={styles.outlineSmBtn} onPress={() => setEditVin(false)}>
+                                <Text style={styles.outlineSmBtnText}>Anulează</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.solidBtn, (!getVinStatus(vinInputVal).ok || savingVin) && styles.solidBtnDisabled]}
+                                onPress={handleSaveVin}
+                                disabled={!getVinStatus(vinInputVal).ok || savingVin}
+                            >
+                                <Text style={styles.solidBtnText}>{savingVin ? '...' : 'Salvează'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                ) : (
+                    <TouchableOpacity
+                        style={styles.row}
+                        onPress={() => { setVinInputVal(activeVehicle?.vin || activeVin || ''); setEditVin(true); }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.rowLabel}>VIN</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={[styles.rowValue, { fontSize: typography.sizes.caption }]}>
+                                {activeVehicle?.vin || activeVin || 'Introdu ✎'}
+                            </Text>
+                            <Text style={styles.editHint}>✎</Text>
+                        </View>
+                    </TouchableOpacity>
+                )}
 
                 {/* Rezervor — editabil */}
                 {editTankCap ? (
@@ -545,6 +651,54 @@ const SettingsScreen = () => {
                         thumbColor={notifsEnabled ? '#FFFFFF' : colors.text.secondary}
                     />
                 </View>
+            </View>
+
+            {/* ── Securitate ─────────────────────────────────────────────── */}
+            <View style={styles.card}>
+                <SectionTitle>Securitate</SectionTitle>
+                <Text style={styles.desc}>
+                    Protejează accesul la datele vehiculului cu amprentă, Face ID sau PIN-ul telefonului.
+                </Text>
+                <View style={styles.switchRow}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.switchLabel}>Blocare biometrică</Text>
+                        <Text style={styles.switchDesc}>
+                            Cere autentificare la deschiderea aplicației.
+                        </Text>
+                    </View>
+                    <Switch
+                        value={securityEnabled}
+                        onValueChange={(v) => saveSettings(v, lockTimeout)}
+                        trackColor={{ false: colors.border.default, true: colors.accent.default }}
+                        thumbColor={securityEnabled ? '#FFFFFF' : colors.text.secondary}
+                    />
+                </View>
+                {securityEnabled && (
+                    <View style={{ marginTop: spacing[3] }}>
+                        <Text style={[styles.desc, { marginBottom: spacing[2] }]}>
+                            Blochează după:
+                        </Text>
+                        <View style={styles.timeoutRow}>
+                            {TIMEOUT_OPTIONS.map(opt => (
+                                <TouchableOpacity
+                                    key={opt.value}
+                                    style={[
+                                        styles.timeoutBtn,
+                                        lockTimeout === opt.value && styles.timeoutBtnActive,
+                                    ]}
+                                    onPress={() => saveSettings(true, opt.value)}
+                                >
+                                    <Text style={[
+                                        styles.timeoutBtnText,
+                                        lockTimeout === opt.value && styles.timeoutBtnTextActive,
+                                    ]}>
+                                        {opt.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                )}
             </View>
 
             {/* ── Conexiune Server ───────────────────────────────────────── */}
@@ -978,6 +1132,49 @@ const styles = StyleSheet.create({
         color: colors.accent.default,
     },
 
+    // ── VIN editor ────────────────────────────────────────────────────────────
+    vinEditContainer: {
+        paddingVertical: spacing[3],
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border.subtle,
+        gap: spacing[2],
+    },
+    vinInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[2],
+    },
+    vinInput: {
+        flex: 1,
+        backgroundColor: colors.bg[0],
+        borderWidth: 1,
+        borderColor: colors.accent.default,
+        borderRadius: radii.xs,
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[2] + 2,
+        color: colors.text.primary,
+        fontSize: typography.sizes.label2,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        fontWeight: typography.weights.bold,
+        letterSpacing: 1.5,
+    },
+    vinCounter: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        minWidth: 36,
+        textAlign: 'right',
+    },
+    vinStatusMsg: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.semibold,
+    },
+    vinBtnRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: spacing[2],
+        marginTop: spacing[1],
+    },
+
     // ── Reset thresholds ──────────────────────────────────────────────────────
     resetThreshBtn: {
         marginTop: spacing[3],
@@ -988,6 +1185,33 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.caption,
         color: colors.text.tertiary,
         textDecorationLine: 'underline',
+    },
+
+    // ── Security timeout ──────────────────────────────────────────────────────
+    timeoutRow: {
+        flexDirection: 'row',
+        gap: spacing[2],
+    },
+    timeoutBtn: {
+        flex: 1,
+        paddingVertical: spacing[2] + 2,
+        borderRadius: radii.xs,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        alignItems: 'center',
+        backgroundColor: colors.bg[0],
+    },
+    timeoutBtnActive: {
+        borderColor: colors.accent.default,
+        backgroundColor: colors.accent.default + '18',
+    },
+    timeoutBtnText: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
+    },
+    timeoutBtnTextActive: {
+        color: colors.accent.default,
     },
 
     // ── Danger ────────────────────────────────────────────────────────────────
