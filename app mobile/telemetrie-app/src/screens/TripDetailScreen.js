@@ -144,7 +144,7 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
             }
         };
         load();
-    }, [tripId, activeVin]);
+    }, [effectiveTripId, activeVin]);
 
     const chartWidth = screenWidth - layout.screenPaddingH * 2 - spacing[8];
 
