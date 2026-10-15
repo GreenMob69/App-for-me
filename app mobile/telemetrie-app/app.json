@@ -23,7 +23,9 @@
     },
     "plugins": [
       "expo-sqlite",
-      "expo-local-authentication"
+      "expo-local-authentication",
+      "expo-sharing",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
