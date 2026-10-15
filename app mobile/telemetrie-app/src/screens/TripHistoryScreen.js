@@ -23,10 +23,12 @@ import { useVehicle } from '../context/VehicleContext';
 const PAGE_SIZE = 25;
 
 const FILTERS = [
-    { key: 'ALL',   label: 'Toate'      },
-    { key: 'TODAY', label: 'Astăzi'     },
-    { key: 'WEEK',  label: 'Săptămâna'  },
-    { key: 'MONTH', label: 'Luna'       },
+    { key: 'ALL',      label: 'Toate'       },
+    { key: 'BUSINESS', label: '💼 Business' },
+    { key: 'PERSONAL', label: '👤 Personal' },
+    { key: 'ALERTS',   label: '⚠️ Alerte'   },
+    { key: 'WEEK',     label: 'Săptămâna'   },
+    { key: 'MONTH',    label: 'Luna'        },
 ];
 
 const MONTH_NAMES = [
@@ -257,7 +259,7 @@ async function fetchWithOfflineFallback(cacheKey, fetchFn, ttl = 30 * 60 * 1000)
 
 // ─── TripRow component ───────────────────────────────────────────────────────
 
-const TripRow = ({ trip, onPress }) => {
+const TripRow = ({ trip, onPress, onToggleTag }) => {
     const eco    = trip.scor_eco ?? 100;
     const km     = parseFloat(trip.km_parcursi ?? 0);
     const hasDTC = (trip.nr_dtc ?? 0) > 0;
@@ -324,8 +326,30 @@ const TripRow = ({ trip, onPress }) => {
                     </View>
                 )}
 
-                {/* Row 4: status badges */}
+                {/* Row 4: status badges + B2B tag */}
                 <View style={styles.tripBadgesRow}>
+                    <TouchableOpacity
+                        onPress={(e) => {
+                            e.stopPropagation?.();
+                            onToggleTag && onToggleTag(trip);
+                        }}
+                        style={[
+                            styles.tagPill,
+                            trip.trip_tag === 'BUSINESS' ? styles.tagPillBusiness :
+                            trip.trip_tag === 'PERSONAL' ? styles.tagPillPersonal : styles.tagPillDefault
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Etichetă B2B: ${trip.trip_tag || 'Nespecificat'}. Apasă pentru comutare`}
+                    >
+                        <Text style={[
+                            styles.tagPillText,
+                            trip.trip_tag === 'BUSINESS' ? styles.tagTextBusiness :
+                            trip.trip_tag === 'PERSONAL' ? styles.tagTextPersonal : styles.tagTextDefault
+                        ]}>
+                            {trip.trip_tag === 'BUSINESS' ? '💼 Business' : trip.trip_tag === 'PERSONAL' ? '👤 Personal' : '+ Tag'}
+                        </Text>
+                    </TouchableOpacity>
+
                     {badges.map(b => (
                         <StatusBadge key={b.label} status={b.status} label={b.label} variant="filled" size="sm" />
                     ))}
@@ -377,6 +401,9 @@ const TripHistoryScreen = () => {
         const params = { limit: PAGE_SIZE, offset: 0 };
         if (startDate) params.startDate = startDate;
         if (endDate)   params.endDate   = endDate;
+        if (activeFilter === 'BUSINESS') params.tag = 'BUSINESS';
+        if (activeFilter === 'PERSONAL') params.tag = 'PERSONAL';
+        if (activeFilter === 'ALERTS')   params.hasAlerts = 'true';
 
         const statsKey = `stats_${activeVin}`;
 
@@ -454,6 +481,9 @@ const TripHistoryScreen = () => {
                 const params = { limit: PAGE_SIZE, offset: offsetRef.current };
                 if (startDate) params.startDate = startDate;
                 if (endDate)   params.endDate   = endDate;
+                if (activeFilter === 'BUSINESS') params.tag = 'BUSINESS';
+                if (activeFilter === 'PERSONAL') params.tag = 'PERSONAL';
+                if (activeFilter === 'ALERTS')   params.hasAlerts = 'true';
 
                 const res   = await api.get('/calatorii/filtrate', { params, timeout: 7000 });
                 const rows  = res.data?.rows || [];
@@ -554,29 +584,51 @@ const TripHistoryScreen = () => {
     const filteredTrips = useMemo(() => {
         // Offline: SQLite a filtrat deja prin search_text; nu mai filtrăm in-memory
         if (fromCache) return trips;
-        if (!search.trim()) return trips;
+        let res = trips;
+        if (activeFilter === 'BUSINESS') {
+            res = res.filter(t => t.trip_tag === 'BUSINESS');
+        } else if (activeFilter === 'PERSONAL') {
+            res = res.filter(t => t.trip_tag === 'PERSONAL');
+        } else if (activeFilter === 'ALERTS') {
+            res = res.filter(t => (t.nr_alerte || 0) > 0 || (t.nr_dtc || 0) > 0);
+        }
+
+        if (!search.trim()) return res;
         const q = search.toLowerCase();
-        return trips.filter(trip => {
+        return res.filter(trip => {
             const title = buildTripTitle(trip).toLowerCase();
             const date  = formatTripDate(trip.timestamp_start).toLowerCase();
             const km    = String(Math.round(trip.km_parcursi || 0));
             const cons  = String(trip.consum_mediu_100km || '');
+            const tag   = String(trip.trip_tag || '').toLowerCase();
             const bgs   = buildTripBadges(trip).map(b => b.label.toLowerCase()).join(' ');
-            return title.includes(q) || date.includes(q) || km.includes(q) || cons.includes(q) || bgs.includes(q);
+            return title.includes(q) || date.includes(q) || km.includes(q) || cons.includes(q) || tag.includes(q) || bgs.includes(q);
         });
-    }, [trips, search, fromCache]);
+    }, [trips, search, fromCache, activeFilter]);
 
     // Group filtered trips into sections by date
     const sections = useMemo(() => groupTripsByDate(filteredTrips), [filteredTrips]);
 
     const heroInfo = useMemo(() => buildHeroInfo(trips, stats), [trips, stats]);
 
+    const handleToggleTag = useCallback(async (trip) => {
+        const nextTag = trip.trip_tag === 'BUSINESS' ? 'PERSONAL' : trip.trip_tag === 'PERSONAL' ? null : 'BUSINESS';
+        setTrips(prev => prev.map(t => t.id_calatorie === trip.id_calatorie ? { ...t, trip_tag: nextTag } : t));
+        try {
+            await api.put(`/calatorii/${trip.id_calatorie}/tag`, { tag: nextTag });
+        } catch (err) {
+            console.error('Eroare actualizare tag:', err);
+            setTrips(prev => prev.map(t => t.id_calatorie === trip.id_calatorie ? { ...t, trip_tag: trip.trip_tag } : t));
+        }
+    }, []);
+
     const renderItem = useCallback(({ item: trip }) => (
         <TripRow
             trip={trip}
             onPress={() => setSelectedTripForPeek(trip)}
+            onToggleTag={handleToggleTag}
         />
-    ), []);
+    ), [handleToggleTag]);
 
     // ── Trip Detail ───────────────────────────────────────────────────────────
     if (selectedTripId !== null) {
@@ -1327,6 +1379,39 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: spacing[1] + 1,
+    },
+    tagPill: {
+        paddingHorizontal: spacing[2],
+        paddingVertical: 2,
+        borderRadius: radii.full,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    tagPillBusiness: {
+        backgroundColor: 'rgba(56, 189, 248, 0.12)',
+        borderColor: colors.accent.default,
+    },
+    tagPillPersonal: {
+        backgroundColor: 'rgba(183, 107, 255, 0.14)',
+        borderColor: '#b76bff',
+    },
+    tagPillDefault: {
+        backgroundColor: colors.bg[2],
+        borderColor: colors.border.default,
+    },
+    tagPillText: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
+    },
+    tagTextBusiness: {
+        color: colors.accent.default,
+    },
+    tagTextPersonal: {
+        color: '#b76bff',
+    },
+    tagTextDefault: {
+        color: colors.text.secondary,
     },
     emptyState: { marginTop: spacing[6] },
 

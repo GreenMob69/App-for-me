@@ -251,6 +251,7 @@ const LiveDashboardScreen = () => {
     const { animated, numeric } = useSmoothedTelemetry(liveData);
 
     const [tab,        setTab]        = useState('LIVE');
+    const [proMode,    setProMode]    = useState(false); // Mod Șofer vs Mod Inginer Pro
     const [category,   setCategory]   = useState('MOTOR');
     const [showAlerts, setShowAlerts] = useState(false);
     const [zoomX,      setZoomX]      = useState(10);
@@ -400,93 +401,97 @@ const LiveDashboardScreen = () => {
                     </View>
                 )}
 
-                {/* ── Virtual Dyno & ECU Glass Card ──────────────── */}
-                <View style={styles.dynoCard}>
-                    <View style={styles.dynoHeader}>
-                        <View style={styles.dynoTag}>
-                            <Text style={styles.dynoTagText}>⚡ VIRTUAL DYNO (ECU MATH)</Text>
-                        </View>
-                        {v.smokeRisk ? (
-                            <View style={[styles.dynoTag, { backgroundColor: 'rgba(239,68,68,0.18)', borderColor: colors.status.critical }]}>
-                                <Text style={[styles.dynoTagText, { color: colors.status.critical }]}>⚠ RISC FUM NEGRU</Text>
+                {/* ── Virtual Dyno & ECU Glass Card (Doar în Mod Inginer Pro) ── */}
+                {proMode && (
+                    <>
+                        <View style={styles.dynoCard}>
+                            <View style={styles.dynoHeader}>
+                                <View style={styles.dynoTag}>
+                                    <Text style={styles.dynoTagText}>⚡ VIRTUAL DYNO (ECU MATH)</Text>
+                                </View>
+                                {v.smokeRisk ? (
+                                    <View style={[styles.dynoTag, { backgroundColor: 'rgba(239,68,68,0.18)', borderColor: colors.status.critical }]}>
+                                        <Text style={[styles.dynoTagText, { color: colors.status.critical }]}>⚠ RISC FUM NEGRU</Text>
+                                    </View>
+                                ) : (
+                                    <View style={[styles.dynoTag, { backgroundColor: 'rgba(16,185,129,0.14)', borderColor: colors.status.good }]}>
+                                        <Text style={[styles.dynoTagText, { color: colors.status.good }]}>✓ LIMITĂ FUM OK</Text>
+                                    </View>
+                                )}
                             </View>
-                        ) : (
-                            <View style={[styles.dynoTag, { backgroundColor: 'rgba(16,185,129,0.14)', borderColor: colors.status.good }]}>
-                                <Text style={[styles.dynoTagText, { color: colors.status.good }]}>✓ LIMITĂ FUM OK</Text>
-                            </View>
-                        )}
-                    </View>
 
-                    <View style={styles.dynoGrid}>
-                        {/* Putere CP */}
-                        <View style={styles.dynoCell}>
-                            <Text style={styles.dynoLabel}>PUTERE REALĂ</Text>
-                            <Text style={styles.dynoValue}>{powerHp} <Text style={styles.dynoUnit}>CP</Text></Text>
-                            <View style={styles.dynoMiniBar}>
-                                <View style={[styles.dynoMiniFill, { width: `${Math.min((powerHp / 140) * 100, 100)}%`, backgroundColor: colors.status.good }]} />
+                            <View style={styles.dynoGrid}>
+                                {/* Putere CP */}
+                                <View style={styles.dynoCell}>
+                                    <Text style={styles.dynoLabel}>PUTERE REALĂ</Text>
+                                    <Text style={styles.dynoValue}>{powerHp} <Text style={styles.dynoUnit}>CP</Text></Text>
+                                    <View style={styles.dynoMiniBar}>
+                                        <View style={[styles.dynoMiniFill, { width: `${Math.min((powerHp / 140) * 100, 100)}%`, backgroundColor: colors.status.good }]} />
+                                    </View>
+                                </View>
+
+                                {/* Cuplu Nm */}
+                                <View style={styles.dynoCell}>
+                                    <Text style={styles.dynoLabel}>CUPLU MOTOR</Text>
+                                    <Text style={styles.dynoValue}>{torqueNm} <Text style={styles.dynoUnit}>Nm</Text></Text>
+                                    <View style={styles.dynoMiniBar}>
+                                        <View style={[styles.dynoMiniFill, { width: `${Math.min((torqueNm / 300) * 100, 100)}%`, backgroundColor: colors.accent.default }]} />
+                                    </View>
+                                </View>
+
+                                {/* Volumetric Efficiency */}
+                                <View style={styles.dynoCell}>
+                                    <Text style={styles.dynoLabel}>EFICIENȚĂ VOLUMETRICĂ</Text>
+                                    <Text style={styles.dynoValue}>{vePct}%</Text>
+                                    <Text style={styles.dynoSub}>{m.load < 40 || rpm < 1600 ? 'Sarcină parțială' : (vePct >= 80 ? 'Admisie optimă' : 'Restricție debit')}</Text>
+                                </View>
+
+                                {/* Lambda / AFR */}
+                                <View style={styles.dynoCell}>
+                                    <Text style={styles.dynoLabel}>LAMBDA / AFR</Text>
+                                    <Text style={styles.dynoValue}>λ {typeof lambda === 'number' ? lambda.toFixed(2) : lambda}</Text>
+                                    <Text style={styles.dynoSub}>{typeof afr === 'number' ? `${afr.toFixed(1)}:1 AFR` : 'AFR'}</Text>
+                                </View>
                             </View>
                         </View>
 
-                        {/* Cuplu Nm */}
-                        <View style={styles.dynoCell}>
-                            <Text style={styles.dynoLabel}>CUPLU MOTOR</Text>
-                            <Text style={styles.dynoValue}>{torqueNm} <Text style={styles.dynoUnit}>Nm</Text></Text>
-                            <View style={styles.dynoMiniBar}>
-                                <View style={[styles.dynoMiniFill, { width: `${Math.min((torqueNm / 300) * 100, 100)}%`, backgroundColor: colors.accent.default }]} />
+                        {/* ── Dual Boost Indicator (Target vs Actual) ───── */}
+                        <View style={styles.boostCard}>
+                            <View style={styles.boostHeader}>
+                                <Text style={styles.boostTitle}>TURBO BOOST (COMANDAT vs EFECTIV)</Text>
+                                <Text style={[styles.boostDelta, { color: Math.abs(boost - targetBoost) > 0.3 ? colors.status.caution : colors.status.good }]}>
+                                    Δ {((boost - targetBoost) > 0 ? '+' : '') + (boost - targetBoost).toFixed(2)} bar
+                                </Text>
                             </View>
-                        </View>
-
-                        {/* Volumetric Efficiency */}
-                        <View style={styles.dynoCell}>
-                            <Text style={styles.dynoLabel}>EFICIENȚĂ VOLUMETRICĂ</Text>
-                            <Text style={styles.dynoValue}>{vePct}%</Text>
-                            <Text style={styles.dynoSub}>{m.load < 40 || rpm < 1600 ? 'Sarcină parțială' : (vePct >= 80 ? 'Admisie optimă' : 'Restricție debit')}</Text>
-                        </View>
-
-                        {/* Lambda / AFR */}
-                        <View style={styles.dynoCell}>
-                            <Text style={styles.dynoLabel}>LAMBDA / AFR</Text>
-                            <Text style={styles.dynoValue}>λ {typeof lambda === 'number' ? lambda.toFixed(2) : lambda}</Text>
-                            <Text style={styles.dynoSub}>{typeof afr === 'number' ? `${afr.toFixed(1)}:1 AFR` : 'AFR'}</Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* ── Dual Boost Indicator (Target vs Actual) ───── */}
-                <View style={styles.boostCard}>
-                    <View style={styles.boostHeader}>
-                        <Text style={styles.boostTitle}>TURBO BOOST (COMANDAT vs EFECTIV)</Text>
-                        <Text style={[styles.boostDelta, { color: Math.abs(boost - targetBoost) > 0.3 ? colors.status.caution : colors.status.good }]}>
-                            Δ {((boost - targetBoost) > 0 ? '+' : '') + (boost - targetBoost).toFixed(2)} bar
-                        </Text>
-                    </View>
-                    <View style={styles.boostBarsWrap}>
-                        <View style={styles.boostBarRow}>
-                            <Text style={styles.boostBarLbl}>Cmd</Text>
-                            <View style={styles.boostBarTrack}>
-                                <View style={[styles.boostBarFill, { width: `${Math.min((targetBoost / 2.5) * 100, 100)}%`, backgroundColor: colors.status.monitor }]} />
+                            <View style={styles.boostBarsWrap}>
+                                <View style={styles.boostBarRow}>
+                                    <Text style={styles.boostBarLbl}>Cmd</Text>
+                                    <View style={styles.boostBarTrack}>
+                                        <View style={[styles.boostBarFill, { width: `${Math.min((targetBoost / 2.5) * 100, 100)}%`, backgroundColor: colors.status.monitor }]} />
+                                    </View>
+                                    <Text style={styles.boostBarVal}>{targetBoost.toFixed(2)} bar</Text>
+                                </View>
+                                <View style={styles.boostBarRow}>
+                                    <Text style={styles.boostBarLbl}>Act</Text>
+                                    <View style={styles.boostBarTrack}>
+                                        <View style={[styles.boostBarFill, { width: `${Math.min((boost / 2.5) * 100, 100)}%`, backgroundColor: boostColor }]} />
+                                    </View>
+                                    <Text style={styles.boostBarVal}>{boost.toFixed(2)} bar</Text>
+                                </View>
                             </View>
-                            <Text style={styles.boostBarVal}>{targetBoost.toFixed(2)} bar</Text>
+                            {v.turboDiagnostic && v.turboDiagnostic !== 'NORMAL' && (
+                                <View style={styles.turboDiagPill}>
+                                    <Text style={styles.turboDiagText}>
+                                        {v.turboDiagnostic === 'VNT_N75_SPIKE' ? '⚡ Spike suprapresiune VNT / electrovalvă N75' :
+                                         v.turboDiagnostic === 'INTERCOOLER_BOOST_LEAK' ? '⚠ Pierdere presiune admisie / intercooler' :
+                                         v.turboDiagnostic === 'TURBO_UNDERBOOST_WEAR' ? 'ℹ Subpresiune constantă — verificare geometrie' :
+                                         v.turboDiagnostic}
+                                    </Text>
+                                </View>
+                            )}
                         </View>
-                        <View style={styles.boostBarRow}>
-                            <Text style={styles.boostBarLbl}>Act</Text>
-                            <View style={styles.boostBarTrack}>
-                                <View style={[styles.boostBarFill, { width: `${Math.min((boost / 2.5) * 100, 100)}%`, backgroundColor: boostColor }]} />
-                            </View>
-                            <Text style={styles.boostBarVal}>{boost.toFixed(2)} bar</Text>
-                        </View>
-                    </View>
-                    {v.turboDiagnostic && v.turboDiagnostic !== 'NORMAL' && (
-                        <View style={styles.turboDiagPill}>
-                            <Text style={styles.turboDiagText}>
-                                {v.turboDiagnostic === 'VNT_N75_SPIKE' ? '⚡ Spike suprapresiune VNT / electrovalvă N75' :
-                                 v.turboDiagnostic === 'INTERCOOLER_BOOST_LEAK' ? '⚠ Pierdere presiune admisie / intercooler' :
-                                 v.turboDiagnostic === 'TURBO_UNDERBOOST_WEAR' ? 'ℹ Subpresiune constantă — verificare geometrie' :
-                                 v.turboDiagnostic}
-                            </Text>
-                        </View>
-                    )}
-                </View>
+                    </>
+                )}
 
                 {/* ── 2×3 metric tiles ────────────────────────────── */}
                 <View style={styles.tileGrid}>
@@ -664,6 +669,23 @@ const LiveDashboardScreen = () => {
                     <View style={[styles.connDot, { backgroundColor: connColor }]} />
                     <Text style={[styles.connLabel, { color: connColor }]}>{connLabel}</Text>
                 </View>
+
+                {/* Dual Persona Switch: Șofer vs Inginer Pro */}
+                <TouchableOpacity
+                    style={[styles.modeTogglePill, proMode ? styles.modeTogglePro : styles.modeToggleDriver]}
+                    onPress={() => {
+                        const next = !proMode;
+                        setProMode(next);
+                        if (!next && tab === 'PARAMS') setTab('LIVE');
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={proMode ? 'Mod Inginer activ. Apasă pentru Mod Șofer' : 'Mod Șofer activ. Apasă pentru Mod Inginer Pro'}
+                >
+                    <Text style={[styles.modeToggleText, proMode ? styles.modeToggleTextPro : styles.modeToggleTextDriver]}>
+                        {proMode ? '⚡ PRO' : '🚗 ȘOFER'}
+                    </Text>
+                </TouchableOpacity>
+
                 <Text style={styles.vehicleName} numberOfLines={1}>
                     {getVehicleLabel() || 'Dashboard'}
                 </Text>
@@ -700,8 +722,8 @@ const LiveDashboardScreen = () => {
             {/* ── Bottom tab bar ──────────────────────────────────────── */}
             <View style={styles.tabBar}>
                 {[
-                    { id: 'LIVE',   label: 'Live'       },
-                    { id: 'PARAMS', label: 'Parametri'  },
+                    { id: 'LIVE',   label: proMode ? 'Bord Pro' : 'Bord Șofer' },
+                    ...(proMode ? [{ id: 'PARAMS', label: 'Parametri' }] : []),
                     { id: 'SCOPE',  label: 'Grafic'     },
                 ].map(t => (
                     <TouchableOpacity
@@ -787,6 +809,31 @@ const styles = StyleSheet.create({
     },
     connDot:   { width: 7, height: 7, borderRadius: 4 },
     connLabel: { fontSize: typography.sizes.micro, fontWeight: typography.weights.heavy },
+    modeTogglePill: {
+        paddingHorizontal: spacing[2] + 4,
+        paddingVertical: spacing[1],
+        borderRadius: radii.full,
+        borderWidth: 1,
+    },
+    modeToggleDriver: {
+        backgroundColor: 'rgba(56, 189, 248, 0.1)',
+        borderColor: colors.accent.default,
+    },
+    modeTogglePro: {
+        backgroundColor: 'rgba(245, 158, 11, 0.16)',
+        borderColor: colors.status.monitor,
+    },
+    modeToggleText: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.5,
+    },
+    modeToggleTextDriver: {
+        color: colors.accent.default,
+    },
+    modeToggleTextPro: {
+        color: colors.status.monitor,
+    },
     vehicleName: {
         flex: 1,
         fontSize: typography.sizes.body1,

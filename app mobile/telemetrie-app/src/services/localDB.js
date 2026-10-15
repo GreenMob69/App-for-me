@@ -87,6 +87,12 @@ export async function queryTrips(vin, { filter = 'ALL', limit = 25, offset = 0, 
         const start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
         where += ' AND timestamp_start >= ?';
         baseArgs.push(start);
+    } else if (filter === 'BUSINESS') {
+        where += " AND search_text LIKE '%business%'";
+    } else if (filter === 'PERSONAL') {
+        where += " AND search_text LIKE '%personal%'";
+    } else if (filter === 'ALERTS') {
+        where += " AND (search_text LIKE '%alerte%' OR search_text LIKE '%erori dtc%')";
     }
 
     if (search) {

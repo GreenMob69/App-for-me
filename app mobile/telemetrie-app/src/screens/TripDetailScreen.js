@@ -75,10 +75,12 @@ const barStyles = StyleSheet.create({
 // ─── CHART CONFIGS ────────────────────────────────────────────────────────────
 
 const CHART_CONFIGS = {
-    RPM:   { key: 'rpm',   label: 'Turație (RPM)',      color: colors.accent.default,  field: 'rpm' },
-    SPEED: { key: 'speed', label: 'Viteză (km/h)',       color: colors.status.good,     field: 'speed' },
-    TEMP:  { key: 'temp',  label: 'Temp. Lichid (°C)',   color: colors.status.critical, field: 'temp_apa_c' },
-    BOOST: { key: 'boost', label: 'Presiune Turbo (bar)',color: colors.status.monitor,  field: 'boost_bar' },
+    RPM:   { key: 'rpm',   label: 'Turație (RPM)',       color: colors.accent.default,  field: 'rpm' },
+    SPEED: { key: 'speed', label: 'Viteză (km/h)',        color: colors.status.good,     field: 'speed' },
+    TEMP:  { key: 'temp',  label: 'Temp. Lichid (°C)',    color: colors.status.critical, field: 'temp_apa_c' },
+    BOOST: { key: 'boost', label: 'Presiune Turbo (bar)', color: colors.status.monitor,  field: 'boost_bar' },
+    BSFC:  { key: 'bsfc',  label: 'BSFC (g/kWh)',         color: '#f59e0b',              field: 'bsfc' },
+    MAF:   { key: 'maf',   label: 'Debit Aer (g/s)',      color: '#38bdf8',              field: 'maf' },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -155,11 +157,30 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
         const points = [];
         for (let i = 0; i < graficData.length; i += step) {
             const row = graficData[i];
-            const val = parseFloat(row?.[config.field] || row?.motor?.[config.field] || 0);
+            let val = 0;
+            if (config.key === 'bsfc') {
+                val = parseFloat(row?.virtual?.bsfc || row?.bsfc || 0);
+            } else if (config.key === 'maf') {
+                val = parseFloat(row?.aer?.maf || row?.maf_gs || row?.maf || 0);
+            } else {
+                val = parseFloat(row?.[config.field] || row?.motor?.[config.field] || 0);
+            }
             points.push({ value: isNaN(val) ? 0 : val });
         }
         return points;
     };
+
+    const handleToggleTag = useCallback(async () => {
+        if (!trip) return;
+        const nextTag = trip.trip_tag === 'BUSINESS' ? 'PERSONAL' : trip.trip_tag === 'PERSONAL' ? null : 'BUSINESS';
+        setTrip(prev => ({ ...prev, trip_tag: nextTag }));
+        try {
+            await api.put(`/calatorii/${effectiveTripId}/tag`, { tag: nextTag });
+        } catch (err) {
+            console.error('Eroare actualizare tag:', err);
+            setTrip(prev => ({ ...prev, trip_tag: trip.trip_tag }));
+        }
+    }, [trip, effectiveTripId]);
 
     // ── Loading ───────────────────────────────────────────────────────────────
     if (loading) {
@@ -261,6 +282,35 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
                 contentContainerStyle={{ paddingBottom: spacing[10] }}
                 showsVerticalScrollIndicator={false}
             >
+                {/* ── B2B Tag & Category Strip ───────────────────────── */}
+                <View style={styles.tagStrip}>
+                    <TouchableOpacity
+                        onPress={handleToggleTag}
+                        style={[
+                            styles.tagPill,
+                            trip.trip_tag === 'BUSINESS' ? styles.tagPillBusiness :
+                            trip.trip_tag === 'PERSONAL' ? styles.tagPillPersonal : styles.tagPillDefault
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Etichetă B2B: ${trip.trip_tag || 'Nespecificat'}. Apasă pentru comutare`}
+                    >
+                        <Text style={[
+                            styles.tagPillText,
+                            trip.trip_tag === 'BUSINESS' ? styles.tagTextBusiness :
+                            trip.trip_tag === 'PERSONAL' ? styles.tagTextPersonal : styles.tagTextDefault
+                        ]}>
+                            {trip.trip_tag === 'BUSINESS' ? '💼 Cursă Business (Decontabilă)' :
+                             trip.trip_tag === 'PERSONAL' ? '👤 Cursă Personală' :
+                             '🏷️ Setează etichetă cursă (+)'}
+                        </Text>
+                    </TouchableOpacity>
+                    {trip.nr_alerte > 0 && (
+                        <View style={styles.alertCountBadge}>
+                            <Text style={styles.alertCountText}>⚠️ {trip.nr_alerte} alerte</Text>
+                        </View>
+                    )}
+                </View>
+
                 {/* ── Metrics grid ──────────────────────────────────────── */}
                 <View style={styles.metricsRow}>
                     <MetricCard
@@ -673,6 +723,61 @@ const styles = StyleSheet.create({
     },
 
     scroll: { flex: 1, paddingHorizontal: layout.screenPaddingH },
+
+    // ── B2B Tag Strip ─────────────────────────────────────────────────────────
+    tagStrip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: spacing[3],
+        marginBottom: spacing[2],
+    },
+    tagPill: {
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[1] + 2,
+        borderRadius: radii.full,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    tagPillBusiness: {
+        backgroundColor: 'rgba(56, 189, 248, 0.12)',
+        borderColor: colors.accent.default,
+    },
+    tagPillPersonal: {
+        backgroundColor: 'rgba(183, 107, 255, 0.14)',
+        borderColor: '#b76bff',
+    },
+    tagPillDefault: {
+        backgroundColor: colors.bg[2],
+        borderColor: colors.border.default,
+    },
+    tagPillText: {
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.bold,
+    },
+    tagTextBusiness: {
+        color: colors.accent.default,
+    },
+    tagTextPersonal: {
+        color: '#b76bff',
+    },
+    tagTextDefault: {
+        color: colors.text.secondary,
+    },
+    alertCountBadge: {
+        backgroundColor: 'rgba(239, 68, 68, 0.12)',
+        borderColor: colors.status.critical,
+        borderWidth: 1,
+        borderRadius: radii.full,
+        paddingHorizontal: spacing[2] + 2,
+        paddingVertical: spacing[1],
+    },
+    alertCountText: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
+        color: colors.status.critical,
+    },
 
     // ── Skeleton ──────────────────────────────────────────────────────────────
     skGap:    { marginTop: spacing[3] },
