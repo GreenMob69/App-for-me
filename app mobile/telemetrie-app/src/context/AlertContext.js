@@ -7,14 +7,20 @@ import socketService from '../services/socket';
 export const AlertContext = createContext();
 
 // ── Notification handler — must be set at module level (outside component)
-Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-        shouldShowBanner: true,   // v57: replaces deprecated shouldShowAlert
-        shouldShowList:   true,
-        shouldPlaySound:  false,
-        shouldSetBadge:   false,
-    }),
-});
+try {
+    if (Notifications?.setNotificationHandler) {
+        Notifications.setNotificationHandler({
+            handleNotification: async () => ({
+                shouldShowBanner: true,   // v57: replaces deprecated shouldShowAlert
+                shouldShowList:   true,
+                shouldPlaySound:  false,
+                shouldSetBadge:   false,
+            }),
+        });
+    }
+} catch (e) {
+    console.warn('[AlertContext] setNotificationHandler warning:', e?.message);
+}
 
 // ── Which alert types deserve a push notification
 const CRITICAL_TIPS = new Set(['DTC', 'DTC_DETECTAT', 'MOTOR_STARE', 'SUPRAINCARCARE']);
@@ -26,28 +32,40 @@ const shouldNotify = (alerta) =>
 const CHANNEL_ID = 'telemetrie_alerte';
 async function ensureAndroidChannel() {
     if (Platform.OS !== 'android') return;
-    await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-        name:       'Alerte vehicul',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF4444',
-    });
+    try {
+        if (Notifications?.setNotificationChannelAsync) {
+            await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+                name:       'Alerte vehicul',
+                importance: Notifications.AndroidImportance?.HIGH ?? 4,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#FF4444',
+            });
+        }
+    } catch (e) {
+        console.warn('[AlertContext] ensureAndroidChannel warning:', e?.message);
+    }
 }
 
 // ── Request permissions — returns true if granted
 async function requestNotifPermissions() {
-    const { status: existing } = await Notifications.getPermissionsAsync();
-    if (existing === 'granted') return true;
-    const { status } = await Notifications.requestPermissionsAsync({
-        ios: { allowAlert: true, allowBadge: false, allowSound: false },
-    });
-    return status === 'granted';
+    try {
+        if (!Notifications?.getPermissionsAsync) return false;
+        const { status: existing } = await Notifications.getPermissionsAsync();
+        if (existing === 'granted') return true;
+        const { status } = await Notifications.requestPermissionsAsync({
+            ios: { allowAlert: true, allowBadge: false, allowSound: false },
+        });
+        return status === 'granted';
+    } catch {
+        return false;
+    }
 }
 
 async function sendLocalNotification(alerta) {
     try {
         const enabled = await AsyncStorage.getItem('@notifs_enabled');
         if (enabled === 'false') return;
+        if (!Notifications?.scheduleNotificationAsync) return;
 
         await Notifications.scheduleNotificationAsync({
             content: {
