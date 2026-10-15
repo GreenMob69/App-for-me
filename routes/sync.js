@@ -25,11 +25,17 @@
  */
 
 const express = require('express');
+const DEVICE_SYNC_TOKEN = process.env.DEVICE_SYNC_TOKEN || 'telemetrie_esp32_sync_secret_2026';
 
 module.exports = function syncRoutes(db) {
     const router = express.Router();
 
     router.post('/sync/obd', (req, res) => {
+        const clientToken = req.headers['x-device-token'] || req.query.token;
+        if (DEVICE_SYNC_TOKEN && clientToken !== DEVICE_SYNC_TOKEN) {
+            return res.status(401).json({ error: 'Neautorizat: token dispozitiv invalid sau lipsă (header x-device-token)' });
+        }
+
         const { vin, trip_start, trip_end, rows } = req.body;
 
         if (!vin || !trip_start || !Array.isArray(rows) || rows.length === 0) {

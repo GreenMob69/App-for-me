@@ -5,6 +5,7 @@ const { THRESHOLDS } = require('../backend/analyzers/config');
 const { analyzeTrends } = require('../backend/analyzers/TrendEngine');
 const { requireAuth } = require('../middleware/auth');
 const dtcService = require('../services/dtcService');
+const { syncVehicleProfile } = require('../services/vehicleSyncService');
 
 module.exports = function(db, io) {
     const router = express.Router();
@@ -385,25 +386,17 @@ module.exports = function(db, io) {
         );
     });
 
-    router.patch('/vehicul/:vin/profil', (req, res) => {
+    router.patch('/vehicul/:vin/profil', async (req, res) => {
         const { vin } = req.params;
-        const { capacitate_rezervor_l, odometru_calibrat_km } = req.body;
-        const updates = [];
-        const params  = [];
-        if (capacitate_rezervor_l != null && !isNaN(capacitate_rezervor_l)) {
-            updates.push('capacitate_rezervor_l = ?');
-            params.push(Number(capacitate_rezervor_l));
+        try {
+            const result = await syncVehicleProfile(db, vin, req.body);
+            if (result.updatedFields.length === 0) {
+                return res.status(400).json({ eroare: 'Niciun câmp de actualizat.' });
+            }
+            res.json({ ok: true, vin: result.vin, updatedFields: result.updatedFields });
+        } catch (err) {
+            res.status(500).json({ eroare: err.message });
         }
-        if (odometru_calibrat_km != null && !isNaN(odometru_calibrat_km)) {
-            updates.push('odometru_calibrat_km = ?');
-            params.push(Number(odometru_calibrat_km));
-        }
-        if (updates.length === 0) return res.status(400).json({ eroare: 'Niciun câmp de actualizat.' });
-        params.push(vin);
-        db.run(`UPDATE vehicule SET ${updates.join(', ')} WHERE vin = ?`, params, function(err) {
-            if (err) return res.status(500).json({ eroare: err.message });
-            res.json({ ok: true, changes: this.changes });
-        });
     });
 
     router.get('/vehicule/list', (req, res) => {

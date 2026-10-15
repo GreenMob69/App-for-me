@@ -7,9 +7,10 @@ const { vehicleEventBus }  = require('../backend/vehicle-profile');
 const { buildTripInsights } = require('../services/tripInsights');
 const calatoriiActive       = require('../services/activeTrips');
 const dtcService            = require('../services/dtcService');
+const { syncOdometer }       = require('../services/vehicleSyncService');
 
 const TOPIC_TELEMETRIE = process.env.MQTT_TOPIC || 'telemetrie/obd2';
-const MQTT_BROKER_URL  = process.env.MQTT_BROKER_URL || 'mqtt://broker.emqx.io';
+const MQTT_BROKER_URL  = process.env.MQTT_BROKER_URL || 'mqtt://84.235.164.52:1883';
 
 function createMqttClient(db, io) {
     const client = mqtt.connect(MQTT_BROKER_URL);
@@ -85,6 +86,8 @@ function createMqttClient(db, io) {
                             ultimul_timestamp: pachet.timestamp,
                             alerts:           0,
                             analysis:         createAnalysis(),
+                            packetCount:      0,
+                            sampledPackets:   [],
                         };
                         console.log(`[TRIP START] Sesiunea #${this.lastID} a început pentru ${vin}!`);
                         io.emit('status_trip', { status: 'START', id_calatorie: this.lastID });
@@ -118,6 +121,18 @@ function createMqttClient(db, io) {
                 trip.consum_l += (c.inst_cons  || 0) * timp_scurs_ore;
             }
             trip.ultimul_timestamp = pachet.timestamp;
+
+            // Eșantionare uniformă în RAM (max 600 pachete) pentru a evita blocarea Event Loop-ului la OPRIRE
+            trip.packetCount = (trip.packetCount || 0) + 1;
+            if (!trip.sampledPackets) trip.sampledPackets = [];
+            if (trip.sampledPackets.length < 600) {
+                trip.sampledPackets.push(pachet);
+            } else {
+                const sampleIdx = Math.floor(Math.random() * trip.packetCount);
+                if (sampleIdx < 600) {
+                    trip.sampledPackets[sampleIdx] = pachet;
+                }
+            }
 
             const hardBrakesInainte  = trip.analysis.events.hardBrakes;
             const overspeedsInainte  = trip.analysis.events.overspeeds;
@@ -159,12 +174,20 @@ function createMqttClient(db, io) {
             const scor_final = Math.max(0, 100 - trip.penalizari_eco);
             const consum_mediu = trip.km > 0.01 ? (trip.consum_l / trip.km) * 100 : null;
 
-            const rawPackets = await new Promise(resolve =>
-                db.all(`SELECT matrice_completa_json FROM telemetrie_flux WHERE id_calatorie = ? ORDER BY timestamp ASC`,
-                    [trip.id_calatorie], (err, rows) =>
-                        resolve((rows || []).map(r => { try { return JSON.parse(r.matrice_completa_json); } catch { return null; } }).filter(Boolean))
-                )
-            );
+            // Optimizare Event Loop: folosim pachetele eșantionate direct din RAM dacă sunt disponibile,
+            // evitând I/O-ul blocant și mii de operațiuni JSON.parse sincrone pe firul principal
+            let rawPackets = (trip.sampledPackets && trip.sampledPackets.length >= 10)
+                ? trip.sampledPackets.slice().sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+                : null;
+
+            if (!rawPackets) {
+                rawPackets = await new Promise(resolve =>
+                    db.all(`SELECT matrice_completa_json FROM telemetrie_flux WHERE id_calatorie = ? ORDER BY timestamp ASC LIMIT 1000`,
+                        [trip.id_calatorie], (err, rows) =>
+                            resolve((rows || []).map(r => { try { return JSON.parse(r.matrice_completa_json); } catch { return null; } }).filter(Boolean))
+                    )
+                );
+            }
 
             const rezultatAnaliza = await finalizeTripAnalysis(trip, { db, vin, dtcList: dtcService.eroriActiveDTC, rawPackets });
 
@@ -238,12 +261,25 @@ function createMqttClient(db, io) {
                         report:       tripReport,
                     });
 
-                    db.get(`SELECT id FROM vehicles WHERE vin=?`, [vin], (err, vehicle) => {
+                    db.get(`SELECT id FROM vehicles WHERE vin=?`, [vin], async (err, vehicle) => {
                         if (!vehicle) return;
                         const distKm = Number(trip.km.toFixed(1));
+
+                        // Sincronizare automată a odometrului cu km parcurși în cursă
+                        let currentOdometer = null;
+                        try {
+                            const rowOdo = await new Promise(r => db.get('SELECT odometru_calibrat_km FROM vehicule WHERE vin=?', [vin], (e, row) => r(row)));
+                            if (rowOdo && rowOdo.odometru_calibrat_km > 0 && distKm > 0.05) {
+                                currentOdometer = Number((rowOdo.odometru_calibrat_km + distKm).toFixed(1));
+                                await syncOdometer(db, vin, currentOdometer, 'OBD', `Final cursă #${trip.id_calatorie} (+${distKm} km)`);
+                            }
+                        } catch (odoErr) {
+                            console.error('[ODOMETER SYNC WARNING]', odoErr.message);
+                        }
+
                         vehicleEventBus.emit(distKm > 300 ? 'LONG_TRIP' : 'TRIP_COMPLETED', {
                             vehicle_id: vehicle.id, source: 'OBD', distance_km: distKm,
-                            mileage_km: null, reference_type: 'TRIP', reference_id: trip.id_calatorie,
+                            mileage_km: currentOdometer, reference_type: 'TRIP', reference_id: trip.id_calatorie,
                             health_score: rezultatAnaliza ? rezultatAnaliza.health.overallHealth : null,
                         });
                         (rezultatAnaliza?.ai?.intelligence?.predictions || [])

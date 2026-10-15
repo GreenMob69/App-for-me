@@ -81,12 +81,12 @@ Roadmap-ul este împărțit în 3 faze cronologice: **Faza I (Urgent / Înainte 
 - [x] **Pasul 1.3**: Sincronizarea topic-ului MQTT (`telemetrie/obd2`) între `handlers/mqttHandler.js` și `simulator.js`.
 - [x] **Pasul 1.4**: Adăugarea Secțiunii de Data Contracts (Schemele JSON pentru `pachet`, `raport_ai_json`, `DigitalTwin`) în documentația AI.
 - [x] **Pasul 1.5**: Adăugarea regulilor stricte pentru AI privind dualitatea tabelelor `vehicule`/`vehicles` și folosirea `groq-sdk` în `GeminiService.js`.
-- [ ] **Pasul 1.6**: Protejarea endpoint-ului `POST /api/sync/obd` cu un header `x-device-token` configurabil în `.env` și în `SDSyncModule.h`.
+- [x] **Pasul 1.6**: Protejarea endpoint-ului `POST /api/sync/obd` cu un header `x-device-token` configurabil în `.env` și în `SDSyncModule.h`.
 
-### ⚡ FAZA II: Stabilitate Backend & Sincronizare DB (Săptămâna viitoare)
-- [ ] **Pasul 2.1**: Crearea unei funcții helper `syncVehicleRecords(vin, data)` în backend care face `UPDATE/INSERT` atomic în ambele tabele (`vehicule` și `vehicles`), prevenind desincronizarea kilometrajului sau rezervorului.
-- [ ] **Pasul 2.2**: Optimizarea pipeline-ului la `OPRIRE`: utilizarea exclusivă a obiectului `trip.analysis` din memorie pentru `finalizeTripAnalysis()`, eliminând `SELECT * FROM telemetrie_flux` și `JSON.parse` pe mii de rânduri.
-- [ ] **Pasul 2.3**: Verificarea offline cache-ului pe mobil: validarea fluxului când serverul este oprit (aplicația trebuie să deschidă direct ecranul din `localDB.js` și `AsyncStorage` fără erori roșii).
+### ⚡ FAZA II: Stabilitate Backend & Sincronizare DB (Finalizat cu succes)
+- [x] **Pasul 2.1**: Crearea modulului helper `services/vehicleSyncService.js` (`syncVehicleProfile`, `syncOdometer`) în backend care face sincronizare atomică în ambele tabele (`vehicule` și `vehicles`), prevenind desincronizarea kilometrajului sau rezervorului. Integrat în `PATCH /vehicul/:vin/profil`, `PUT /api/vehicles/:id` și `POST /api/vehicles/:id/mileage`.
+- [x] **Pasul 2.2**: Optimizarea pipeline-ului la `OPRIRE`: utilizarea unui buffer eșantionat uniform în RAM (`trip.sampledPackets`, max 600 puncte) pentru `finalizeTripAnalysis()`, eliminând blocarea Event Loop-ului Node.js prin `SELECT *` și mii de `JSON.parse` sincrone. Sincronizarea automată a kilometrilor parcurși în odometru la final de cursă.
+- [x] **Pasul 2.3**: Verificarea offline cache-ului pe mobil: validarea fluxului când serverul este offline (`localDB.js` cu expo-sqlite async WAL mode, fallback robust în `TripHistoryScreen.js`).
 
 ### 🌟 FAZA III: Finisare Prezentare & Demo Live (Zilele dinaintea susținerii)
 - [ ] **Pasul 3.1**: Script de demonstrație live: pregătirea simulatorului cu scenariul de 10 minute pentru a demonstra live în fața comisiei frânarea ABS, detecția defecțiunilor și generarea raportului AI la oprire.

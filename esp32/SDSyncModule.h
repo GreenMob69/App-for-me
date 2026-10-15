@@ -53,9 +53,10 @@ public:
         return true;
     }
 
-    void setServer(const char* baseUrl, const char* vin) {
+    void setServer(const char* baseUrl, const char* vin, const char* syncToken = "telemetrie_esp32_sync_secret_2026") {
         _serverUrl = String(baseUrl);
         _vin       = String(vin);
+        _syncToken = String(syncToken);
     }
 
     // ── Logare date OBD ──────────────────────────────────────────────────────
@@ -151,6 +152,7 @@ private:
     uint8_t       _csPin          = 5;
     String        _serverUrl      = "";
     String        _vin            = "";
+    String        _syncToken      = "telemetrie_esp32_sync_secret_2026";
     String        _currentFile    = "";
     bool          _tripActive     = false;
     int           _rowCount       = 0;
@@ -262,6 +264,9 @@ private:
             HTTPClient http;
             http.begin(_serverUrl + "/api/sync/obd");
             http.addHeader("Content-Type", "application/json");
+            if (_syncToken.length() > 0) {
+                http.addHeader("x-device-token", _syncToken);
+            }
             http.setTimeout(15000);
             int code = http.POST(body);
 

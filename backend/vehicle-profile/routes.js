@@ -7,6 +7,7 @@ const { decodeVin, validateVin } = require('./VinDecoder');
 const { seedMaintenanceItems, recalculateAllItems, onServiceAdded, getEstimatedOdometer } = require('./MaintenanceCalculator');
 const { vehicleEventBus } = require('./EventBus');
 const { hydrateStatus, sortDocs } = require('./DocumentsModule');
+const { syncVehicleProfile, syncOdometer } = require('../../services/vehicleSyncService');
 
 // Service type -> event type mapping
 const SERVICE_EVENT_MAP = {
@@ -214,9 +215,21 @@ function registerVehicleProfileRoutes(app, db) {
         db.run(
             `UPDATE vehicles SET ${sets.join(', ')} WHERE id = ?`,
             values,
-            function(err) {
+            async function(err) {
                 if (err) return res.status(500).json({ error: err.message });
                 if (this.changes === 0) return res.status(404).json({ error: 'Vehicul negasit' });
+
+                // Sincronizare bidirecțională spre tabela nucleu `vehicule`
+                try {
+                    const row = await new Promise((resolve) => {
+                        db.get(`SELECT vin FROM vehicles WHERE id = ?`, [req.params.id], (e, r) => resolve(r));
+                    });
+                    if (row?.vin) {
+                        await syncVehicleProfile(db, row.vin, data);
+                    }
+                } catch (syncErr) {
+                    console.error('[SYNC VEHICLE WARNING]', syncErr.message);
+                }
 
                 vehicleEventBus.emit('VEHICLE_UPDATED', {
                     vehicle_id: parseInt(req.params.id),
@@ -273,6 +286,18 @@ function registerVehicleProfileRoutes(app, db) {
             VALUES (?, ?, ?, ?, ?)
         `, [vehicleId, odometer_km, source || 'MANUAL', now, note || null], async function(err) {
             if (err) return res.status(500).json({ error: err.message });
+
+            // Sincronizare bidirecțională spre `vehicule.odometru_calibrat_km`
+            try {
+                const row = await new Promise(resolve => {
+                    db.get(`SELECT vin FROM vehicles WHERE id = ?`, [vehicleId], (e, r) => resolve(r));
+                });
+                if (row?.vin) {
+                    await syncOdometer(db, row.vin, odometer_km, source || 'MANUAL', note);
+                }
+            } catch (syncErr) {
+                console.error('[SYNC ODOMETER WARNING]', syncErr.message);
+            }
 
             // Recalculate all maintenance items with new odometer
             const results = await recalculateAllItems(db, vehicleId);

@@ -208,6 +208,7 @@
   - `PORNIRE`: Creates active trip record in memory and inserts row into `calatorii`.
   - `MERS`: Writes row to `telemetrie_flux` and emits `telemetrie_live` via WebSocket.
   - `OPRIRE`: Gathers raw packets, executes `finalizeTripAnalysis()`, writes `trip_summary`, emits `status_trip` with full report, and fires `vehicleEventBus` events.
+- **`services/vehicleSyncService.js`**: Atomic synchronization bridge between `vehicule` (core telemetry table) and `vehicles` (extended profile table). Exports `syncVehicleProfile(db, vin, data)` and `syncOdometer(db, vin, odometerKm, source, note)` with duplicate deduplication.
 - **`services/activeTrips.js`**: In-memory map of ongoing trips indexed by VIN.
 - **`services/dtcService.js`**: In-memory array of active Diagnostic Trouble Codes.
 - **`services/tripInsights.js`**: Generates human-readable natural language insights for a completed trip.
@@ -584,20 +585,21 @@ When developing, refactoring, or generating code, **you MUST follow these rules*
    - Keep user-facing notifications, status verdicts, and UI labels in Romanian (`ro.js` conventions).
 8. **Cloud Deployment Target & Mosquitto**:
    - Host: Oracle Cloud VM (`ubuntu@84.235.164.52`), Port: `3000`, Process Manager: `pm2`.
-   - **MQTT Production Recommendation**: For thesis defense, migrate from public `broker.emqx.io` to a local Mosquitto broker on the Oracle Cloud instance (`sudo apt install mosquitto`) with username/password authentication to prevent public packet injection.
+   - **Private Mosquitto Broker**: Operational at `mqtt://84.235.164.52:1883`, default topic `telemetrie/obd2`. Replaces public `broker.emqx.io` for production security and isolation during live demos.
 9. **Database Duality (`vehicule` vs. `vehicles`)**:
-   - The database contains two vehicle tables created at different phases of development:
-     - `vehicule` (Romanian, PK: `vin TEXT`) — Used exclusively by the core telemetry engine, trip sessions (`calatorii`), and live watchdog.
-     - `vehicles` (English, PK: `id INTEGER AUTOINCREMENT`, `vin TEXT UNIQUE`) — Used by the vehicle profile, timeline, maintenance items, and legal document tracking.
-   - **CRITICAL INSTRUCTION FOR AI**: Whenever writing code that creates a vehicle, updates odometer mileage, or modifies fuel capacity, **YOU MUST SYNCHRONIZE BOTH TABLES** (`vehicule` and `vehicles`) to prevent cross-module state drift.
+   - The database contains two vehicle tables:
+     - `vehicule` (Romanian, PK: `vin TEXT`) — Used exclusively by core telemetry, trip sessions (`calatorii`), and live watchdog.
+     - `vehicles` (English, PK: `id INTEGER AUTOINCREMENT`, `vin TEXT UNIQUE`) — Used by vehicle profile, timeline, maintenance items, and legal document tracking.
+   - **MANDATORY HELPER**: All profile, fuel capacity, model, or odometer updates must pass through [`services/vehicleSyncService.js`](file:///c:/Users/tfl/Desktop/telemetrie-licenta/services/vehicleSyncService.js) (`syncVehicleProfile`, `syncOdometer`) to atomically synchronize both tables and avoid drift.
 10. **Legacy Naming — `GeminiService.js` (Uses Groq SDK)**:
     - [`backend/intelligence/GeminiService.js`](file:///c:/Users/tfl/Desktop/telemetrie-licenta/backend/intelligence/GeminiService.js) uses `groq-sdk` with Llama-3 / Mixtral for low latency and high free-tier limits.
     - **DO NOT** attempt to install `@google/generative-ai` or rewrite this file. The filename `GeminiService.js` is historical/legacy and is imported across multiple modules.
 11. **Event Loop & Memory Optimization at `OPRIRE`**:
-    - For long trips (e.g. 2–4 hours = 7,200–14,400 rows), running an unbuffered `SELECT * FROM telemetrie_flux` followed by `JSON.parse()` on every row blocks the single-threaded Node.js Event Loop for several seconds.
-    - AI assistants must rely primarily on the in-memory statistical accumulators from `TripAnalyzer.js` or query indexed numeric columns (`rpm`, `viteza_kmh`, `boost_bar`) rather than re-parsing massive JSON blobs in memory.
+    - Handled via in-memory reservoir sampling (`trip.sampledPackets`, max 600 points) during `MERS`. At `OPRIRE`, `finalizeTripAnalysis()` consumes the sampled buffer directly from RAM, eliminating blocking `SELECT *` and massive synchronous `JSON.parse()` loops.
+    - Fallback queries use `LIMIT 1000`.
+    - At `OPRIRE`, the trip distance (`trip.km`) is automatically accumulated into `vehicule.odometru_calibrat_km` and `mileage_log` via `syncOdometer`.
 12. **Device Sync Security (`/api/sync/obd`)**:
-    - The ESP32 sync route [`POST /api/sync/obd`](file:///c:/Users/tfl/Desktop/telemetrie-licenta/routes/sync.js) should validate an `x-device-token` header matching `process.env.DEVICE_SYNC_TOKEN` to prevent arbitrary HTTP injection into the trip history.
+    - The ESP32 sync route [`POST /api/sync/obd`](file:///c:/Users/tfl/Desktop/telemetrie-licenta/routes/sync.js) strictly enforces the header `x-device-token: <DEVICE_SYNC_TOKEN>` (matching `process.env.DEVICE_SYNC_TOKEN` and `esp32/SDSyncModule.h`), rejecting unauthenticated requests with HTTP 401.
 
 ---
 
