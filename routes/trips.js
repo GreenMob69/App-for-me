@@ -175,14 +175,22 @@ module.exports = function(db, io) {
 
     router.put('/calatorii/:id/tag', (req, res) => {
         const id = req.params.id;
-        const { tag } = req.body;
-        const validTags = ['BUSINESS', 'PERSONAL', 'TESTARE'];
+        let { tag } = req.body;
+        if (tag === '' || tag === undefined) tag = null;
+        const validTags = ['BUSINESS', 'PERSONAL', 'TESTARE', null];
         if (!validTags.includes(tag)) {
-            return res.status(400).json({ eroare: `Tag invalid. Valori acceptate: ${validTags.join(', ')}` });
+            return res.status(400).json({ eroare: `Tag invalid. Valori acceptate: BUSINESS, PERSONAL, TESTARE, sau null` });
         }
         db.run(`UPDATE trip_summary SET trip_tag = ? WHERE id_calatorie = ?`, [tag, id], function(err) {
             if (err) return res.status(500).json({ eroare: err.message });
-            if (this.changes === 0) return res.status(404).json({ eroare: 'Cursă negăsită' });
+            if (this.changes === 0) {
+                // Dacă nu există rând în trip_summary, încercăm INSERT OR REPLACE
+                db.run(`INSERT OR REPLACE INTO trip_summary (id_calatorie, trip_tag) VALUES (?, ?)`, [id, tag], (err2) => {
+                    if (err2) return res.status(500).json({ eroare: err2.message });
+                    return res.json({ success: true, id_calatorie: id, tag });
+                });
+                return;
+            }
             res.json({ success: true, id_calatorie: id, tag });
         });
     });
