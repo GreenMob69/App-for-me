@@ -13,11 +13,11 @@ function getClient() {
     return _client;
 }
 
-function buildSystemPrompt(ctx) {
-    const v  = ctx.vehicle        || {};
-    const h  = ctx.health         || {};
-    const ds = ctx.drivingStyle   || {};
-    const fe = ctx.fuelEfficiency || {};
+function buildSystemPrompt(ctx = {}) {
+    const v  = ctx?.vehicle        || {};
+    const h  = ctx?.health         || {};
+    const ds = ctx?.drivingStyle   || {};
+    const fe = ctx?.fuelEfficiency || {};
 
     const healthLabel = (score) => {
         if (score == null) return 'necunoscut';
@@ -90,16 +90,32 @@ async function enhanceWithGemini(question, ctx, baseAnswer, intent, history = []
 
         const userMessage = hintLine ? `${hintLine}\n\n${question}` : question;
 
-        const completion = await client.chat.completions.create({
-            model:       'llama-3.3-70b-versatile',
-            temperature: 0.7,
-            max_tokens:  350,
-            messages: [
-                { role: 'system', content: buildSystemPrompt(ctx) },
-                ...conversationHistory,
-                { role: 'user',   content: userMessage },
-            ],
-        });
+        const modelName = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+        let completion;
+        try {
+            completion = await client.chat.completions.create({
+                model:       modelName,
+                temperature: 0.7,
+                max_tokens:  350,
+                messages: [
+                    { role: 'system', content: buildSystemPrompt(ctx) },
+                    ...conversationHistory,
+                    { role: 'user',   content: userMessage },
+                ],
+            });
+        } catch (modelErr) {
+            console.warn(`[AIService] Model ${modelName} fallback to qwen/qwen3.8-27b:`, modelErr.message);
+            completion = await client.chat.completions.create({
+                model:       'qwen/qwen3.8-27b',
+                temperature: 0.7,
+                max_tokens:  350,
+                messages: [
+                    { role: 'system', content: buildSystemPrompt(ctx) },
+                    ...conversationHistory,
+                    { role: 'user',   content: userMessage },
+                ],
+            });
+        }
 
         const text = completion.choices?.[0]?.message?.content?.trim();
         return text || null;
