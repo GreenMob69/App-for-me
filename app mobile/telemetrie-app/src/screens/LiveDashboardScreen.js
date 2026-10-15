@@ -11,7 +11,7 @@ import { AlertContext } from '../context/AlertContext';
 import { AppContext }   from '../context/AppContext';
 import { getVehicleLabel } from '../utils/config';
 import RecommendationCard from '../components/ui/RecommendationCard';
-import { colors, typography, radii, spacing, layout } from '../theme';
+import { colors, typography, radii, spacing, layout, TEMPLATES } from '../theme';
 import { useSmoothedTelemetry } from '../hooks/useSmoothedTelemetry';
 
 // ─── AI assistant ─────────────────────────────────────────────────────────────
@@ -245,14 +245,17 @@ const LiveDashboardScreen = () => {
     const { width } = useWindowDimensions();
     const { isConnected, isReconnecting, liveData, chartVersion, getChartHistory } = useContext(LiveContext);
     const { latestAlert, alertsList, unreadCount, markAlertsAsRead } = useContext(AlertContext);
-    const { selectedMetric, setSelectedMetric } = useContext(AppContext);
+    const { selectedMetric, setSelectedMetric, activeTemplate, currentTemplate } = useContext(AppContext);
 
     // ── 60 FPS Smoothed Telemetry ─────────────────────────────────────────────
     const { animated, numeric } = useSmoothedTelemetry(liveData);
 
-    const [tab,        setTab]        = useState('LIVE');
-    const [proMode,    setProMode]    = useState(false); // Mod Șofer vs Mod Inginer Pro
-    const [category,   setCategory]   = useState('MOTOR');
+    const [tab,           setTab]           = useState('LIVE');
+    const [proMode,       setProMode]       = useState(false); // Mod Rapid vs Telemetrie Completă
+    const [isHudMirrored, setIsHudMirrored] = useState(false); // Oglindă HUD Parbriz
+    const [category,      setCategory]      = useState('MOTOR');
+
+    const tpl = currentTemplate || TEMPLATES.MOTORSPORT;
     const [showAlerts, setShowAlerts] = useState(false);
     const [zoomX,      setZoomX]      = useState(10);
     const [autoScaleY, setAutoScaleY] = useState(true);
@@ -366,10 +369,10 @@ const LiveDashboardScreen = () => {
         const aiColor = aiColorMap[assistantMsg.level] ?? colors.text.secondary;
 
         return (
-            <View style={styles.liveContainer}>
+            <View style={[styles.liveContainer, isHudMirrored && styles.hudMirrored]}>
                 {/* ── Speed hero ──────────────────────────────────── */}
                 <View style={styles.speedHero}>
-                    <Text style={styles.speedNum}>{speed}</Text>
+                    <Text style={[styles.speedNum, { color: tpl.speedColor }]}>{speed}</Text>
                     <Text style={styles.speedUnit}>km/h</Text>
                 </View>
 
@@ -404,7 +407,7 @@ const LiveDashboardScreen = () => {
                 {/* ── Virtual Dyno & ECU Glass Card (Doar în Mod Inginer Pro) ── */}
                 {proMode && (
                     <>
-                        <View style={styles.dynoCard}>
+                        <View style={[styles.dynoCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                             <View style={styles.dynoHeader}>
                                 <View style={styles.dynoTag}>
                                     <Text style={styles.dynoTagText}>⚡ VIRTUAL DYNO (ECU MATH)</Text>
@@ -456,7 +459,7 @@ const LiveDashboardScreen = () => {
                         </View>
 
                         {/* ── Dual Boost Indicator (Target vs Actual) ───── */}
-                        <View style={styles.boostCard}>
+                        <View style={[styles.boostCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                             <View style={styles.boostHeader}>
                                 <Text style={styles.boostTitle}>TURBO BOOST (COMANDAT vs EFECTIV)</Text>
                                 <Text style={[styles.boostDelta, { color: Math.abs(boost - targetBoost) > 0.3 ? colors.status.caution : colors.status.good }]}>
@@ -489,6 +492,62 @@ const LiveDashboardScreen = () => {
                                     </Text>
                                 </View>
                             )}
+                        </View>
+
+                        {/* ── Observatori Fizici & Sănătate Componente (Sensor Fusion) ── */}
+                        <View style={[styles.observersCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                            <View style={styles.dynoHeader}>
+                                <View style={[styles.dynoTag, { backgroundColor: 'rgba(56, 189, 248, 0.14)' }]}>
+                                    <Text style={[styles.dynoTagText, { color: colors.accent.default }]}>🔬 SENSOR FUSION & OBSERVERS</Text>
+                                </View>
+                                <Text style={styles.observerSubtitle}>Inginerie Empirică VAG</Text>
+                            </View>
+
+                            <View style={styles.observerGrid}>
+                                {/* BSFC */}
+                                <View style={styles.observerCell}>
+                                    <Text style={styles.observerLabel}>BSFC (EFICIENȚĂ)</Text>
+                                    <Text style={styles.observerVal}>
+                                        {v.bsfcGPerKwh ? `${v.bsfcGPerKwh}` : '—'} <Text style={styles.observerUnit}>g/kWh</Text>
+                                    </Text>
+                                    <Text style={styles.observerSub}>
+                                        {v.bsfcGPerKwh < 220 ? '✓ Eficiență optimă TDI' : 'Sarcină parțială/rece'}
+                                    </Text>
+                                </View>
+
+                                {/* Smart Oil Wear Index (Arrhenius) */}
+                                <View style={styles.observerCell}>
+                                    <Text style={styles.observerLabel}>UZURĂ ULEI (ARRHENIUS)</Text>
+                                    <Text style={styles.observerVal}>
+                                        {v.oilLifeWearFactor ? `${v.oilLifeWearFactor}×` : '1.0×'}
+                                    </Text>
+                                    <Text style={styles.observerSub}>
+                                        {v.oilLifeWearFactor > 1.4 ? '⚠ Solicitare termică/diluție' : '✓ Degradare normală'}
+                                    </Text>
+                                </View>
+
+                                {/* 12V Battery Cranking Health & SoH */}
+                                <View style={styles.observerCell}>
+                                    <Text style={styles.observerLabel}>SĂNĂTATE BATERIE (SoH)</Text>
+                                    <Text style={[styles.observerVal, { color: (v.batterySoHPct || 95) < 70 ? colors.status.critical : colors.status.good }]}>
+                                        {v.batterySoHPct ?? 95}%
+                                    </Text>
+                                    <Text style={styles.observerSub}>
+                                        {v.batteryInternalResistanceMOhms ? `Rint: ${v.batteryInternalResistanceMOhms} mΩ` : 'Pornire optimă'}
+                                    </Text>
+                                </View>
+
+                                {/* Frâne & Energie Disipată */}
+                                <View style={styles.observerCell}>
+                                    <Text style={styles.observerLabel}>ENERGIE FRÂNE (TRIP)</Text>
+                                    <Text style={styles.observerVal}>
+                                        {v.brakeEnergyTripMj ? `${v.brakeEnergyTripMj}` : '0.0'} <Text style={styles.observerUnit}>MJ</Text>
+                                    </Text>
+                                    <Text style={styles.observerSub}>
+                                        {v.estimatedBrakeDiscTempC ? `Disc: ~${v.estimatedBrakeDiscTempC}°C` : 'Plăcuțe reci'}
+                                    </Text>
+                                </View>
+                            </View>
                         </View>
                     </>
                 )}
@@ -662,7 +721,7 @@ const LiveDashboardScreen = () => {
     const connLabel = isConnected ? 'LIVE' : isReconnecting ? 'SYNC' : 'OFF';
 
     return (
-        <View style={styles.root}>
+        <View style={[styles.root, { backgroundColor: tpl.bg }]}>
             {/* ── Top bar ─────────────────────────────────────────────── */}
             <View style={styles.topBar}>
                 <View style={[styles.connPill, { borderColor: connColor }]}>
@@ -670,7 +729,7 @@ const LiveDashboardScreen = () => {
                     <Text style={[styles.connLabel, { color: connColor }]}>{connLabel}</Text>
                 </View>
 
-                {/* Dual Persona Switch: Șofer vs Inginer Pro */}
+                {/* Persona Switch: Rapid vs Pro Telemetrie (Complet voluntar, nelimitat în mers) */}
                 <TouchableOpacity
                     style={[styles.modeTogglePill, proMode ? styles.modeTogglePro : styles.modeToggleDriver]}
                     onPress={() => {
@@ -679,12 +738,26 @@ const LiveDashboardScreen = () => {
                         if (!next && tab === 'PARAMS') setTab('LIVE');
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel={proMode ? 'Mod Inginer activ. Apasă pentru Mod Șofer' : 'Mod Șofer activ. Apasă pentru Mod Inginer Pro'}
+                    accessibilityLabel={proMode ? 'Mod Pro activ. Apasă pentru Mod Rapid' : 'Mod Rapid activ. Apasă pentru Mod Pro'}
                 >
                     <Text style={[styles.modeToggleText, proMode ? styles.modeToggleTextPro : styles.modeToggleTextDriver]}>
-                        {proMode ? '⚡ PRO' : '🚗 ȘOFER'}
+                        {proMode ? '⚡ PRO' : '🚗 RAPID'}
                     </Text>
                 </TouchableOpacity>
+
+                {/* HUD Windshield Mirror Toggle când șablonul este NIGHT_HUD */}
+                {tpl.isHud && (
+                    <TouchableOpacity
+                        style={[styles.hudToggleBtn, isHudMirrored && styles.hudToggleBtnActive]}
+                        onPress={() => setIsHudMirrored(!isHudMirrored)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Oglindire afișaj parbriz"
+                    >
+                        <Text style={[styles.hudToggleText, isHudMirrored && styles.hudToggleTextActive]}>
+                            {isHudMirrored ? '🪞 MIRROR ON' : '🪞 HUD'}
+                        </Text>
+                    </TouchableOpacity>
+                )}
 
                 <Text style={styles.vehicleName} numberOfLines={1}>
                     {getVehicleLabel() || 'Dashboard'}
@@ -834,6 +907,25 @@ const styles = StyleSheet.create({
     modeToggleTextPro: {
         color: colors.status.monitor,
     },
+    hudToggleBtn: {
+        backgroundColor: 'rgba(255, 69, 58, 0.1)',
+        borderColor: '#ff453a',
+        borderWidth: 1,
+        borderRadius: radii.full,
+        paddingHorizontal: spacing[2] + 2,
+        paddingVertical: spacing[1],
+    },
+    hudToggleBtnActive: {
+        backgroundColor: '#ff453a',
+    },
+    hudToggleText: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.heavy,
+        color: '#ff453a',
+    },
+    hudToggleTextActive: {
+        color: '#000000',
+    },
     vehicleName: {
         flex: 1,
         fontSize: typography.sizes.body1,
@@ -873,6 +965,9 @@ const styles = StyleSheet.create({
 
     // ── LIVE: Speed hero ─────────────────────────────────────────────────────
     liveContainer: { paddingTop: spacing[4] },
+    hudMirrored: {
+        transform: [{ scaleX: -1 }],
+    },
     speedHero: { alignItems: 'center', paddingBottom: spacing[1] },
     speedNum: {
         fontSize: 88,
@@ -1119,6 +1214,59 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: colors.status.monitor,
         fontWeight: typography.weights.semibold,
+    },
+
+    // ── LIVE: Observers card ─────────────────────────────────────────────────
+    observersCard: {
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[3],
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        marginBottom: spacing[3],
+    },
+    observerSubtitle: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
+    },
+    observerGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing[2],
+        marginTop: spacing[2],
+    },
+    observerCell: {
+        flex: 1,
+        minWidth: '46%',
+        backgroundColor: colors.bg[0],
+        borderRadius: radii.sm,
+        padding: spacing[2],
+        borderWidth: 1,
+        borderColor: colors.border.subtle ?? colors.bg[2],
+    },
+    observerLabel: {
+        fontSize: 8,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.heavy,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+        marginBottom: 2,
+    },
+    observerVal: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    observerUnit: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+    },
+    observerSub: {
+        fontSize: 9,
+        color: colors.text.secondary,
+        marginTop: 2,
     },
 
     // ── LIVE: 2×3 tiles ──────────────────────────────────────────────────────

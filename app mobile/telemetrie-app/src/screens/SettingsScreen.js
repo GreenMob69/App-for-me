@@ -7,12 +7,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { useContext } from 'react';
 import { SecurityContext } from '../context/SecurityContext';
+import { AppContext } from '../context/AppContext';
 import { getActiveServerUrl, setCustomServerUrl } from '../utils/config';
 import { useVehicle } from '../context/VehicleContext';
 import { Linking } from 'react-native';
 import api from '../services/api';
 import socketService from '../services/socket';
-import { colors, typography, radii, spacing, layout } from '../theme';
+import { colors, typography, radii, spacing, layout, TEMPLATES } from '../theme';
 
 // ─── Connection badge ─────────────────────────────────────────────────────────
 
@@ -92,6 +93,7 @@ const SettingsScreen = () => {
     const navigation = useNavigation();
     const { securityEnabled, lockTimeout, saveSettings } = useContext(SecurityContext);
     const { activeVin, activeVehicle, vehicles, switchVehicle, refreshVehicles } = useVehicle();
+    const { activeTemplate, setActiveTemplate } = useContext(AppContext);
 
     // ── Connection
     const [connStatus, setConnStatus]   = useState('checking');
@@ -565,6 +567,48 @@ const SettingsScreen = () => {
                 </View>
             )}
 
+            {/* ── Șabloane Cockpit & Design HMI ─────────────────────── */}
+            <View style={styles.card}>
+                <SectionTitle>Șabloane Cockpit (Design Templates)</SectionTitle>
+                <Text style={styles.desc}>
+                    Alege stilul vizual și structura preferată pentru bord, inspirate de cele mai bune interfețe din motorsport și mașini electrice:
+                </Text>
+
+                <View style={styles.templateGrid}>
+                    {Object.values(TEMPLATES).map(tpl => {
+                        const isSelected = activeTemplate === tpl.id;
+                        return (
+                            <TouchableOpacity
+                                key={tpl.id}
+                                style={[
+                                    styles.templateCard,
+                                    { borderColor: isSelected ? tpl.accent : colors.border.default },
+                                    isSelected && styles.templateCardSelected,
+                                ]}
+                                onPress={() => setActiveTemplate(tpl.id)}
+                                activeOpacity={0.75}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Alege șablonul ${tpl.name}`}
+                            >
+                                <View style={styles.templateHeader}>
+                                    <View style={[styles.templateColorDot, { backgroundColor: tpl.accent }]} />
+                                    <View style={[styles.templateBadge, { backgroundColor: tpl.tagBg }]}>
+                                        <Text style={[styles.templateBadgeText, { color: tpl.accent }]}>{tpl.badge}</Text>
+                                    </View>
+                                </View>
+                                <Text style={[styles.templateName, isSelected && { color: tpl.accent }]}>{tpl.name}</Text>
+                                <Text style={styles.templateSub}>{tpl.subtitle}</Text>
+                                {isSelected && (
+                                    <View style={[styles.templateActiveIndicator, { backgroundColor: tpl.accent }]}>
+                                        <Text style={styles.templateActiveText}>✓ ACTIV</Text>
+                                    </View>
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </View>
+
             {/* ── Economie ───────────────────────────────────────────────── */}
             <View style={styles.card}>
                 <SectionTitle>Economie</SectionTitle>
@@ -927,6 +971,64 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: spacing[2] + 2,
+    },
+    templateGrid: {
+        gap: spacing[2] + 2,
+        marginTop: spacing[2],
+        marginBottom: spacing[1],
+    },
+    templateCard: {
+        backgroundColor: colors.bg[0],
+        borderRadius: radii.md,
+        padding: spacing[3],
+        borderWidth: 1.5,
+    },
+    templateCardSelected: {
+        backgroundColor: colors.bg[2],
+    },
+    templateHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    templateColorDot: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+    },
+    templateBadge: {
+        paddingHorizontal: spacing[2],
+        paddingVertical: 2,
+        borderRadius: radii.full,
+    },
+    templateBadgeText: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.5,
+    },
+    templateName: {
+        fontSize: typography.sizes.body1,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
+        marginBottom: 2,
+    },
+    templateSub: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        marginBottom: spacing[2],
+    },
+    templateActiveIndicator: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: spacing[2] + 2,
+        paddingVertical: 2,
+        borderRadius: radii.xs,
+    },
+    templateActiveText: {
+        color: '#000000',
+        fontSize: 9,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.5,
     },
 
     sectionTitle: {
