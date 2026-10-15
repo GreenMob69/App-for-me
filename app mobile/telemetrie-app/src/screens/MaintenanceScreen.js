@@ -29,7 +29,7 @@ import api from '../services/api';
 import { fetchMaintenanceData, fetchDocuments } from '../services/vehicleService';
 import { getDtcDescription, getDtcSeverityColor } from '../data/dtcCodes';
 import { t } from '../i18n';
-import { colors, typography, spacing, layout } from '../theme';
+import { colors, typography, spacing, layout, radii } from '../theme';
 
 import {
     Card,
