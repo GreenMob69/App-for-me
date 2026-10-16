@@ -102,21 +102,18 @@ function buildContextualAlert(liveData, latestAlert) {
     return null;
 }
 
-// ─── Params data ──────────────────────────────────────────────────────────────
+// ─── Params data (5 Logical Diagnostic Categories) ───────────────────────────
 
 const PARAM_CATEGORIES = [
-    { id: 'MOTOR',   label: 'Motor'   },
-    { id: 'VIRTUAL', label: 'Virtual' },
-    { id: 'TEMP',    label: 'Temp'    },
-    { id: 'AER',     label: 'Aer'     },
-    { id: 'COMB',    label: 'Carb'    },
-    { id: 'LAMBDA',  label: 'O₂'      },
-    { id: 'EMISII',  label: 'DPF'     },
-    { id: 'TRANS',   label: 'Trans'   },
-    { id: 'ECU',     label: 'ECU'     },
+    { id: 'ALL',      label: 'TOATE' },
+    { id: 'MOTOR',    label: '🔥 MOTOR & PUTERE' },
+    { id: 'TURBO',    label: '🌪️ TURBO & AER' },
+    { id: 'TERMIC',   label: '🌡️ TERMIC & ULEI' },
+    { id: 'EVACUARE', label: '💨 DPF & EVACUARE' },
+    { id: 'ELECTRIC', label: '🔋 ELECTRIC & CUTIE' },
 ];
 
-function buildParams(cat, d) {
+function buildCategoryList(catId, d) {
     const m    = d.motor        || {};
     const tem  = d.temperaturi  || {};
     const a    = d.aer          || {};
@@ -126,106 +123,69 @@ function buildParams(cat, d) {
     const em   = d.emisii       || {};
     const bat  = d.baterie      || {};
     const dpf  = d.dpf          || {};
-    const vvt  = d.vvt          || {};
     const tr   = d.transmisie   || {};
-    const pr   = d.presiuni     || {};
-    const tim  = d.timp         || {};
-    const meta = d.consum_meta  || {};
     const v    = d.virtual      || {};
 
-    switch (cat) {
+    switch (catId) {
         case 'MOTOR': return [
-            { label: 'RPM',           val: m.rpm || 0,             unit: 'RPM',  max: 5000, color: colors.accent.default },
-            { label: 'Viteză',        val: m.speed || 0,           unit: 'km/h', max: 220,  color: colors.status.good },
-            { label: 'Sarcină',       val: m.load || 0,            unit: '%',    max: 100 },
-            { label: 'Clapetă',       val: m.throttle_pos || 0,    unit: '%',    max: 100,  color: colors.accent.default },
-            { label: 'Pedală',        val: m.pedal_d || 0,         unit: '%',    max: 100,  color: colors.status.monitor },
-            { label: 'Cuplu Motor',   val: m.torque_engine || 0,   unit: 'Nm',   max: 400,  color: colors.status.good },
-            { label: 'Cuplu Cerut',   val: m.torque_driver || 0,   unit: 'Nm',   max: 400,  color: colors.status.monitor },
-            { label: 'Cuplu Frecare', val: m.torque_friction || 0, unit: 'Nm',   max: 100,  color: colors.status.critical },
+            { label: 'Turație Motor',       val: m.rpm || 0,                 unit: 'RPM',   max: 5000, nominalMin: 750, nominalMax: 4200, color: colors.accent.default },
+            { label: 'Viteză Deplasare',    val: m.speed || 0,               unit: 'km/h',  max: 220,  nominalMin: 0,   nominalMax: 130,  color: colors.status.good },
+            { label: 'Putere Estimată Dyno',val: Math.round(v.powerHp || 0), unit: 'CP',    max: 160,  nominalMin: 5,   nominalMax: 140,  color: colors.status.good, isVirtual: true },
+            { label: 'Cuplu Motor Real',    val: Math.round(v.torqueNm || 0),unit: 'Nm',    max: 350,  nominalMin: 40,  nominalMax: 290,  color: colors.status.good, isVirtual: true },
+            { label: 'Sarcină Motor Calculată', val: m.load || 0,            unit: '%',     max: 100,  nominalMin: 15,  nominalMax: 85 },
+            { label: 'Consum Specific BSFC',val: Math.round(v.bsfcGPerKwh||210), unit: 'g/kWh', max: 450, nominalMin: 195, nominalMax: 280, color: (v.bsfcGPerKwh||0) > 300 ? colors.status.caution : colors.status.good, isVirtual: true },
+            { label: 'Eficiență Volumetrică', val: Math.round(v.volumetricEfficiencyPct||85), unit: '%', max: 120, nominalMin: 70, nominalMax: 105, color: colors.accent.default, isVirtual: true },
+            { label: 'Poziție Pedală Accel.',val: m.pedal_d || 0,            unit: '%',     max: 100,  nominalMin: 0,   nominalMax: 100, color: colors.status.monitor },
+            { label: 'Deschidere Clapetă',  val: m.throttle_pos || 0,        unit: '%',     max: 100,  nominalMin: 0,   nominalMax: 100 },
+            { label: 'Cuplu Cerut de Șofer',val: m.torque_driver || 0,       unit: 'Nm',    max: 400,  nominalMin: 0,   nominalMax: 300, color: colors.status.monitor },
+            { label: 'Cuplu Frecare Internă',val: m.torque_friction || 0,    unit: 'Nm',    max: 100,  nominalMin: 10,  nominalMax: 45,  color: colors.status.critical },
         ];
-        case 'VIRTUAL': return [
-            { label: 'Putere Dyno',       val: v.powerHp || 0,                 unit: 'CP',    max: 150,  color: colors.status.good },
-            { label: 'Cuplu Dyno',        val: v.torqueNm || 0,                unit: 'Nm',    max: 350,  color: colors.status.good },
-            { label: 'Consum Spec. BSFC', val: v.bsfcGPerKwh || 0,             unit: 'g/kWh', max: 450,  color: (v.bsfcGPerKwh||0) > 300 ? colors.status.caution : colors.status.good },
-            { label: 'Eficiență Volum.',  val: v.volumetricEfficiencyPct || 0, unit: '%',     max: 120,  color: colors.accent.default },
-            { label: 'Lambda Virtual',    val: v.lambda ? v.lambda.toFixed(2) : 1, unit: 'λ',  max: 2,    color: colors.status.good },
-            { label: 'AFR Real',          val: v.afr ? v.afr.toFixed(1) : 14.5, unit: ':1',   max: 25,   color: colors.status.monitor },
-            { label: 'Uzură Ulei Index',  val: v.oilLifeWearFactor || 1,       unit: 'x',     max: 4,    color: (v.oilLifeWearFactor||1) > 2.0 ? colors.status.critical : colors.status.good },
-            { label: 'Pantă Drum',        val: v.roadGradePct || 0,            unit: '%',     max: 20,   color: colors.accent.default },
-            { label: 'Sănătate Baterie',  val: v.batterySoHPct || 100,         unit: '%',     max: 100,  color: (v.batterySoHPct||100) < 70 ? colors.status.caution : colors.status.good },
-            { label: 'Rezistență Bat.',   val: v.batteryInternalResistanceMOhms || 0, unit: 'mΩ', max: 20, color: (v.batteryInternalResistanceMOhms||0) > 10 ? colors.status.critical : colors.status.good },
-            { label: 'Disipare Frâne',    val: v.brakeEnergyTripMj || 0,       unit: 'MJ',    max: 30,   color: colors.status.monitor },
-            { label: 'Recirculare EGR',   val: v.egrRatioPct || 0,             unit: '%',     max: 60,   color: colors.accent.default },
-            { label: 'Pres. Rail Țintă',  val: v.railPressTargetBar || 0,      unit: 'bar',   max: 1600, color: colors.status.monitor },
-            { label: 'Alunecare Ambreiaj',val: v.clutchSlipPct || 0,           unit: '%',     max: 100,  color: (v.clutchSlipPct||0) > 10 ? colors.status.critical : colors.status.good },
-            { label: 'Rezistență DPF',    val: v.dpfResistanceIndex || 0,      unit: 'idx',   max: 200,  color: colors.status.monitor },
-            { label: 'Delta Ulei-Apă',    val: v.deltaOilWaterC || 0,          unit: '°C',    max: 40,   color: (v.deltaOilWaterC||0) > 22 ? colors.status.caution : colors.status.good },
-            { label: 'Cădere Tensiune',   val: v.voltageDropV || 0,            unit: 'V',     max: 2,    color: (v.voltageDropV||0) > 0.4 ? colors.status.caution : colors.status.good },
-            { label: 'Eroare Boost',      val: v.boostErrorKpa || 0,           unit: 'kPa',   max: 100,  color: colors.accent.default },
-            { label: 'Compresie M2M',    val: v.m2mTelemetry?.compressionRatioPct || 93.4, unit: '%', max: 100, color: colors.status.good },
-            { label: 'Pachet Binar',     val: v.m2mTelemetry?.binaryBytes || 96,           unit: 'B', max: 200, color: colors.accent.default },
-            { label: 'Risc Ulei Weibull',val: v.weibullReliability?.oil?.pFail3000kmPct || 0, unit: '%', max: 100, color: (v.weibullReliability?.oil?.pFail3000kmPct||0) > 30 ? colors.status.caution : colors.status.good },
-            { label: 'ROI Flotă Anual',  val: v.economicImpactEur?.totalFleetRoiEur || 1689, unit: '€', max: 5000, color: colors.status.good },
+        case 'TURBO': return [
+            { label: 'Presiune Turbo (Act)', val: (a.boost_actual ?? a.boost ?? 0).toFixed(2), unit: 'bar', max: 2.5, nominalMin: 0.95, nominalMax: 2.15, color: colors.status.good },
+            { label: 'Presiune Turbo (Cmd)', val: (a.boost_cmd || 0).toFixed(2),               unit: 'bar', max: 2.5, nominalMin: 0.95, nominalMax: 2.15, color: colors.status.monitor },
+            { label: 'Eroare Presiune Boost',val: ((a.boost_actual ?? 0) - (a.boost_cmd ?? 0)).toFixed(2), unit: 'bar', max: 0.8, min: -0.8, nominalMin: -0.15, nominalMax: 0.15, isVirtual: true },
+            { label: 'Debit Aer Admisie MAF',val: Math.round(a.maf || 0),   unit: 'g/s',   max: 160, nominalMin: 12,  nominalMax: 135, color: colors.status.monitor },
+            { label: 'Presiune Galerie MAP', val: Math.round(a.map || 101),  unit: 'kPa',   max: 300, nominalMin: 98,  nominalMax: 235, color: colors.accent.default },
+            { label: 'Presiune Barometrică', val: Math.round(a.baro || 101), unit: 'kPa',   max: 110, nominalMin: 95,  nominalMax: 105 },
+            { label: 'Recirculare Gaze EGR', val: Math.round(v.egrRatioPct || em.egr_cmd || 0), unit: '%', max: 60, nominalMin: 0, nominalMax: 45, isVirtual: true },
         ];
-        case 'TEMP': return [
-            { label: 'Lichid Răcire', val: tem.coolant || 0,  unit: '°C', max: 110, color: (tem.coolant||0)>95 ? colors.status.critical : colors.status.good },
-            { label: 'Admisie IAT',   val: tem.iat || 0,      unit: '°C', max: 80,  color: colors.accent.default },
-            { label: 'Ambient',       val: tem.ambient || 0,  unit: '°C', max: 50 },
-            { label: 'Ulei Motor',    val: tem.oil || 0,      unit: '°C', max: 130, color: colors.status.monitor },
-            { label: 'Cat. B1S1',     val: tem.cat_b1s1 || 0, unit: '°C', max: 800, color: colors.status.critical },
-            { label: 'Cat. B1S2',     val: tem.cat_b1s2 || 0, unit: '°C', max: 800, color: colors.status.critical },
+        case 'TERMIC': return [
+            { label: 'Temp. Lichid Răcire', val: Math.round(tem.coolant || 0), unit: '°C', max: 120, nominalMin: 80, nominalMax: 96, color: (tem.coolant||0) > 98 ? colors.status.critical : colors.status.good },
+            { label: 'Temp. Ulei Motor',    val: Math.round(tem.oil || (tem.coolant ? tem.coolant + 4 : 0)), unit: '°C', max: 140, nominalMin: 85, nominalMax: 115, color: colors.status.monitor },
+            { label: 'Temp. Aer Admisie IAT',val: Math.round(tem.iat || 0),   unit: '°C', max: 80,  nominalMin: 15, nominalMax: 50, color: colors.accent.default },
+            { label: 'Gaze Evacuare EGT S1', val: Math.round(dpf.egt1 || tem.cat_b1s1 || 0), unit: '°C', max: 850, nominalMin: 180, nominalMax: 680, color: colors.status.critical },
+            { label: 'Delta Ulei - Răcire',  val: Math.round(v.deltaOilWaterC || 4), unit: '°C', max: 35, nominalMin: 2, nominalMax: 18, isVirtual: true },
+            { label: 'Stres Ulei Arrhenius', val: (v.oilLifeWearFactor || 1.0).toFixed(2), unit: 'x', max: 4.0, nominalMin: 0.8, nominalMax: 1.8, isVirtual: true },
+            { label: 'Risc Degradare Weibull',val: Math.round(v.weibullReliability?.oil?.pFail3000kmPct || 0), unit: '%', max: 100, nominalMin: 0, nominalMax: 25, isVirtual: true },
         ];
-        case 'AER': return [
-            { label: 'MAF Debit',     val: a.maf || 0,         unit: 'g/s', max: 150, color: colors.status.monitor },
-            { label: 'MAP Presiune',  val: a.map || 101,       unit: 'kPa', max: 300, color: colors.accent.default },
-            { label: 'Barometric',    val: a.baro || 101,      unit: 'kPa', max: 110 },
-            { label: 'Boost Cmd.',    val: a.boost_cmd || 0,   unit: 'bar', max: 2.5, color: colors.status.monitor },
-            { label: 'Boost Eff.',    val: a.boost_actual || 0,unit: 'bar', max: 2.5, color: colors.status.good },
+        case 'EVACUARE': return [
+            { label: 'Încărcare Funingine DPF', val: (dpf.soot_load || 0).toFixed(1), unit: 'g', max: 60, nominalMin: 0, nominalMax: 35, color: (dpf.soot_load||0) > 40 ? colors.status.critical : colors.status.good },
+            { label: 'Presiune Dif. DPF',    val: (dpf.diff_press || 0).toFixed(1), unit: 'kPa', max: 12, nominalMin: 0.4, nominalMax: 6.5, color: colors.status.monitor },
+            { label: 'Rezistență Debit R_dpf',val: Math.round(v.dpfResistanceIndex || 0), unit: 'idx', max: 200, nominalMin: 10, nominalMax: 110, isVirtual: true },
+            { label: 'Lambda Real Amestec', val: v.lambda ? v.lambda.toFixed(2) : '1.35', unit: 'λ', max: 2.5, nominalMin: 1.15, nominalMax: 2.1, color: colors.status.good, isVirtual: true },
+            { label: 'Raport Aer/Carb. AFR',val: v.afr ? v.afr.toFixed(1) : '18.2', unit: ':1', max: 30, nominalMin: 15.5, nominalMax: 22.5, isVirtual: true },
+            { label: 'Sondă O2 Tensiune B1S1',val: (lam.o2_b1s1 || 0).toFixed(2), unit: 'V', max: 1.0, nominalMin: 0.1, nominalMax: 0.9 },
+            { label: 'Presiune Rampă Common Rail', val: Math.round((c.rail_press || 0) / 100), unit: 'bar', max: 1600, nominalMin: 250, nominalMax: 1450, color: colors.status.monitor },
         ];
-        case 'COMB': return [
-            { label: 'Nivel Carb.',   val: c.level || 0,      unit: '%',       max: 100, color: colors.status.good },
-            { label: 'Presiune Rail', val: c.rail_press || 0, unit: 'kPa',     max: 40000, color: colors.status.monitor },
-            { label: 'Timing Inj.',   val: c.inj_timing || 0, unit: '°',       max: 30 },
-            { label: 'Cant. Inj.',    val: c.inj_qty || 0,    unit: 'mg/crs',  max: 60,  color: colors.status.good },
-            { label: 'Consum Inst.',  val: c.inst_cons || 0,  unit: 'L/h',     max: 20 },
-            { label: 'Consum Mediu',  val: c.avg_cons || 0,   unit: 'L/100km', max: 20,  color: colors.status.good },
-            { label: 'Fuel Trim SFT', val: c.sft_b1 || 0,    unit: '%',       max: 25 },
-            { label: 'Fuel Trim LFT', val: c.lft_b1 || 0,    unit: '%',       max: 25 },
-        ];
-        case 'LAMBDA': return [
-            { label: 'O2 B1S1',       val: lam.o2_b1s1 || 0,    unit: 'V', max: 1,   color: colors.accent.default },
-            { label: 'O2 B1S2',       val: lam.o2_b1s2 || 0,    unit: 'V', max: 1 },
-            { label: 'Wideband B1S1', val: lam.wb_b1s1 || 0,    unit: 'λ', max: 2,   color: colors.status.good },
-            { label: 'Lambda Cmd.',   val: lam.cmd_lambda || 0, unit: 'λ', max: 2 },
-            { label: 'Avans Aprin.',  val: ign.timing_adv || 0, unit: '°', max: 40,  color: colors.status.monitor },
-            { label: 'Knock Retard',  val: ign.knock_retard||0, unit: '°', max: 10,  color: colors.status.good },
-        ];
-        case 'EMISII': return [
-            { label: 'EGR Cmd.',      val: em.egr_cmd || 0,      unit: '%',  max: 100, color: colors.accent.default },
-            { label: 'EGR Eroare',    val: em.egr_error || 0,    unit: '%',  max: 50,  color: colors.status.good },
-            { label: 'DPF Presiune',  val: dpf.diff_press || 0,  unit: 'kPa',max: 10,  color: colors.status.monitor },
-            { label: 'DPF Funingine', val: dpf.soot_load || 0,   unit: 'g',  max: 60,  color: colors.status.critical },
-            { label: 'EGT S1',        val: dpf.egt1 || 0,        unit: '°C', max: 800, color: colors.status.critical },
-            { label: 'EGT S2',        val: dpf.egt2 || 0,        unit: '°C', max: 800 },
-        ];
-        case 'TRANS': return [
-            { label: 'Temp Trans.',   val: tr.trans_temp || 0,  unit: '°C', max: 130, color: colors.status.monitor },
-            { label: 'Treaptă',       val: tr.gear || 0,        unit: 'Tr', max: 8,   color: colors.status.good },
-            { label: 'Alunecare',     val: tr.slip || 0,        unit: 'RPM',max: 200 },
-            { label: 'Cam. Intake',   val: vvt.cam_intake || 0, unit: '°',  max: 50,  color: colors.accent.default },
-            { label: 'Pres. Ulei',    val: pr.oil_press || 0,   unit: 'bar',max: 7,   color: colors.status.good },
-        ];
-        case 'ECU': return [
-            { label: 'Voltaj ECU',    val: bat.ecu_volt || 0,          unit: 'V',       max: 16,   color: colors.status.good },
-            { label: 'Voltaj Bat.',   val: bat.bat_volt || 0,          unit: 'V',       max: 16 },
-            { label: 'Timp Func.',    val: tim.run_time || 0,          unit: 'sec',     max: 3600, color: colors.accent.default },
-            { label: 'Warmups',       val: tim.warmups || 0,           unit: 'cicluri', max: 100,  color: colors.status.good },
-            { label: 'Dist. DTC',     val: meta.dist_dtc || 0,         unit: 'km',      max: 5000, color: colors.accent.default },
-            { label: 'Ore Motor',     val: meta.engine_hours || 0,     unit: 'ore',     max: 500 },
+        case 'ELECTRIC': return [
+            { label: 'Tensiune Alternator/Bat.', val: (bat.ecu_volt || bat.bat_volt || 0).toFixed(1), unit: 'V', max: 16, nominalMin: 13.6, nominalMax: 14.6, color: colors.status.good },
+            { label: 'Sănătate Baterie SoH', val: Math.round(v.batterySoHPct || 96), unit: '%', max: 100, nominalMin: 75, nominalMax: 100, color: colors.status.good, isVirtual: true },
+            { label: 'Rezistență Internă R_int', val: (v.batteryInternalResistanceMOhms || 5.2).toFixed(1), unit: 'mΩ', max: 25, nominalMin: 2, nominalMax: 8.5, isVirtual: true },
+            { label: 'Cădere Tensiune Demaror', val: (v.voltageDropV || 0.18).toFixed(2), unit: 'V', max: 2.0, nominalMin: 0.05, nominalMax: 0.45, isVirtual: true },
+            { label: 'Treaptă Cutie Viteze', val: tr.gear ? `Treapta ${tr.gear}` : 'Liber (N)', unit: '', max: 6, nominalMin: 1, nominalMax: 6 },
+            { label: 'Alunecare Ambreiaj Slip', val: (v.clutchSlipPct || 0).toFixed(1), unit: '%', max: 100, nominalMin: 0, nominalMax: 3.5, color: (v.clutchSlipPct||0) > 8 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Disipare Frânare Archard', val: (v.brakeEnergyTripMj || 0).toFixed(1), unit: 'MJ', max: 30, nominalMin: 0, nominalMax: 15, isVirtual: true },
         ];
         default: return [];
     }
+}
+
+function buildParams(cat, d) {
+    if (cat === 'ALL') {
+        const categories = ['MOTOR', 'TURBO', 'TERMIC', 'EVACUARE', 'ELECTRIC'];
+        return categories.flatMap(cId => buildCategoryList(cId, d));
+    }
+    return buildCategoryList(cat, d);
 }
 
 // ─── Oscilloscope metrics ─────────────────────────────────────────────────────
@@ -256,16 +216,38 @@ const MetricTile = ({ label, value, unit, color = colors.text.primary, highlight
     </View>
 );
 
-const ParamRow = ({ label, val, unit, max = 100, color = colors.accent.default, last = false }) => {
-    const pct = max > 0 ? `${Math.min(Math.max((Number(val) / max) * 100, 0), 100)}%` : '0%';
+const ParamRow = ({ label, val, unit, max = 100, min = 0, nominalMin, nominalMax, isVirtual = false, color = colors.accent.default, last = false }) => {
+    const numVal = parseFloat(val);
+    const range = max - min;
+    const pct = range > 0 && !isNaN(numVal) ? `${Math.min(Math.max(((numVal - min) / range) * 100, 0), 100)}%` : '0%';
+
+    let barColor = color;
+    if (nominalMin !== undefined && nominalMax !== undefined && !isNaN(numVal)) {
+        if (numVal >= nominalMin && numVal <= nominalMax) {
+            barColor = colors.status.good;
+        } else if (numVal > nominalMax * 1.15 || numVal < nominalMin * 0.85) {
+            barColor = colors.status.critical;
+        } else {
+            barColor = colors.status.caution;
+        }
+    }
+
     return (
         <View style={[styles.paramRow, last && { borderBottomWidth: 0 }]}>
-            <Text style={styles.paramLabel} numberOfLines={1}>{label}</Text>
-            <View style={styles.paramTrack}>
-                <View style={[styles.paramFill, { width: pct, backgroundColor: color }]} />
+            <View style={styles.paramLabelWrap}>
+                <Text style={styles.paramLabel} numberOfLines={1}>{label}</Text>
+                {isVirtual && (
+                    <View style={styles.virtualPill}>
+                        <Text style={styles.virtualPillText}>VIRTUAL</Text>
+                    </View>
+                )}
             </View>
-            <Text style={[styles.paramVal, { color }]} numberOfLines={1}>
-                {val}<Text style={styles.paramUnit}> {unit}</Text>
+            <View style={styles.paramTrack}>
+                <View style={[styles.paramFill, { width: pct, backgroundColor: barColor }]} />
+            </View>
+            <Text style={[styles.paramVal, { color: barColor }]} numberOfLines={1}>
+                {typeof val === 'number' ? (Number.isInteger(val) ? val.toLocaleString() : val.toFixed(1)) : val}
+                <Text style={styles.paramUnit}> {unit}</Text>
             </Text>
         </View>
     );
@@ -1665,11 +1647,31 @@ const styles = StyleSheet.create({
         borderBottomColor: colors.border.subtle ?? colors.bg[2],
         gap: spacing[2],
     },
+    paramLabelWrap: {
+        width: 140,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
     paramLabel: {
-        width: 108,
+        flex: 1,
         fontSize: typography.sizes.caption,
         color: colors.text.secondary,
         fontWeight: typography.weights.semibold,
+    },
+    virtualPill: {
+        paddingHorizontal: 4,
+        paddingVertical: 1,
+        borderRadius: radii.full,
+        backgroundColor: 'rgba(0, 240, 255, 0.15)',
+        borderWidth: 0.5,
+        borderColor: '#00f0ff',
+    },
+    virtualPillText: {
+        fontSize: 7.5,
+        fontWeight: typography.weights.heavy,
+        color: '#00f0ff',
+        letterSpacing: 0.5,
     },
     paramTrack: {
         flex: 1,
@@ -1680,7 +1682,7 @@ const styles = StyleSheet.create({
     },
     paramFill:  { height: '100%', borderRadius: radii.full, opacity: 0.9 },
     paramVal: {
-        width: 58,
+        minWidth: 65,
         textAlign: 'right',
         fontSize: typography.sizes.label2,
         fontWeight: typography.weights.heavy,

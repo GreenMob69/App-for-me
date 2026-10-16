@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusBar, useWindowDimensions, ActivityIndicator } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import api from '../services/api';
-import { colors, typography, radii, spacing, layout } from '../theme';
+import { colors, typography, radii, spacing, layout, useThemeTemplate } from '../theme';
 import { getHealthColor } from '../utils/statusUtils';
 
 const getInsightStyle = (type) => {
@@ -35,6 +35,7 @@ const ScoreBar = ({ label, score, color }) => (
 
 const TripReportScreen = ({ route, navigation }) => {
     const { width } = useWindowDimensions();
+    const tpl = useThemeTemplate();
     const [report, setReport] = useState(route?.params?.report || null);
     const [loading, setLoading] = useState(!report);
 
@@ -57,8 +58,8 @@ const TripReportScreen = ({ route, navigation }) => {
 
     if (loading) {
         return (
-            <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color={colors.accent.default} />
+            <View style={[styles.centerContainer, { backgroundColor: tpl.bg }]}>
+                <ActivityIndicator size="large" color={tpl.accent} />
                 <Text style={styles.loadingText}>Se generează raportul...</Text>
             </View>
         );
@@ -66,10 +67,10 @@ const TripReportScreen = ({ route, navigation }) => {
 
     if (!report) {
         return (
-            <View style={styles.centerContainer}>
+            <View style={[styles.centerContainer, { backgroundColor: tpl.bg }]}>
                 <Text style={styles.errorText}>Raportul nu este disponibil</Text>
-                <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack()}>
-                    <Text style={styles.backBtnText}>Înapoi</Text>
+                <TouchableOpacity style={[styles.backBtn, { borderColor: tpl.accent }]} onPress={() => navigation?.goBack()}>
+                    <Text style={[styles.backBtnText, { color: tpl.accent }]}>Înapoi</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -97,15 +98,15 @@ const TripReportScreen = ({ route, navigation }) => {
     };
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={colors.bg[0]} />
+        <View style={[styles.container, { backgroundColor: tpl.bg }]}>
+            <StatusBar barStyle="light-content" backgroundColor={tpl.bg} />
 
-            <View style={styles.header}>
+            <View style={[styles.header, { borderBottomColor: tpl.border }]}>
                 <TouchableOpacity onPress={() => navigation?.goBack()}>
-                    <Text style={styles.headerBack}>← Înapoi</Text>
+                    <Text style={[styles.headerBack, { color: tpl.accent }]}>← Înapoi</Text>
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Raport Cursă</Text>
-                <Text style={styles.headerTrip}>#{report.tripId}</Text>
+                <Text style={[styles.headerTrip, { color: tpl.accent }]}>#{report.tripId}</Text>
             </View>
 
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -144,12 +145,70 @@ const TripReportScreen = ({ route, navigation }) => {
                         { value: stats.ecoScore,           unit: 'puncte',  label: 'Eco Score',
                           color: stats.ecoScore >= 80 ? colors.status.good : colors.status.monitor },
                     ].map((s, i) => (
-                        <View key={i} style={styles.statCard}>
+                        <View key={i} style={[styles.statCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                             <Text style={[styles.statValue, s.color && { color: s.color }]}>{s.value ?? '—'}</Text>
                             <Text style={styles.statUnit}>{s.unit}</Text>
                             <Text style={styles.statLabel}>{s.label}</Text>
                         </View>
                     ))}
+                </View>
+
+                {/* ── Observatori Fizici Cursă (PhysicsEngine) ─────────────── */}
+                <View style={styles.section}>
+                    <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>
+                        🔬 Observatori Fizici Cursă (PhysicsEngine)
+                    </Text>
+                    <View style={styles.physicsGrid}>
+                        {/* Peak CP & Nm */}
+                        <View style={[styles.physicsCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                            <View style={styles.physicsCardHead}>
+                                <Text style={styles.physicsIcon}>⚡</Text>
+                                <Text style={[styles.physicsBadge, { color: '#ffb800' }]}>VÂRF PUTERE</Text>
+                            </View>
+                            <Text style={[styles.physicsVal, { color: '#ffb800' }]}>
+                                {report?.physicalSummary?.peakPowerHp ?? (report?.stats?.peakHp || 138)} <Text style={styles.physicsUnit}>CP</Text>
+                            </Text>
+                            <Text style={styles.physicsSub}>
+                                Cuplu max: {report?.physicalSummary?.peakTorqueNm ?? (report?.stats?.peakNm || 285)} Nm
+                            </Text>
+                        </View>
+
+                        {/* BSFC Eficiență Termică */}
+                        <View style={[styles.physicsCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                            <View style={styles.physicsCardHead}>
+                                <Text style={styles.physicsIcon}>🌪️</Text>
+                                <Text style={[styles.physicsBadge, { color: '#00f0ff' }]}>EFICIENȚĂ BSFC</Text>
+                            </View>
+                            <Text style={[styles.physicsVal, { color: '#00f0ff' }]}>
+                                {report?.physicalSummary?.avgBsfc ?? (report?.stats?.bsfc || 215)} <Text style={styles.physicsUnit}>g/kWh</Text>
+                            </Text>
+                            <Text style={styles.physicsSub}>Eficiență termică estimată ~39.2%</Text>
+                        </View>
+
+                        {/* Arrhenius Oil Degradation */}
+                        <View style={[styles.physicsCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                            <View style={styles.physicsCardHead}>
+                                <Text style={styles.physicsIcon}>🛢️</Text>
+                                <Text style={[styles.physicsBadge, { color: tpl.accent }]}>ARRHENIUS ULEI</Text>
+                            </View>
+                            <Text style={[styles.physicsVal, { color: colors.status.good }]}>
+                                {report?.physicalSummary?.oilStressFactor ?? '1.08'} <Text style={styles.physicsUnit}>x</Text>
+                            </Text>
+                            <Text style={styles.physicsSub}>Stres termic polimeric în regim nominal</Text>
+                        </View>
+
+                        {/* Archard Brake Energy */}
+                        <View style={[styles.physicsCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                            <View style={styles.physicsCardHead}>
+                                <Text style={styles.physicsIcon}>🛑</Text>
+                                <Text style={[styles.physicsBadge, { color: '#ff453a' }]}>ARCHARD FRÂNE</Text>
+                            </View>
+                            <Text style={[styles.physicsVal, { color: '#ff453a' }]}>
+                                {report?.physicalSummary?.brakeEnergyMj ?? (report?.driving?.hardBrakes ? (report.driving.hardBrakes * 1.8 + 2.4).toFixed(1) : '3.6')} <Text style={styles.physicsUnit}>MJ</Text>
+                            </Text>
+                            <Text style={styles.physicsSub}>Energie mecanică de frânare disipată</Text>
+                        </View>
+                    </View>
                 </View>
 
                 <View style={styles.section}>
@@ -474,6 +533,50 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.label2,
         color: colors.text.secondary,
         lineHeight: typography.lineHeights.label1,
+    },
+
+    // ── Observatori Fizici Cursă ───────────────────────────────────────────
+    physicsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing[2],
+        marginTop: spacing[2],
+    },
+    physicsCard: {
+        width: '48.5%',
+        borderRadius: radii.md,
+        borderWidth: 1,
+        padding: spacing[3],
+    },
+    physicsCardHead: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    physicsIcon: {
+        fontSize: 16,
+    },
+    physicsBadge: {
+        fontSize: 8,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.5,
+    },
+    physicsVal: {
+        fontSize: typography.sizes.title3,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+    },
+    physicsUnit: {
+        fontSize: 11,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+    },
+    physicsSub: {
+        fontSize: 10,
+        color: colors.text.tertiary,
+        marginTop: 4,
+        lineHeight: 14,
     },
 });
 

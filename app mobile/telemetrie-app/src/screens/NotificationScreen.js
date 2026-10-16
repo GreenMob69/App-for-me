@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NotificationContext } from '../context/NotificationContext';
 import { NOTIF_CATEGORY, NOTIF_SEVERITY } from '../engine/NotificationEngine';
 import { useScreenFadeIn } from '../utils/animations';
-import { colors, typography, radii, spacing, layout } from '../theme';
+import { colors, typography, radii, spacing, layout, useThemeTemplate } from '../theme';
 import { EmptyState, Skeleton } from '../components/ui';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -88,6 +88,7 @@ NotifItem.displayName = 'NotifItem';
 
 // ── NotificationScreen ────────────────────────────────────────────────────────
 const NotificationScreen = () => {
+    const tpl = useThemeTemplate();
     const navigation = useNavigation();
     const {
         notifications,
@@ -146,9 +147,9 @@ const NotificationScreen = () => {
     ), [activeCategory]);
 
     return (
-        <Animated.View style={[styles.container, screenFadeStyle]}>
+        <Animated.View style={[styles.container, { backgroundColor: tpl.bg }, screenFadeStyle]}>
             {/* ── Header ───────────────────────────────────────────────── */}
-            <View style={styles.header}>
+            <View style={[styles.header, { borderBottomColor: tpl.border }]}>
                 <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
                     <Text style={styles.backBtnText}>←</Text>
                 </TouchableOpacity>
@@ -195,7 +196,7 @@ const NotificationScreen = () => {
                         const cnt      = categoryCounts[cat.key];
                         return (
                             <TouchableOpacity
-                                style={[styles.chip, isActive && styles.chipActive]}
+                                style={[styles.chip, isActive && { backgroundColor: tpl.accent, borderColor: tpl.accent }]}
                                 onPress={() => handleCategoryPress(cat.key)}
                                 accessibilityRole="radio"
                                 accessibilityState={{ checked: isActive }}

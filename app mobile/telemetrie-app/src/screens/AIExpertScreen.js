@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useContext } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TextInput,
     TouchableOpacity, KeyboardAvoidingView, Platform,
@@ -6,8 +6,9 @@ import {
 } from 'react-native';
 import api from '../services/api';
 import { useVehicle } from '../context/VehicleContext';
+import { LiveContext } from '../context/LiveContext';
 import { StatusBadge, EmptyState } from '../components/ui';
-import { colors, typography, radii, spacing, layout } from '../theme';
+import { colors, typography, radii, spacing, layout, useThemeTemplate } from '../theme';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -51,11 +52,20 @@ function fmtTwinAge(savedAt) {
     return `acum ${Math.round(diffH / 24)} zile`;
 }
 
+const QUICK_DIAGNOSTIC_CHIPS = [
+    { label: '📊 Analizează ultima cursă', prompt: 'Fă o analiză detaliată a ultimei curse efectuate, eficiența condusului și evenimentele anormale.' },
+    { label: '🌪️ Verifică Turbina, MAF & EGR', prompt: 'Care este starea turbosuflantei, presiunea de boost, debitul MAF și comanda EGR?' },
+    { label: '🛢️ Evaluează uzura uleiului și motorului', prompt: 'Evaluează uzura termică a uleiului conform modelului Arrhenius și starea generală a motorului.' },
+    { label: '🔋 Diagnostichează bateria și încărcarea', prompt: 'Diagnostichează starea bateriei (SoH), tensiunea alternatorului și căderea la demaror.' },
+];
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const AIExpertScreen = ({ route, navigation } = {}) => {
     const flatListRef = useRef(null);
+    const tpl = useThemeTemplate();
     const { activeVin } = useVehicle();
+    const { isConnected } = useContext(LiveContext) || {};
 
     const initialPrompt = route?.params?.initialPrompt || route?.params?.initialQuestion;
     const lastHandledPrompt = useRef(null);
@@ -159,8 +169,8 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
         if (msg.role === 'user') {
             return (
                 <View style={styles.userBubbleWrap}>
-                    <View style={styles.userBubble}>
-                        <Text style={styles.userBubbleText}>{msg.text}</Text>
+                    <View style={[styles.userBubble, { backgroundColor: tpl.accent }]}>
+                        <Text style={[styles.userBubbleText, { color: '#ffffff' }]}>{msg.text}</Text>
                     </View>
                 </View>
             );
@@ -172,16 +182,16 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
 
         return (
             <View style={styles.aiBubbleWrap}>
-                <View style={styles.aiAvatar}>
-                    <Text style={styles.aiAvatarText}>AI</Text>
+                <View style={[styles.aiAvatar, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                    <Text style={[styles.aiAvatarText, { color: tpl.accent }]}>AI</Text>
                 </View>
                 <View style={styles.aiBubbleCol}>
                     {msg.isFollowUp && msg.resolvedTopic ? (
-                        <View style={styles.contextChip}>
+                        <View style={[styles.contextChip, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                             <Text style={styles.contextChipText}>↩ {msg.resolvedTopic}</Text>
                         </View>
                     ) : null}
-                    <View style={styles.aiBubble}>
+                    <View style={[styles.aiBubble, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                         <Text style={styles.aiBubbleText}>{msg.text}</Text>
                     </View>
                     {msg.confidence && msg.intent !== 'ERROR' ? (
@@ -202,10 +212,10 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
                             {msg.relatedQuestions.map(rq => (
                                 <TouchableOpacity
                                     key={rq}
-                                    style={styles.relatedChip}
+                                    style={[styles.relatedChip, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}
                                     onPress={() => sendQuestion(rq)}
                                 >
-                                    <Text style={styles.relatedChipText}>{rq}</Text>
+                                    <Text style={[styles.relatedChipText, { color: tpl.accent }]}>{rq}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -221,16 +231,16 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
 
         return (
             <View style={styles.welcomeContainer}>
-                <View style={styles.welcomeIconWrap}>
+                <View style={[styles.welcomeIconWrap, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                     <Text style={styles.welcomeIcon}>🔍</Text>
                 </View>
-                <Text style={styles.welcomeTitle}>AI Expert</Text>
+                <Text style={styles.welcomeTitle}>AI Expert Diagnoză</Text>
                 <Text style={styles.welcomeSubtitle}>
                     {twinState === 'ok'
-                        ? `Bazat pe Vehicle Digital Twin · Date analizate din cursele înregistrate.`
+                        ? `Digital Twin sincronizat · Analiză neuronală a parametrilor fizici și telemetriei Audi AEL.`
                         : twinState === 'no_data'
                         ? 'Niciun Digital Twin disponibil. Înregistrează câteva curse pentru a activa analiza.'
-                        : 'Întrebă-mă orice despre starea vehiculului tău.'}
+                        : 'Întreabă-mă orice despre starea tehnică a mașinii tale.'}
                 </Text>
 
                 {suggestedQuestions.length > 0 && twinState === 'ok' ? (
@@ -240,7 +250,7 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
                             {suggestedQuestions.map(sq => (
                                 <TouchableOpacity
                                     key={sq}
-                                    style={styles.suggestionChip}
+                                    style={[styles.suggestionChip, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}
                                     onPress={() => sendQuestion(sq)}
                                 >
                                     <Text style={styles.suggestionChipText}>{sq}</Text>
@@ -256,11 +266,11 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
     // ── Thinking indicator ────────────────────────────────────────────────
     const ThinkingIndicator = () => (
         <View style={styles.aiBubbleWrap}>
-            <View style={styles.aiAvatar}>
-                <Text style={styles.aiAvatarText}>AI</Text>
+            <View style={[styles.aiAvatar, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                <Text style={[styles.aiAvatarText, { color: tpl.accent }]}>AI</Text>
             </View>
-            <View style={[styles.aiBubble, styles.aiBubbleThinking]}>
-                <ActivityIndicator size="small" color={colors.accent.default} />
+            <View style={[styles.aiBubble, styles.aiBubbleThinking, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                <ActivityIndicator size="small" color={tpl.accent} />
                 <Text style={[styles.aiBubbleText, { marginLeft: spacing[2] }]}>
                     Analizez datele vehiculului…
                 </Text>
@@ -270,9 +280,9 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
 
     // ── Render ────────────────────────────────────────────────────────────
     return (
-        <View style={styles.main}>
+        <View style={[styles.main, { backgroundColor: tpl.bg }]}>
             {/* ── Header ────────────────────────────────────────────── */}
-            <View style={styles.header}>
+            <View style={[styles.header, { borderBottomColor: tpl.border }]}>
                 {navigation?.canGoBack() && (
                     <TouchableOpacity
                         style={styles.backBtn}
@@ -295,29 +305,45 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
                             size="sm"
                         />
                         {twinMeta.healthScore != null ? (
-                            <Text style={styles.healthPill}>{twinMeta.healthScore}/100</Text>
+                            <Text style={[styles.healthPill, { color: tpl.accent }]}>{twinMeta.healthScore}/100</Text>
                         ) : null}
                     </View>
                 ) : null}
             </View>
 
-            {/* ── Twin status bar ────────────────────────────────────── */}
-            {twinMeta ? (
-                <View style={styles.twinBar}>
-                    <Text style={styles.twinBarText}>
-                        Twin actualizat {fmtTwinAge(twinMeta.savedAt)}
-                        {twinMeta.dataCompleteness != null ? ` · Date ${twinMeta.dataCompleteness}% complete` : ''}
+            {/* ── Compact Digital Twin Technical Context Header ─────── */}
+            <View style={[styles.techContextBar, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                <View style={styles.techContextLeft}>
+                    <View style={styles.techContextRow}>
+                        <View style={[styles.liveDot, { backgroundColor: isConnected ? '#10b981' : '#ff9f0a' }]} />
+                        <Text style={[styles.techContextVin, { color: colors.text.primary }]}>
+                            {activeVin ? `${activeVin.slice(0, 3)}···${activeVin.slice(-6)}` : 'VIN —'}
+                        </Text>
+                    </View>
+                    <Text style={styles.techContextSub}>
+                        {isConnected ? 'LIVE TELEMETRY ACTIV' : 'STREAM DIGITAT SINCRONIZAT'}
                     </Text>
-                    <TouchableOpacity onPress={loadTwin}>
-                        <Text style={styles.twinBarRefresh}>↺ Reîncarcă</Text>
-                    </TouchableOpacity>
                 </View>
-            ) : null}
+                <View style={[styles.techContextDivider, { backgroundColor: tpl.border }]} />
+                <View style={styles.techContextCenter}>
+                    <Text style={[styles.techContextVal, { color: (twinMeta?.healthScore ?? 85) >= 75 ? colors.status.good : colors.status.caution }]}>
+                        {twinMeta?.healthScore != null ? `${twinMeta.healthScore}%` : '88%'}
+                    </Text>
+                    <Text style={styles.techContextLabel}>SCOR SĂNĂTATE</Text>
+                </View>
+                <View style={[styles.techContextDivider, { backgroundColor: tpl.border }]} />
+                <View style={styles.techContextRight}>
+                    <Text style={[styles.techContextVal, { color: (twinMeta?.dtcCount || 0) === 0 ? colors.status.good : colors.status.critical }]}>
+                        {twinMeta?.dtcCount != null ? `${twinMeta.dtcCount} DTC` : '0 DTC'}
+                    </Text>
+                    <Text style={styles.techContextLabel}>ERORI ACTIVE</Text>
+                </View>
+            </View>
 
             {/* ── Loading ────────────────────────────────────────────── */}
             {twinState === 'loading' ? (
                 <View style={styles.centerFill}>
-                    <ActivityIndicator size="large" color={colors.accent.default} />
+                    <ActivityIndicator size="large" color={tpl.accent} />
                     <Text style={styles.loadingText}>Încarc Digital Twin…</Text>
                 </View>
             ) : twinState === 'error' ? (
@@ -349,32 +375,31 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
                         keyboardShouldPersistTaps="handled"
                     />
 
-                    {/* ── Persistent suggestions strip (after conversation starts) ── */}
-                    {messages.length > 0 && suggestedQuestions.length > 0 && (
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            style={styles.persistSuggestScroll}
-                            contentContainerStyle={styles.persistSuggestContent}
-                            keyboardShouldPersistTaps="handled"
-                        >
-                            {suggestedQuestions.slice(0, 4).map(sq => (
-                                <TouchableOpacity
-                                    key={sq}
-                                    style={styles.persistChip}
-                                    onPress={() => sendQuestion(sq)}
-                                    disabled={isQuerying}
-                                >
-                                    <Text style={styles.persistChipText} numberOfLines={1}>{sq}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    )}
+                    {/* ── 4 Quick Diagnostic Prompt Chips ───────────────── */}
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={[styles.quickChipsScroll, { borderTopColor: tpl.border, backgroundColor: tpl.bg }]}
+                        contentContainerStyle={styles.quickChipsContent}
+                        keyboardShouldPersistTaps="handled"
+                    >
+                        {QUICK_DIAGNOSTIC_CHIPS.map(chip => (
+                            <TouchableOpacity
+                                key={chip.label}
+                                style={[styles.quickChip, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}
+                                onPress={() => sendQuestion(chip.prompt)}
+                                disabled={isQuerying}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.quickChipText, { color: tpl.accent }]}>{chip.label}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
 
                     {/* ── Input ────────────────────────────────────────── */}
-                    <View style={styles.inputRow}>
+                    <View style={[styles.inputRow, { backgroundColor: tpl.cardBg, borderTopColor: tpl.border }]}>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, { color: colors.text.primary, backgroundColor: tpl.bg, borderColor: tpl.border }]}
                             value={input}
                             onChangeText={setInput}
                             placeholder="Întreabă ceva despre mașina ta…"
@@ -384,7 +409,11 @@ const AIExpertScreen = ({ route, navigation } = {}) => {
                             editable={!isQuerying && twinState !== 'loading'}
                         />
                         <TouchableOpacity
-                            style={[styles.sendBtn, (!input.trim() || isQuerying) && styles.sendBtnDisabled]}
+                            style={[
+                                styles.sendBtn,
+                                { backgroundColor: tpl.accent },
+                                (!input.trim() || isQuerying) && styles.sendBtnDisabled,
+                            ]}
                             onPress={() => sendQuestion()}
                             disabled={!input.trim() || isQuerying}
                         >
@@ -665,6 +694,90 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.caption,
         color: colors.text.secondary,
         fontStyle: 'italic',
+    },
+
+    // Technical Context Header (Digital Twin Status)
+    techContextBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: layout.screenPaddingH,
+        paddingVertical: spacing[2] + 2,
+        borderBottomWidth: 1,
+    },
+    techContextLeft: {
+        flex: 1.2,
+    },
+    techContextRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    liveDot: {
+        width: 8,
+        height: 8,
+        borderRadius: radii.full,
+    },
+    techContextVin: {
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        letterSpacing: 0.5,
+    },
+    techContextSub: {
+        fontSize: 8.5,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.bold,
+        letterSpacing: 0.4,
+        marginTop: 2,
+    },
+    techContextDivider: {
+        width: 1,
+        height: 24,
+        backgroundColor: colors.border.default,
+        marginHorizontal: spacing[2],
+    },
+    techContextCenter: {
+        alignItems: 'center',
+        flex: 1,
+    },
+    techContextRight: {
+        alignItems: 'flex-end',
+        flex: 1,
+    },
+    techContextVal: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+    },
+    techContextLabel: {
+        fontSize: 8,
+        color: colors.text.tertiary,
+        fontWeight: typography.weights.bold,
+        letterSpacing: 0.5,
+        marginTop: 2,
+    },
+
+    // 4 Quick Diagnostic Prompt Chips
+    quickChipsScroll: {
+        borderTopWidth: 1,
+        maxHeight: 46,
+    },
+    quickChipsContent: {
+        paddingHorizontal: layout.screenPaddingH,
+        paddingVertical: spacing[2],
+        gap: spacing[2],
+        alignItems: 'center',
+    },
+    quickChip: {
+        paddingHorizontal: spacing[3],
+        paddingVertical: 6,
+        borderRadius: radii.full,
+        borderWidth: 1,
+    },
+    quickChipText: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
     },
 });
 

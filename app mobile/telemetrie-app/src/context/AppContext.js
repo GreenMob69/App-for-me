@@ -50,3 +50,9 @@ export const AppProvider = ({ children }) => {
         </AppContext.Provider>
     );
 };
+
+export const useThemeTemplate = () => {
+    const context = React.useContext(AppContext);
+    return context?.currentTemplate || TEMPLATES.MOTORSPORT;
+};
+

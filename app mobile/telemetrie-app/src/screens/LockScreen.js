@@ -5,9 +5,10 @@ import {
     Platform, StatusBar, ActivityIndicator,
 } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { colors, typography, spacing, radii } from '../theme';
+import { colors, typography, spacing, radii, useThemeTemplate } from '../theme';
 
 const LockScreen = ({ onUnlock }) => {
+    const tpl = useThemeTemplate();
     const [hasHardware, setHasHardware] = useState(false);
     const [isEnrolled,  setIsEnrolled]  = useState(false);
     const [checking,    setChecking]    = useState(true);
@@ -56,15 +57,15 @@ const LockScreen = ({ onUnlock }) => {
 
     if (checking) {
         return (
-            <View style={styles.container}>
-                <ActivityIndicator size="large" color={colors.accent.default} />
+            <View style={[styles.container, { backgroundColor: tpl.bg }]}>
+                <ActivityIndicator size="large" color={tpl.accent} />
             </View>
         );
     }
 
     return (
-        <View style={styles.container}>
-            <View style={styles.iconWrap}>
+        <View style={[styles.container, { backgroundColor: tpl.bg }]}>
+            <View style={[styles.iconWrap, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                 <Text style={styles.icon}>🔒</Text>
             </View>
 
@@ -81,7 +82,7 @@ const LockScreen = ({ onUnlock }) => {
                 </View>
             )}
 
-            <TouchableOpacity style={styles.btn} onPress={handlePress} activeOpacity={0.8}>
+            <TouchableOpacity style={[styles.btn, { backgroundColor: tpl.accent }]} onPress={handlePress} activeOpacity={0.8}>
                 <Text style={styles.btnText}>
                     {hasHardware && isEnrolled ? '🔓  Deblochează' : 'Autentifică-te'}
                 </Text>

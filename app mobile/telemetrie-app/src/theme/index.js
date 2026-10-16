@@ -247,3 +247,6 @@ export const TEMPLATES = {
         isHud: true,
     },
 };
+
+export { useThemeTemplate } from '../context/AppContext';
+

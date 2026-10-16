@@ -23,7 +23,7 @@ import { useScreenFadeIn } from '../utils/animations';
 import { fetchFullStatus } from '../services/vehicleService';
 import { mapStatusData } from '../mappers/statusMapper';
 import { t } from '../i18n';
-import { colors, typography, spacing, layout, radii, motion } from '../theme';
+import { colors, typography, spacing, layout, radii, motion, useThemeTemplate } from '../theme';
 import { TREND_INDICATORS } from '../utils/statusUtils';
 import { NotificationContext } from '../context/NotificationContext';
 import { useVehicle } from '../context/VehicleContext';
@@ -221,6 +221,7 @@ const LoadingSkeleton = () => (
 // ─────────────────────────────────────────────────────────────────────────────
 
 const StatusScreen = ({ navigation }) => {
+    const tpl = useThemeTemplate();
     const [screenState, setScreenState] = useState('loading');
     const [refreshing, setRefreshing]   = useState(false);
     const [statusModel, setStatusModel] = useState(null);
@@ -404,7 +405,7 @@ const StatusScreen = ({ navigation }) => {
     // ────────────────────────────────────────────────────────────────────────
 
     return (
-        <Animated.View style={[styles.container, screenFadeStyle]}>
+        <Animated.View style={[styles.container, { backgroundColor: tpl.bg }, screenFadeStyle]}>
             <ScrollView
                 style={styles.scroll}
                 contentContainerStyle={styles.content}
@@ -413,8 +414,8 @@ const StatusScreen = ({ navigation }) => {
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        tintColor={colors.accent.default}
-                        colors={[colors.accent.default]}
+                        tintColor={tpl.accent}
+                        colors={[tpl.accent]}
                     />
                 }
             >

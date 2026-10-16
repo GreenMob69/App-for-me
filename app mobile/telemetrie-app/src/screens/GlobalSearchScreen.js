@@ -6,7 +6,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { fetchVehicleSummary } from '../services/vehicleService';
 import { useScreenFadeIn } from '../utils/animations';
-import { colors, typography, radii, spacing, layout } from '../theme';
+import { colors, typography, radii, spacing, layout, useThemeTemplate } from '../theme';
 import { Skeleton, EmptyState } from '../components/ui';
 
 // ── Category colors ───────────────────────────────────────────────────────────
@@ -142,6 +142,7 @@ const HINTS = [
 
 // ── GlobalSearchScreen ────────────────────────────────────────────────────────
 const GlobalSearchScreen = () => {
+    const tpl = useThemeTemplate();
     const navigation     = useNavigation();
     const [query, setQuery]           = useState('');
     const [index, setIndex]           = useState([]);
@@ -230,10 +231,10 @@ const GlobalSearchScreen = () => {
     // ── Skeleton loading ─────────────────────────────────────────────────────
     if (loadState === 'loading') {
         return (
-            <View style={styles.container}>
-                <View style={styles.header}>
+            <View style={[styles.container, { backgroundColor: tpl.bg }]}>
+                <View style={[styles.header, { borderBottomColor: tpl.border }]}>
                     <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
-                        <Text style={styles.cancelBtnText}>Anulează</Text>
+                        <Text style={[styles.cancelBtnText, { color: tpl.accent }]}>Anulează</Text>
                     </TouchableOpacity>
                     <View style={styles.searchBarSkeleton}>
                         <Skeleton variant="rect" height={40} />
@@ -250,10 +251,10 @@ const GlobalSearchScreen = () => {
 
     if (loadState === 'error') {
         return (
-            <View style={[styles.container, styles.center]}>
-                <View style={styles.header}>
+            <View style={[styles.container, styles.center, { backgroundColor: tpl.bg }]}>
+                <View style={[styles.header, { borderBottomColor: tpl.border }]}>
                     <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
-                        <Text style={styles.cancelBtnText}>Anulează</Text>
+                        <Text style={[styles.cancelBtnText, { color: tpl.accent }]}>Anulează</Text>
                     </TouchableOpacity>
                 </View>
                 <EmptyState
@@ -268,10 +269,10 @@ const GlobalSearchScreen = () => {
     }
 
     return (
-        <Animated.View style={[styles.container, screenFadeStyle]}>
+        <Animated.View style={[styles.container, { backgroundColor: tpl.bg }, screenFadeStyle]}>
             {/* ── Header ────────────────────────────────────────────── */}
-            <View style={styles.header}>
-                <View style={styles.searchBar}>
+            <View style={[styles.header, { borderBottomColor: tpl.border }]}>
+                <View style={[styles.searchBar, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                     <Text style={styles.searchIcon}>🔍</Text>
                     <TextInput
                         ref={inputRef}
@@ -293,7 +294,7 @@ const GlobalSearchScreen = () => {
                     accessibilityRole="button"
                     accessibilityLabel="Anuleaza cautarea"
                 >
-                    <Text style={styles.cancelBtnText}>Anulează</Text>
+                    <Text style={[styles.cancelBtnText, { color: tpl.accent }]}>Anulează</Text>
                 </TouchableOpacity>
             </View>
 

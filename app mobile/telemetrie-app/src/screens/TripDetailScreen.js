@@ -12,7 +12,7 @@ import { t } from '../i18n';
 import { getActiveServerUrl } from '../utils/config';
 import { useVehicle } from '../context/VehicleContext';
 import { getRootNavigation } from '../utils/navigation';
-import { colors, typography, radii, spacing, layout } from '../theme';
+import { colors, typography, radii, spacing, layout, useThemeTemplate } from '../theme';
 import { getSubsystemColor } from '../utils/statusUtils';
 import {
     Skeleton, MetricCard, PredictionCard, SectionHeader, EmptyState, CausalChainCard,
@@ -89,6 +89,7 @@ const CHART_CONFIGS = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
+    const tpl = useThemeTemplate();
     const nav = useNavigation();
     const effectiveTripId = propTripId || route?.params?.tripId;
     const handleBack = onBack || (() => nav.goBack());
@@ -200,8 +201,8 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
     // ── Loading ───────────────────────────────────────────────────────────────
     if (loading) {
         return (
-            <View style={styles.container}>
-                <View style={styles.header}>
+            <View style={[styles.container, { backgroundColor: tpl.bg }]}>
+                <View style={[styles.header, { borderBottomColor: tpl.border }]}>
                     <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Înapoi">
                         <Text style={styles.backBtnText}>{t('detail.back')}</Text>
                     </TouchableOpacity>
@@ -226,8 +227,8 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
     // ── No data ───────────────────────────────────────────────────────────────
     if (!trip) {
         return (
-            <View style={styles.container}>
-                <View style={styles.header}>
+            <View style={[styles.container, { backgroundColor: tpl.bg }]}>
+                <View style={[styles.header, { borderBottomColor: tpl.border }]}>
                     <TouchableOpacity onPress={handleBack} style={styles.backBtn} accessibilityRole="button">
                         <Text style={styles.backBtnText}>{t('detail.back')}</Text>
                     </TouchableOpacity>
@@ -256,9 +257,9 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
         : `#${effectiveTripId}`;
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: tpl.bg }]}>
             {/* ── Header ──────────────────────────────────────────────────── */}
-            <View style={styles.header}>
+            <View style={[styles.header, { borderBottomColor: tpl.border }]}>
                 <TouchableOpacity
                     onPress={handleBack}
                     style={styles.backBtn}

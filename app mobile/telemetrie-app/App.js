@@ -15,7 +15,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TelemetryProvider } from './src/context/TelemetryContext';
-import { AppContext } from './src/context/AppContext';
+import { AppProvider, AppContext } from './src/context/AppContext';
 import { NotificationContext } from './src/context/NotificationContext';
 import { setCustomServerUrl } from './src/utils/config';
 import { VehicleProvider, useVehicle } from './src/context/VehicleContext';
@@ -248,16 +248,18 @@ function AppRoot() {
     }
 
     return (
-        <TelemetryProvider>
-            <SecurityProvider>
-                <View style={styles.container}>
-                    <StatusBar style="light" backgroundColor={colors.bg[0]} />
-                    <SecurityGate>
-                        <AppNavigator />
-                    </SecurityGate>
-                </View>
-            </SecurityProvider>
-        </TelemetryProvider>
+        <AppProvider>
+            <TelemetryProvider>
+                <SecurityProvider>
+                    <View style={styles.container}>
+                        <StatusBar style="light" backgroundColor={colors.bg[0]} />
+                        <SecurityGate>
+                            <AppNavigator />
+                        </SecurityGate>
+                    </View>
+                </SecurityProvider>
+            </TelemetryProvider>
+        </AppProvider>
     );
 }
 

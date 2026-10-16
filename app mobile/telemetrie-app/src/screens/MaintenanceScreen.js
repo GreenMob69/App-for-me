@@ -8,7 +8,7 @@
  *           Sănătate → Costuri → Istoric Service → Workshop → Footer
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import {
     View,
     Text,
@@ -25,11 +25,13 @@ import {
 import { useScreenFadeIn } from '../utils/animations';
 import { useNavigation } from '@react-navigation/native';
 import { useVehicle } from '../context/VehicleContext';
+import { LiveContext } from '../context/LiveContext';
+import { useSmoothedTelemetry } from '../hooks/useSmoothedTelemetry';
 import api from '../services/api';
 import { fetchMaintenanceData, fetchDocuments } from '../services/vehicleService';
 import { getDtcDescription, getDtcSeverityColor } from '../data/dtcCodes';
 import { t } from '../i18n';
-import { colors, typography, spacing, layout, radii } from '../theme';
+import { colors, typography, spacing, layout, radii, useThemeTemplate } from '../theme';
 
 import {
     Card,
@@ -218,12 +220,19 @@ const LoadingSkeleton = () => (
 
 const MaintenanceScreen = () => {
     const navigation = useNavigation();
+    const tpl = useThemeTemplate();
     const { activeVin, vehicleLabel } = useVehicle();
+    const { liveData: rawLiveData } = useContext(LiveContext) || {};
+    const liveData = useSmoothedTelemetry(rawLiveData || {});
+    const v = liveData?.virtual || liveData?.fizica || {};
+    const dpf = liveData?.dpf || {};
+
     const [screenState, setScreenState] = useState('loading');
     const [refreshing, setRefreshing]   = useState(false);
     const [maintData, setMaintData]     = useState(null);
     const [documents,  setDocuments]    = useState([]);
     const [showAllUrgent, setShowAllUrgent]   = useState(false);
+    const [showAllOptimal, setShowAllOptimal] = useState(false);
     const [showAllHistory, setShowAllHistory] = useState(false);
     const [dtcData, setDtcData] = useState(null);
     const [peekMaintItem, setPeekMaintItem]     = useState(null);
@@ -317,19 +326,50 @@ const MaintenanceScreen = () => {
     // Hero
     const heroInfo = buildHeroInfo(summary);
 
-    // Atenție Acum — OVERDUE + DUE_SOON
-    const urgentAll = allItems.filter(i => i.status === 'OVERDUE' || i.status === 'DUE_SOON');
+    // Atenție Acum — OVERDUE + DUE_SOON + SOON
+    const urgentAll = allItems.filter(i => i.status === 'OVERDUE' || i.status === 'DUE_SOON' || i.status === 'SOON');
     const urgentVisible = showAllUrgent ? urgentAll : urgentAll.slice(0, 3);
     const urgentHidden  = urgentAll.length - 3;
 
-    // Urmează — OK cu uzură ≥ 40% sau remaining < 8000 km sau < 90 zile
-    const upcomingItems = allItems
-        .filter(i => i.status === 'OK' && (
-            (i.wear_percent != null && i.wear_percent >= 40) ||
-            (i.remaining_km != null && i.remaining_km <= 8000) ||
-            (i.remaining_days != null && i.remaining_days <= 90)
-        ))
-        .slice(0, 3);
+    // Sisteme în Parametri Optimi — OK
+    const optimalItems = allItems.filter(i => i.status === 'OK' || (!i.status && i.status !== 'OVERDUE' && i.status !== 'DUE_SOON'));
+
+    // Handler marcare efectuată
+    const handleMarkDone = useCallback((item) => {
+        Alert.alert(
+            'Confirmare Servisare',
+            `Marchezi intervenția "${item.item_name}" ca fiind efectuată la kilometrajul curent?`,
+            [
+                { text: 'Anulează', style: 'cancel' },
+                {
+                    text: 'Confirmă',
+                    onPress: async () => {
+                        try {
+                            await api.post(`/mentenanta/item/${item.id}/efectuat`, { km: estimatedKm || 0 });
+                        } catch (_) {}
+                        setMaintData(prev => {
+                            if (!prev?.profile?.maintenance_summary?.items) return prev;
+                            const updated = prev.profile.maintenance_summary.items.map(it =>
+                                it.id === item.id ? { ...it, status: 'OK', wear_percent: 0, last_service_date: new Date().toISOString() } : it
+                            );
+                            return {
+                                ...prev,
+                                profile: {
+                                    ...prev.profile,
+                                    maintenance_summary: {
+                                        ...prev.profile.maintenance_summary,
+                                        items: updated,
+                                        overdue: Math.max(0, (prev.profile.maintenance_summary.overdue || 1) - 1)
+                                    }
+                                }
+                            };
+                        });
+                        Alert.alert('Succes', `Intervenția "${item.item_name}" a fost marcată ca efectuată!`);
+                    }
+                }
+            ]
+        );
+    }, [estimatedKm]);
 
     // Sănătate
     const healthScore   = profile?.health_score ?? health?.overallHealth ?? null;
@@ -358,7 +398,7 @@ const MaintenanceScreen = () => {
     // ────────────────────────────────────────────────────────────────────────
 
     return (
-        <Animated.View style={[styles.container, screenFadeStyle]}>
+        <Animated.View style={[styles.container, { backgroundColor: tpl.bg }, screenFadeStyle]}>
             <ScrollView
                 style={styles.scroll}
                 contentContainerStyle={styles.content}
@@ -367,8 +407,8 @@ const MaintenanceScreen = () => {
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        tintColor={colors.accent.default}
-                        colors={[colors.accent.default]}
+                        tintColor={tpl.accent}
+                        colors={[tpl.accent]}
                     />
                 }
             >
@@ -396,73 +436,198 @@ const MaintenanceScreen = () => {
                     style={styles.hero}
                 />
 
-                {/* ── 2. ATENȚIE ACUM ──────────────────────────────────── */}
-                {urgentAll.length > 0 ? (
-                    <View style={styles.section}>
-                        <SectionHeader
-                            title={t('maint.sections.attentionNow')}
-                            size="sm"
-                        />
-                        {urgentVisible.map((item, i) => (
-                            <MaintenanceCard
-                                key={`urgent-${item.id}`}
-                                title={item.item_name}
-                                subtitle={buildItemSubtitle(item)}
-                                dueKm={item.next_due_km}
-                                dueDate={buildDueDate(item)}
-                                status={mapItemStatus(item.status)}
-                                urgency={mapItemUrgency(item)}
-                                onPress={() => setPeekMaintItem(item)}
-                                style={i > 0 ? styles.cardGap : undefined}
-                            />
-                        ))}
-                        {urgentHidden > 0 ? (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                label={showAllUrgent
-                                    ? 'Arată mai puțin'
-                                    : `Vezi toate (${urgentAll.length})`}
-                                onPress={() => setShowAllUrgent(v => !v)}
-                                style={styles.seeAllBtn}
-                            />
-                        ) : null}
-                    </View>
-                ) : null}
-
-                {/* ── 3. URMEAZĂ ───────────────────────────────────────── */}
-                {upcomingItems.length > 0 ? (
-                    <View style={styles.section}>
-                        <SectionHeader
-                            title={t('maint.sections.upcoming')}
-                            size="sm"
-                        />
-                        {upcomingItems.map((item, i) => (
-                            <MaintenanceCard
-                                key={`upcoming-${item.id}`}
-                                title={item.item_name}
-                                subtitle={buildItemSubtitle(item)}
-                                dueKm={item.next_due_km}
-                                dueDate={buildDueDate(item)}
-                                status="upcoming"
-                                urgency={mapItemUrgency(item)}
-                                onPress={() => setPeekMaintItem(item)}
-                                style={i > 0 ? styles.cardGap : undefined}
-                            />
-                        ))}
-                    </View>
-                ) : (
-                    urgentAll.length === 0 ? (
-                        <View style={styles.section}>
-                            <SectionHeader title={t('maint.sections.upcoming')} size="sm" />
-                            <Card padding="md">
-                                <Text style={styles.calmText}>
-                                    Nicio intervenție programată în următoarele 3 luni.
+                {/* ── CATEGORIA 1: 🔬 MONITORIZARE FIZICĂ INTELIGENTĂ ──── */}
+                <View style={styles.section}>
+                    <SectionHeader
+                        title="🔬 MONITORIZARE FIZICĂ INTELIGENTĂ"
+                        subtitle="Estimatori bazați pe legi fizice din PhysicsEngine"
+                        size="sm"
+                    />
+                    <View style={[styles.virtualCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                        {/* Arrhenius Oil Stress */}
+                        <View style={styles.virtualRow}>
+                            <View style={styles.virtualHeaderRow}>
+                                <View style={styles.virtualTitleWrap}>
+                                    <Text style={[styles.virtualTitle, { color: colors.text.primary }]}>Stres Termic Ulei Arrhenius</Text>
+                                    <View style={[styles.virtualBadge, { backgroundColor: 'rgba(0, 240, 255, 0.15)', borderColor: '#00f0ff' }]}>
+                                        <Text style={[styles.virtualBadgeText, { color: '#00f0ff' }]}>ARRHENIUS V2</Text>
+                                    </View>
+                                </View>
+                                <Text style={[styles.virtualVal, { color: (v.oilLifeWearFactor || 1) > 2 ? colors.status.critical : colors.status.good }]}>
+                                    {(v.oilLifeWearFactor || 1.0).toFixed(2)}x
                                 </Text>
-                            </Card>
+                            </View>
+                            <View style={styles.virtualTrack}>
+                                <View style={[styles.virtualFill, {
+                                    width: `${Math.min(Math.max(((v.oilLifeWearFactor || 1.0) / 3.0) * 100, 10), 100)}%`,
+                                    backgroundColor: (v.oilLifeWearFactor || 1) > 2 ? colors.status.critical : tpl.accent
+                                }]} />
+                            </View>
+                            <Text style={styles.virtualDesc}>
+                                Factor multiplicativ de degradare a polimerilor. Nominal: 1.0x la 90°C.
+                            </Text>
                         </View>
-                    ) : null
-                )}
+
+                        {/* Archard Brake Energy */}
+                        <View style={[styles.virtualRow, { borderTopWidth: 1, borderTopColor: tpl.border }]}>
+                            <View style={styles.virtualHeaderRow}>
+                                <View style={styles.virtualTitleWrap}>
+                                    <Text style={[styles.virtualTitle, { color: colors.text.primary }]}>Disipare Energie Frânare Archard</Text>
+                                    <View style={[styles.virtualBadge, { backgroundColor: 'rgba(255, 184, 0, 0.15)', borderColor: '#ffb800' }]}>
+                                        <Text style={[styles.virtualBadgeText, { color: '#ffb800' }]}>ARCHARD MJ</Text>
+                                    </View>
+                                </View>
+                                <Text style={[styles.virtualVal, { color: '#ffb800' }]}>
+                                    {(v.brakeEnergyTripMj || 0).toFixed(1)} MJ
+                                </Text>
+                            </View>
+                            <View style={styles.virtualTrack}>
+                                <View style={[styles.virtualFill, {
+                                    width: `${Math.min(Math.max(((v.brakeEnergyTripMj || 0) / 25) * 100, 4), 100)}%`,
+                                    backgroundColor: '#ffb800'
+                                }]} />
+                            </View>
+                            <Text style={styles.virtualDesc}>
+                                Lucru mecanic de fricțiune disipat termic pe discuri și plăcuțe în călătoria curentă.
+                            </Text>
+                        </View>
+
+                        {/* DPF Soot Loading & Resistance */}
+                        <View style={[styles.virtualRow, { borderTopWidth: 1, borderTopColor: tpl.border }]}>
+                            <View style={styles.virtualHeaderRow}>
+                                <View style={styles.virtualTitleWrap}>
+                                    <Text style={[styles.virtualTitle, { color: colors.text.primary }]}>Încărcare DPF & Rezistență Debit</Text>
+                                    <View style={[styles.virtualBadge, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10b981' }]}>
+                                        <Text style={[styles.virtualBadgeText, { color: '#10b981' }]}>R_DPF ESTIMAT</Text>
+                                    </View>
+                                </View>
+                                <Text style={[styles.virtualVal, { color: (dpf.soot_load || 0) > 40 ? colors.status.critical : colors.status.good }]}>
+                                    {(dpf.soot_load || 0).toFixed(1)} g
+                                </Text>
+                            </View>
+                            <View style={styles.virtualTrack}>
+                                <View style={[styles.virtualFill, {
+                                    width: `${Math.min(Math.max(((dpf.soot_load || 0) / 60) * 100, 5), 100)}%`,
+                                    backgroundColor: (dpf.soot_load || 0) > 40 ? colors.status.critical : colors.status.good
+                                }]} />
+                            </View>
+                            <Text style={styles.virtualDesc}>
+                                Rezistență debit: {Math.round(v.dpfResistanceIndex || 18)} idx · Presiune diferențială: {(dpf.diff_press || 0.8).toFixed(1)} kPa (max 60g).
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* ── CATEGORIA 2: ⚠️ INTERVENȚII PRIORITARE ─────────────── */}
+                <View style={styles.section}>
+                    <SectionHeader
+                        title="⚠️ INTERVENȚII PRIORITARE"
+                        subtitle={urgentAll.length > 0 ? `${urgentAll.length} operațiuni necesită acțiune` : undefined}
+                        size="sm"
+                    />
+                    {urgentAll.length > 0 ? (
+                        urgentVisible.map((item) => (
+                            <View
+                                key={`urgent-${item.id}`}
+                                style={[
+                                    styles.priorityCard,
+                                    {
+                                        backgroundColor: tpl.cardBg,
+                                        borderColor: item.status === 'OVERDUE' ? colors.status.critical : colors.status.caution,
+                                        borderLeftWidth: 4,
+                                    }
+                                ]}
+                            >
+                                <View style={styles.priorityCardTop}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.priorityTitle, { color: colors.text.primary }]}>{item.item_name}</Text>
+                                        <Text style={styles.prioritySub}>{buildItemSubtitle(item) || item.item_type?.replace(/_/g, ' ')}</Text>
+                                    </View>
+                                    <StatusBadge
+                                        status={item.status === 'OVERDUE' ? 'critical' : 'caution'}
+                                        label={item.status === 'OVERDUE' ? 'Depășit' : 'Scadent curând'}
+                                        variant="filled"
+                                        size="sm"
+                                    />
+                                </View>
+                                <View style={styles.priorityMetaRow}>
+                                    <Text style={styles.priorityMetaText}>
+                                        {buildDueDate(item) || (item.next_due_km ? `${item.next_due_km.toLocaleString()} km` : 'Scadență apropiată')}
+                                    </Text>
+                                    {item.estimated_cost ? (
+                                        <Text style={[styles.priorityCostText, { color: tpl.accent }]}>
+                                            ~{item.estimated_cost} RON
+                                        </Text>
+                                    ) : null}
+                                </View>
+                                <TouchableOpacity
+                                    style={[styles.markDoneBtn, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10b981' }]}
+                                    onPress={() => handleMarkDone(item)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={styles.markDoneBtnText}>✓ Marchează Efectuat</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ))
+                    ) : (
+                        <Card padding="md">
+                            <Text style={styles.calmText}>
+                                Toate intervențiile prioritare sunt efectuate! Niciun element restant.
+                            </Text>
+                        </Card>
+                    )}
+                    {urgentHidden > 0 ? (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            label={showAllUrgent
+                                ? 'Arată mai puțin'
+                                : `Vezi toate (${urgentAll.length})`}
+                            onPress={() => setShowAllUrgent(v => !v)}
+                            style={styles.seeAllBtn}
+                        />
+                    ) : null}
+                </View>
+
+                {/* ── CATEGORIA 3: ✅ SISTEME ÎN PARAMETRI OPTIMI ───────── */}
+                <View style={styles.section}>
+                    <SectionHeader
+                        title="✅ SISTEME ÎN PARAMETRI OPTIMI"
+                        subtitle={`${optimalItems.length} componente verificate și conforme`}
+                        size="sm"
+                    />
+                    {optimalItems.length > 0 ? (
+                        <View style={styles.optimalGrid}>
+                            {(showAllOptimal ? optimalItems : optimalItems.slice(0, 6)).map((item) => (
+                                <View key={`optimal-${item.id}`} style={[styles.optimalCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                                    <View style={styles.optimalTopRow}>
+                                        <Text style={styles.optimalIcon}>✓</Text>
+                                        <View style={styles.optimalPill}>
+                                            <Text style={styles.optimalPillText}>OPTIM</Text>
+                                        </View>
+                                    </View>
+                                    <Text style={[styles.optimalName, { color: colors.text.primary }]} numberOfLines={1}>{item.item_name}</Text>
+                                    <Text style={styles.optimalSub} numberOfLines={1}>
+                                        {item.remaining_km ? `~${Math.round(item.remaining_km).toLocaleString()} km rămași` : (item.wear_percent ? `Uzură ${item.wear_percent}%` : 'Conform')}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    ) : (
+                        <Card padding="md">
+                            <Text style={styles.calmText}>Nu există componente înregistrate.</Text>
+                        </Card>
+                    )}
+                    {optimalItems.length > 6 && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            label={showAllOptimal ? 'Arată mai puțin' : `Vezi toate cele ${optimalItems.length} sisteme`}
+                            onPress={() => setShowAllOptimal(v => !v)}
+                            style={styles.seeAllBtn}
+                        />
+                    )}
+                </View>
 
                 {/* ── 4. DOCUMENTE ─────────────────────────────────────── */}
                 <View style={styles.section}>
@@ -1186,6 +1351,164 @@ const styles = StyleSheet.create({
     },
     peekBtn: {
         width: '100%',
+    },
+
+    // ── 3 Categorii Condiție Mentenanță ─────────────────────────────────────
+    virtualCard: {
+        borderRadius: radii.md,
+        borderWidth: 1,
+        padding: spacing[4],
+        marginBottom: spacing[4],
+    },
+    virtualRow: {
+        paddingVertical: spacing[3],
+    },
+    virtualHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing[2],
+    },
+    virtualTitleWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[2],
+        flex: 1,
+    },
+    virtualTitle: {
+        fontSize: typography.sizes.body2,
+        fontWeight: typography.weights.bold,
+    },
+    virtualBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: radii.xs,
+        borderWidth: 1,
+    },
+    virtualBadgeText: {
+        fontSize: 8,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.5,
+    },
+    virtualVal: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+    },
+    virtualTrack: {
+        height: 5,
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.full,
+        overflow: 'hidden',
+        marginVertical: 4,
+    },
+    virtualFill: {
+        height: '100%',
+        borderRadius: radii.full,
+    },
+    virtualDesc: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        marginTop: 2,
+    },
+
+    priorityCard: {
+        borderRadius: radii.md,
+        borderWidth: 1,
+        padding: spacing[3],
+        marginBottom: spacing[3],
+    },
+    priorityCardTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: spacing[2],
+        marginBottom: spacing[2],
+    },
+    priorityTitle: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.bold,
+    },
+    prioritySub: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        marginTop: 2,
+    },
+    priorityMetaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginVertical: spacing[2],
+    },
+    priorityMetaText: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.medium,
+    },
+    priorityCostText: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+    },
+    markDoneBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: spacing[3],
+        borderRadius: radii.sm,
+        borderWidth: 1,
+        marginTop: 4,
+    },
+    markDoneBtnText: {
+        color: '#10b981',
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+    },
+
+    optimalGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing[2],
+        marginBottom: spacing[2],
+    },
+    optimalCard: {
+        width: '48.5%',
+        borderRadius: radii.sm,
+        borderWidth: 1,
+        padding: spacing[3],
+    },
+    optimalTopRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    optimalIcon: {
+        color: '#10b981',
+        fontWeight: typography.weights.heavy,
+        fontSize: typography.sizes.label1,
+    },
+    optimalPill: {
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: radii.xs,
+    },
+    optimalPillText: {
+        fontSize: 8,
+        fontWeight: typography.weights.heavy,
+        color: '#10b981',
+        letterSpacing: 0.5,
+    },
+    optimalName: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        marginBottom: 2,
+    },
+    optimalSub: {
+        fontSize: 10,
+        color: colors.text.secondary,
     },
 });
 

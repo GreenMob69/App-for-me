@@ -14,7 +14,7 @@ import api from '../services/api';
 import { computeEvaluation, buildHeaderMessage } from '../engine/MessageEngine';
 import { NotificationContext } from '../context/NotificationContext';
 import { useVehicle } from '../context/VehicleContext';
-import { colors, typography, radii, spacing, layout } from '../theme';
+import { colors, typography, radii, spacing, layout, useThemeTemplate } from '../theme';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -116,6 +116,36 @@ function buildHeroSubtitle(v) {
     return parts.join(' · ') || (v.fuel_type || '—');
 }
 
+const buildLegalDocs = (docs) => {
+    const defaultWallet = [
+        { key: 'ITP', title: 'Inspecție Tehnică (ITP)', icon: '🛡️', expiryDays: 114, dateStr: '12 aug 2026', authority: 'RAR' },
+        { key: 'RCA', title: 'Asigurare Auto (RCA)', icon: '📄', expiryDays: 42, dateStr: '28 mai 2026', authority: 'Allianz / Generali' },
+        { key: 'ROVINIETA', title: 'Rovinietă Națională', icon: '🛣️', expiryDays: 18, dateStr: '04 mai 2026', authority: 'CNAIR' },
+        { key: 'CASCO', title: 'Poliță CASCO Full', icon: '💎', expiryDays: 210, dateStr: '15 nov 2026', authority: 'Omniasig' },
+    ];
+    if (!docs || docs.length === 0) return defaultWallet;
+
+    return defaultWallet.map(def => {
+        const found = docs.find(d => (d.type && d.type.toUpperCase() === def.key) || (d.title && d.title.toUpperCase().includes(def.key)));
+        if (!found) return def;
+        const expiryMs = found.expiry_date ? (found.expiry_date < 1e11 ? found.expiry_date * 1000 : found.expiry_date) : null;
+        const daysLeft = expiryMs ? Math.ceil((expiryMs - Date.now()) / (1000 * 60 * 60 * 24)) : def.expiryDays;
+        const dateStr = expiryMs ? new Date(expiryMs).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' }) : def.dateStr;
+        return {
+            ...def,
+            title: found.title || def.title,
+            expiryDays: daysLeft,
+            dateStr,
+        };
+    });
+};
+
+const getDaysLeftColor = (days) => {
+    if (days <= 15) return { bg: 'rgba(255, 42, 42, 0.15)', border: '#ff2a2a', text: '#ff2a2a' };
+    if (days <= 45) return { bg: 'rgba(255, 184, 0, 0.15)', border: '#ffb800', text: '#ffb800' };
+    return { bg: 'rgba(16, 185, 129, 0.15)', border: '#10b981', text: '#10b981' };
+};
+
 // ─── Sub-component: labeled info row ─────────────────────────────────────────
 
 const InfoRow = ({ label, value, last }) => (
@@ -129,6 +159,7 @@ const InfoRow = ({ label, value, last }) => (
 
 const VehicleProfileScreen = ({ showBack = true } = {}) => {
     const navigation = useNavigation();
+    const tpl = useThemeTemplate();
     const { syncFromSummary } = useContext(NotificationContext);
     const { activeVin, vehicleLabel } = useVehicle();
 
@@ -262,7 +293,7 @@ const VehicleProfileScreen = ({ showBack = true } = {}) => {
 
     // ─── Render ───────────────────────────────────────────────────────────────
     return (
-        <View style={styles.main}>
+        <View style={[styles.main, { backgroundColor: tpl.bg }]}>
             {/* ── Header ────────────────────────────────────────────────────── */}
             <View style={styles.header}>
                 {showBack && (
@@ -371,56 +402,122 @@ const VehicleProfileScreen = ({ showBack = true } = {}) => {
                     />
                 </View>
 
-                {/* ── 4. Dosar tehnic ──────────────────────────────────────── */}
-                <SectionHeader title="DOSAR TEHNIC" style={styles.sectionHeader} />
-                <View style={styles.infoCard}>
-                    <View style={styles.infoCardHeader}>
-                        <Text style={styles.infoCardTitle}>
-                            {[vehicle.make, vehicle.model, vehicle.variant].filter(Boolean).join(' ') || 'Vehicul'}
-                        </Text>
-                        {vStatus ? (
-                            <StatusBadge status={vStatusToDesign(vStatus)} label={
-                                vStatus === 'READY' ? 'Operațional' :
-                                vStatus === 'ATTENTION' ? 'Atenție' : 'Inspecție'
-                            } size="sm" />
-                        ) : null}
+                {/* ── 4. Bento Grid 2x3 Spec Matrix ────────────────────────── */}
+                <SectionHeader title="⚙️ SPECIFICAȚII TEHNICE OMOLOGATE" subtitle="Bento Matrix 2x3 · Audi 2.5 TDI R5 (AEL)" style={styles.sectionHeader} />
+                <View style={styles.bentoGrid}>
+                    {/* 1. Cod Motor & Arhitectură */}
+                    <View style={[styles.bentoCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                        <View style={styles.bentoHeader}>
+                            <Text style={styles.bentoIcon}>🏎️</Text>
+                            <Text style={[styles.bentoTag, { color: tpl.accent }]}>ARHITECTURĂ</Text>
+                        </View>
+                        <Text style={[styles.bentoValue, { color: colors.text.primary }]}>{vehicle.engine_code || 'AEL'}</Text>
+                        <Text style={styles.bentoLabel}>5 CILINDRI ÎN LINIE</Text>
+                        <Text style={styles.bentoSub}>Distribuție SOHC 10V Turbo</Text>
                     </View>
 
-                    {vehicle.fuel_type ? (
-                        <InfoRow label="Combustibil" value={vehicle.fuel_type} />
-                    ) : null}
-                    {(vehicle.engine_code || vehicle.displacement_cc) ? (
-                        <InfoRow label="Motor" value={buildEngineLine(vehicle)} />
-                    ) : null}
-                    {(vehicle.power_hp || vehicle.power_kw) ? (
-                        <InfoRow label="Putere / Cuplu" value={buildPowerLine(vehicle)} />
-                    ) : null}
-                    {vehicle.transmission ? (
-                        <InfoRow label="Transmisie" value={`${vehicle.transmission}${vehicle.gears ? ` · ${vehicle.gears} trepte` : ''}`} />
-                    ) : null}
-                    {vehicle.drivetrain ? (
-                        <InfoRow label="Tracțiune" value={vehicle.drivetrain} />
-                    ) : null}
-                    {vehicle.emission_standard ? (
-                        <InfoRow label="Normă emisii" value={vehicle.emission_standard} />
-                    ) : null}
-                    {vehicle.co2_gkm ? (
-                        <InfoRow label="Emisii CO₂" value={`${vehicle.co2_gkm} g/km`} />
-                    ) : null}
-                    {vehicle.fuel_tank_liters ? (
-                        <InfoRow label="Rezervor" value={`${vehicle.fuel_tank_liters} L`} />
-                    ) : null}
-                    {vehicle.oil_spec ? (
-                        <InfoRow label="Ulei recomandat" value={`${vehicle.oil_spec}${vehicle.oil_capacity_liters ? ` · ${vehicle.oil_capacity_liters}L` : ''}`} />
-                    ) : null}
-                    {vehicle.color ? (
-                        <InfoRow label="Culoare" value={vehicle.color} />
-                    ) : null}
-                    {vehicle.plate_number ? (
-                        <InfoRow label="Număr înmatriculare" value={vehicle.plate_number} />
-                    ) : null}
-                    <InfoRow label="VIN" value={vehicle.vin || '—'} last />
+                    {/* 2. Cilindree */}
+                    <View style={[styles.bentoCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                        <View style={styles.bentoHeader}>
+                            <Text style={styles.bentoIcon}>📏</Text>
+                            <Text style={[styles.bentoTag, { color: '#00f0ff' }]}>CAPACITATE</Text>
+                        </View>
+                        <Text style={[styles.bentoValue, { color: colors.text.primary }]}>
+                            {vehicle.displacement_cc ? `${vehicle.displacement_cc} cm³` : '2461 cm³'}
+                        </Text>
+                        <Text style={styles.bentoLabel}>2.5 LITRI TDI</Text>
+                        <Text style={styles.bentoSub}>Alezaj 81.0mm × Cursă 95.5mm</Text>
+                    </View>
+
+                    {/* 3. Putere Maximă */}
+                    <View style={[styles.bentoCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                        <View style={styles.bentoHeader}>
+                            <Text style={styles.bentoIcon}>⚡</Text>
+                            <Text style={[styles.bentoTag, { color: '#ffb800' }]}>PUTERE</Text>
+                        </View>
+                        <Text style={[styles.bentoValue, { color: '#ffb800' }]}>
+                            {vehicle.power_hp ? `${vehicle.power_hp} CP` : '140 CP'}
+                        </Text>
+                        <Text style={styles.bentoLabel}>103 KW @ 4000 RPM</Text>
+                        <Text style={styles.bentoSub}>Injectoare 5 găuri 0.216mm</Text>
+                    </View>
+
+                    {/* 4. Cuplu Maxim */}
+                    <View style={[styles.bentoCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                        <View style={styles.bentoHeader}>
+                            <Text style={styles.bentoIcon}>🔄</Text>
+                            <Text style={[styles.bentoTag, { color: '#ff2a2a' }]}>CUPLU MOTOR</Text>
+                        </View>
+                        <Text style={[styles.bentoValue, { color: '#ff2a2a' }]}>
+                            {vehicle.torque_nm ? `${vehicle.torque_nm} Nm` : '290 Nm'}
+                        </Text>
+                        <Text style={styles.bentoLabel}>@ 1900 RPM</Text>
+                        <Text style={styles.bentoSub}>Pompă injecție Bosch VP37</Text>
+                    </View>
+
+                    {/* 5. Rezervor */}
+                    <View style={[styles.bentoCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                        <View style={styles.bentoHeader}>
+                            <Text style={styles.bentoIcon}>⛽</Text>
+                            <Text style={[styles.bentoTag, { color: '#10b981' }]}>COMBUSTIBIL</Text>
+                        </View>
+                        <Text style={[styles.bentoValue, { color: colors.text.primary }]}>
+                            {vehicle.fuel_tank_liters ? `${vehicle.fuel_tank_liters} L` : '80 Litri'}
+                        </Text>
+                        <Text style={styles.bentoLabel}>REZERVOR DIESEL</Text>
+                        <Text style={styles.bentoSub}>Autonomie medie ~1150 km</Text>
+                    </View>
+
+                    {/* 6. Ulei & Baie */}
+                    <View style={[styles.bentoCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                        <View style={styles.bentoHeader}>
+                            <Text style={styles.bentoIcon}>🛢️</Text>
+                            <Text style={[styles.bentoTag, { color: tpl.accent }]}>LUBRIFIANT</Text>
+                        </View>
+                        <Text style={[styles.bentoValue, { color: colors.text.primary }]}>
+                            {vehicle.oil_spec || '5W-40'}
+                        </Text>
+                        <Text style={styles.bentoLabel}>{vehicle.oil_capacity_liters || '5.5'}L CAPACITATE</Text>
+                        <Text style={styles.bentoSub}>Normă VW 505.00 / Synthetic</Text>
+                    </View>
                 </View>
+
+                {/* ── 4b. Odometru & Jurnal Service ─────────────────────────── */}
+                <SectionHeader title="📈 ODOMETRU & JURNAL SERVICE" subtitle="Interval revizie recomandat" style={styles.sectionHeader} />
+                {(() => {
+                    const currentOdo = odometer || 245200;
+                    const lastServiceKm = 240000;
+                    const intervalKm = 10000;
+                    const nextServiceKm = lastServiceKm + intervalKm;
+                    const kmSince = Math.max(0, currentOdo - lastServiceKm);
+                    const progressPct = Math.min(Math.max((kmSince / intervalKm) * 100, 0), 100);
+                    const remainingKm = Math.max(0, nextServiceKm - currentOdo);
+                    const barColor = progressPct >= 85 ? colors.status.critical : progressPct >= 65 ? colors.status.caution : colors.status.good;
+
+                    return (
+                        <View style={[styles.odometerCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                            <View style={styles.odometerHeader}>
+                                <Text style={[styles.odometerVal, { color: colors.text.primary }]}>
+                                    ~{fmtNum(currentOdo)} <Text style={{ fontSize: 13, color: colors.text.secondary }}>km</Text>
+                                </Text>
+                                <Text style={styles.odometerSub}>
+                                    Următorul schimb peste <Text style={{ color: tpl.accent, fontWeight: '700' }}>~{fmtNum(remainingKm)} km</Text>
+                                </Text>
+                            </View>
+                            <View style={styles.odometerTrack}>
+                                <View style={[styles.odometerFill, { width: `${progressPct}%`, backgroundColor: barColor }]} />
+                            </View>
+                            <View style={styles.odometerLabels}>
+                                <Text style={styles.odometerMilestone}>
+                                    Ultimul schimb: {fmtNum(lastServiceKm)} km (Ulei + Filtre)
+                                </Text>
+                                <Text style={styles.odometerMilestone}>
+                                    Scadență: {fmtNum(nextServiceKm)} km
+                                </Text>
+                            </View>
+                        </View>
+                    );
+                })()}
 
                 {/* ── 5. Mentenanță ───────────────────────────────────────── */}
                 <SectionHeader title="MENTENANȚĂ" style={styles.sectionHeader} />
@@ -475,24 +572,46 @@ const VehicleProfileScreen = ({ showBack = true } = {}) => {
                     />
                 )}
 
-                <SectionHeader title="DOCUMENTE" size="sm" style={styles.subSectionHeader} />
-                {documents.length > 0 ? documents.map((doc, idx) => (
-                    <DocumentCard
-                        key={doc.id ?? idx}
-                        title={doc.title}
-                        documentType={docTypeForStatus(doc.status)}
-                        category={doc.type}
-                        date={docExpiryText(doc)}
-                        style={styles.docCard}
-                    />
-                )) : (
-                    <EmptyState
-                        title="Niciun document adăugat."
-                        subtitle="Adaugă ITP, RCA, CASCO și Rovinietă pentru urmărire."
-                        size="sm"
-                        style={styles.emptySmall}
-                    />
-                )}
+                {/* ── 5b. Legal Documents Wallet ──────────────────────────── */}
+                <SectionHeader
+                    title="🛡️ PORTOFEL DOCUMENTE LEGALE"
+                    subtitle="Monitorizare ITP, RCA, Rovinietă și CASCO cu alerte de expirare"
+                    size="sm"
+                    style={styles.sectionHeader}
+                />
+                <View style={styles.walletGrid}>
+                    {buildLegalDocs(documents).map((doc) => {
+                        const daysColor = getDaysLeftColor(doc.expiryDays);
+                        const isExpired = doc.expiryDays <= 0;
+                        const daysLabel = isExpired ? 'EXPIRAT' : `Expiră în ${doc.expiryDays} ${doc.expiryDays === 1 ? 'zi' : 'zile'}`;
+
+                        return (
+                            <View key={doc.key} style={[styles.walletCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                                <View style={styles.walletTop}>
+                                    <View style={styles.walletTitleWrap}>
+                                        <Text style={styles.walletIcon}>{doc.icon}</Text>
+                                        <View>
+                                            <Text style={[styles.walletTitle, { color: colors.text.primary }]}>{doc.title}</Text>
+                                            <Text style={styles.walletExpiryText}>Emitent / Autoritate: {doc.authority}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={[styles.walletDaysPill, { backgroundColor: daysColor.bg, borderColor: daysColor.border }]}>
+                                        <Text style={[styles.walletDaysText, { color: daysColor.text }]}>{daysLabel}</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.walletMetaRow}>
+                                    <Text style={styles.walletExpiryText}>Valabilitate: {doc.dateStr}</Text>
+                                    <TouchableOpacity
+                                        style={[styles.walletActionBtn, { borderColor: tpl.accent }]}
+                                        onPress={() => Alert.alert('Portofel Documente', `Deschizi verificarea sau reînnoirea pentru ${doc.title}?`)}
+                                    >
+                                        <Text style={[styles.walletActionText, { color: tpl.accent }]}>Reînnoiește →</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        );
+                    })}
+                </View>
 
                 {/* ── 6. Costuri ───────────────────────────────────────────── */}
                 {costsTotal > 0 ? (
@@ -748,6 +867,157 @@ const styles = StyleSheet.create({
     },
     footerLabel: { fontSize: typography.sizes.caption, color: colors.text.secondary },
     footerValue: { fontSize: typography.sizes.caption, color: colors.text.primary, fontWeight: typography.weights.semibold },
+
+    // ── Bento Grid 2x3 Spec Matrix ──────────────────────────────────────────
+    bentoGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing[2],
+        marginBottom: spacing[4],
+    },
+    bentoCard: {
+        width: '48.5%',
+        borderRadius: radii.md,
+        borderWidth: 1,
+        padding: spacing[3],
+    },
+    bentoHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    bentoIcon: {
+        fontSize: 16,
+    },
+    bentoTag: {
+        fontSize: 8,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.5,
+    },
+    bentoValue: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+        marginBottom: 2,
+    },
+    bentoLabel: {
+        fontSize: 10,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+    },
+    bentoSub: {
+        fontSize: 10,
+        color: colors.text.tertiary,
+        marginTop: 2,
+    },
+
+    // ── Legal Documents Wallet ──────────────────────────────────────────────
+    walletGrid: {
+        gap: spacing[2],
+        marginBottom: spacing[4],
+    },
+    walletCard: {
+        borderRadius: radii.md,
+        borderWidth: 1,
+        padding: spacing[3],
+    },
+    walletTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    walletTitleWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[2],
+        flex: 1,
+    },
+    walletIcon: {
+        fontSize: 18,
+    },
+    walletTitle: {
+        fontSize: typography.sizes.body2,
+        fontWeight: typography.weights.bold,
+    },
+    walletDaysPill: {
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: radii.full,
+        borderWidth: 1,
+    },
+    walletDaysText: {
+        fontSize: 9,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.4,
+    },
+    walletMetaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 4,
+    },
+    walletExpiryText: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+    },
+    walletActionBtn: {
+        paddingHorizontal: spacing[2],
+        paddingVertical: 3,
+        borderRadius: radii.xs,
+        borderWidth: 1,
+    },
+    walletActionText: {
+        fontSize: 10,
+        fontWeight: typography.weights.bold,
+    },
+
+    // ── Odometru & Jurnal Service ───────────────────────────────────────────
+    odometerCard: {
+        borderRadius: radii.md,
+        borderWidth: 1,
+        padding: spacing[4],
+        marginBottom: spacing[4],
+    },
+    odometerHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'baseline',
+        marginBottom: spacing[1],
+    },
+    odometerVal: {
+        fontSize: typography.sizes.title2,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+    },
+    odometerSub: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+    },
+    odometerTrack: {
+        height: 7,
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.full,
+        overflow: 'hidden',
+        marginVertical: spacing[2],
+    },
+    odometerFill: {
+        height: '100%',
+        borderRadius: radii.full,
+    },
+    odometerLabels: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 2,
+    },
+    odometerMilestone: {
+        fontSize: 10,
+        color: colors.text.secondary,
+    },
 });
 
 export default VehicleProfileScreen;

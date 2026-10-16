@@ -6,7 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import { t } from '../i18n';
-import { colors, typography, radii, spacing, layout } from '../theme';
+import { colors, typography, radii, spacing, layout, useThemeTemplate } from '../theme';
 import { formatTimeAgo } from '../utils/formatters';
 import { getSubsystemColor } from '../utils/statusUtils';
 import {
@@ -132,6 +132,7 @@ function getSubsystemExplanation(key, score) {
 }
 
 const VehicleHealthScreen = ({ navigation }) => {
+    const tpl = useThemeTemplate();
     const [healthData, setHealthData] = useState(null);
     const [loading, setLoading]       = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -310,8 +311,8 @@ const VehicleHealthScreen = ({ navigation }) => {
     }, [overallHealth]);
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={colors.bg[0]} />
+        <View style={[styles.container, { backgroundColor: tpl.bg }]}>
+            <StatusBar barStyle="light-content" backgroundColor={tpl.bg} />
 
             <ScrollView
                 style={styles.scroll}
@@ -320,8 +321,8 @@ const VehicleHealthScreen = ({ navigation }) => {
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        tintColor={colors.accent.default}
-                        colors={[colors.accent.default]}
+                        tintColor={tpl.accent}
+                        colors={[tpl.accent]}
                     />
                 }
                 showsVerticalScrollIndicator={false}

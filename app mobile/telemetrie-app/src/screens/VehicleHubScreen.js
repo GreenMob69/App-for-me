@@ -9,7 +9,7 @@ import VehicleProfileScreen from './VehicleProfileScreen';
 import AIExpertScreen       from './AIExpertScreen';
 import { useVehicle } from '../context/VehicleContext';
 import { NotificationContext } from '../context/NotificationContext';
-import { colors, typography, radii, spacing, layout } from '../theme';
+import { colors, typography, radii, spacing, layout, useThemeTemplate } from '../theme';
 import { getRootNavigation } from '../utils/navigation';
 
 // Compensates for status-bar height used by each sub-screen internally.
@@ -22,15 +22,16 @@ const TABS = [
 ];
 
 const VehicleHubScreen = () => {
+    const tpl = useThemeTemplate();
     const navigation = useNavigation();
     const [activeTab, setActiveTab] = useState('MENTENANTA');
     const { activeVin, vehicleLabel } = useVehicle();
     const { unreadCount } = useContext(NotificationContext);
 
     return (
-        <View style={styles.root}>
+        <View style={[styles.root, { backgroundColor: tpl.bg }]}>
             {/* ── Global Header Bar ───────────────────────────────────── */}
-            <View style={styles.header}>
+            <View style={[styles.header, { backgroundColor: tpl.bg, borderBottomColor: tpl.border }]}>
                 <View style={styles.headerInfo}>
                     <Text style={styles.headerTitle}>VEHICUL & SERVICII</Text>
                     <Text style={styles.headerSub}>
@@ -73,12 +74,12 @@ const VehicleHubScreen = () => {
             </View>
 
             {/* ── Segmented control ──────────────────────────────────── */}
-            <View style={styles.topBar}>
-                <View style={styles.tabs}>
+            <View style={[styles.topBar, { backgroundColor: tpl.bg, borderBottomColor: tpl.border }]}>
+                <View style={[styles.tabs, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                     {TABS.map(tab => (
                         <TouchableOpacity
                             key={tab.id}
-                            style={[styles.tab, activeTab === tab.id && styles.tabActive]}
+                            style={[styles.tab, activeTab === tab.id && { backgroundColor: tpl.accent }]}
                             onPress={() => setActiveTab(tab.id)}
                             accessibilityRole="tab"
                             accessibilityLabel={tab.label}

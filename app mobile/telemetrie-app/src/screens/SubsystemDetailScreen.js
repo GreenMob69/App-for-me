@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, StatusB
 import { LineChart } from 'react-native-gifted-charts';
 import api from '../services/api';
 import { t } from '../i18n';
-import { colors, typography, radii, spacing, layout, motion } from '../theme';
+import { colors, typography, radii, spacing, layout, motion, useThemeTemplate } from '../theme';
 import { getSubsystemColor } from '../utils/statusUtils';
 import { buildDetailExplanation } from '../engine/MessageEngine';
 import { Skeleton, EmptyState } from '../components/ui';
@@ -13,6 +13,7 @@ import PropTypes from 'prop-types';
 const SubsystemDetailScreen = ({ route, navigation }) => {
     const { system, vin } = route.params;
     const { width: screenWidth } = useWindowDimensions();
+    const tpl = useThemeTemplate();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [technicalExpanded, setTechnicalExpanded] = useState(false);
@@ -40,11 +41,11 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
 
     if (loading) {
         return (
-            <View style={styles.container}>
-                <StatusBar barStyle="light-content" backgroundColor={colors.bg[0]} />
-                <View style={styles.headerBar}>
+            <View style={[styles.container, { backgroundColor: tpl.bg }]}>
+                <StatusBar barStyle="light-content" backgroundColor={tpl.bg} />
+                <View style={[styles.headerBar, { borderBottomColor: tpl.border }]}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                        <Text style={styles.backText}>{t('detail.back')}</Text>
+                        <Text style={[styles.backText, { color: tpl.accent }]}>{t('detail.back')}</Text>
                     </TouchableOpacity>
                     <Skeleton variant="text" height={typography.sizes.body1} width={120} />
                 </View>
@@ -61,11 +62,11 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
 
     if (!data) {
         return (
-            <View style={styles.container}>
-                <StatusBar barStyle="light-content" backgroundColor={colors.bg[0]} />
-                <View style={styles.headerBar}>
+            <View style={[styles.container, { backgroundColor: tpl.bg }]}>
+                <StatusBar barStyle="light-content" backgroundColor={tpl.bg} />
+                <View style={[styles.headerBar, { borderBottomColor: tpl.border }]}>
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                        <Text style={styles.backText}>{t('detail.back')}</Text>
+                        <Text style={[styles.backText, { color: tpl.accent }]}>{t('detail.back')}</Text>
                     </TouchableOpacity>
                 </View>
                 <View style={styles.centerContainer}>
@@ -95,12 +96,12 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
     const chartWidth = screenWidth - layout.screenPaddingH * 2 - spacing[4] * 2;
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor={colors.bg[0]} />
+        <View style={[styles.container, { backgroundColor: tpl.bg }]}>
+            <StatusBar barStyle="light-content" backgroundColor={tpl.bg} />
 
-            <View style={styles.headerBar}>
+            <View style={[styles.headerBar, { borderBottomColor: tpl.border }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                    <Text style={styles.backText}>{t('detail.back')}</Text>
+                    <Text style={[styles.backText, { color: tpl.accent }]}>{t('detail.back')}</Text>
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{t(`detail.systems.${system}`)}</Text>
             </View>
