@@ -214,7 +214,6 @@ const styles = StyleSheet.create({
     },
     screenSlot: {
         flex: 1,
-        marginTop: -PT,
         zIndex: 1,
     },
 });

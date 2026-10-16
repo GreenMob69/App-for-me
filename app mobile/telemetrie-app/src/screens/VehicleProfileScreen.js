@@ -293,7 +293,7 @@ const VehicleProfileScreen = ({ showBack = true } = {}) => {
 
     // ─── Render ───────────────────────────────────────────────────────────────
     return (
-        <View style={[styles.main, { backgroundColor: tpl.bg }]}>
+        <View style={[styles.main, { backgroundColor: tpl.bg }, !showBack && { paddingTop: 0 }]}>
             {/* ── Header ────────────────────────────────────────────────────── */}
             <View style={styles.header}>
                 {showBack && (

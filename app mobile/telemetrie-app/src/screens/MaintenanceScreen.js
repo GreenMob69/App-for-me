@@ -1064,7 +1064,6 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: colors.bg[0],
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 40) + 10 : 44,
     },
     center: {
         justifyContent: 'center',
@@ -1367,20 +1366,20 @@ const styles = StyleSheet.create({
     virtualHeaderRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         marginBottom: spacing[2],
     },
     virtualTitleWrap: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing[2],
         flex: 1,
+        marginRight: spacing[2],
     },
     virtualTitle: {
         fontSize: typography.sizes.body2,
         fontWeight: typography.weights.bold,
+        marginBottom: 4,
     },
     virtualBadge: {
+        alignSelf: 'flex-start',
         paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: radii.xs,

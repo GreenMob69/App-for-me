@@ -122,7 +122,17 @@ const HeroCard = React.memo(({
             </View>
 
             <View style={styles.valueRow}>
-                <Text style={[styles.value, { color: borderColor }, styles.tabular]}>{value ?? '--'}</Text>
+                <Text
+                    style={[
+                        styles.value,
+                        { color: borderColor },
+                        styles.tabular,
+                        typeof value === 'string' && value.length > 12 && styles.valueLong,
+                        typeof value === 'string' && value.length > 20 && styles.valueVeryLong,
+                    ]}
+                >
+                    {value ?? '--'}
+                </Text>
                 {unit ? <Text style={[styles.unit, { color: borderColor }]}>{unit}</Text> : null}
             </View>
 
@@ -198,6 +208,16 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.hero,
         fontWeight: typography.weights.heavy,
         lineHeight: typography.lineHeights.hero,
+    },
+    valueLong: {
+        fontSize: typography.sizes.title1,
+        lineHeight: 32,
+        flexShrink: 1,
+    },
+    valueVeryLong: {
+        fontSize: typography.sizes.title3,
+        lineHeight: 26,
+        flexShrink: 1,
     },
     unit: {
         fontSize: typography.sizes.title3,
