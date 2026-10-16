@@ -25,6 +25,7 @@ import Svg, {
     Stop,
     Polygon,
     Ellipse,
+    Text as SvgText,
 } from 'react-native-svg';
 
 const ExplodedComponentSvg = ({
@@ -171,7 +172,7 @@ const ExplodedComponentSvg = ({
                 <Rect x="260" y="55" width="45" height="50" rx="6" fill="#334155" stroke="#10b981" strokeWidth="2" />
                 <Circle cx="282" cy="80" r="12" fill="#0f172a" stroke="#10b981" strokeWidth="1.5" />
                 <Rect x="290" y="38" width="12" height="20" rx="3" fill="#0284c7" stroke="#38bdf8" strokeWidth="1" />
-                <Text x="282" y="84" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="middle">87°C</Text>
+                <SvgText x="282" y="84" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="middle">87°C</SvgText>
             </Svg>
         );
     }
@@ -307,8 +308,8 @@ const ExplodedComponentSvg = ({
             {/* Borne pozitivă și negativă */}
             <Rect x="185" y="32" width="14" height="14" rx="3" fill="#ef4444" />
             <Rect x="250" y="32" width="14" height="14" rx="3" fill="#3b82f6" />
-            <Text x="192" y="43" fill="#FFFFFF" fontSize="10" fontWeight="bold" textAnchor="middle">+</Text>
-            <Text x="257" y="43" fill="#FFFFFF" fontSize="10" fontWeight="bold" textAnchor="middle">-</Text>
+            <SvgText x="192" y="43" fill="#FFFFFF" fontSize="10" fontWeight="bold" textAnchor="middle">+</SvgText>
+            <SvgText x="257" y="43" fill="#FFFFFF" fontSize="10" fontWeight="bold" textAnchor="middle">-</SvgText>
 
             {/* Modul electronic ECU */}
             <Rect x="180" y="65" width="90" height="55" rx="4" fill="#1e293b" stroke="#38bdf8" strokeWidth="1.5" />
