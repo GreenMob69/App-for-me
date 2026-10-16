@@ -1,14 +1,16 @@
 'use strict';
 
 /**
- * InteractiveCarXRay.js — Scanner Anatomic & Digital Twin Interactiv (Drawing-First)
+ * InteractiveCarXRay.js — Arhitectură Hibridă 1 + 3 (Digital Twin 3D Cutaway + Module Explodate CAD)
  *
- * 1. Fără aglomerație de butoane: Un singur comutator curat [ 🚗 Vedere 3D | 🔧 Zoom Motor ].
- * 2. Interacțiune directă pe desen: Piese și senzori cu cip-uri cu detalii la suprafață.
- * 3. Inspecție instantanee: La atingerea oricărei piese, cardul de jos afișează toleranța OEM și diagnoza.
+ * 1. Sus (Varianta 1): Mașina completă în perspectivă 3/4 cutaway cu cablaj electric (Wiring Harness)
+ *    și 8 noduri luminoase cu detalii direct la suprafață (92% Motor, 88% Turbo, etc.).
+ * 2. Mijloc: Selector orizontal fluid de componente (fără butoane care se suprapun sau se rup).
+ * 3. Jos (Varianta 3): Card Modular Explodat de mari dimensiuni cu ilustrație tehnică CAD a piesei,
+ *    plajă de toleranță grafică OEM și buton direct către Inginerul AI.
  */
 
-import React, { useState, useEffect, useContext, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useMemo, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -31,11 +33,9 @@ import {
     TOPOLOGIES,
     detectVehicleTopology,
     PERSPECTIVE_PINS,
-    SENSORS_BY_CATEGORY,
 } from './xrayConstants';
 import PerspectiveCarSvg from './PerspectiveCarSvg';
-import EngineBaySvg from './EngineBaySvg';
-import ComponentCard from './ComponentCard';
+import ExplodedModuleCard from './ExplodedModuleCard';
 
 const InteractiveCarXRay = ({
     mode = 'preview',
@@ -50,18 +50,17 @@ const InteractiveCarXRay = ({
     const { liveData: rawLiveData } = useContext(LiveContext) || {};
     const liveData = useSmoothedTelemetry(rawLiveData || {});
 
-    // Topologie activă (detectată sau comutată)
+    // Topologie activă (detectată sau selectată)
     const detectedTopology = useMemo(() => detectVehicleTopology(activeVehicle || vehicleLabel), [activeVehicle, vehicleLabel]);
     const [topology, setTopology] = useState(detectedTopology);
 
-    // Unghi activ: '3D_VIEW' (Ansamblu) sau 'ENGINE_BAY' (Zoom Motor)
-    const [activeView, setActiveView] = useState('3D_VIEW');
-
-    // Componenta selectată pentru inspecție (inițial prima piesă: motorul)
-    const [selectedComponent, setSelectedComponent] = useState(PERSPECTIVE_PINS[0]);
+    // Componenta activă pentru cardul explodat (implicit: motorul)
+    const [selectedPin, setSelectedPin] = useState(PERSPECTIVE_PINS[0]);
 
     // Stare Modal Scanner
     const [isScannerOpen, setIsScannerOpen] = useState(mode === 'full');
+
+    const scrollRef = useRef(null);
 
     useEffect(() => {
         setTopology(detectedTopology);
@@ -86,7 +85,7 @@ const InteractiveCarXRay = ({
         }
     }, [activeNav]);
 
-    // Comută rapid prin cele 4 topologii la atingerea chip-ului de arhitectură
+    // Ciclare topologie la atingerea indicatorului
     const handleCycleTopology = useCallback(() => {
         const keys = Object.keys(TOPOLOGIES);
         const currIdx = keys.indexOf(topology);
@@ -94,17 +93,16 @@ const InteractiveCarXRay = ({
         setTopology(nextKey);
     }, [topology]);
 
-    // Senzorii din compartimentul motor pentru vederea 'ENGINE_BAY'
-    const engineBaySensors = useMemo(() => {
-        return [
-            ...(SENSORS_BY_CATEGORY.AIR_BOOST || []),
-            ...(SENSORS_BY_CATEGORY.FUEL_ING || []),
-            ...(SENSORS_BY_CATEGORY.COOLING_ELEC || []),
-        ];
-    }, []);
+    // Selectare piesă de pe mașină sau din carusel
+    const handleSelectComponent = useCallback((pin) => {
+        setSelectedPin(pin);
+        if (onSelectSubsystem) {
+            onSelectSubsystem(pin.subsystem, { key: pin.subsystem, name: pin.name });
+        }
+    }, [onSelectSubsystem]);
 
     // ─────────────────────────────────────────────────────────────────────────
-    // VEDERE 1: PREVIEW PE STATUS SCREEN (Ultra Curat & Elegant)
+    // VEDERE 1: PREVIEW PE STATUS SCREEN (Curat, Elegant & Interactiv)
     // ─────────────────────────────────────────────────────────────────────────
     if (mode === 'preview' && !isScannerOpen) {
         return (
@@ -131,9 +129,9 @@ const InteractiveCarXRay = ({
                 >
                     <PerspectiveCarSvg
                         liveData={liveData}
-                        selectedPinId={selectedComponent?.id}
+                        selectedPinId={selectedPin?.id}
                         onSelectPin={(pin) => {
-                            setSelectedComponent(pin);
+                            handleSelectComponent(pin);
                             setIsScannerOpen(true);
                         }}
                     />
@@ -148,7 +146,7 @@ const InteractiveCarXRay = ({
                     accessibilityLabel="Deschide Scannerul Anatomic 3D"
                 >
                     <Text style={[styles.openScannerBtnText, { color: tpl.accent }]}>
-                        🔍 Deschide Scannerul Anatomic 3D (Inspecție Piese) ❯
+                        🔍 Deschide Scannerul Anatomic & Module Explodate ❯
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -156,7 +154,7 @@ const InteractiveCarXRay = ({
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // VEDERE 2: MODAL COMPLET DE INSPECȚIE (Direct pe Desen, Fără Butoane Îngrămădite)
+    // VEDERE 2: MODAL COMPLET DE INSPECȚIE (Hibrid 1 + 3: 3D Cutaway + Module Explodate)
     // ─────────────────────────────────────────────────────────────────────────
     return (
         <Modal
@@ -182,87 +180,70 @@ const InteractiveCarXRay = ({
                     </TouchableOpacity>
                 </View>
 
-                <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
-                    {/* ── 1. Selector Curat: Un Singur Segmented Control (Fără Suprapuneri!) ── */}
-                    <View style={styles.viewSegmentedWrap}>
-                        <TouchableOpacity
-                            style={[
-                                styles.viewSegmentBtn,
-                                activeView === '3D_VIEW' && { backgroundColor: tpl.accent }
-                            ]}
-                            onPress={() => setActiveView('3D_VIEW')}
-                        >
-                            <Text style={[styles.viewSegmentText, activeView === '3D_VIEW' && styles.viewSegmentTextActive]}>
-                                🚗 VEDERE 3D ANSAMBLU
-                            </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[
-                                styles.viewSegmentBtn,
-                                activeView === 'ENGINE_BAY' && { backgroundColor: tpl.accent }
-                            ]}
-                            onPress={() => setActiveView('ENGINE_BAY')}
-                        >
-                            <Text style={[styles.viewSegmentText, activeView === 'ENGINE_BAY' && styles.viewSegmentTextActive]}>
-                                🔧 ZOOM MOTOR & SENZORI
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* ── 2. Indicator Arhitectură Șasiu (Compact, Un Singur Chip) ── */}
+                <ScrollView
+                    ref={scrollRef}
+                    style={styles.modalScroll}
+                    contentContainerStyle={styles.modalScrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* ── Indicator Arhitectură Șasiu (Compact, Un Singur Chip) ── */}
                     <TouchableOpacity
                         style={[styles.topologyChip, { borderColor: tpl.border }]}
                         onPress={handleCycleTopology}
                         activeOpacity={0.8}
                     >
-                        <Text style={styles.topologyChipLabel}>Arhitectură activă:</Text>
+                        <Text style={styles.topologyChipLabel}>Arhitectură:</Text>
                         <Text style={[styles.topologyChipValue, { color: tpl.accent }]}>
                             {TOPOLOGIES[topology]?.label} ▾
                         </Text>
-                        <Text style={styles.topologyChipHint}>(Atinge pt. a schimba)</Text>
+                        <Text style={styles.topologyChipHint}>(Atinge pt. schimbare)</Text>
                     </TouchableOpacity>
 
-                    {/* ── 3. Schema CAD Interactivă cu Detalii la Suprafață ── */}
+                    {/* ── SECTIUNEA 1 (VARIANTA 1): Digital Twin 3D Cutaway cu Puncte Interactive ── */}
                     <View style={[styles.canvasCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
-                        {activeView === '3D_VIEW' ? (
-                            <PerspectiveCarSvg
-                                liveData={liveData}
-                                selectedPinId={selectedComponent?.id}
-                                onSelectPin={(pin) => {
-                                    setSelectedComponent(pin);
-                                    if (onSelectSubsystem) {
-                                        onSelectSubsystem(pin.subsystem, { key: pin.subsystem, name: pin.name });
-                                    }
-                                }}
-                            />
-                        ) : (
-                            <EngineBaySvg
-                                topology={topology}
-                                subCategory="AIR_BOOST"
-                                activeSensors={engineBaySensors}
-                                selectedSensorId={selectedComponent?.id}
-                                onSelectSensor={(s) => {
-                                    setSelectedComponent(s);
-                                    if (onSelectSubsystem) {
-                                        onSelectSubsystem(s.subsystem, { key: s.subsystem, name: s.name });
-                                    }
-                                }}
-                            />
-                        )}
+                        <PerspectiveCarSvg
+                            liveData={liveData}
+                            selectedPinId={selectedPin?.id}
+                            onSelectPin={handleSelectComponent}
+                        />
                     </View>
 
-                    {/* ── 4. Notă de Interacțiune pe Desen ── */}
-                    <View style={styles.interactionHintRow}>
-                        <Text style={styles.interactionHintText}>
-                            👆 Atinge direct orice piesă de pe mașină pentru analiză și diagnoză detaliată.
-                        </Text>
+                    {/* ── SECTIUNEA 2: Rând de Selectare Rapidă a Pieselor (Fără Wrap / Fără Suprapuneri) ── */}
+                    <View style={styles.selectorSection}>
+                        <Text style={styles.selectorHeading}>ALEGE MODULUL PENTRU INSPECȚIE EXPLODATĂ:</Text>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.selectorScroll}
+                        >
+                            {PERSPECTIVE_PINS.map(pin => {
+                                const isSelected = selectedPin?.id === pin.id;
+                                const reading = pin.getReading ? pin.getReading(liveData) : { val: 'Nominal' };
+
+                                return (
+                                    <TouchableOpacity
+                                        key={pin.id}
+                                        style={[
+                                            styles.moduleChip,
+                                            isSelected && { borderColor: tpl.accent, backgroundColor: 'rgba(77, 142, 245, 0.16)' },
+                                        ]}
+                                        onPress={() => handleSelectComponent(pin)}
+                                    >
+                                        <View style={[styles.moduleChipDot, { backgroundColor: isSelected ? tpl.accent : '#10b981' }]} />
+                                        <Text style={[styles.moduleChipCode, isSelected && { color: tpl.accent }]}>
+                                            {pin.code}
+                                        </Text>
+                                        <Text style={styles.moduleChipVal}>{reading.val}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
                     </View>
 
-                    {/* ── 5. Card Detaliat de Inspecție & Plajă de Toleranță OEM ── */}
-                    {selectedComponent ? (
-                        <ComponentCard
-                            component={selectedComponent}
+                    {/* ── SECTIUNEA 3 (VARIANTA 3): Card Modular Explodat cu Ilustrație CAD Mare ── */}
+                    {selectedPin ? (
+                        <ExplodedModuleCard
+                            component={selectedPin}
                             liveData={liveData}
                             theme={tpl}
                             onAskAI={handleAskAI}
@@ -390,33 +371,6 @@ const styles = StyleSheet.create({
         paddingBottom: spacing[10],
     },
 
-    // Segmented Control (Curat & Fără Suprapunere)
-    viewSegmentedWrap: {
-        flexDirection: 'row',
-        backgroundColor: colors.bg[1],
-        borderRadius: radii.md,
-        borderWidth: 1,
-        borderColor: colors.border.default,
-        padding: 3,
-        marginBottom: spacing[2],
-    },
-    viewSegmentBtn: {
-        flex: 1,
-        paddingVertical: 9,
-        borderRadius: radii.sm,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    viewSegmentText: {
-        fontSize: typography.sizes.caption,
-        fontWeight: typography.weights.semibold,
-        color: colors.text.secondary,
-    },
-    viewSegmentTextActive: {
-        color: '#FFFFFF',
-        fontWeight: typography.weights.bold,
-    },
-
     // Topology Indicator Chip
     topologyChip: {
         flexDirection: 'row',
@@ -443,7 +397,7 @@ const styles = StyleSheet.create({
         color: colors.text.tertiary,
     },
 
-    // Canvas Card
+    // Canvas Card (Varianta 1)
     canvasCard: {
         borderRadius: radii.lg,
         borderWidth: 1,
@@ -452,15 +406,48 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         overflow: 'hidden',
     },
-    interactionHintRow: {
-        marginTop: spacing[2],
-        paddingHorizontal: spacing[2],
-        alignItems: 'center',
+
+    // Selector Section
+    selectorSection: {
+        marginTop: spacing[3],
+        marginBottom: spacing[1],
     },
-    interactionHintText: {
+    selectorHeading: {
         fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
         color: colors.text.tertiary,
-        textAlign: 'center',
+        letterSpacing: 0.6,
+        marginBottom: spacing[2],
+    },
+    selectorScroll: {
+        gap: spacing[2],
+        paddingRight: spacing[2],
+    },
+    moduleChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 7,
+        paddingHorizontal: spacing[3],
+        borderRadius: radii.full,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        backgroundColor: colors.bg[1],
+        gap: 5,
+    },
+    moduleChipDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    moduleChipCode: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+    },
+    moduleChipVal: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
     },
 });
 

@@ -539,7 +539,7 @@ const StatusScreen = ({ navigation }) => {
                     <InteractiveCarXRay
                         subsystems={SUBSYSTEM_PEEK_DATA}
                         selectedKey={selectedSubsystem?.key}
-                        onSelectSubsystem={(key, item) => setSelectedSubsystem(item || SUBSYSTEM_PEEK_DATA[key])}
+                        onSelectSubsystem={(key, item) => setSelectedSubsystem(SUBSYSTEM_PEEK_DATA[key] || item)}
                         navigation={navigation}
                     />
                     <ScrollView
@@ -750,7 +750,7 @@ const StatusScreen = ({ navigation }) => {
                         </View>
                         <Text style={styles.sheetDesc}>{selectedSubsystem.desc}</Text>
                         <View style={styles.sheetMetricsGrid}>
-                            {selectedSubsystem.metrics.map((m, idx) => (
+                            {(selectedSubsystem.metrics || []).map((m, idx) => (
                                 <View key={idx} style={styles.sheetMetricBox}>
                                     <Text style={styles.sheetMetricLbl}>{m.label}</Text>
                                     <Text style={styles.sheetMetricVal}>{m.val}</Text>
