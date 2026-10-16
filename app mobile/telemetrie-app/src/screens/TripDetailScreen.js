@@ -78,12 +78,12 @@ const barStyles = StyleSheet.create({
 // ─── CHART CONFIGS ────────────────────────────────────────────────────────────
 
 const CHART_CONFIGS = {
-    RPM:   { key: 'rpm',   label: 'Turație (RPM)',       color: colors.accent.default,  field: 'rpm' },
-    SPEED: { key: 'speed', label: 'Viteză (km/h)',        color: colors.status.good,     field: 'speed' },
-    TEMP:  { key: 'temp',  label: 'Temp. Lichid (°C)',    color: colors.status.critical, field: 'temp_apa_c' },
-    BOOST: { key: 'boost', label: 'Presiune Turbo (bar)', color: colors.status.monitor,  field: 'boost_bar' },
-    BSFC:  { key: 'bsfc',  label: 'BSFC (g/kWh)',         color: '#f59e0b',              field: 'bsfc' },
-    MAF:   { key: 'maf',   label: 'Debit Aer (g/s)',      color: '#38bdf8',              field: 'maf' },
+    RPM:   { key: 'rpm',   label: 'Turație',             unit: 'RPM',   color: colors.accent.default,  field: 'rpm' },
+    SPEED: { key: 'speed', label: 'Viteză',              unit: 'km/h',  color: colors.status.good,     field: 'speed' },
+    TEMP:  { key: 'temp',  label: 'Temp. Lichid Răcire', unit: '°C',    color: colors.status.critical, field: 'temp_apa_c' },
+    BOOST: { key: 'boost', label: 'Presiune Turbo',      unit: 'bar',   color: colors.status.monitor,  field: 'boost_bar' },
+    BSFC:  { key: 'bsfc',  label: 'BSFC Eficiență',      unit: 'g/kWh', color: '#f59e0b',              field: 'bsfc' },
+    MAF:   { key: 'maf',   label: 'Debit Aer MAF',       unit: 'g/s',   color: '#38bdf8',              field: 'maf' },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,7 +181,12 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
             } else {
                 val = parseFloat(row?.[config.field] || row?.motor?.[config.field] || 0);
             }
-            points.push({ value: isNaN(val) ? 0 : val });
+            const cleanVal = isNaN(val) ? 0 : Math.round(val * 10) / 10;
+            points.push({
+                value: cleanVal,
+                rawVal: isNaN(val) ? 0 : val,
+                secunda: row?.secunda || (i * 2),
+            });
         }
         return points;
     };
@@ -248,6 +253,10 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
 
     const chartData    = getChartData();
     const chartConfig  = CHART_CONFIGS[activeChart];
+    const chartVals    = chartData.map(d => d.value);
+    const chartMax     = chartVals.length ? Math.max(...chartVals) : 0;
+    const chartMin     = chartVals.length ? Math.min(...chartVals) : 0;
+    const chartAvg     = chartVals.length ? Math.round((chartVals.reduce((a, b) => a + b, 0) / chartVals.length) * 10) / 10 : 0;
     const driveStyle   = analiza?.ai?.driving?.style;
     const predictions  = (analiza?.ai?.intelligence?.predictions || []).filter(
         p => p.severity === 'HIGH' || p.severity === 'MEDIUM'
@@ -495,25 +504,84 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
                                     </TouchableOpacity>
                                 ))}
                             </ScrollView>
+                            {/* ── Mini-Bento Stats Row ── */}
+                            <View style={styles.chartHudRow}>
+                                <View style={[styles.chartHudCard, { borderLeftColor: chartConfig.color, borderLeftWidth: 3 }]}>
+                                    <Text style={styles.chartHudLbl}>🔺 VÂRF (MAX)</Text>
+                                    <Text style={[styles.chartHudVal, { color: chartConfig.color }]}>
+                                        {chartMax.toFixed(1)} <Text style={styles.chartHudUnit}>{chartConfig.unit}</Text>
+                                    </Text>
+                                </View>
+                                <View style={styles.chartHudCard}>
+                                    <Text style={styles.chartHudLbl}>🔻 MINIM</Text>
+                                    <Text style={styles.chartHudVal}>
+                                        {chartMin.toFixed(1)} <Text style={styles.chartHudUnit}>{chartConfig.unit}</Text>
+                                    </Text>
+                                </View>
+                                <View style={styles.chartHudCard}>
+                                    <Text style={styles.chartHudLbl}>📊 MEDIE</Text>
+                                    <Text style={styles.chartHudVal}>
+                                        {chartAvg.toFixed(1)} <Text style={styles.chartHudUnit}>{chartConfig.unit}</Text>
+                                    </Text>
+                                </View>
+                                <View style={styles.chartHudCard}>
+                                    <Text style={styles.chartHudLbl}>📍 PUNCTE</Text>
+                                    <Text style={styles.chartHudVal}>
+                                        {chartData.length} <Text style={styles.chartHudUnit}>pct</Text>
+                                    </Text>
+                                </View>
+                            </View>
+
                             {chartData.length > 0 ? (
                                 <LineChart
                                     data={chartData}
                                     width={chartWidth}
-                                    height={180}
+                                    height={195}
                                     color={chartConfig.color}
-                                    thickness={2}
-                                    hideDataPoints
-                                    yAxisTextStyle={{ color: colors.text.secondary, fontSize: typography.sizes.micro - 1 }}
+                                    thickness={2.5}
+                                    curved
+                                    areaChart
+                                    startFillColor={chartConfig.color}
+                                    endFillColor="rgba(0, 0, 0, 0.01)"
+                                    startOpacity={0.35}
+                                    endOpacity={0.02}
+                                    hideDataPoints={chartData.length > 30}
+                                    dataPointsColor={chartConfig.color}
+                                    dataPointsRadius={2}
+                                    yAxisTextStyle={{ color: colors.text.secondary, fontSize: typography.sizes.micro - 1, fontWeight: 'bold' }}
                                     xAxisLabelTextStyle={{ color: colors.text.secondary, fontSize: typography.sizes.micro - 1 }}
-                                    rulesColor={colors.border.subtle}
+                                    rulesColor="rgba(56, 189, 248, 0.12)"
+                                    rulesType="dashed"
+                                    yAxisColor="transparent"
+                                    xAxisColor="rgba(56, 189, 248, 0.25)"
                                     backgroundColor={colors.bg[0]}
                                     noOfSections={4}
-                                    curved
-                                    startFillColor={chartConfig.color}
-                                    endFillColor="transparent"
-                                    startOpacity={0.2}
-                                    endOpacity={0}
-                                    areaChart
+                                    initialSpacing={10}
+                                    endSpacing={10}
+                                    pointerConfig={{
+                                        pointerStripHeight: 195,
+                                        pointerStripColor: 'rgba(56, 189, 248, 0.5)',
+                                        pointerStripWidth: 2,
+                                        pointerColor: chartConfig.color,
+                                        radius: 5,
+                                        pointerLabelWidth: 105,
+                                        pointerLabelHeight: 38,
+                                        activatePointersOnLongPress: false,
+                                        autoAdjustPointerLabelPosition: true,
+                                        pointerLabelComponent: items => {
+                                            if (!items?.[0]) return null;
+                                            const item = items[0];
+                                            return (
+                                                <View style={styles.chartCrosshairBadge}>
+                                                    <Text style={[styles.chartCrosshairVal, { color: chartConfig.color }]}>
+                                                        {item.rawVal !== undefined ? (Number.isInteger(item.rawVal) ? item.rawVal : item.rawVal.toFixed(1)) : item.value}{' '}
+                                                        <Text style={{ fontSize: 9, color: colors.text.secondary }}>{chartConfig.unit}</Text>
+                                                    </Text>
+                                                    <Text style={styles.chartCrosshairSec}>T+{item.secunda ?? 0}s</Text>
+                                                </View>
+                                            );
+                                        },
+                                    }}
                                 />
                             ) : (
                                 <Text style={styles.chartNoData}>
@@ -855,6 +923,59 @@ const styles = StyleSheet.create({
         color: colors.text.secondary,
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.semibold,
+    },
+    chartHudRow: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        marginBottom: spacing[3],
+    },
+    chartHudCard: {
+        flex: 1,
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.sm,
+        padding: spacing[2],
+        borderWidth: 1,
+        borderColor: colors.border.subtle,
+        justifyContent: 'center',
+    },
+    chartHudLbl: {
+        fontSize: 8,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.secondary,
+        letterSpacing: 0.5,
+        marginBottom: 2,
+    },
+    chartHudVal: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    chartHudUnit: {
+        fontSize: 8,
+        fontWeight: typography.weights.regular,
+        color: colors.text.secondary,
+    },
+    chartCrosshairBadge: {
+        height: 36,
+        width: 105,
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.xs,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        paddingHorizontal: 4,
+    },
+    chartCrosshairVal: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+    },
+    chartCrosshairSec: {
+        fontSize: 8,
+        color: colors.text.secondary,
+        marginTop: 1,
     },
     chartNoData: {
         color: colors.text.secondary,

@@ -84,14 +84,33 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
     const explanation = buildDetailExplanation(system, data);
     const { evolution, diagnostics, sensorQuality } = data;
 
-    const chartKey = system === 'electric' ? 'voltaj_min' : system === 'turbo' ? 'boost_mediu' : system === 'motor' ? 'coolant_max' : 'health_score';
+    const chartMeta = system === 'electric'
+        ? { key: 'voltaj_min', label: 'Tensiune Minimă', unit: 'V' }
+        : system === 'turbo'
+            ? { key: 'boost_mediu', label: 'Presiune Medie Turbo', unit: 'bar' }
+            : system === 'motor'
+                ? { key: 'coolant_max', label: 'Temp. Lichid Răcire Max', unit: '°C' }
+                : { key: 'health_score', label: 'Scor Sănătate', unit: '%' };
+
+    const chartKey = chartMeta.key;
     const hasChart = evolution && evolution.length >= 2;
     const chartData = hasChart
-        ? evolution.map((item, idx) => ({
-            value: item[chartKey] || item.health_score || 0,
-            label: idx === 0 ? '#1' : idx === evolution.length - 1 ? `#${evolution.length}` : '',
-        }))
+        ? evolution.map((item, idx) => {
+            const raw = item[chartKey] !== undefined ? item[chartKey] : (item.health_score || 0);
+            const num = parseFloat(raw) || 0;
+            return {
+                value: Math.round(num * 10) / 10,
+                rawVal: num,
+                label: idx === 0 ? '#1' : idx === evolution.length - 1 ? `#${evolution.length}` : '',
+                cursa: idx + 1,
+            };
+        })
         : [];
+
+    const evoVals = chartData.map(d => d.value);
+    const evoMax  = evoVals.length ? Math.max(...evoVals) : 0;
+    const evoMin  = evoVals.length ? Math.min(...evoVals) : 0;
+    const evoAvg  = evoVals.length ? Math.round((evoVals.reduce((a, b) => a + b, 0) / evoVals.length) * 10) / 10 : 0;
 
     const chartWidth = screenWidth - layout.screenPaddingH * 2 - spacing[4] * 2;
 
@@ -142,28 +161,76 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
 
                 {hasChart && (
                     <View style={styles.section}>
-                        <Text style={styles.sectionLabel}>{t('detail.evolutionLabel')}</Text>
+                        <View style={styles.chartHeaderRow}>
+                            <Text style={styles.sectionLabel}>{t('detail.evolutionLabel')}</Text>
+                            <View style={styles.chartMetricBadge}>
+                                <Text style={styles.chartMetricBadgeText}>{chartMeta.label}</Text>
+                            </View>
+                        </View>
                         <View style={styles.chartContainer}>
+                            {/* Mini Bento Stats */}
+                            <View style={styles.chartStatsRow}>
+                                <View style={[styles.chartStatCard, { borderLeftColor: colors.status.good, borderLeftWidth: 2 }]}>
+                                    <Text style={styles.chartStatLbl}>🔺 MAX</Text>
+                                    <Text style={[styles.chartStatVal, { color: colors.status.good }]}>
+                                        {evoMax.toFixed(1)} <Text style={styles.chartStatUnit}>{chartMeta.unit}</Text>
+                                    </Text>
+                                </View>
+                                <View style={[styles.chartStatCard, { borderLeftColor: colors.status.caution, borderLeftWidth: 2 }]}>
+                                    <Text style={styles.chartStatLbl}>🔻 MIN</Text>
+                                    <Text style={styles.chartStatVal}>
+                                        {evoMin.toFixed(1)} <Text style={styles.chartStatUnit}>{chartMeta.unit}</Text>
+                                    </Text>
+                                </View>
+                                <View style={[styles.chartStatCard, { borderLeftColor: colors.accent.default, borderLeftWidth: 2 }]}>
+                                    <Text style={styles.chartStatLbl}>📊 MEDIE</Text>
+                                    <Text style={styles.chartStatVal}>
+                                        {evoAvg.toFixed(1)} <Text style={styles.chartStatUnit}>{chartMeta.unit}</Text>
+                                    </Text>
+                                </View>
+                            </View>
+
                             <LineChart
                                 data={chartData}
                                 width={chartWidth}
-                                height={100}
+                                height={125}
                                 spacing={chartWidth / Math.max(chartData.length - 1, 1)}
                                 color={colors.accent.default}
-                                thickness={2}
-                                hideRules
+                                thickness={2.5}
                                 yAxisColor="transparent"
-                                xAxisColor={colors.border.default}
+                                xAxisColor="rgba(56, 189, 248, 0.25)"
+                                rulesColor="rgba(56, 189, 248, 0.1)"
+                                rulesType="dashed"
                                 yAxisTextStyle={{ color: colors.text.secondary, fontSize: typography.sizes.micro - 1 }}
                                 xAxisLabelTextStyle={{ color: colors.text.secondary, fontSize: typography.sizes.micro - 1 }}
                                 hideYAxisText
-                                dataPointsRadius={3}
+                                dataPointsRadius={4}
                                 dataPointsColor={colors.accent.default}
                                 curved
-                                startFillColor={colors.accent.muted}
-                                endFillColor="rgba(77,142,245,0.01)"
+                                startFillColor={colors.accent.default}
+                                endFillColor="rgba(0, 0, 0, 0.01)"
+                                startOpacity={0.35}
+                                endOpacity={0.02}
                                 areaChart
                                 noOfSections={3}
+                                pointerConfig={{
+                                    pointerStripColor: 'rgba(56, 189, 248, 0.5)',
+                                    pointerStripWidth: 2,
+                                    pointerColor: colors.accent.default,
+                                    radius: 5,
+                                    pointerLabelWidth: 85,
+                                    pointerLabelHeight: 34,
+                                    activatePointersOnLongPress: false,
+                                    autoAdjustPointerLabelPosition: true,
+                                    pointerLabelComponent: items => (
+                                        <View style={styles.chartTooltip}>
+                                            <Text style={styles.chartTooltipVal}>
+                                                {items[0].value} {chartMeta.unit}
+                                            </Text>
+                                            <Text style={styles.chartTooltipSub}>Cursă #{items[0].cursa}</Text>
+                                        </View>
+                                    ),
+                                }}
                             />
                         </View>
                     </View>
@@ -382,6 +449,76 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.label2,
         color: colors.text.secondary,
         marginTop: spacing[1] - 2,
+    },
+    chartHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing[2],
+    },
+    chartMetricBadge: {
+        backgroundColor: colors.accent.default + '18',
+        borderRadius: radii.full,
+        paddingHorizontal: spacing[2] + 2,
+        paddingVertical: 2,
+        borderWidth: 1,
+        borderColor: colors.accent.default + '40',
+    },
+    chartMetricBadgeText: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.heavy,
+        color: colors.accent.default,
+    },
+    chartStatsRow: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        marginBottom: spacing[3],
+    },
+    chartStatCard: {
+        flex: 1,
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.sm,
+        padding: spacing[2],
+        borderWidth: 1,
+        borderColor: colors.border.subtle,
+    },
+    chartStatLbl: {
+        fontSize: 8,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.secondary,
+        letterSpacing: 0.5,
+        marginBottom: 2,
+    },
+    chartStatVal: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    chartStatUnit: {
+        fontSize: 8,
+        fontWeight: typography.weights.regular,
+        color: colors.text.secondary,
+    },
+    chartTooltip: {
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.xs,
+        paddingHorizontal: spacing[2],
+        paddingVertical: 3,
+        borderColor: colors.border.default,
+        borderWidth: 1,
+        alignItems: 'center',
+    },
+    chartTooltipVal: {
+        fontSize: typography.sizes.label2,
+        fontWeight: typography.weights.heavy,
+        color: colors.accent.default,
+        fontVariant: ['tabular-nums'],
+    },
+    chartTooltipSub: {
+        fontSize: 8,
+        color: colors.text.secondary,
+        marginTop: 1,
     },
     chartContainer: {
         backgroundColor: colors.bg[1],

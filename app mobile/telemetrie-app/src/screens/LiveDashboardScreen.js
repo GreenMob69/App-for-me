@@ -191,15 +191,23 @@ function buildParams(cat, d) {
 // ─── Oscilloscope metrics ─────────────────────────────────────────────────────
 
 const SCOPE_METRICS = [
-    { id: 'rpm',       label: 'RPM',     color: colors.text.primary,    unit: 'RPM',  defaultMax: 5000 },
-    { id: 'speed',     label: 'Km/h',    color: colors.status.good,     unit: 'km/h', defaultMax: 220  },
-    { id: 'powerHp',   label: 'Dyno CP', color: colors.status.good,     unit: 'CP',   defaultMax: 150  },
-    { id: 'map',       label: 'MAP',     color: colors.accent.default,  unit: 'kPa',  defaultMax: 250  },
-    { id: 'maf',       label: 'MAF',     color: colors.status.monitor,  unit: 'g/s',  defaultMax: 150  },
-    { id: 'inst_cons', label: 'Cons',    color: colors.status.critical, unit: 'L/h',  defaultMax: 20   },
-    { id: 'coolant',   label: 'Temp',    color: colors.status.caution,  unit: '°C',   defaultMax: 110  },
-    { id: 'ecu_volt',  label: 'Volt',    color: colors.status.good,     unit: 'V',    defaultMax: 16   },
-    { id: 'accel_g',   label: 'G',       color: colors.status.critical, unit: 'G',    defaultMax: 1.5  },
+    { id: 'rpm',       label: 'Turație',     color: '#00f0ff', unit: 'RPM',  defaultMax: 5000 },
+    { id: 'speed',     label: 'Viteză',      color: '#10b981', unit: 'km/h', defaultMax: 220  },
+    { id: 'powerHp',   label: 'Dyno CP',     color: '#38bdf8', unit: 'CP',   defaultMax: 160  },
+    { id: 'map',       label: 'Presiune MAP',color: '#f59e0b', unit: 'kPa',  defaultMax: 250  },
+    { id: 'maf',       label: 'Debit MAF',   color: '#ec4899', unit: 'g/s',  defaultMax: 150  },
+    { id: 'inst_cons', label: 'Consum',      color: '#ef4444', unit: 'L/h',  defaultMax: 20   },
+    { id: 'coolant',   label: 'Temp. Apă',   color: '#f97316', unit: '°C',   defaultMax: 110  },
+    { id: 'ecu_volt',  label: 'Tensiune 12V',color: '#a855f7', unit: 'V',    defaultMax: 16   },
+    { id: 'accel_g',   label: 'G-Force',     color: '#6366f1', unit: 'G',    defaultMax: 1.5  },
+];
+
+const DUAL_PRESETS = [
+    { label: '🌪️ Boost vs. MAF', m1: 'map', m2: 'maf' },
+    { label: '🏎️ RPM vs. Viteză', m1: 'rpm', m2: 'speed' },
+    { label: '💧 Răcire vs. Putere', m1: 'coolant', m2: 'powerHp' },
+    { label: '⛽ Turație vs. Consum', m1: 'rpm', m2: 'inst_cons' },
+    { label: '⚡ Tensiune vs. RPM', m1: 'ecu_volt', m2: 'rpm' },
 ];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -274,6 +282,8 @@ const LiveDashboardScreen = () => {
     const [zoomX,      setZoomX]      = useState(10);
     const [autoScaleY, setAutoScaleY] = useState(true);
     const [zoomYMult,  setZoomYMult]  = useState(1);
+    const [isDualChannel, setIsDualChannel] = useState(false);
+    const [secondMetric,  setSecondMetric]  = useState('speed');
 
     // Pinch-to-zoom for oscilloscope
     const zoomXRef   = useRef(10);
@@ -861,17 +871,56 @@ const LiveDashboardScreen = () => {
 
     // ─── SCOPE tab ────────────────────────────────────────────────────────────
 
+    // ─── SCOPE tab (Osciloscop Telemetrie de Înaltă Rezoluție) ────────────────
     const renderScope = () => {
-        const cfg      = SCOPE_METRICS.find(s => s.id === selectedMetric) ?? SCOPE_METRICS[0];
+        const cfg1     = SCOPE_METRICS.find(s => s.id === selectedMetric) ?? SCOPE_METRICS[0];
+        const cfg2     = SCOPE_METRICS.find(s => s.id === secondMetric) ?? SCOPE_METRICS[1];
+
         const maxPts   = Math.floor((width - 80) / zoomX);
         const sliced   = chartHistory.slice(-maxPts);
-        const data     = sliced.map(item => ({ value: Number(item[cfg.id]) || 0, label: item.label || '', secunda: item.secunda || 0 }));
 
-        let maxValue  = cfg.defaultMax * zoomYMult;
+        // Date canal 1
+        const data1    = sliced.map(item => ({
+            value: Number(item[cfg1.id]) || 0,
+            label: item.label || '',
+            rawVal1: Number(item[cfg1.id]) || 0,
+            rawVal2: Number(item[cfg2.id]) || 0,
+            secunda: item.secunda || 0,
+        }));
+
+        // Statistici canal 1
+        const vals1    = data1.map(d => d.value);
+        const live1    = vals1.length > 0 ? vals1[vals1.length - 1] : 0;
+        const max1     = vals1.length > 0 ? Math.max(...vals1) : 0;
+        const min1     = vals1.length > 0 ? Math.min(...vals1) : 0;
+        const avg1     = vals1.length > 0 ? Math.round((vals1.reduce((a, b) => a + b, 0) / vals1.length) * 10) / 10 : 0;
+
+        // Date canal 2 (dacă este activ modul dual)
+        let data2 = [];
+        let live2 = 0, max2 = 0, min2 = 0, avg2 = 0;
+        let scaleRatio = 1;
+
+        if (isDualChannel) {
+            const vals2 = sliced.map(item => Number(item[cfg2.id]) || 0);
+            live2 = vals2.length > 0 ? vals2[vals2.length - 1] : 0;
+            max2  = vals2.length > 0 ? Math.max(...vals2) : 0;
+            min2  = vals2.length > 0 ? Math.min(...vals2) : 0;
+            avg2  = vals2.length > 0 ? Math.round((vals2.reduce((a, b) => a + b, 0) / vals2.length) * 10) / 10 : 0;
+
+            scaleRatio = (cfg1.defaultMax || 1) / (cfg2.defaultMax || 1);
+            data2 = sliced.map(item => ({
+                value: (Number(item[cfg2.id]) || 0) * scaleRatio,
+                label: item.label || '',
+                rawVal2: Number(item[cfg2.id]) || 0,
+                secunda: item.secunda || 0,
+            }));
+        }
+
+        let maxValue  = cfg1.defaultMax * zoomYMult;
         let stepValue = Math.max(1, Math.round(maxValue / 4));
-        if (autoScaleY && data.length > 0) {
-            const peak = Math.max(...data.map(i => i.value), 1);
-            maxValue  = Math.ceil(peak * 1.2);
+        if (autoScaleY && data1.length > 0) {
+            const peak = Math.max(...data1.map(i => i.value), isDualChannel ? Math.max(...data2.map(i => i.value), 1) : 1);
+            maxValue  = Math.ceil(peak * 1.18);
             stepValue = Math.max(1, Math.ceil(maxValue / 4));
         }
 
@@ -879,84 +928,224 @@ const LiveDashboardScreen = () => {
 
         return (
             <View style={styles.scopeContainer}>
-                {/* metric chips */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
-                    {SCOPE_METRICS.map(s => (
-                        <TouchableOpacity
-                            key={s.id}
-                            style={[styles.chip, selectedMetric === s.id && { backgroundColor: s.color, borderColor: s.color }]}
-                            onPress={() => setSelectedMetric(s.id)}
-                        >
-                            <Text style={[styles.chipText, selectedMetric === s.id && { color: '#FFFFFF' }]}>{s.label}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-
-                {/* zoom controls */}
-                <View style={styles.zoomRow}>
-                    <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomX(p => Math.max(p - 3, 2))}>
-                        <Text style={styles.zoomBtnTxt}>X—</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.zoomVal}>{zoomX}px</Text>
-                    <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomX(p => Math.min(p + 3, 40))}>
-                        <Text style={styles.zoomBtnTxt}>X+</Text>
-                    </TouchableOpacity>
-                    <View style={{ flex: 1 }} />
+                {/* ── 1. MOD CANAL (UN SINGUR CANAL vs 2 CANALE COMPARATIV) ── */}
+                <View style={styles.channelModeSwitchRow}>
                     <TouchableOpacity
-                        style={[styles.zoomBtn, autoScaleY && { backgroundColor: colors.status.good, borderColor: colors.status.good }]}
-                        onPress={() => setAutoScaleY(true)}
+                        style={[styles.channelModePill, !isDualChannel && styles.channelModePillActive]}
+                        onPress={() => setIsDualChannel(false)}
+                        activeOpacity={0.8}
                     >
-                        <Text style={[styles.zoomBtnTxt, autoScaleY && { color: '#FFF' }]}>Auto</Text>
+                        <Text style={[styles.channelModePillText, !isDualChannel && styles.channelModePillTextActive]}>
+                            📈 CANAL INDIVIDUAL
+                        </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.zoomBtn} onPress={() => { setAutoScaleY(false); setZoomYMult(p => Math.min(p + 0.2, 3)); }}>
-                        <Text style={styles.zoomBtnTxt}>Y—</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.zoomBtn} onPress={() => { setAutoScaleY(false); setZoomYMult(p => Math.max(p - 0.2, 0.2)); }}>
-                        <Text style={styles.zoomBtnTxt}>Y+</Text>
+                    <TouchableOpacity
+                        style={[styles.channelModePill, isDualChannel && styles.channelModePillActive]}
+                        onPress={() => setIsDualChannel(true)}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={[styles.channelModePillText, isDualChannel && styles.channelModePillTextActive]}>
+                            🔀 COMPARĂ 2 CANALE
+                        </Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* chart */}
+                {/* ── 2. PRESET-URI PENTRU 2 CANALE SAU SELECTOR DE METRICI ── */}
+                {isDualChannel ? (
+                    <View style={styles.dualPresetsWrap}>
+                        <Text style={styles.scopeSectionSub}>COMBINAȚII MECANICE RECOMANDATE:</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+                            {DUAL_PRESETS.map((p, idx) => {
+                                const isCurrent = selectedMetric === p.m1 && secondMetric === p.m2;
+                                return (
+                                    <TouchableOpacity
+                                        key={idx}
+                                        style={[styles.dualPresetChip, isCurrent && styles.dualPresetChipActive]}
+                                        onPress={() => {
+                                            setSelectedMetric(p.m1);
+                                            setSecondMetric(p.m2);
+                                        }}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text style={[styles.dualPresetText, isCurrent && styles.dualPresetTextActive]}>
+                                            {p.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
+                ) : (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+                        {SCOPE_METRICS.map(s => (
+                            <TouchableOpacity
+                                key={s.id}
+                                style={[styles.chip, selectedMetric === s.id && { backgroundColor: s.color, borderColor: s.color }]}
+                                onPress={() => setSelectedMetric(s.id)}
+                            >
+                                <Text style={[styles.chipText, selectedMetric === s.id && { color: '#000000', fontWeight: 'bold' }]}>
+                                    {s.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                )}
+
+                {/* ── 3. BENTO HUD: STATISTICI LIVE / MAX / MIN / MEDIE ── */}
+                <View style={styles.statsHudRow}>
+                    <View style={[styles.statsHudCard, { borderLeftColor: cfg1.color, borderLeftWidth: 3 }]}>
+                        <Text style={styles.statsHudLbl}>🔴 LIVE</Text>
+                        <Text style={[styles.statsHudVal, { color: cfg1.color }]}>
+                            {live1.toFixed(1)} <Text style={styles.statsHudUnit}>{cfg1.unit}</Text>
+                        </Text>
+                        {isDualChannel && (
+                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]}>
+                                CH2: {live2.toFixed(1)} {cfg2.unit}
+                            </Text>
+                        )}
+                    </View>
+                    <View style={styles.statsHudCard}>
+                        <Text style={styles.statsHudLbl}>🔺 VÂRF (MAX)</Text>
+                        <Text style={styles.statsHudVal}>
+                            {max1.toFixed(1)} <Text style={styles.statsHudUnit}>{cfg1.unit}</Text>
+                        </Text>
+                        {isDualChannel && (
+                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]}>
+                                CH2: {max2.toFixed(1)} {cfg2.unit}
+                            </Text>
+                        )}
+                    </View>
+                    <View style={styles.statsHudCard}>
+                        <Text style={styles.statsHudLbl}>🔻 MINIM</Text>
+                        <Text style={styles.statsHudVal}>
+                            {min1.toFixed(1)} <Text style={styles.statsHudUnit}>{cfg1.unit}</Text>
+                        </Text>
+                        {isDualChannel && (
+                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]}>
+                                CH2: {min2.toFixed(1)} {cfg2.unit}
+                            </Text>
+                        )}
+                    </View>
+                    <View style={styles.statsHudCard}>
+                        <Text style={styles.statsHudLbl}>📊 MEDIE</Text>
+                        <Text style={styles.statsHudVal}>
+                            {avg1.toFixed(1)} <Text style={styles.statsHudUnit}>{cfg1.unit}</Text>
+                        </Text>
+                        {isDualChannel && (
+                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]}>
+                                CH2: {avg2.toFixed(1)} {cfg2.unit}
+                            </Text>
+                        )}
+                    </View>
+                </View>
+
+                {/* ── 4. COMENZI DE ZOOM & SCALARE ── */}
+                <View style={styles.zoomRow}>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomX(p => Math.max(p - 3, 2))}>
+                        <Text style={styles.zoomBtnTxt}>TIMP —</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.zoomVal}>{zoomX}px</Text>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={() => setZoomX(p => Math.min(p + 3, 40))}>
+                        <Text style={styles.zoomBtnTxt}>TIMP +</Text>
+                    </TouchableOpacity>
+                    <View style={{ flex: 1 }} />
+                    <TouchableOpacity
+                        style={[styles.zoomBtn, autoScaleY && { backgroundColor: 'rgba(16, 185, 129, 0.2)', borderColor: '#10b981' }]}
+                        onPress={() => setAutoScaleY(true)}
+                    >
+                        <Text style={[styles.zoomBtnTxt, autoScaleY && { color: '#10b981', fontWeight: 'bold' }]}>AUTO-Y</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={() => { setAutoScaleY(false); setZoomYMult(p => Math.min(p + 0.2, 3)); }}>
+                        <Text style={styles.zoomBtnTxt}>Y —</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.zoomBtn} onPress={() => { setAutoScaleY(false); setZoomYMult(p => Math.max(p - 0.2, 0.2)); }}>
+                        <Text style={styles.zoomBtnTxt}>Y +</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* ── 5. CARDUL DE GRAFIC OSCILOSCOP CYBERPUNK CU DEGRADEURI NEON ── */}
                 <View style={styles.chartCard} {...pinchPR.panHandlers}>
-                    <Text style={styles.chartTitle}>{cfg.label} · {cfg.unit} · {data.length}s · {zoomX}px/pt</Text>
+                    <View style={styles.chartHeaderRow}>
+                        <View style={styles.chartLegendRow}>
+                            <View style={[styles.legendDot, { backgroundColor: cfg1.color }]} />
+                            <Text style={[styles.chartLegendLabel, { color: cfg1.color }]}>
+                                CH1: {cfg1.label} ({cfg1.unit})
+                            </Text>
+                            {isDualChannel && (
+                                <>
+                                    <View style={[styles.legendDot, { backgroundColor: cfg2.color, marginLeft: 12 }]} />
+                                    <Text style={[styles.chartLegendLabel, { color: cfg2.color }]}>
+                                        CH2: {cfg2.label} ({cfg2.unit})
+                                    </Text>
+                                </>
+                            )}
+                        </View>
+                        <Text style={styles.chartMetaText}>
+                            {data1.length} puncte · {data1.length > 0 ? `${data1[data1.length - 1].secunda}s` : '0s'}
+                        </Text>
+                    </View>
+
                     <LineChart
-                        data={data}
+                        data={data1}
+                        data2={isDualChannel ? data2 : undefined}
                         width={chartW}
-                        height={200}
-                        color={cfg.color}
-                        thickness={2}
-                        dataPointsColor={cfg.color}
+                        height={210}
+                        color={cfg1.color}
+                        color2={isDualChannel ? cfg2.color : undefined}
+                        thickness={2.5}
+                        thickness2={isDualChannel ? 2.5 : undefined}
+                        curved
+                        areaChart
+                        areaChart2={isDualChannel}
+                        startFillColor={cfg1.color}
+                        startFillColor2={isDualChannel ? cfg2.color : undefined}
+                        endFillColor="rgba(0, 0, 0, 0.01)"
+                        endFillColor2={isDualChannel ? "rgba(0, 0, 0, 0.01)" : undefined}
+                        startOpacity={0.35}
+                        startOpacity2={isDualChannel ? 0.25 : undefined}
+                        endOpacity={0.02}
+                        endOpacity2={isDualChannel ? 0.02 : undefined}
+                        dataPointsColor={cfg1.color}
                         dataPointsRadius={1}
                         maxValue={maxValue}
                         stepValue={stepValue}
                         noOfSections={4}
                         spacing={zoomX}
-                        yAxisTextStyle={{ color: colors.text.secondary, fontSize: 9 }}
+                        yAxisColor="transparent"
+                        xAxisColor="rgba(56, 189, 248, 0.25)"
+                        yAxisTextStyle={{ color: colors.text.secondary, fontSize: 9, fontWeight: 'bold' }}
                         xAxisLabelTextStyle={{ color: colors.text.secondary, fontSize: 8 }}
-                        rulesColor={colors.border.default}
-                        rulesType="solid"
-                        initialSpacing={8}
-                        endSpacing={8}
+                        rulesColor="rgba(56, 189, 248, 0.12)"
+                        rulesType="dashed"
+                        initialSpacing={10}
+                        endSpacing={10}
                         isAnimated={false}
                         pointerConfig={{
-                            pointerStripHeight: 200,
-                            pointerStripColor: 'rgba(139,148,158,0.35)',
+                            pointerStripHeight: 210,
+                            pointerStripColor: 'rgba(56, 189, 248, 0.5)',
                             pointerStripWidth: 2,
-                            pointerColor: cfg.color,
-                            radius: 4,
-                            pointerLabelWidth: 80,
-                            pointerLabelHeight: 36,
+                            pointerColor: cfg1.color,
+                            radius: 5,
+                            pointerLabelWidth: 120,
+                            pointerLabelHeight: isDualChannel ? 52 : 38,
                             activatePointersOnLongPress: false,
                             autoAdjustPointerLabelPosition: true,
                             pointerLabelComponent: items => {
                                 if (!items?.[0]) return null;
+                                const item1 = items[0];
                                 return (
-                                    <View style={styles.crosshairBadge}>
-                                        <Text style={styles.crosshairVal}>
-                                            {items[0].value}{' '}
-                                            <Text style={{ fontSize: 9, color: cfg.color }}>{cfg.unit}</Text>
+                                    <View style={[styles.crosshairBadge, isDualChannel && { height: 50, width: 115 }]}>
+                                        <Text style={[styles.crosshairVal, { color: cfg1.color }]}>
+                                            {item1.rawVal1 ?? item1.value}{' '}
+                                            <Text style={{ fontSize: 9, color: colors.text.secondary }}>{cfg1.unit}</Text>
                                         </Text>
-                                        <Text style={styles.crosshairSec}>{items[0].secunda ?? 0}s</Text>
+                                        {isDualChannel && (
+                                            <Text style={[styles.crosshairVal, { color: cfg2.color, fontSize: 11 }]}>
+                                                {item1.rawVal2 ?? 0}{' '}
+                                                <Text style={{ fontSize: 9, color: colors.text.secondary }}>{cfg2.unit}</Text>
+                                            </Text>
+                                        )}
+                                        <Text style={styles.crosshairSec}>T+{item1.secunda ?? 0}s</Text>
                                     </View>
                                 );
                             },
@@ -1692,6 +1881,107 @@ const styles = StyleSheet.create({
 
     // ── SCOPE tab ────────────────────────────────────────────────────────────
     scopeContainer: { paddingTop: spacing[2] },
+    channelModeSwitchRow: {
+        flexDirection: 'row',
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.md,
+        padding: 3,
+        marginBottom: spacing[2],
+        borderWidth: 1,
+        borderColor: colors.border.subtle,
+    },
+    channelModePill: {
+        flex: 1,
+        paddingVertical: spacing[2],
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: radii.sm,
+    },
+    channelModePillActive: {
+        backgroundColor: colors.bg[1],
+        borderWidth: 1,
+        borderColor: colors.accent.default,
+    },
+    channelModePillText: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+        letterSpacing: 0.5,
+    },
+    channelModePillTextActive: {
+        color: colors.accent.default,
+    },
+    dualPresetsWrap: {
+        marginBottom: spacing[2],
+    },
+    scopeSectionSub: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+        letterSpacing: 0.8,
+        marginBottom: 6,
+        paddingHorizontal: 2,
+    },
+    dualPresetChip: {
+        paddingHorizontal: spacing[3],
+        paddingVertical: 7,
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.full,
+        marginRight: spacing[2],
+        borderWidth: 1,
+        borderColor: colors.border.subtle,
+    },
+    dualPresetChipActive: {
+        backgroundColor: 'rgba(56, 189, 248, 0.15)',
+        borderColor: colors.accent.default,
+    },
+    dualPresetText: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
+    },
+    dualPresetTextActive: {
+        color: colors.text.primary,
+        fontWeight: typography.weights.bold,
+    },
+    statsHudRow: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        marginBottom: spacing[3],
+    },
+    statsHudCard: {
+        flex: 1,
+        backgroundColor: colors.bg[1],
+        borderRadius: radii.md,
+        padding: spacing[2],
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        justifyContent: 'center',
+    },
+    statsHudLbl: {
+        fontSize: 8,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.secondary,
+        letterSpacing: 0.5,
+        marginBottom: 2,
+    },
+    statsHudVal: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    statsHudSubVal: {
+        fontSize: 9,
+        fontWeight: typography.weights.bold,
+        marginTop: 2,
+        fontVariant: ['tabular-nums'],
+    },
+    statsHudUnit: {
+        fontSize: 8,
+        fontWeight: typography.weights.regular,
+        color: colors.text.secondary,
+    },
     zoomRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1724,6 +2014,33 @@ const styles = StyleSheet.create({
         borderColor: colors.border.default,
         alignItems: 'center',
     },
+    chartHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        width: '100%',
+        marginBottom: spacing[2],
+    },
+    chartLegendRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+    },
+    legendDot: {
+        width: 8,
+        height: 8,
+        borderRadius: radii.full,
+        marginRight: 4,
+    },
+    chartLegendLabel: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+    },
+    chartMetaText: {
+        fontSize: 9,
+        color: colors.text.secondary,
+        fontVariant: ['tabular-nums'],
+    },
     chartTitle: {
         color: colors.text.secondary,
         fontSize: typography.sizes.caption,
@@ -1732,15 +2049,16 @@ const styles = StyleSheet.create({
         marginBottom: spacing[2],
     },
     crosshairBadge: {
-        height: 36, width: 80,
+        height: 36, width: 85,
         backgroundColor: colors.bg[2],
         borderRadius: radii.xs,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
         borderColor: colors.border.default,
+        paddingHorizontal: 4,
     },
-    crosshairVal: { color: colors.text.primary, fontSize: typography.sizes.label1, fontWeight: typography.weights.heavy },
+    crosshairVal: { color: colors.text.primary, fontSize: typography.sizes.label1, fontWeight: typography.weights.heavy, fontVariant: ['tabular-nums'] },
     crosshairSec: { color: colors.text.secondary, fontSize: 8, marginTop: 1 },
 
     // ── 1. MOTORSPORT COCKPIT STYLES ────────────────────────────────────────
