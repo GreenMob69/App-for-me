@@ -49,6 +49,23 @@ const TABLES = [
         timing_belt_interval_km INTEGER,
         spark_plug_interval_km INTEGER,
 
+        -- Fizică, Dimensiuni & Aerodinamică
+        curb_weight_kg REAL,
+        length_mm INTEGER,
+        width_mm INTEGER,
+        height_mm INTEGER,
+        drag_coefficient REAL,
+        frontal_area_m2 REAL,
+        tire_spec TEXT,
+        wheel_radius_m REAL,
+
+        -- Praguri Dinamice & Calibrare
+        redline_rpm INTEGER,
+        idle_rpm INTEGER,
+        operating_temp_min REAL,
+        operating_temp_max REAL,
+        nominal_boost_bar REAL,
+
         -- Status calculat (actualizat automat)
         vehicle_status TEXT DEFAULT 'UNKNOWN',
         status_reason TEXT,
@@ -208,6 +225,19 @@ const MIGRATIONS = [
     `ALTER TABLE vehicles ADD COLUMN vehicle_status TEXT DEFAULT 'UNKNOWN'`,
     `ALTER TABLE vehicles ADD COLUMN status_reason TEXT`,
     `ALTER TABLE vehicles ADD COLUMN status_updated_at INTEGER`,
+    `ALTER TABLE vehicles ADD COLUMN curb_weight_kg REAL`,
+    `ALTER TABLE vehicles ADD COLUMN length_mm INTEGER`,
+    `ALTER TABLE vehicles ADD COLUMN width_mm INTEGER`,
+    `ALTER TABLE vehicles ADD COLUMN height_mm INTEGER`,
+    `ALTER TABLE vehicles ADD COLUMN drag_coefficient REAL`,
+    `ALTER TABLE vehicles ADD COLUMN frontal_area_m2 REAL`,
+    `ALTER TABLE vehicles ADD COLUMN tire_spec TEXT`,
+    `ALTER TABLE vehicles ADD COLUMN wheel_radius_m REAL`,
+    `ALTER TABLE vehicles ADD COLUMN redline_rpm INTEGER`,
+    `ALTER TABLE vehicles ADD COLUMN idle_rpm INTEGER`,
+    `ALTER TABLE vehicles ADD COLUMN operating_temp_min REAL`,
+    `ALTER TABLE vehicles ADD COLUMN operating_temp_max REAL`,
+    `ALTER TABLE vehicles ADD COLUMN nominal_boost_bar REAL`,
 ];
 
 function initVehicleProfileSchema(db) {

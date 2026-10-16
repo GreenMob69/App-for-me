@@ -25,6 +25,7 @@ function deriveCapabilities(vehicleRow) {
 
     const fuel    = (vehicleRow.fuel_type    || '').toLowerCase().trim();
     const code    = (vehicleRow.engine_code  || '').toUpperCase().trim();
+    const textAll = `${vehicleRow.engine_code || ''} ${vehicleRow.model || ''} ${vehicleRow.variant || ''}`.toUpperCase().trim();
     const trans   = (vehicleRow.transmission || '').toLowerCase().trim();
     const year    = vehicleRow.year ? Number(vehicleRow.year) : null;
 
@@ -37,11 +38,12 @@ function deriveCapabilities(vehicleRow) {
 
     // ── Turbo ─────────────────────────────────────────────────────────
     // Diesel post-1990 este aproape mereu turbo. La benzinǎ: verificăm
-    // codul motorului pentru markeri comuni (T, TSI, TFSI, TDCI etc.).
+    // codul motorului, modelul sau varianta pentru markeri comuni (T, TSI, TFSI, TDCI etc.).
     const hasTurbo = isDiesel ||
-        /TDI|TDCI|CDI|CDTI|CRDI|D4D/.test(code) ||    // diesel turbo
-        /TSI|TFSI|TGDI|TURBO|EcoBoost|SkyActiv-T/.test(code) || // benzinǎ turbo
-        /[0-9]T$/.test(code);                          // ex: "M54T", "1.8T"
+        (vehicleRow.nominal_boost_bar !== undefined && Number(vehicleRow.nominal_boost_bar) > 0) ||
+        /TDI|TDCI|CDI|CDTI|CRDI|D4D|JTD|HDi|dCi/i.test(textAll) ||
+        /TSI|TFSI|TGDI|TURBO|ECOBOOST|SKYACTIV-T|VTEC TURBO|KOMPRESSOR/i.test(textAll) ||
+        /\b[0-9](\.[0-9])?T\b/i.test(textAll);
 
     // ── DPF (Filtru Particule Diesel) ─────────────────────────────────
     // Introdus treptat după 2005 (optional) și obligatoriu Euro 5 din 2009.

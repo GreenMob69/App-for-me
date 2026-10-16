@@ -30,6 +30,7 @@ const { createDiagnosticContext, PIPELINE_STEPS } = require('../pipeline/Diagnos
 const { deriveCapabilities, defaultCapabilities } = require('../capabilities/VehicleCapabilities');
 const { resolve: resolveKnowledgePack } = require('../knowledge/KnowledgePackRegistry');
 const { deriveProfile } = require('../powertrain/PowertrainProfileRegistry');
+const { resolveVehiclePhysics } = require('../vehicle-profile/VehiclePhysicsResolver');
 
 const { createAnalysis, updateAnalyzer } = require('./TripAnalyzer');
 const { calculateHealthScore } = require('./HealthEngine');
@@ -86,6 +87,8 @@ async function finalizeTripAnalysis(trip, opts = {}) {
     ctx.capabilities  = deriveCapabilities(ctx.vehicleRow) || defaultCapabilities();
     ctx.knowledgePack = resolveKnowledgePack(ctx.vehicleRow, ctx.capabilities);
     ctx.powertrain    = deriveProfile(ctx.vehicleRow, ctx.capabilities);
+    ctx.physics       = resolveVehiclePhysics(ctx.vehicleRow, ctx.vin);
+    ctx.thresholds    = ctx.physics.thresholds;
 
     // ═══════════════════════════════════════════════════════════════════
     // PASUL 1: Validare integritate date

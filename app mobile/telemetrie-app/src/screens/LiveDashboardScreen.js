@@ -9,6 +9,7 @@ import { LineChart } from 'react-native-gifted-charts';
 import { LiveContext }  from '../context/LiveContext';
 import { AlertContext } from '../context/AlertContext';
 import { AppContext }   from '../context/AppContext';
+import { useVehicle }   from '../context/VehicleContext';
 import { getVehicleLabel } from '../utils/config';
 import RecommendationCard from '../components/ui/RecommendationCard';
 import { colors, typography, radii, spacing, layout, TEMPLATES } from '../theme';
@@ -48,7 +49,7 @@ function describeClockwiseArc(x, y, radius, startAngle, endAngle) {
 
 // ─── AI assistant ─────────────────────────────────────────────────────────────
 
-function buildAssistantMsg(liveData, isConnected) {
+function buildAssistantMsg(liveData, isConnected, vehicleContext = {}) {
     if (!isConnected) return { text: 'Aștept conexiunea. Pornește vehiculul sau verifică conexiunea.', level: 'neutral' };
     const coolant = liveData.temperaturi?.coolant ?? 0;
     const rpm     = liveData.motor?.rpm ?? 0;
@@ -58,25 +59,34 @@ function buildAssistantMsg(liveData, isConnected) {
     const dpfRgn  = liveData.dpf?.regen_status;
 
     const v       = liveData.virtual || {};
+    const optMin  = vehicleContext.optTempMin || 80;
+    const optMax  = vehicleContext.optTempMax || 95;
+    const warnTemp = vehicleContext.warnTemp || (optMax + 5);
+    const critTemp = vehicleContext.critTemp || (optMax + 12);
+    const highRpmLimit = vehicleContext.highRpmLimit || 3800;
+
     if (v.dpfRegenActive) return { text: v.dpfRegenNotice || 'Regenerare DPF în curs! Menține motorul pornit.', level: 'warning' };
     if (v.rollingDragAnomaly) return { text: 'Rezistență anormală la rulare (posibil etrier frână blocat).', level: 'warning' };
-    if (coolant > 105) return { text: 'Temperatura motorului este critică. Recomand oprirea imediată.', level: 'critical' };
-    if (coolant > 95)  return { text: 'Temperatura motorului este ridicată. Dacă continuă să crească, oprește motorul.', level: 'serious' };
+    if (coolant > critTemp) return { text: `Temperatura motorului este critică (${coolant}°C). Recomand oprirea imediată.`, level: 'critical' };
+    if (coolant > warnTemp)  return { text: `Temperatura motorului este ridicată (${coolant}°C). Dacă continuă să crească, oprește motorul.`, level: 'serious' };
     if (volt > 0 && volt < 13.0) return { text: 'Tensiunea de la alternator este scăzută. Posibilă problemă electrică.', level: 'warning' };
     if (volt > 0 && volt < 13.5) return { text: 'Tensiunea alternatorului este ușor sub valoarea obișnuită.', level: 'info' };
     if (dpfRgn === 'ACTIVE' || dpfRgn === 'ON') return { text: 'Regenerare DPF activă. Drumul lung ajută la eficiența filtrului.', level: 'info' };
     if (cons > 15 && speed > 5)  return { text: 'Consum instant ridicat. Menține o viteză constantă pentru eficiență.', level: 'info' };
-    if (rpm > 3800 && speed > 0) return { text: 'Turație ridicată. Schimbă la o treaptă superioară.', level: 'info' };
+    if (rpm > highRpmLimit && speed > 0) return { text: 'Turație ridicată. Schimbă la o treaptă superioară.', level: 'info' };
     if (speed === 0 && rpm > 500) return { text: 'Motor în ralanti. Temperaturi și presiuni stabile.', level: 'normal' };
-    if (speed > 0 && coolant >= 75 && coolant <= 95) return { text: 'Motorul funcționează la temperatura optimă.', level: 'normal' };
+    if (speed > 0 && coolant >= optMin && coolant <= optMax) return { text: 'Motorul funcționează la temperatura optimă.', level: 'normal' };
     if (speed > 0) return { text: 'Motorul funcționează normal.', level: 'normal' };
     return { text: 'Nu am observat nimic neobișnuit.', level: 'normal' };
 }
 
-function buildContextualAlert(liveData, latestAlert) {
+function buildContextualAlert(liveData, latestAlert, vehicleContext = {}) {
     const coolant = liveData.temperaturi?.coolant ?? 0;
     const volt    = liveData.baterie?.ecu_volt ?? 0;
     const v       = liveData.virtual || {};
+    const optMax  = vehicleContext.optTempMax || 95;
+    const warnTemp = vehicleContext.warnTemp || (optMax + 5);
+    const critTemp = vehicleContext.critTemp || (optMax + 12);
 
     if (v.dpfRegenActive) {
         return {
@@ -92,8 +102,8 @@ function buildContextualAlert(liveData, latestAlert) {
             priority: 'high'
         };
     }
-    if (coolant > 105) return { title: 'Supraîncălzire critică', description: 'Temperatura motorului depășește 105°C. Oprește motorul și verifică lichidul de răcire.', priority: 'critical' };
-    if (coolant > 95)  return { title: 'Temperatură motor ridicată', description: `Temperatura actuală: ${coolant}°C. Dacă continuă să crească, oprește motorul.`, priority: 'high' };
+    if (coolant > critTemp) return { title: 'Supraîncălzire critică', description: `Temperatura motorului depășește ${critTemp}°C (${coolant}°C). Oprește motorul și verifică lichidul de răcire.`, priority: 'critical' };
+    if (coolant > warnTemp)  return { title: 'Temperatură motor ridicată', description: `Temperatura actuală: ${coolant}°C (> normal ${optMax}°C). Dacă continuă să crească, oprește motorul.`, priority: 'high' };
     if (volt > 0 && volt < 13.0) return { title: 'Tensiune scăzută', description: `Tensiunea de încărcare: ${volt.toFixed(1)}V. Posibilă problemă cu alternatorul sau bateria.`, priority: 'high' };
     if (latestAlert) {
         const TIP = { OVERSPEED: `Viteză excesivă${latestAlert.viteza ? ` — ${Math.round(latestAlert.viteza)} km/h` : ''}`, FRANARE_BRUSCA: 'Frânare bruscă detectată', DTC_DETECTAT: `Cod DTC: ${latestAlert.cod || ''}` };
@@ -325,8 +335,26 @@ const LiveDashboardScreen = () => {
     const tr  = liveData.transmisie   || {};
     const v   = liveData.virtual      || {};
 
-    const assistantMsg    = useMemo(() => buildAssistantMsg(liveData, isConnected),    [liveData, isConnected]);
-    const contextualAlert = useMemo(() => buildContextualAlert(liveData, latestAlert), [liveData, latestAlert]);
+    const { activeVehicle, fuelType } = useVehicle() || {};
+
+    // Parametri dinamici vehicul
+    const baseRedline = activeVehicle?.redline_rpm || (fuelType === 'PETROL' ? 6500 : 4800);
+    const maxRpmScale = Math.ceil((baseRedline * 1.15) / 1000) * 1000;
+    const displacementL = activeVehicle?.displacement_cc ? (activeVehicle.displacement_cc / 1000) : 2.0;
+    const optTempMin = activeVehicle?.operating_temp_min || (fuelType === 'PETROL' ? 88 : 82);
+    const optTempMax = activeVehicle?.operating_temp_max || (fuelType === 'PETROL' ? 103 : 93);
+    const warnTemp = optTempMax + 5;
+    const critTemp = optTempMax + 12;
+    const vehicleContext = useMemo(() => ({
+        optTempMin,
+        optTempMax,
+        warnTemp,
+        critTemp,
+        highRpmLimit: Math.round(baseRedline * 0.78),
+    }), [optTempMin, optTempMax, warnTemp, critTemp, baseRedline]);
+
+    const assistantMsg    = useMemo(() => buildAssistantMsg(liveData, isConnected, vehicleContext),    [liveData, isConnected, vehicleContext]);
+    const contextualAlert = useMemo(() => buildContextualAlert(liveData, latestAlert, vehicleContext), [liveData, latestAlert, vehicleContext]);
     const chartHistory    = useMemo(() => getChartHistory(), [chartVersion]);
     const params          = useMemo(() => buildParams(category, liveData),             [category, liveData]);
 
@@ -350,40 +378,40 @@ const LiveDashboardScreen = () => {
         const torqueNm    = (v.torqueNm && v.torqueNm > 0)
             ? v.torqueNm
             : (powerHp > 0 && rpm > 400 ? Math.round((powerHp * 7120) / rpm) : 0);
-        const vePct       = v.volumetricEfficiencyPct ?? (a.maf ? Math.round((a.maf * 120 / ((rpm || 800) * 2.461 * 1.25)) * 100) : 88);
+        const vePct       = v.volumetricEfficiencyPct ?? (a.maf ? Math.round((a.maf * 120 / ((rpm || 800) * displacementL * 1.25)) * 100) : 88);
         const lambda      = v.lambda ?? 1.15;
         const afr         = v.afr ?? 16.8;
 
-        // Redline dinamic în funcție de temperatura motorului (răcire / ulei)
-        let dynamicRedline = 4500;
+        // Redline dinamic în funcție de profilul vehiculului și temperatura motorului
+        let dynamicRedline = baseRedline;
         let engineTempStatus = 'optimal'; // 'cold', 'warming', 'optimal'
         let tempBadgeText = null;
 
         const oilTemp = tem.oil;
         const coolTemp = cool;
 
-        if ((coolTemp > 0 && coolTemp < 65) || (oilTemp != null && oilTemp > 0 && oilTemp < 60)) {
-            dynamicRedline = 2500;
+        if ((coolTemp > 0 && coolTemp < 60) || (oilTemp != null && oilTemp > 0 && oilTemp < 55)) {
+            dynamicRedline = Math.round(baseRedline * 0.55);
             engineTempStatus = 'cold';
-            tempBadgeText = '❄️ Motor rece (Redline dinamic: 2500 RPM)';
-        } else if (coolTemp >= 65 && coolTemp < 80) {
-            dynamicRedline = 3200;
+            tempBadgeText = `❄️ Motor rece (Redline dinamic: ${dynamicRedline} RPM)`;
+        } else if (coolTemp >= 60 && coolTemp < optTempMin) {
+            dynamicRedline = Math.round(baseRedline * 0.75);
             engineTempStatus = 'warming';
-            tempBadgeText = '🌡️ În încălzire (Redline dinamic: 3200 RPM)';
+            tempBadgeText = `🌡️ În încălzire (Redline dinamic: ${dynamicRedline} RPM)`;
         } else {
-            dynamicRedline = 4500;
+            dynamicRedline = baseRedline;
             engineTempStatus = 'optimal';
         }
 
-        const redlinePct = (dynamicRedline / 5000) * 100;
-        const rpmPct   = `${Math.min((rpm / 5000) * 100, 100)}%`;
+        const redlinePct = (dynamicRedline / maxRpmScale) * 100;
+        const rpmPct   = `${Math.min((rpm / maxRpmScale) * 100, 100)}%`;
         const rpmColor = rpm > dynamicRedline
             ? colors.status.critical
             : rpm > (dynamicRedline - 400)
                 ? colors.status.caution
                 : colors.accent.default;
 
-        const coolColor  = cool > 105 ? colors.status.critical : cool > 95 ? colors.status.caution : cool > 60 ? colors.status.good : colors.text.secondary;
+        const coolColor  = cool > critTemp ? colors.status.critical : cool > warnTemp ? colors.status.caution : cool > 60 ? colors.status.good : colors.text.secondary;
         const voltColor  = volt > 0 && volt < 13.0 ? colors.status.critical : volt > 0 && volt < 13.5 ? colors.status.monitor : volt > 0 ? colors.status.good : colors.text.secondary;
         const ecoColor   = eco >= 85 ? colors.status.good : eco >= 65 ? colors.status.monitor : colors.status.caution;
         const consColor  = cons > 15 ? colors.status.caution : cons > 10 ? colors.status.monitor : colors.text.primary;
@@ -405,29 +433,42 @@ const LiveDashboardScreen = () => {
             const r = 100;
             const strokeW = 12;
 
-            const tachoRatio = Math.min(Math.max(rpm, 0), 5000) / 5000;
+            const tachoRatio = Math.min(Math.max(rpm, 0), maxRpmScale) / maxRpmScale;
             const curTachoAngle = 150 + tachoRatio * 240;
-            const redlineAngle = 150 + (dynamicRedline / 5000) * 240;
+            const redlineAngle = 150 + (dynamicRedline / maxRpmScale) * 240;
 
             const bgArcPath = describeClockwiseArc(cx, cy, r, 150, 390);
             const redlineArcPath = describeClockwiseArc(cx, cy, r, redlineAngle, 390);
             const progressArcPath = curTachoAngle > 150 ? describeClockwiseArc(cx, cy, r, 150, curTachoAngle) : '';
 
+            const maxRpmThousands = Math.round(maxRpmScale / 1000);
             const ticks = [];
-            for (let i = 0; i <= 10; i++) {
-                const angle = 150 + i * 24;
-                const isMajor = i % 2 === 0;
-                const p1 = polarToCartesian(cx, cy, r + (isMajor ? 14 : 9), angle);
+            for (let i = 0; i <= maxRpmThousands; i++) {
+                const angle = 150 + (i / maxRpmThousands) * 240;
+                const p1 = polarToCartesian(cx, cy, r + 14, angle);
                 const p2 = polarToCartesian(cx, cy, r + 2, angle);
                 const lp = polarToCartesian(cx, cy, r - 18, angle);
                 ticks.push({
-                    key: i,
+                    key: `major-${i}`,
                     x1: p1.x, y1: p1.y,
                     x2: p2.x, y2: p2.y,
-                    isMajor,
-                    val: i / 2,
+                    isMajor: true,
+                    val: i,
                     lx: lp.x, ly: lp.y,
                 });
+                if (i < maxRpmThousands) {
+                    const midAngle = angle + (1 / (maxRpmThousands * 2)) * 240;
+                    const mp1 = polarToCartesian(cx, cy, r + 8, midAngle);
+                    const mp2 = polarToCartesian(cx, cy, r + 2, midAngle);
+                    ticks.push({
+                        key: `minor-${i}`,
+                        x1: mp1.x, y1: mp1.y,
+                        x2: mp2.x, y2: mp2.y,
+                        isMajor: false,
+                        val: i + 0.5,
+                        lx: 0, ly: 0,
+                    });
+                }
             }
 
             return (

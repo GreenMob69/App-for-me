@@ -101,17 +101,18 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     const vin = packet.ecu?.vin || 'WAUZZZ4A1RN000000';
     const state = getSessionState(vin);
 
-    // Parametri motor & vehicul
-    const cylinders    = vehicleConfig.cylinders || 5;          // Audi AEL R5
-    const displacement = vehicleConfig.displacement_l || 2.461;    // 2461 cmc
-    const massKg       = vehicleConfig.mass_kg || 1550;         // Masă proprie
-    const cd           = 0.30;                                  // Coeficient aerodinamic Audi 100/A6 C4
-    const frontalArea  = 2.10;                                  // Suprafață frontală m²
-    const crr          = 0.015;                                 // Rezistență la rulare pneuri
-    const diffRatio    = 3.89;                                  // Raport grup conic final
-    const wheelRadiusM = 0.316;                                 // Rază dinamică roată (195/65 R15 sau 205/55 R16)
-    const transEff     = 0.92;                                  // Randament mecanic cutie + diferențial
-    const gearRatios   = { 1: 3.50, 2: 1.89, 3: 1.23, 4: 0.93, 5: 0.73, 6: 0.60 };
+    // Parametri motor & vehicul dinamici per profil
+    const capabilities = vehicleConfig.capabilities || {};
+    const cylinders    = vehicleConfig.cylinders || (capabilities.isElectric ? 0 : 4);
+    const displacement = vehicleConfig.displacementL || vehicleConfig.displacement_l || 2.0;
+    const massKg       = vehicleConfig.massKg || vehicleConfig.curb_weight_kg || vehicleConfig.mass_kg || 1550;
+    const cd           = vehicleConfig.cd || vehicleConfig.drag_coefficient || 0.30;
+    const frontalArea  = vehicleConfig.frontalAreaM2 || vehicleConfig.frontal_area_m2 || 2.10;
+    const crr          = vehicleConfig.crr || 0.013;
+    const diffRatio    = vehicleConfig.diffRatio || 3.89;
+    const wheelRadiusM = vehicleConfig.wheelRadiusM || vehicleConfig.wheel_radius_m || 0.316;
+    const transEff     = vehicleConfig.transEff || 0.92;
+    const gearRatios   = vehicleConfig.gearRatios || { 1: 3.50, 2: 1.89, 3: 1.23, 4: 0.93, 5: 0.73, 6: 0.60 };
 
     // Extragere senzori pachet
     const m = packet.motor        || {};
@@ -227,8 +228,13 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         powerHpWheel = Number((powerKwWheel * 1.35962).toFixed(1));
     }
 
-    const powerHp = Math.min(150, Math.max(0, powerHpThermo || powerHpWheel));
-    const torqueNm = Math.min(350, Math.max(0, torqueNmThermo));
+    const ratedHp = vehicleConfig.power_hp || vehicleConfig.powerHp || 250;
+    const ratedTorque = vehicleConfig.torque_nm || vehicleConfig.torqueNm || 550;
+    const maxDynoHp = Math.max(200, Math.round(ratedHp * 1.35));
+    const maxDynoTorque = Math.max(350, Math.round(ratedTorque * 1.35));
+
+    const powerHp = Math.min(maxDynoHp, Math.max(0, powerHpThermo || powerHpWheel));
+    const torqueNm = Math.min(maxDynoTorque, Math.max(0, torqueNmThermo));
 
     // ── 4. Patinarea Ambreiajului (Clutch Slip %) ─────────────────────────────
     let clutchSlipPct = 0;
@@ -256,7 +262,9 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     let dpfResistanceIndex = 0;
     let dpfStatus = 'CLEAN';
 
-    if (filteredMaf > 2.0) {
+    const hasDPF = capabilities.hasDPF !== undefined ? capabilities.hasDPF : (vehicleConfig.fuelType === 'diesel' || vehicleConfig.fuel_type === 'diesel');
+
+    if (hasDPF && filteredMaf > 2.0) {
         const tCatK = Math.max(273.15, tempCat1 + 273.15);
         const rhoExhaust = 352.9 / tCatK;
         const mafKgH = filteredMaf * 3.6;
@@ -269,13 +277,16 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
             else if (dpfResistanceIndex < 18.0) dpfStatus = 'WARNING_SOOT';
             else                                dpfStatus = 'CRITICAL_CLOGGED';
         }
+    } else if (!hasDPF) {
+        dpfStatus = 'NOT_APPLICABLE';
     }
 
     // ── 6. Analiza Dinamică Turbină (Boost Error & Diagnoză Fizică) ───────────
+    const hasTurbo = capabilities.hasTurbo !== undefined ? capabilities.hasTurbo : (vehicleConfig.nominal_boost_bar !== 0);
     const boostErrorKpa = Number((mapKpa - mapCmdKpa).toFixed(1));
-    let turboDiagnostic = 'NORMAL';
+    let turboDiagnostic = hasTurbo ? 'NORMAL' : 'NOT_APPLICABLE';
 
-    if (loadPct > 45 && rpm > 1400) {
+    if (hasTurbo && loadPct > 45 && rpm > 1400) {
         if (boostErrorKpa > 22.0) {
             turboDiagnostic = 'VNT_N75_SPIKE';
         } else if (boostErrorKpa < -25.0) {
@@ -405,7 +416,7 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         }
     }
 
-    const dpfRegenActive = (tempCat1 > 530) || (deltaCatTempC > 40 && tempCat2 > 450);
+    const dpfRegenActive = hasDPF && ((tempCat1 > 530) || (deltaCatTempC > 40 && tempCat2 > 450));
     const dpfRegenNotice = dpfRegenActive
         ? `🔥 Regenerare DPF în curs (${Math.round(tempCat2 || tempCat1)}°C)! Nu opri motorul încă 3 minute.`
         : null;

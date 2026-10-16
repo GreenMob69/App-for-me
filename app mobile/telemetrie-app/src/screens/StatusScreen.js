@@ -49,86 +49,110 @@ import PropTypes from 'prop-types';
 import { useRefreshOnOnline } from '../hooks/useRefreshOnOnline';
 import { getRootNavigation } from '../utils/navigation';
 
-const SUBSYSTEM_PEEK_DATA = {
-    motor: {
-        name: 'Motor & Injecție',
-        key: 'motor',
-        score: 92,
-        status: 'optimal',
-        statusText: 'Eficiență volumetrică 92% · Injecție optimă',
-        metrics: [
-            { label: 'Lambda / AFR', val: 'λ 1.18 (17.1:1)' },
-            { label: 'Eficiență Vol.', val: '92.4%' },
-            { label: 'Compresie/Stare', val: 'Cilindri echilibrați' },
-        ],
-        desc: 'Sistemul de injecție AEL funcționează în parametri nominali. Nu s-a detectat amestec bogat sau risc de fum negru.',
-    },
-    turbo: {
-        name: 'Turbosuflantă & VNT',
-        key: 'turbo',
-        score: 88,
-        status: 'good',
-        statusText: 'Presiune stabilă · VNT fără blocaje',
-        metrics: [
-            { label: 'Boost efectiv', val: '1.15 bar' },
-            { label: 'Răspuns N75', val: 'Normal (<120ms)' },
-            { label: 'Pierderi traseu', val: '0 bar (Etanș)' },
-        ],
-        desc: 'Curba de presiune efectivă urmărește fidel cererea ECU. Nu există semne de oboseală pe ax sau scăpări de vacuum.',
-    },
-    racire: {
-        name: 'Răcire & Termodinamică',
-        key: 'racire',
-        score: 94,
-        status: 'optimal',
-        statusText: 'Termostat funcțional · Delta Ulei-Apă optim',
-        metrics: [
-            { label: 'Temp. Lichid', val: '88°C (Stabil)' },
-            { label: 'Delta Ulei-Apă', val: '11°C (<22°C)' },
-            { label: 'Termostat', val: 'Deschide la 87°C' },
-        ],
-        desc: 'Schimbătorul de căldură ulei-apă asigură transfer termic eficient. Motorul atinge temperatura optimă în timpi ideali.',
-    },
-    dpf: {
-        name: 'Filtru Particule / Emisii',
-        key: 'dpf',
-        score: 86,
-        status: 'good',
-        statusText: 'Permeabilitate optimă · Fără contrapresiune',
-        metrics: [
-            { label: 'Rezistență R_dpf', val: '0.048 (Optim)' },
-            { label: 'Pres. diferențială', val: '4.2 mbar' },
-            { label: 'Stare funingine', val: 'Încărcare redusă' },
-        ],
-        desc: 'Indicele de permeabilitate normalizat cu debitul arată o celulă ceramică curată, fără colmatare de cenușă.',
-    },
-    electric: {
-        name: 'Sistem Electric & Baterie',
-        key: 'electric',
-        score: 95,
-        status: 'optimal',
-        statusText: 'Alternator stabil · Cădere masă neglijabilă',
-        metrics: [
-            { label: 'Tensiune încărcare', val: '14.2 V' },
-            { label: 'Cădere masă (Drop)', val: '0.12 V (<0.4V)' },
-            { label: 'Stare alternator', val: 'Regulator stabil' },
-        ],
-        desc: 'Puntea redresoare și regulatorul alternatorului mențin tensiunea stabilă chiar și la pornirea consumatorilor grei.',
-    },
-    transmisie: {
-        name: 'Transmisie & Ambreiaj',
-        key: 'transmisie',
-        score: 90,
-        status: 'optimal',
-        statusText: 'Fără patinare · Raport trepte confirmat',
-        metrics: [
-            { label: 'Alunecare ambreiaj', val: '0.8% (<5%)' },
-            { label: 'Sincronizare', val: 'Exactă (K_gear)' },
-            { label: 'Volant masă dublă', val: 'Vibrații minime' },
-        ],
-        desc: 'Cuplajul discului de ambreiaj este ferm. Raportul turație/viteză confirmă aderență completă sub sarcină.',
-    },
-};
+export function buildSubsystemPeekData(vehicle = null, fuelType = 'DIESEL') {
+    const isPetrol = (fuelType || '').toUpperCase() === 'PETROL' ||
+                     (vehicle?.tip_combustibil || '').toLowerCase() === 'petrol' ||
+                     (vehicle?.fuel_type || '').toLowerCase() === 'petrol';
+    const isNA = vehicle?.nominal_boost_bar === 0;
+    const optTemp = isPetrol ? 96 : 88;
+
+    return {
+        motor: {
+            name: isPetrol ? 'Motor & Aprindere' : 'Motor & Injecție',
+            key: 'motor',
+            score: 92,
+            status: 'optimal',
+            statusText: isPetrol ? 'Eficiență volumetrică 92% · Aprindere optimă' : 'Eficiență volumetrică 92% · Injecție optimă',
+            metrics: [
+                { label: 'Lambda / AFR', val: isPetrol ? 'λ 1.00 (14.7:1)' : 'λ 1.18 (17.1:1)' },
+                { label: 'Eficiență Vol.', val: '92.4%' },
+                { label: isPetrol ? 'Rateuri (Misfire)' : 'Compresie/Stare', val: isPetrol ? '0 pe toți cilindrii' : 'Cilindri echilibrați' },
+            ],
+            desc: isPetrol
+                ? 'Sistemul de injecție pe benzină și aprinderea funcționează în parametri nominali. Amestec stoechiometric optim, fără rateuri de scânteie.'
+                : 'Sistemul de injecție diesel funcționează în parametri nominali. Nu s-a detectat amestec excesiv de bogat sau risc de fum negru.',
+        },
+        turbo: {
+            name: isNA ? 'Admisie Aer Atmosferică' : 'Turbosuflantă & Boost',
+            key: 'turbo',
+            score: isNA ? 96 : 88,
+            status: isNA ? 'optimal' : 'good',
+            statusText: isNA ? 'Presiune MAP promptă · Clapetă curată' : 'Presiune stabilă · VNT fără blocaje',
+            metrics: isNA ? [
+                { label: 'Presiune MAP', val: '101 kPa (Atmosferic)' },
+                { label: 'Clapetă accelerație', val: 'Răspuns prompt (<80ms)' },
+                { label: 'Etanșeitate admisie', val: 'Fără vacuum leak' },
+            ] : [
+                { label: 'Boost efectiv', val: `${vehicle?.nominal_boost_bar ? Number(vehicle.nominal_boost_bar).toFixed(2) : '1.15'} bar` },
+                { label: 'Răspuns Actuator', val: 'Normal (<120ms)' },
+                { label: 'Pierderi traseu', val: '0 bar (Etanș)' },
+            ],
+            desc: isNA
+                ? 'Motor cu aspirație naturală. Traseul de admisie și clapeta de accelerație sunt etanșe, asigurând răspuns liniar la pedală.'
+                : 'Curba de presiune efectivă urmărește fidel cererea ECU. Nu există semne de uzură pe ax sau scăpări pe tubulatură.',
+        },
+        racire: {
+            name: 'Răcire & Termodinamică',
+            key: 'racire',
+            score: 94,
+            status: 'optimal',
+            statusText: `Termostat funcțional · Regim optim (${optTemp}°C)`,
+            metrics: [
+                { label: 'Temp. Lichid', val: `${optTemp}°C (Stabil)` },
+                { label: 'Delta Ulei-Apă', val: '10°C (<22°C)' },
+                { label: 'Termostat', val: isPetrol ? 'Electronic (88-103°C)' : 'Deschide la 87°C' },
+            ],
+            desc: isPetrol
+                ? 'Managementul termic electronic menține motorul în intervalul optim de eficiență și protecție catalitică (88-103°C).'
+                : 'Schimbătorul de căldură ulei-apă asigură transfer termic eficient. Motorul atinge temperatura optimă în timpi ideali.',
+        },
+        dpf: {
+            name: isPetrol ? 'Emisii & Catalizator' : 'Filtru Particule / Emisii',
+            key: 'dpf',
+            score: isPetrol ? 93 : 86,
+            status: 'good',
+            statusText: isPetrol ? 'Eficiență catalitică optimă · λ 1.00' : 'Permeabilitate optimă · Fără contrapresiune',
+            metrics: isPetrol ? [
+                { label: 'Sonda Lambda B1S1', val: 'λ 1.00 (Buclă închisă)' },
+                { label: 'Catalizator 3-căi', val: 'Exotermie optimă' },
+                { label: 'Sistem EVAP', val: 'Etanș (Fără vapori)' },
+            ] : [
+                { label: 'Rezistență R_dpf', val: '0.048 (Optim)' },
+                { label: 'Pres. diferențială', val: '4.2 mbar' },
+                { label: 'Stare funingine', val: 'Încărcare redusă' },
+            ],
+            desc: isPetrol
+                ? 'Sistemul de catalizator cu 3 căi neutralizează eficient emisiile. Senzorii de oxigen confirmă arderea curată și stoechiometrică.'
+                : 'Indicele de permeabilitate normalizat cu debitul arată o celulă ceramică curată, fără colmatare de cenușă.',
+        },
+        electric: {
+            name: 'Sistem Electric & Baterie',
+            key: 'electric',
+            score: 95,
+            status: 'optimal',
+            statusText: 'Alternator stabil · Cădere masă neglijabilă',
+            metrics: [
+                { label: 'Tensiune încărcare', val: '14.2 V' },
+                { label: 'Cădere masă (Drop)', val: '0.12 V (<0.4V)' },
+                { label: 'Stare alternator', val: 'Regulator stabil' },
+            ],
+            desc: 'Puntea redresoare și regulatorul alternatorului mențin tensiunea stabilă chiar și la pornirea consumatorilor grei.',
+        },
+        transmisie: {
+            name: 'Transmisie & Ambreiaj',
+            key: 'transmisie',
+            score: 90,
+            status: 'optimal',
+            statusText: 'Fără patinare · Raport trepte confirmat',
+            metrics: [
+                { label: 'Alunecare ambreiaj', val: '0.8% (<5%)' },
+                { label: 'Sincronizare', val: 'Exactă (K_gear)' },
+                { label: 'Tren rulare', val: 'Vibrații minime' },
+            ],
+            desc: 'Cuplajul discului de ambreiaj este ferm. Raportul turație/viteză confirmă aderență completă sub sarcină.',
+        },
+    };
+}
 
 const STATUS_CACHE_KEY = '@status_cache';
 
@@ -230,7 +254,9 @@ const StatusScreen = ({ navigation }) => {
     const [selectedSubsystem, setSelectedSubsystem] = useState(null);
 
     const { unreadCount, syncFromSummary } = useContext(NotificationContext);
-    const { activeVin, vehicleLabel, fuelType } = useVehicle();
+    const { activeVin, vehicleLabel, fuelType, activeVehicle } = useVehicle();
+
+    const subsystemPeekData = useMemo(() => buildSubsystemPeekData(activeVehicle, fuelType), [activeVehicle, fuelType]);
 
     const screenFadeStyle = useScreenFadeIn(screenState);
 
@@ -537,9 +563,9 @@ const StatusScreen = ({ navigation }) => {
                         size="sm"
                     />
                     <InteractiveCarXRay
-                        subsystems={SUBSYSTEM_PEEK_DATA}
+                        subsystems={subsystemPeekData}
                         selectedKey={selectedSubsystem?.key}
-                        onSelectSubsystem={(key, item) => setSelectedSubsystem(SUBSYSTEM_PEEK_DATA[key] || item)}
+                        onSelectSubsystem={(key, item) => setSelectedSubsystem(subsystemPeekData[key] || item)}
                         navigation={navigation}
                     />
                     <ScrollView
@@ -547,7 +573,7 @@ const StatusScreen = ({ navigation }) => {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.subsystemRow}
                     >
-                        {Object.entries(SUBSYSTEM_PEEK_DATA).map(([key, item]) => (
+                        {Object.entries(subsystemPeekData).map(([key, item]) => (
                             <TouchableOpacity
                                 key={key}
                                 style={[

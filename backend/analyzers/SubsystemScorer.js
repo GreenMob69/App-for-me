@@ -105,13 +105,16 @@ const SCORERS = {
     // ENGINE — stres mecanic: turație, sarcină
     // ════════════════════════════════════════════════════════════════════
     ENGINE: {
-        compute({ summary }) {
+        compute({ summary, thresholds }) {
             let score = 100;
             const rpmZones = summary?.rpmZones;
             if (!rpmZones) return NEUTRAL;
 
-            const highRpmExcess = Math.max(0, (rpmZones.over3500Pct || 0) - 15);
-            score -= Math.min(20, highRpmExcess * 0.6);
+            // Permisivitate dinamică de turație: la benzină (highRpmThreshold > 4000), 3500+ RPM este regim normal de croazieră
+            const highRpmLimit = thresholds?.highRpmThreshold || 3500;
+            const allowance = highRpmLimit >= 4500 ? 30 : 15;
+            const highRpmExcess = Math.max(0, (rpmZones.over3500Pct || 0) - allowance);
+            score -= Math.min(20, highRpmExcess * (highRpmLimit >= 4500 ? 0.35 : 0.6));
 
             const load = summary?.pid?.load?.average;
             if (load && load > 75) {
@@ -125,12 +128,13 @@ const SCORERS = {
 
             return clamp(score);
         },
-        explain(raw, coverage, { summary }) {
+        explain(raw, coverage, { summary, thresholds }) {
             if (coverage < 0.3) return 'Date RPM insuficiente pentru evaluare motor';
             const highRpm = summary?.rpmZones?.over3500Pct || 0;
             const load    = summary?.pid?.load?.average;
+            const isPetrol = (thresholds?.highRpmThreshold || 3500) >= 4500;
             if (raw < 65) return `Stres mecanic ridicat — ${Math.round(highRpm)}% din timp peste 3500 RPM`;
-            if (highRpm > 20) return `Motor solicitat — ${Math.round(highRpm)}% la turații înalte`;
+            if (highRpm > (isPetrol ? 35 : 20)) return `Motor solicitat — ${Math.round(highRpm)}% la turații înalte`;
             if (load && load > 75) return `Sarcină medie ridicată: ${Math.round(load)}%`;
             return `Motor în parametri optimi de turație (medie ${Math.round(summary?.pid?.rpm?.average || 0)} RPM)`;
         }
@@ -168,11 +172,16 @@ const SCORERS = {
     // ════════════════════════════════════════════════════════════════════
     TURBO: {
         compute({ summary, baselineOverrides }) {
+            // Dacă motorul este aspirat natural (nominalBoost == 0 sau hasTurbo == false)
+            if (baselineOverrides?.hasTurbo === false || baselineOverrides?.nominalBoost === 0) {
+                return 100;
+            }
+
             let score = 100;
             const boostAvg = summary?.pid?.boost?.average;
             if (boostAvg === undefined) return NEUTRAL;
 
-            const expectedBoost = baselineOverrides?.boost || 1.2;
+            const expectedBoost = baselineOverrides?.nominalBoost || baselineOverrides?.boost || 1.2;
 
             if (boostAvg < 0.5) {
                 score -= 40;
@@ -190,9 +199,12 @@ const SCORERS = {
             return clamp(score);
         },
         explain(raw, coverage, { summary, baselineOverrides }) {
+            if (baselineOverrides?.hasTurbo === false || baselineOverrides?.nominalBoost === 0) {
+                return 'Motor aspirat natural — fără turbină de supraalimentare';
+            }
             if (coverage < 0.1) return 'Senzor boost indisponibil — evaluare turbo prin proxy';
             const boostAvg = summary?.pid?.boost?.average;
-            const expected = baselineOverrides?.boost || 1.2;
+            const expected = baselineOverrides?.nominalBoost || baselineOverrides?.boost || 1.2;
             if (!boostAvg) return 'Date boost insuficiente';
             if (boostAvg < expected * 0.75) {
                 return `Presiune boost scăzută — medie ${boostAvg.toFixed(2)} bar (normal: ${expected} bar)`;
@@ -211,13 +223,25 @@ const SCORERS = {
             const t = summary?.temperature?.coolant;
             if (!t) return NEUTRAL;
 
-            score -= Math.min(30, ((t.timeOver100 || 0) / 60) * 6);
-            score -= Math.min(15, ((t.timeOver95  || 0) / 60) * 2.5);
-            score -= Math.min(10, ((t.timeOver90  || 0) / 60) * 1);
+            const opMax = thresholds?.operatingTempMax || 93;
+            const warnTemp = thresholds?.warningTemp || thresholds?.coolant_warning || 100;
+            const critTemp = thresholds?.criticalTemp || 105;
+
+            if (opMax <= 95) {
+                // Diesel sau motoare cu termostat mecanic 87°C
+                score -= Math.min(30, ((t.timeOver100 || 0) / 60) * 6);
+                score -= Math.min(15, ((t.timeOver95  || 0) / 60) * 2.5);
+                score -= Math.min(10, ((t.timeOver90  || 0) / 60) * 1);
+            } else {
+                // Benzină cu management termic electronic (88-103°C este regim nominal)
+                if ((t.timeOver100 || 0) > 300) {
+                    score -= Math.min(15, (((t.timeOver100 || 0) - 300) / 60) * 1.5);
+                }
+            }
 
             const coolantMax = summary?.pid?.coolant?.max;
-            const warningTemp = thresholds?.coolant_warning || 100;
-            if (coolantMax && coolantMax > warningTemp + 5) score -= 10;
+            if (coolantMax && coolantMax > warnTemp) score -= 12;
+            if (coolantMax && coolantMax > critTemp) score -= 20;
 
             return clamp(score);
         },
@@ -225,10 +249,11 @@ const SCORERS = {
             if (coverage < 0.1) return 'Senzor temperatură indisponibil — evaluare răcire limitată';
             const t = summary?.temperature?.coolant;
             if (!t) return 'Date temperatură lipsă';
-            if ((t.timeOver100 || 0) > 60) {
+            const warnTemp = thresholds?.warningTemp || thresholds?.coolant_warning || 100;
+            if ((t.timeOver100 || 0) > 60 && (summary?.pid?.coolant?.max || 0) > warnTemp) {
                 return `Supraîncălzire detectată — ${Math.round(t.timeOver100 / 60)} min peste 100°C`;
             }
-            if ((t.timeOver95 || 0) > 180) {
+            if ((t.timeOver95 || 0) > 180 && (thresholds?.operatingTempMax || 93) <= 95) {
                 return `Temperaturi ridicate — ${Math.round(t.timeOver95 / 60)} min peste 95°C`;
             }
             const maxC = summary?.pid?.coolant?.max;

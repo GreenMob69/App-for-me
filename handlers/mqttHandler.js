@@ -5,6 +5,7 @@ const { createAnalysis, updateAnalyzer, finalizeTripAnalysis } = require('../bac
 const { THRESHOLDS } = require('../backend/analyzers/config');
 const { computeVirtualSensors } = require('../backend/analyzers/PhysicsEngine');
 const { vehicleEventBus }  = require('../backend/vehicle-profile');
+const { resolveVehiclePhysics } = require('../backend/vehicle-profile/VehiclePhysicsResolver');
 const { buildTripInsights } = require('../services/tripInsights');
 const calatoriiActive       = require('../services/activeTrips');
 const dtcService            = require('../services/dtcService');
@@ -76,23 +77,27 @@ function createMqttClient(db, io) {
         if (pachet.stare_motor === 'PORNIRE' && !calatoriiActive[vin]) {
             const modelVehicul = pachet.ecu?.model || 'Audi A6 C4 2.5 TDI AEL';
             db.run(`INSERT OR IGNORE INTO vehicule (vin, model) VALUES (?, ?)`, [vin, modelVehicul], () => {
-                db.run(`INSERT INTO calatorii (vin, timestamp_start) VALUES (?, ?)`, [vin, pachet.timestamp], function(err) {
-                    if (!err) {
-                        calatoriiActive[vin] = {
-                            id_calatorie:     this.lastID,
-                            timestamp_start:  pachet.timestamp,
-                            km:               0,
-                            consum_l:         0,
-                            penalizari_eco:   0,
-                            ultimul_timestamp: pachet.timestamp,
-                            alerts:           0,
-                            analysis:         createAnalysis(),
-                            packetCount:      0,
-                            sampledPackets:   [],
-                        };
-                        console.log(`[TRIP START] Sesiunea #${this.lastID} a început pentru ${vin}!`);
-                        io.emit('status_trip', { status: 'START', id_calatorie: this.lastID });
-                    }
+                db.get(`SELECT * FROM vehicles WHERE UPPER(vin) = ?`, [vin.toUpperCase()], (err, vRow) => {
+                    const vehiclePhysics = resolveVehiclePhysics(vRow || { vin, model: modelVehicul }, vin);
+                    db.run(`INSERT INTO calatorii (vin, timestamp_start) VALUES (?, ?)`, [vin, pachet.timestamp], function(tripErr) {
+                        if (!tripErr) {
+                            calatoriiActive[vin] = {
+                                id_calatorie:     this.lastID,
+                                timestamp_start:  pachet.timestamp,
+                                km:               0,
+                                consum_l:         0,
+                                penalizari_eco:   0,
+                                ultimul_timestamp: pachet.timestamp,
+                                alerts:           0,
+                                analysis:         createAnalysis(),
+                                packetCount:      0,
+                                sampledPackets:   [],
+                                vehiclePhysics,
+                            };
+                            console.log(`[TRIP START] Sesiunea #${this.lastID} a început pentru ${vin}! (${vehiclePhysics.model} - ${vehiclePhysics.massKg}kg, Redline: ${vehiclePhysics.thresholds.redlineRpm} RPM)`);
+                            io.emit('status_trip', { status: 'START', id_calatorie: this.lastID });
+                        }
+                    });
                 });
             });
             return;
@@ -123,12 +128,9 @@ function createMqttClient(db, io) {
             }
             trip.ultimul_timestamp = pachet.timestamp;
 
-            // Calcul senzori virtuali (AFR, Lambda, Dyno HP/Cuplu, Slip %, DPF R, Turbo Boost Error)
-            pachet.virtual = computeVirtualSensors(pachet, {
-                cylinders: 5,
-                displacement_l: 2.461,
-                mass_kg: 1550
-            });
+            // Calcul senzori virtuali cu profilul fizic dinamic al vehiculului activ
+            const activePhysics = trip.vehiclePhysics || resolveVehiclePhysics({ vin }, vin);
+            pachet.virtual = computeVirtualSensors(pachet, activePhysics);
 
             // Eșantionare uniformă în RAM (max 600 pachete) pentru a evita blocarea Event Loop-ului la OPRIRE
             trip.packetCount = (trip.packetCount || 0) + 1;
@@ -144,7 +146,7 @@ function createMqttClient(db, io) {
 
             const hardBrakesInainte  = trip.analysis.events.hardBrakes;
             const overspeedsInainte  = trip.analysis.events.overspeeds;
-            updateAnalyzer(trip, pachet);
+            updateAnalyzer(trip, pachet, trip.vehiclePhysics);
             const tocmaiAFostFranare   = trip.analysis.events.hardBrakes  > hardBrakesInainte;
             const tocmaiAFostOverspeed = trip.analysis.events.overspeeds  > overspeedsInainte;
 

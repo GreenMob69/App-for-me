@@ -117,8 +117,8 @@ function _calculateUniversal(summary, ctx) {
 
     const inputs = {
         summary,
-        thresholds:        knowledgePack?.threshold_overrides  || {},
-        baselineOverrides: knowledgePack?.baseline_overrides   || {},
+        thresholds:        { ...(ctx.thresholds || {}), ...(knowledgePack?.threshold_overrides || {}) },
+        baselineOverrides: { nominalBoost: ctx.physics?.thresholds?.nominalBoostBar, ...(knowledgePack?.baseline_overrides || {}) },
         baseline,    // null la Step 4 — scorers îl gestionează graceful
         trends,
         sensorQuality,

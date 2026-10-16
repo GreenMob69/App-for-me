@@ -103,6 +103,19 @@ async function syncVehicleProfile(db, vin, data = {}) {
         updatedFields.push('year');
     }
 
+    const physicsFields = [
+        'curb_weight_kg', 'length_mm', 'width_mm', 'height_mm', 'drag_coefficient',
+        'frontal_area_m2', 'tire_spec', 'wheel_radius_m', 'redline_rpm', 'idle_rpm',
+        'operating_temp_min', 'operating_temp_max', 'nominal_boost_bar'
+    ];
+    for (const f of physicsFields) {
+        if (data[f] !== undefined) {
+            vpUpdates.push(`${f} = ?`);
+            vpParams.push(data[f]);
+            updatedFields.push(f);
+        }
+    }
+
     if (vpUpdates.length > 0) {
         vpUpdates.push(`updated_at = strftime('%s', 'now')`);
         vpParams.push(cleanVin);

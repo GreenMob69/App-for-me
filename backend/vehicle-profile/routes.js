@@ -8,6 +8,7 @@ const { seedMaintenanceItems, recalculateAllItems, onServiceAdded, getEstimatedO
 const { vehicleEventBus } = require('./EventBus');
 const { hydrateStatus, sortDocs } = require('./DocumentsModule');
 const { syncVehicleProfile, syncOdometer } = require('../../services/vehicleSyncService');
+const { resolveVehiclePhysics } = require('./VehiclePhysicsResolver');
 
 // Service type -> event type mapping
 const SERVICE_EVENT_MAP = {
@@ -82,6 +83,24 @@ function registerVehicleProfileRoutes(app, db) {
         }
     });
 
+    // GET profil fizic complet & praguri dinamice
+    app.get('/api/vehicles/:id/physics', async (req, res) => {
+        try {
+            const vehicle = await new Promise((resolve, reject) => {
+                db.get(`SELECT * FROM vehicles WHERE id = ? OR UPPER(vin) = ?`, [req.params.id, req.params.id.toUpperCase()], (err, row) => {
+                    if (err) return reject(err);
+                    resolve(row);
+                });
+            });
+            if (!vehicle) return res.status(404).json({ error: 'Vehicul negasit' });
+
+            const physics = resolveVehiclePhysics(vehicle, vehicle.vin);
+            res.json(physics);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     // POST creare vehicul (cu VIN decode + seed maintenance items)
     app.post('/api/vehicles', (req, res) => {
         const data = req.body;
@@ -92,6 +111,10 @@ function registerVehicleProfileRoutes(app, db) {
 
         // Auto-decode VIN pentru campuri lipsa
         const decoded = decodeVin(vin);
+
+        // Rezolvă dinamic fizica și pragurile specifice mașinii
+        const candidateData = { ...decoded, ...data, vin };
+        const physics = resolveVehiclePhysics(candidateData, vin);
 
         const vehicle = {
             vin,
@@ -122,6 +145,24 @@ function registerVehicleProfileRoutes(app, db) {
             coolant_capacity_liters: data.coolant_capacity_liters || null,
             timing_belt_interval_km: data.timing_belt_interval_km || null,
             spark_plug_interval_km: data.spark_plug_interval_km || null,
+
+            // Fizică, Dimensiuni & Aerodinamică
+            curb_weight_kg: data.curb_weight_kg ?? physics.massKg,
+            length_mm: data.length_mm ?? physics.lengthMm,
+            width_mm: data.width_mm ?? physics.widthMm,
+            height_mm: data.height_mm ?? physics.heightMm,
+            drag_coefficient: data.drag_coefficient ?? physics.cd,
+            frontal_area_m2: data.frontal_area_m2 ?? physics.frontalAreaM2,
+            tire_spec: data.tire_spec ?? physics.tire.rawSpec,
+            wheel_radius_m: data.wheel_radius_m ?? physics.wheelRadiusM,
+
+            // Praguri dinamice & Calibrare
+            redline_rpm: data.redline_rpm ?? physics.thresholds.redlineRpm,
+            idle_rpm: data.idle_rpm ?? physics.thresholds.idleRpm,
+            operating_temp_min: data.operating_temp_min ?? physics.thresholds.operatingTempMin,
+            operating_temp_max: data.operating_temp_max ?? physics.thresholds.operatingTempMax,
+            nominal_boost_bar: data.nominal_boost_bar !== undefined ? data.nominal_boost_bar : physics.thresholds.nominalBoostBar,
+
             custom_json: data.custom_json ? JSON.stringify(data.custom_json) : null,
         };
 
@@ -176,7 +217,7 @@ function registerVehicleProfileRoutes(app, db) {
                 );
 
                 console.log(`[VEHICLE PROFILE] Vehicul creat: ${vin} (${vehicle.make} ${vehicle.model}) — ID ${vehicleId}`);
-                res.status(201).json({ id: vehicleId, ...vehicle, vin_decoded: decoded });
+                res.status(201).json({ id: vehicleId, ...vehicle, vin_decoded: decoded, physics_resolved: physics });
             }
         );
     });
@@ -193,6 +234,9 @@ function registerVehicleProfileRoutes(app, db) {
             'drivetrain', 'emission_standard', 'co2_gkm', 'purchase_date',
             'purchase_mileage_km', 'purchase_price', 'oil_capacity_liters', 'oil_spec',
             'coolant_capacity_liters', 'timing_belt_interval_km', 'spark_plug_interval_km',
+            'curb_weight_kg', 'length_mm', 'width_mm', 'height_mm', 'drag_coefficient',
+            'frontal_area_m2', 'tire_spec', 'wheel_radius_m', 'redline_rpm', 'idle_rpm',
+            'operating_temp_min', 'operating_temp_max', 'nominal_boost_bar',
             'custom_json'
         ];
 

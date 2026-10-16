@@ -82,7 +82,7 @@ function createAnalysis() {
 //    Cost: o singură buclă peste PID_CONFIG (~13 chei) + câteva comparații.
 //    Nimic nu costă performanță, exact cum voiai.
 // -------------------------------------------------------------------------
-function updateAnalyzer(trip, pachet) {
+function updateAnalyzer(trip, pachet, vehiclePhysics = null) {
     if (!trip.analysis) trip.analysis = createAnalysis();
     const a = trip.analysis;
 
@@ -99,6 +99,7 @@ function updateAnalyzer(trip, pachet) {
 
     const speed = a.pid.speed.current;
     const isIdle = speed !== null && speed < THRESHOLDS.IDLE_SPEED_KMH;
+    const highRpmLimit = vehiclePhysics?.thresholds?.highRpmThreshold || THRESHOLDS.HIGH_RPM_THRESHOLD;
 
     updateIdle(a, isIdle, dt);
     updateDistance(a, speed, dt);
@@ -106,7 +107,7 @@ function updateAnalyzer(trip, pachet) {
     updateThresholdTimers(a, dt);
     updateFullLoadStreak(a, dt);
     updateFuel(a, dt, isIdle);
-    updateDrivingStyleAndEvents(a, dt, isIdle);
+    updateDrivingStyleAndEvents(a, dt, isIdle, highRpmLimit);
     updateKickdown(a);
     updateOverspeed(a, speed);
 
@@ -217,7 +218,7 @@ function updateFuel(a, dt, isIdle) {
 //    eveniment de frânare susținut 3 pachete la rând se numără O DATĂ,
 //    nu de 3 ori (îmbunătățire față de codul actual).
 // -------------------------------------------------------------------------
-function updateDrivingStyleAndEvents(a, dt, isIdle) {
+function updateDrivingStyleAndEvents(a, dt, isIdle, highRpmLimit = THRESHOLDS.HIGH_RPM_THRESHOLD) {
     const accelG = a.pid.accelG.current;
     const rpm = a.pid.rpm.current;
     const load = a.pid.load.current;
@@ -233,13 +234,13 @@ function updateDrivingStyleAndEvents(a, dt, isIdle) {
 
     if (magnitude < THRESHOLDS.SMOOTH_ACCEL_G) a.drivingStyle.smoothTime += dt;
     if (magnitude < THRESHOLDS.SMOOTH_ACCEL_G * 0.6) a.drivingStyle.constantSpeedTime += dt;
-    if (rpm !== null && rpm >= THRESHOLDS.HIGH_RPM_THRESHOLD) a.drivingStyle.highRPMTime += dt;
+    if (rpm !== null && rpm >= highRpmLimit) a.drivingStyle.highRPMTime += dt;
     if (load !== null && load >= THRESHOLDS.HIGH_LOAD_PCT) a.drivingStyle.highLoadTime += dt;
 
     const isAggressiveInstant =
         accelG >= THRESHOLDS.HARD_ACCEL_G ||
         accelG <= THRESHOLDS.HARD_BRAKE_G ||
-        (rpm !== null && rpm >= THRESHOLDS.HIGH_RPM_THRESHOLD && load !== null && load >= THRESHOLDS.HIGH_LOAD_PCT);
+        (rpm !== null && rpm >= highRpmLimit && load !== null && load >= THRESHOLDS.HIGH_LOAD_PCT);
 
     if (isAggressiveInstant) {
         a.drivingStyle.aggressiveTime += dt;
