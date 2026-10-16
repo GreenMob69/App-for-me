@@ -1,0 +1,66 @@
+'use strict';
+
+/**
+ * ȘABLOANE / DESIGN TEMPLATES COCKPIT
+ * Izolate în acest modul pentru a preveni ciclurile de import între theme și context.
+ */
+
+export const TEMPLATES = {
+    MOTORSPORT: {
+        id: 'MOTORSPORT',
+        name: 'Motorsport Pro',
+        subtitle: 'Porsche GT3 & AiM Race Telemetry',
+        badge: 'RACE',
+        accent: '#00f0ff',
+        accentSecondary: '#ffb800',
+        bg: '#05070e',
+        cardBg: '#0b0f1a',
+        border: '#162238',
+        speedColor: '#00f0ff',
+        rpmColor: '#ffb800',
+        tagBg: 'rgba(0, 240, 255, 0.12)',
+    },
+    AUDI_RS: {
+        id: 'AUDI_RS',
+        name: 'Audi Sport RS',
+        subtitle: 'Audi Virtual Cockpit Performance',
+        badge: 'RS',
+        accent: '#ff2a2a',
+        accentSecondary: '#ffffff',
+        bg: '#08080a',
+        cardBg: '#121318',
+        border: '#2a1a1c',
+        speedColor: '#ffffff',
+        rpmColor: '#ff2a2a',
+        tagBg: 'rgba(255, 42, 42, 0.12)',
+    },
+    TESLA_MINIMAL: {
+        id: 'TESLA_MINIMAL',
+        name: 'Minimal Clean',
+        subtitle: 'Tesla OS Clean & Aerodinamic',
+        badge: 'CLEAN',
+        accent: '#38bdf8',
+        accentSecondary: '#10b981',
+        bg: '#08090d',
+        cardBg: '#0f1219',
+        border: '#1a202c',
+        speedColor: '#f8fafc',
+        rpmColor: '#38bdf8',
+        tagBg: 'rgba(56, 189, 248, 0.12)',
+    },
+    NIGHT_HUD: {
+        id: 'NIGHT_HUD',
+        name: 'Night Stealth HUD',
+        subtitle: 'OLED Black & Proiecție Parbriz',
+        badge: 'HUD',
+        accent: '#ff453a',
+        accentSecondary: '#ff9f0a',
+        bg: '#000000',
+        cardBg: '#080808',
+        border: '#2a1010',
+        speedColor: '#ff453a',
+        rpmColor: '#ff453a',
+        tagBg: 'rgba(255, 69, 58, 0.15)',
+        isHud: true,
+    },
+};

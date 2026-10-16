@@ -271,6 +271,44 @@ const MaintenanceScreen = () => {
         loadMaintenance(true);
     }, [loadMaintenance]);
 
+    // Handler marcare efectuată (definit la top-level pentru a respecta Rules of Hooks)
+    const handleMarkDone = useCallback((item) => {
+        const estimatedKm = maintData?.profile?.estimated_odometer_km ?? 0;
+        Alert.alert(
+            'Confirmare Servisare',
+            `Marchezi intervenția "${item.item_name}" ca fiind efectuată la kilometrajul curent?`,
+            [
+                { text: 'Anulează', style: 'cancel' },
+                {
+                    text: 'Confirmă',
+                    onPress: async () => {
+                        try {
+                            await api.post(`/mentenanta/item/${item.id}/efectuat`, { km: estimatedKm });
+                        } catch (_) {}
+                        setMaintData(prev => {
+                            if (!prev?.profile?.maintenance_summary?.items) return prev;
+                            const updated = prev.profile.maintenance_summary.items.map(it =>
+                                it.id === item.id ? { ...it, status: 'OK', wear_percent: 0, last_service_date: new Date().toISOString() } : it
+                            );
+                            return {
+                                ...prev,
+                                profile: {
+                                    ...prev.profile,
+                                    maintenance_summary: {
+                                        ...prev.profile.maintenance_summary,
+                                        items: updated,
+                                        overdue: Math.max(0, (prev.profile.maintenance_summary.overdue || 1) - 1)
+                                    }
+                                }
+                            };
+                        });
+                        Alert.alert('Succes', `Intervenția "${item.item_name}" a fost marcată ca efectuată!`);
+                    }
+                }
+            ]
+        );
+    }, [maintData]);
+
     // ── Stati speciale ───────────────────────────────────────────────────────
 
     if (screenState === 'loading') {
@@ -333,43 +371,6 @@ const MaintenanceScreen = () => {
 
     // Sisteme în Parametri Optimi — OK
     const optimalItems = allItems.filter(i => i.status === 'OK' || (!i.status && i.status !== 'OVERDUE' && i.status !== 'DUE_SOON'));
-
-    // Handler marcare efectuată
-    const handleMarkDone = useCallback((item) => {
-        Alert.alert(
-            'Confirmare Servisare',
-            `Marchezi intervenția "${item.item_name}" ca fiind efectuată la kilometrajul curent?`,
-            [
-                { text: 'Anulează', style: 'cancel' },
-                {
-                    text: 'Confirmă',
-                    onPress: async () => {
-                        try {
-                            await api.post(`/mentenanta/item/${item.id}/efectuat`, { km: estimatedKm || 0 });
-                        } catch (_) {}
-                        setMaintData(prev => {
-                            if (!prev?.profile?.maintenance_summary?.items) return prev;
-                            const updated = prev.profile.maintenance_summary.items.map(it =>
-                                it.id === item.id ? { ...it, status: 'OK', wear_percent: 0, last_service_date: new Date().toISOString() } : it
-                            );
-                            return {
-                                ...prev,
-                                profile: {
-                                    ...prev.profile,
-                                    maintenance_summary: {
-                                        ...prev.profile.maintenance_summary,
-                                        items: updated,
-                                        overdue: Math.max(0, (prev.profile.maintenance_summary.overdue || 1) - 1)
-                                    }
-                                }
-                            };
-                        });
-                        Alert.alert('Succes', `Intervenția "${item.item_name}" a fost marcată ca efectuată!`);
-                    }
-                }
-            ]
-        );
-    }, [estimatedKm]);
 
     // Sănătate
     const healthScore   = profile?.health_score ?? health?.overallHealth ?? null;

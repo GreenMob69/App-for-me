@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useRef, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { TEMPLATES } from '../theme';
+import { TEMPLATES } from '../theme/templates';
 
 export const AppContext = createContext();
 

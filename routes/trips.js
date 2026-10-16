@@ -175,9 +175,19 @@ module.exports = function(db, io) {
 
     router.put('/calatorii/:id/tag', (req, res) => {
         const id = req.params.id;
-        let { tag } = req.body;
-        if (tag === '' || tag === undefined) tag = null;
-        const validTags = ['BUSINESS', 'PERSONAL', 'TESTARE', null];
+        let { tag } = req.body || {};
+        if (typeof tag === 'string') {
+            const upper = tag.trim().toUpperCase();
+            if (upper === '' || upper === 'NULL' || upper === 'NONE' || upper === 'UNDEFINED') {
+                tag = null;
+            } else {
+                tag = upper;
+            }
+        } else if (tag === undefined) {
+            tag = null;
+        }
+
+        const validTags = ['BUSINESS', 'PERSONAL', 'TESTARE', 'AUTO_CLOSED', null];
         if (!validTags.includes(tag)) {
             return res.status(400).json({ eroare: `Tag invalid. Valori acceptate: BUSINESS, PERSONAL, TESTARE, sau null` });
         }
