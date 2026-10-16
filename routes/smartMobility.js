@@ -424,5 +424,120 @@ module.exports = function(db, io) {
         res.json({ ok: true, alerta });
     });
 
+    // POST testare simulare eveniment Sentinela (Șoc sau Înclinare)
+    router.post('/vehicul/:vin/sentry/test', (req, res) => {
+        const vin = req.params.vin.toUpperCase();
+        const tip = req.body.tip === 'INCLINARE' ? 'INCLINARE' : 'IMPACT';
+        const now = Date.now();
+        const nowSec = Math.floor(now / 1000);
+        const forceG = parseFloat(req.body.forceG) || 0.85;
+        const tiltDeg = parseFloat(req.body.tiltDeg) || 4.2;
+
+        const alerta = tip === 'INCLINARE' ? {
+            vin,
+            tip: 'INCLINARE',
+            titlu: 'Tentativă Ridicare / Înclinare!',
+            descriere: `Înclinare anormală la ${tiltDeg.toFixed(1)}° (simulare tentativă furt roți / platformă).`,
+            valoare: tiltDeg,
+            timestamp: now,
+        } : {
+            vin,
+            tip: 'IMPACT',
+            titlu: 'Tamponare / Șoc în Parcare!',
+            descriere: `Senzorul de impact a înregistrat o forță de ${forceG.toFixed(2)}G. Verifică caroseria!`,
+            valoare: forceG,
+            timestamp: now,
+        };
+
+        db.get(`SELECT * FROM parcare_sentinela WHERE UPPER(vin) = ?`, [vin], (err, row) => {
+            let events = [];
+            try { events = JSON.parse(row?.sentry_events_json || '[]'); } catch (_) { events = []; }
+            events.unshift(alerta);
+
+            db.run(`
+                INSERT INTO parcare_sentinela (vin, last_impact_at, last_impact_g, last_tilt_at, last_tilt_deg, sentry_events_json, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(vin) DO UPDATE SET
+                    last_impact_at = excluded.last_impact_at,
+                    last_impact_g = excluded.last_impact_g,
+                    last_tilt_at = excluded.last_tilt_at,
+                    last_tilt_deg = excluded.last_tilt_deg,
+                    sentry_events_json = excluded.sentry_events_json,
+                    updated_at = excluded.updated_at
+            `, [vin, nowSec, forceG, nowSec, tiltDeg, JSON.stringify(events.slice(0, 30)), nowSec], () => {
+                io.emit('alerta_sentinela', alerta);
+                io.emit('alerta_live', { tip: 'ALERTA_SENTINELA', descriere: alerta.descriere, severitate: 'CRITICAL' });
+                res.json({ ok: true, alerta });
+            });
+        });
+    });
+
+    // POST testare simulare violare Mod Valet
+    router.post('/vehicul/:vin/valet/test', (req, res) => {
+        const vin = req.params.vin.toUpperCase();
+        const now = Date.now();
+        const speed = parseInt(req.body.speed) || 94;
+        const rpm = parseInt(req.body.rpm) || 3950;
+        const descriere = `Simulare depășire viteză Mod Valet: ${speed} km/h (limită 80 km/h) & ${rpm} RPM!`;
+
+        const newViolation = {
+            tip: 'VITEZA',
+            valoare: speed,
+            limita: 80,
+            timestamp: now,
+            descriere,
+            lat: 44.4323,
+            lon: 26.1063,
+        };
+
+        db.get(`SELECT * FROM valet_mode WHERE UPPER(vin) = ?`, [vin], (err, row) => {
+            let list = [];
+            try { list = JSON.parse(row?.violations_json || '[]'); } catch (_) { list = []; }
+            list.unshift(newViolation);
+
+            db.run(`
+                INSERT INTO valet_mode (vin, is_active, violations_count, violations_json)
+                VALUES (?, 1, 1, ?)
+                ON CONFLICT(vin) DO UPDATE SET
+                    violations_count = violations_count + 1,
+                    violations_json = excluded.violations_json
+            `, [vin, JSON.stringify(list.slice(0, 50))], () => {
+                io.emit('alerta_valet', newViolation);
+                io.emit('alerta_live', { tip: 'ALERTA_VALET', descriere, severitate: 'WARNING' });
+                res.json({ ok: true, violation: newViolation });
+            });
+        });
+    });
+
+    // POST testare simulare detecție groapă asfalt
+    router.post('/vehicul/:vin/pothole/test', (req, res) => {
+        const vin = req.params.vin.toUpperCase();
+        const now = Date.now();
+        const forceG = parseFloat(req.body.forceG) || 1.95;
+        const speed = parseInt(req.body.speed) || 48;
+        const descriere = `Groapă severă detectată (${forceG}G la ${speed} km/h)!`;
+
+        db.get(`SELECT id_calatorie FROM calatorii WHERE UPPER(vin) = ? ORDER BY id_calatorie DESC LIMIT 1`, [vin], (err, trip) => {
+            const tripId = trip?.id_calatorie || 1;
+            db.run(`
+                INSERT INTO evenimente_alerte (id_calatorie, timestamp, tip_eveniment, valoare_masurata, severitate, descriere)
+                VALUES (?, ?, 'GROAPA_DETECTATA', ?, 'WARNING', ?)
+            `, [tripId, now, forceG, descriere], () => {
+                const potholeObj = {
+                    tripId,
+                    timestamp: now,
+                    forceG,
+                    speed,
+                    lat: 44.4323 + (Math.random() * 0.005 - 0.0025),
+                    lon: 26.1063 + (Math.random() * 0.005 - 0.0025),
+                    descriere,
+                };
+                io.emit('groapa_detectata', potholeObj);
+                io.emit('alerta_live', { tip: 'GROAPA_DETECTATA', g: forceG, descriere, severitate: 'WARNING' });
+                res.json({ ok: true, pothole: potholeObj });
+            });
+        });
+    });
+
     return router;
 };

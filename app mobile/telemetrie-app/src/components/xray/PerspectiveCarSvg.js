@@ -403,6 +403,7 @@ const styles = StyleSheet.create({
         borderRadius: radii.full,
         paddingHorizontal: 7,
         paddingVertical: 3,
+        maxWidth: 96,
         gap: 5,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },

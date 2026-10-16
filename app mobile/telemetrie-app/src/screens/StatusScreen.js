@@ -468,6 +468,14 @@ const StatusScreen = ({ navigation }) => {
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.headerIconBtn}
+                        onPress={() => getRootNavigation(navigation)?.navigate('SmartMobility')}
+                        accessibilityRole="button"
+                        accessibilityLabel="Smart Mobility & Securitate"
+                    >
+                        <Text style={styles.headerIconBtnText}>🛡️</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.headerIconBtn}
                         onPress={openNotifications}
                         accessibilityRole="button"
                         accessibilityLabel={`Notificari${unreadCount > 0 ? `, ${unreadCount} necitite` : ''}`}

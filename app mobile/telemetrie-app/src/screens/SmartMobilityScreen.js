@@ -263,6 +263,51 @@ export default function SmartMobilityScreen({ showBack = true }) {
         );
     };
 
+    // ── Simulare Test Sentinela (Șoc sau Înclinare) ─────────────────────────
+    const handleTriggerSentryTest = async (tip = 'IMPACT') => {
+        try {
+            await api.post(`/vehicul/${activeVin}/sentry/test`, {
+                tip,
+                forceG: 0.85,
+                tiltDeg: 4.2,
+            });
+            Alert.alert(
+                tip === 'INCLINARE' ? '📐 Test Înclinare Transmis' : '🎯 Test Șoc Transmis',
+                tip === 'INCLINARE'
+                    ? 'S-a simulat o înclinare de 4.2° (tentativă furt roți / platformă). Alerta a fost logată!'
+                    : 'S-a simulat un impact în parcare de 0.85G. Alerta Sentinela a fost declanșată!'
+            );
+        } catch (e) {
+            Alert.alert('Eroare', 'Nu s-a putut trimite testul de sentinela.');
+        }
+    };
+
+    // ── Simulare Test Violare Mod Valet ─────────────────────────────────────
+    const handleTriggerValetTest = async () => {
+        try {
+            await api.post(`/vehicul/${activeVin}/valet/test`, {
+                speed: 94,
+                rpm: 3950,
+            });
+            Alert.alert('⚠️ Test Abuz Valet Transmis', 'S-a simulat depășirea limitelor (94 km/h și 3950 RPM). Alerta apare în jurnal!');
+        } catch (e) {
+            Alert.alert('Eroare', 'Nu s-a putut trimite testul de valet.');
+        }
+    };
+
+    // ── Simulare Test Groapă Asfalt ─────────────────────────────────────────
+    const handleTriggerPotholeTest = async () => {
+        try {
+            await api.post(`/vehicul/${activeVin}/pothole/test`, {
+                forceG: 1.95,
+                speed: 48,
+            });
+            Alert.alert('🕳️ Test Groapă Transmis', 'S-a detectat o denivelare violentă de 1.95G. Punctul a fost adăugat pe traseu!');
+        } catch (e) {
+            Alert.alert('Eroare', 'Nu s-a putut trimite testul de groapă.');
+        }
+    };
+
     const pt = Platform.OS === 'android' ? (StatusBar.currentHeight || 40) + 10 : 44;
 
     return (
@@ -507,6 +552,34 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                             ))}
                                         </View>
                                     )}
+                                    {/* Card Testare Simulare Sentinela Demo */}
+                                    <View style={[styles.card, { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: tpl.border, marginTop: spacing[3] }]}>
+                                        <View style={styles.cardHeader}>
+                                            <View style={styles.cardTitleRow}>
+                                                <Ionicons name="flask-outline" size={20} color={tpl.accent} />
+                                                <Text style={[styles.cardTitle, { color: tpl.text, fontSize: typography.sizes.caption }]}>SIMULARE LIVE / TEST DEMO COMISIE</Text>
+                                            </View>
+                                        </View>
+                                        <Text style={[styles.cardDesc, { color: tpl.textSecondary }]}>
+                                            Declanșează instant evenimentele de protecție pentru a demonstra reacția senzorilor în timp real:
+                                        </Text>
+                                        <View style={{ flexDirection: 'row', gap: spacing[2] }}>
+                                            <TouchableOpacity
+                                                style={[styles.primaryActionBtn, { flex: 1, backgroundColor: 'rgba(240,100,100,0.18)', borderWidth: 1, borderColor: colors.status.critical }]}
+                                                onPress={() => handleTriggerSentryTest('IMPACT')}
+                                            >
+                                                <Ionicons name="flash" size={16} color={colors.status.critical} />
+                                                <Text style={[styles.primaryActionBtnText, { color: colors.status.critical, fontSize: typography.sizes.tiny }]}>Șoc 0.85G</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                style={[styles.primaryActionBtn, { flex: 1, backgroundColor: 'rgba(240,192,74,0.18)', borderWidth: 1, borderColor: colors.status.monitor }]}
+                                                onPress={() => handleTriggerSentryTest('INCLINARE')}
+                                            >
+                                                <Ionicons name="trending-up" size={16} color={colors.status.monitor} />
+                                                <Text style={[styles.primaryActionBtnText, { color: colors.status.monitor, fontSize: typography.sizes.tiny }]}>Înclinare 4.2°</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
                                 </View>
                             </View>
                         )}
@@ -653,6 +726,17 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                             Nicio încălcare detectată! Vehiculul se află în parametrii permiși.
                                         </Text>
                                     )}
+
+                                    {/* Buton Test Simulare Abuz Valet */}
+                                    <TouchableOpacity
+                                        style={[styles.primaryActionBtn, { backgroundColor: 'rgba(240,100,100,0.18)', borderWidth: 1, borderColor: colors.status.critical, marginTop: spacing[3] }]}
+                                        onPress={handleTriggerValetTest}
+                                    >
+                                        <Ionicons name="speedometer-outline" size={16} color={colors.status.critical} />
+                                        <Text style={[styles.primaryActionBtnText, { color: colors.status.critical }]}>
+                                            SIMULEAZĂ ABUZ VALET (94 KM/H & 3950 RPM)
+                                        </Text>
+                                    </TouchableOpacity>
                                 </View>
                             </View>
                         )}
@@ -769,6 +853,17 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                             Nicio groapă severă detectată în această sesiune!
                                         </Text>
                                     )}
+
+                                    {/* Buton Test Simulare Groapă Asfalt */}
+                                    <TouchableOpacity
+                                        style={[styles.primaryActionBtn, { backgroundColor: 'rgba(240,192,74,0.18)', borderWidth: 1, borderColor: colors.status.monitor, marginTop: spacing[3] }]}
+                                        onPress={handleTriggerPotholeTest}
+                                    >
+                                        <Ionicons name="alert-outline" size={16} color={colors.status.monitor} />
+                                        <Text style={[styles.primaryActionBtnText, { color: colors.status.monitor }]}>
+                                            SIMULEAZĂ GROAPĂ SEVERĂ (1.95G PE COORDONATELE CURENTE)
+                                        </Text>
+                                    </TouchableOpacity>
                                 </View>
                             </View>
                         )}
