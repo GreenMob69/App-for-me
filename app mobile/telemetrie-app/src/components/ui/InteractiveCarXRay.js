@@ -1,11 +1,15 @@
 'use strict';
 
 /**
- * InteractiveCarXRay — Scanner Anatomic & X-Ray Multi-Unghi 360°
+ * InteractiveCarXRay — Scanner Anatomic & X-Ray Multi-Unghi 360° (Universal CAD Digital Twin)
  *
- * Suportă 2 moduri:
- * - mode="preview": Vedere curată pe prima pagină (fără etichete text mari care se rup/suprapun).
- * - mode="full": Scanner interactiv complet cu 3 unghiuri de vizualizare și topologii adaptabile.
+ * Conceput pentru TOATE vehiculele (platformă universală modulară):
+ * 1. 4 Arhetipuri Fizice: Transversal FWD, Longitudinal FWD/AWD, Longitudinal RWD, Skateboard BEV.
+ * 2. 3 Unghiuri CAD: Șasiu Sus (Top-Down), Sub Capotă (Engine Bay Zoom-In), Profil Lateral (Side Blueprint).
+ * 3. 3 Straturi de Diagnoză: Mecanică & Tren de Rulare, Rețea Senzori CAN, Hartă Termică 360° (Heatmap).
+ * 4. Sistem Linii Frânte CAD (Leader Lines): Zero suprapuneri / coliziuni pe ecran.
+ * 5. Scanner Laser Sweep Animation: Efect vizual cinematic de scanare tomografică industrială.
+ * 6. Plajă de Toleranță OEM: Vizualizare grafică a intervalului optim vs valoarea live din telemetrie.
  */
 
 import React, { useState, useRef, useEffect, useContext, useMemo, useCallback } from 'react';
@@ -30,6 +34,8 @@ import Svg, {
     Defs,
     LinearGradient,
     Stop,
+    Polygon,
+    Ellipse,
 } from 'react-native-svg';
 import { colors, typography, radii, spacing, layout, useThemeTemplate } from '../../theme';
 import { LiveContext } from '../../context/LiveContext';
@@ -40,42 +46,61 @@ import { useNavigation } from '@react-navigation/native';
 import PropTypes from 'prop-types';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. TOPOLOGII MULTI-VEHICUL
+// 1. TOPOLOGII MULTI-VEHICUL (ARHETIPURI UNIVERSALE)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TOPOLOGIES = {
-    LONGITUDINAL_AWD_FWD: {
-        id: 'LONGITUDINAL_AWD_FWD',
-        label: '📐 Longitudinal FWD/AWD',
-        shortLabel: 'Longitudinal',
-        arch: 'Audi MLP / 01E (AEL, V6, Quattro, Passat B5)',
-        desc: 'Motor montat longitudinal în consolă față, cutie în tunelul median, baterie la parbriz.',
-    },
     TRANSVERSAL_FWD: {
         id: 'TRANSVERSAL_FWD',
         label: '🔄 Transversal FWD',
-        shortLabel: 'Transversal',
-        arch: 'VW MQB / PQ35 (Golf, Octavia, Focus, Dacia)',
-        desc: 'Motor montat transversal de-a latul, cutie în stânga, turbină spre habitaclu.',
+        shortLabel: 'Transversal FWD',
+        arch: 'Platforme Globale MQB / PQ / CMF / Global B',
+        examples: 'VW Golf, Skoda Octavia, Focus, Logan, Duster, Megane, Corolla',
+        desc: 'Motor transversal de-a latul punții față, cutie transaxle laterală, planetare față inegale, fără cardan central.',
+        cylinders: 4,
+    },
+    LONGITUDINAL_AWD_FWD: {
+        id: 'LONGITUDINAL_AWD_FWD',
+        label: '📐 Longitudinal FWD/AWD',
+        shortLabel: 'Longitudinal AWD',
+        arch: 'Audi MLP / MLB / Quattro & Subaru Symmetrical',
+        examples: 'Audi A4, A6, A8, Allroad, Passat B5, Subaru Outback',
+        desc: 'Motor longitudinal în consolă frontală, cutie mediană lungă cu diferențial central Torsen/Crown și tracțiune integrală.',
+        cylinders: 5,
     },
     LONGITUDINAL_RWD: {
         id: 'LONGITUDINAL_RWD',
-        label: '⚡ RWD Spate',
-        shortLabel: 'RWD Spate',
-        arch: 'BMW CLAR / Mercedes MRA (Seria 3/5, C/E-Class)',
-        desc: 'Motor longitudinal, cardan central, diferențial punte spate, baterie în portbagaj.',
+        label: '⚡ RWD Clasic / Spate',
+        shortLabel: 'Longitudinal RWD',
+        arch: 'BMW CLAR / Mercedes MRA / Alpha RWD',
+        examples: 'BMW Seria 3/5, Mercedes C/E-Class, Lexus IS, Mustang',
+        desc: 'Motor longitudinal retras spre habitaclu (mase 50:50), cardan median din 2 segmente, diferențial punte spate, baterie în portbagaj.',
+        cylinders: 6,
+    },
+    SKATEBOARD_BEV: {
+        id: 'SKATEBOARD_BEV',
+        label: '🔋 EV Skateboard Plat',
+        shortLabel: 'EV Skateboard',
+        arch: 'Tesla Skate / MEB / PPE / E-GMP',
+        examples: 'Tesla Model 3/Y, Porsche Taycan, VW ID.4, Ioniq 5',
+        desc: 'Pachet baterie Li-Ion plat în podea, unități electrice compacte pe punți (Front/Rear Drive Units), fără eșapament sau cutie cu trepte.',
+        cylinders: 0,
     },
 };
 
 export function detectVehicleTopology(vehicle) {
     const text = `${vehicle?.make || ''} ${vehicle?.model || ''} ${vehicle?.variant || ''} ${vehicle?.label || ''} ${typeof vehicle === 'string' ? vehicle : ''}`.toUpperCase();
-    if (text.includes('BMW') || text.includes('MERCEDES') || text.includes('MIATA') || text.includes('RWD')) {
+    if (text.includes('TESLA') || text.includes('EV') || text.includes('ELECTRIC') || text.includes('TAYCAN') || text.includes('ID.3') || text.includes('ID.4') || text.includes('IONIQ')) {
+        return 'SKATEBOARD_BEV';
+    }
+    if (text.includes('BMW') || text.includes('MERCEDES') || text.includes('MIATA') || text.includes('RWD') || text.includes('SERIA 3') || text.includes('SERIA 5') || text.includes('C-CLASS') || text.includes('E-CLASS')) {
         return 'LONGITUDINAL_RWD';
     }
     if (
-        text.includes('GOLF') || text.includes('PASSAT B6') || text.includes('PASSAT B7') ||
-        text.includes('OCTAVIA') || text.includes('LEON') || text.includes('LOGAN') ||
-        text.includes('MEGANE') || text.includes('FOCUS') || text.includes('TRANSVERSAL')
+        text.includes('GOLF') || text.includes('PASSAT B6') || text.includes('PASSAT B7') || text.includes('PASSAT B8') ||
+        text.includes('OCTAVIA') || text.includes('LEON') || text.includes('LOGAN') || text.includes('DUSTER') ||
+        text.includes('SANDERO') || text.includes('MEGANE') || text.includes('CLIO') || text.includes('FOCUS') ||
+        text.includes('FIESTA') || text.includes('COROLLA') || text.includes('CIVIC') || text.includes('TRANSVERSAL')
     ) {
         return 'TRANSVERSAL_FWD';
     }
@@ -83,13 +108,19 @@ export function detectVehicleTopology(vehicle) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. UNGHIURI DE VEDERE (VIEWPOINTS)
+// 2. UNGHIURI DE VEDERE (VIEWPOINTS) & STRATURI DIAGNOSTIC
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const VIEWPOINTS = [
-    { id: 'CHASSIS_TOP',  icon: '📐', label: 'ȘASIU SUS',   sub: 'Vedere ansamblu șasiu' },
-    { id: 'ENGINE_BAY',   icon: '🔧', label: 'SUB CAPOTĂ',  sub: 'Compartiment motor & senzori' },
-    { id: 'SIDE_PROFILE', icon: '🚗', label: 'PROFIL LAT.', sub: 'Termic, frâne & evacuare' },
+    { id: 'CHASSIS_TOP',  icon: '📐', label: 'ȘASIU SUS',   sub: 'Vedere ansamblu tren de rulare' },
+    { id: 'ENGINE_BAY',   icon: '🔧', label: 'SUB CAPOTĂ',  sub: 'Compartiment motor & senzori OBD' },
+    { id: 'SIDE_PROFILE', icon: '🚗', label: 'PROFIL LAT.', sub: 'Termic, frâne, baie ulei & eșapament' },
+];
+
+export const DIAGNOSTIC_LAYERS = [
+    { id: 'MECHANICAL', label: '⚙️ MECANICĂ', desc: 'Structură CAD, bloc motor, cutie și frâne' },
+    { id: 'SENSORS',    label: '⚡ SENZORI CAN', desc: 'Noduri de semnal și buclă de telemetrie' },
+    { id: 'HEATMAP',    label: '🔥 TERMIC 360°', desc: 'Hartă gradient temperaturi de funcționare' },
 ];
 
 function getScoreColor(score) {
@@ -102,26 +133,90 @@ function getScoreColor(score) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. DICTIONAR DETALIAT DE COMPONENTE ȘI SENZORI
+// 3. DICTIONAR UNIVERSAL DE SENZORI ȘI COMPONENTE ANATOMICE
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DETAILED_SENSORS = {
     // ── SUB CAPOTĂ ──
     maf: {
         id: 'maf',
-        name: 'Senzor MAF (G70) & Filtru Aer',
+        name: 'Senzor Debitmetru MAF & Cutie Filtru Aer',
         view: 'ENGINE_BAY',
         subsystem: 'turbo',
-        code: 'G70',
-        nominal: '11.0 – 16.0 g/s la relanti (max 115 g/s)',
-        location: 'Partea dreaptă-față a compartimentului motor, integrat în tubulatura carcasei filtrului de aer, înainte de turbină.',
-        coords: { x: 70, y: 145 },
+        code: 'G70 / MAF',
+        nominal: '11.0 – 16.0 g/s la relanti · max 140 g/s',
+        nominalMin: 10.0,
+        nominalMax: 130.0,
+        unit: 'g/s',
+        location: 'Montat pe tubulatura de admisie din plastic dur, imediat după carcasa filtrului de aer, înainte de admisia compresorului.',
+        coords: { x: 60, y: 130 },
+        callout: { x: 50, y: 110, align: 'left' },
         getReading: (live) => {
             const val = live?.aer?.maf_gs || live?.maf || 14.2;
-            return { val: `${Number(val).toFixed(1)} g/s`, status: 'optimal', note: 'Debit aer stabil' };
+            return { val: `${Number(val).toFixed(1)} g/s`, rawNum: Number(val), status: 'optimal', note: 'Debit aer stabil' };
         },
-        diag: 'Debit volumetric corelat cu cerința ECU. Firul cald este curat, fără depuneri uleioase.',
-        aiPrompt: 'Analizează semnalul senzorului MAF (G70), debitul de aer în g/s și verifică dacă există deviații față de cerința ECU.',
+        diag: 'Debit volumetric corelat cu turația și sarcina. Firul cald/pelicula este curată, fără vapori de ulei din carter.',
+        aiPrompt: 'Analizează semnalul senzorului MAF (debit aer în g/s), verifică dacă există pierderi de vacuum sau murdărire a senzorului.',
+    },
+    map_ic: {
+        id: 'map_ic',
+        name: 'Traseu Intercooler & Senzor MAP / IAT',
+        view: 'ENGINE_BAY',
+        subsystem: 'turbo',
+        code: 'G71 / MAP',
+        nominal: '98 – 102 kPa atmosferic · 215 kPa la boost',
+        nominalMin: 95,
+        nominalMax: 240,
+        unit: 'kPa',
+        location: 'Integrat în tubulatura presurizată din aluminiu/silicon de după radiatorul intercooler, la intrarea în admisie.',
+        coords: { x: 170, y: 70 },
+        callout: { x: 170, y: 38, align: 'center' },
+        getReading: (live) => {
+            const val = live?.aer?.map_kpa || live?.map || 115;
+            return { val: `${Number(val).toFixed(0)} kPa`, rawNum: Number(val), status: 'optimal', note: 'Presiune absolută' };
+        },
+        diag: 'Etanșeitate circuit presiune 100%. Nu există scăpări de aer prin coliere sau fisuri în miezul intercooler-ului.',
+        aiPrompt: 'Evaluează integritatea traseului intercooler și verifică dacă senzorul MAP raportează boost leak.',
+    },
+    egr: {
+        id: 'egr',
+        name: 'Supapă Recirculare Gaze EGR & Admisie',
+        view: 'ENGINE_BAY',
+        subsystem: 'motor',
+        code: 'EGR / N18',
+        nominal: '0% în sarcină maximă · 20–55% la croazieră',
+        nominalMin: 0,
+        nominalMax: 65,
+        unit: '%',
+        location: 'Fixată pe galeria de admisie, conectată la țeava de inox ce aduce gazele de eșapament recirculate din chiuloasă.',
+        coords: { x: 135, y: 155 },
+        callout: { x: 110, y: 155, align: 'left' },
+        getReading: (live) => {
+            const val = live?.aer?.egr_pct ?? 15;
+            return { val: `${Number(val).toFixed(0)}%`, rawNum: Number(val), status: 'optimal', note: 'Ciclare clapetă' };
+        },
+        diag: 'Clapetă fără depuneri excesive de calamină. Ciclarea pneumatică/electrică este precisă și fără întârzieri.',
+        aiPrompt: 'Care este starea supapei EGR și a galeriei de admisie? Există risc de îmbâcsire sau calaminare?',
+    },
+    injection: {
+        id: 'injection',
+        name: 'Rampă Injecție / Pompă & Injectoare',
+        view: 'ENGINE_BAY',
+        subsystem: 'motor',
+        code: 'INJ / FUEL',
+        nominal: '3.5 – 6.0 mg/str la relanti · 280–350 bar/1600 bar',
+        nominalMin: 3.0,
+        nominalMax: 60.0,
+        unit: 'mg/str',
+        location: 'Conducte de înaltă presiune distribuite direct pe chiuloasă către fiecare injector de precizie.',
+        coords: { x: 205, y: 185 },
+        callout: { x: 235, y: 185, align: 'right' },
+        getReading: (live) => {
+            const val = live?.combustibil?.inj_qty_mg || live?.motor?.inj_qty || 4.2;
+            return { val: `${Number(val).toFixed(1)} mg/str`, rawNum: Number(val), status: 'optimal', note: 'Debit compensat' };
+        },
+        diag: 'Corecții debit pe cilindri perfect echilibrate (±0.25 mg/str). Presiunea în rampa comună/pompă este stabilă.',
+        aiPrompt: 'Analizează cantitatea injectată de combustibil, deviațiile pe cilindri și presiunea sistemului de injecție.',
     },
     turbo_vnt: {
         id: 'turbo_vnt',
@@ -129,176 +224,160 @@ const DETAILED_SENSORS = {
         view: 'ENGINE_BAY',
         subsystem: 'turbo',
         code: 'VNT / N75',
-        nominal: '0.0 bar relanti / 1.15 – 1.30 bar boost max',
-        location: 'Partea stângă-jos a motorului, pe galeria de evacuare; electrovalva N75 pe contraaripă.',
-        coords: { x: 92, y: 220 },
+        nominal: '0.0 bar la relanti · 1.15 – 1.35 bar boost max',
+        nominalMin: 0.0,
+        nominalMax: 1.5,
+        unit: 'bar',
+        location: 'Montată lateral pe galeria de evacuare fontă; capsulă vacuum sau servomotor electronic VNT.',
+        coords: { x: 80, y: 235 },
+        callout: { x: 55, y: 235, align: 'left' },
         getReading: (live) => {
             const val = live?.turbo?.boost_bar || live?.aer?.boost_bar || live?.boost || 1.15;
-            return { val: `${Number(val).toFixed(2)} bar`, status: 'optimal', note: 'Presiune efectivă' };
+            return { val: `${Number(val).toFixed(2)} bar`, rawNum: Number(val), status: 'optimal', note: 'Presiune turbo' };
         },
-        diag: 'Geometria variabilă (vanele VNT) culisează fără blocaj. Răspunsul N75 este fluid (<120ms).',
-        aiPrompt: 'Verifică dacă presiunea de boost a turbinei urmărește cererea dinamică și dacă vanele VNT au depuneri de funingine.',
-    },
-    map_ic: {
-        id: 'map_ic',
-        name: 'Traseu Intercooler & Senzor MAP (G71)',
-        view: 'ENGINE_BAY',
-        subsystem: 'turbo',
-        code: 'G71 / MAP',
-        nominal: '98 – 102 kPa atmosferic / 215 kPa la boost',
-        location: 'Traseul inferior de tubulatură presurizată intercooler spre galeria de admisie.',
-        coords: { x: 170, y: 72 },
-        getReading: (live) => {
-            const val = live?.aer?.map_kpa || live?.map || 115;
-            return { val: `${Number(val).toFixed(0)} kPa`, status: 'optimal', note: 'Presiune absolută' };
-        },
-        diag: 'Etanșeitate traseu 100%. Nu s-au detectat scăpări de presiune prin îmbinări sau fisuri de furtun.',
-        aiPrompt: 'Evaluează integritatea traseului intercooler și verifică dacă senzorul MAP raportează pierderi de presiune (boost leak).',
-    },
-    egr: {
-        id: 'egr',
-        name: 'Supapă EGR & Galerie Admisie',
-        view: 'ENGINE_BAY',
-        subsystem: 'motor',
-        code: 'EGR / N18',
-        nominal: '0% în sarcină maximă / 20–60% croazieră',
-        location: 'Montată deasupra galeriei de admisie, conectată la țeava de recirculare gaze arse din evacuare.',
-        coords: { x: 175, y: 155 },
-        getReading: (live) => {
-            const val = live?.aer?.egr_pct ?? 15;
-            return { val: `${Number(val).toFixed(0)}%`, status: 'optimal', note: 'Ciclare clapetă' };
-        },
-        diag: 'Clapetă mecanică curată. Eficiența volumetrică a motorului se menține la un nivel optim de 92%.',
-        aiPrompt: 'Care este starea supapei EGR și a galeriei de admisie? Există risc de îmbâcsire cu calamină sau blocare?',
-    },
-    injection: {
-        id: 'injection',
-        name: 'Pompă Injecție Bosch & Injectoare',
-        view: 'ENGINE_BAY',
-        subsystem: 'motor',
-        code: 'VP37 / R5',
-        nominal: '3.5 – 6.0 mg/str la relanti · 290 Nm',
-        location: 'Antrenată frontal de cureaua de distribuție; conducte din oțel de înaltă presiune spre cei 5 cilindri.',
-        coords: { x: 235, y: 155 },
-        getReading: (live) => {
-            const val = live?.combustibil?.inj_qty_mg || live?.motor?.inj_qty || 4.2;
-            return { val: `${Number(val).toFixed(1)} mg/str`, status: 'optimal', note: 'Debit injecție' };
-        },
-        diag: 'Avans dinamic corelat cu cerința ECU. Compensare cilindri în toleranță restrânsă (±0.3 mg/str).',
-        aiPrompt: 'Analizează cantitatea injectată de motorină (mg/str), avansul la injecție și echilibrul între cilindri.',
+        diag: 'Geometrie variabilă fluidă, fără blocaje mecanice de funingine. Reglajul actuatorului N75 răspunde instant.',
+        aiPrompt: 'Verifică dacă presiunea de boost urmărește cerința ECU și dacă există fluctuații sau supra-presiune (overboost).',
     },
     cooling: {
         id: 'cooling',
-        name: 'Termostat, Senzor Apă (G62) & Radiator',
+        name: 'Termostat, Pompă Apă & Senzor ECT (G62)',
         view: 'ENGINE_BAY',
         subsystem: 'racire',
-        code: 'G62 / G2',
-        nominal: '87 – 92°C regim termic nominal',
-        location: 'Carcasă termostat pe flanșa laterală a blocului motor; radiator pe traversa frontală.',
-        coords: { x: 170, y: 250 },
+        code: 'G62 / ECT',
+        nominal: '87 – 92°C temperatură de regim optim',
+        nominalMin: 80,
+        nominalMax: 105,
+        unit: '°C',
+        location: 'Flanșă termostat pe blocul motor spre furtunul superior al radiatorului frontal.',
+        coords: { x: 170, y: 280 },
+        callout: { x: 170, y: 310, align: 'center' },
         getReading: (live) => {
             const val = live?.temperaturi?.temp_apa_c || live?.coolant || 90;
-            return { val: `${Number(val).toFixed(0)}°C`, status: 'optimal', note: 'Lichid răcire' };
+            return { val: `${Number(val).toFixed(0)}°C`, rawNum: Number(val), status: 'optimal', note: 'Antigel motor' };
         },
-        diag: 'Termostatul deschide la 87°C. Delta termic ulei-apă este optim (8–10°C). Fără risc de fierbere.',
-        aiPrompt: 'Verifică comportamentul termic al motorului, temperatura lichidului de răcire și stabilitatea termostatului.',
+        diag: 'Termostatul deschide la temperatura nominală de 87°C. Schimbul termic prin radiator este uniform.',
+        aiPrompt: 'Evaluează regimul termic al motorului, stabilitatea temperaturii lichidului de răcire și eficiența radiatorului.',
     },
     battery_alt: {
         id: 'battery_alt',
-        name: 'Alternator & Baterie 12V / ECU',
+        name: 'Alternator & Baterie 12V / Management Energie',
         view: 'ENGINE_BAY',
         subsystem: 'electric',
         code: '12V / ALT',
-        nominal: '13.8 – 14.4 V cu motorul pornit',
-        location: 'Alternator pe transmisia cu curea accesorii; modul electronic ECU la cutia de protecție din cowl.',
+        nominal: '13.8 – 14.5 V cu motorul pornit (12.6V repaus)',
+        nominalMin: 12.0,
+        nominalMax: 14.8,
+        unit: 'V',
+        location: 'Alternator antrenat de cureaua de accesorii; bornă management baterie cu senzor IBS.',
         coords: { x: 265, y: 245 },
+        callout: { x: 275, y: 245, align: 'right' },
         getReading: (live) => {
             const val = live?.baterie?.ecu_volt || live?.voltage || 14.1;
-            return { val: `${Number(val).toFixed(1)} V`, status: 'optimal', note: 'Tensiune încărcare' };
+            return { val: `${Number(val).toFixed(1)} V`, rawNum: Number(val), status: 'optimal', note: 'Tensiune încărcare' };
         },
-        diag: 'Punte de diode sănătoasă (ripple < 0.2V). SoH baterie estimat 94%. Pornire promptă la demaror.',
-        aiPrompt: 'Evaluează starea bateriei de 12V, tensiunea furnizată de alternator și calitatea încărcării electrice.',
+        diag: 'Punte redresoare fără pulsații anormale (ripple < 0.15V). Starea de sănătate (SoH) estimată la 94%.',
+        aiPrompt: 'Analizează tensiunea de încărcare a alternatorului și starea bateriei de pornire.',
     },
 
     // ── PROFIL LATERAL ──
     brakes_front: {
         id: 'brakes_front',
-        name: 'Frâne Față & Discuri Ventilate',
+        name: 'Frâne Față & Discuri Ventilate Perforate',
         view: 'SIDE_PROFILE',
         subsystem: 'transmisie',
-        code: '288x25mm',
-        nominal: 'Disipare normală călătorie: < 15 MJ',
-        location: 'Discuri ventilate și etriere flotante cu un piston pe fuzeta punții față.',
+        code: 'FRÂNE FAȚĂ',
+        nominal: 'Disipare normală călătorie: < 15 MJ (Archard)',
+        nominalMin: 0,
+        nominalMax: 20,
+        unit: 'MJ',
+        location: 'Punte față: etriere flotante/fixe cu plăcuțe de fricțiune pe discuri din fontă aliată.',
         coords: { x: 84, y: 180 },
+        callout: { x: 75, y: 110, align: 'center' },
         getReading: (live) => {
             const val = live?.virtual?.brakeEnergyTripMj || 0.0;
-            return { val: `${Number(val).toFixed(1)} MJ`, status: 'optimal', note: 'Energie Archard' };
+            return { val: `${Number(val).toFixed(1)} MJ`, rawNum: Number(val), status: 'optimal', note: 'Energie Archard' };
         },
-        diag: 'Rezistență la rulare zero. Fără etrier gripat (drag anomaly 0 N). Plăcuțe cu peste 70% material.',
-        aiPrompt: 'Verifică modelul Archard de disipare a energiei pe frâne și confirmă dacă există riscul de etrier blocat.',
+        diag: 'Rezistență parazită la rulare nulă. Etrierele culisează liber, fără risc de supraîncălzire a butucului.',
+        aiPrompt: 'Verifică modelul Archard de disipare pe frânele din față și confirmă dacă există rezistență la rulare (drag).',
     },
     oil_sump: {
         id: 'oil_sump',
-        name: 'Baie de Ulei Motor (Model Arrhenius)',
+        name: 'Baie Ulei Motor & Senzor Nivel/Temp',
         view: 'SIDE_PROFILE',
         subsystem: 'racire',
-        code: 'Arrhenius',
-        nominal: 'Factor uzură 1.0x (la 90°C) · 5.5L 5W-40',
-        location: 'Cel mai jos punct mecanic al blocului motor, protejat de scutul de protecție inferior.',
-        coords: { x: 132, y: 186 },
+        code: 'BAIE ULEI',
+        nominal: 'Factor degradare Arrhenius: 1.0x (la 90°C)',
+        nominalMin: 0.8,
+        nominalMax: 2.5,
+        unit: 'x',
+        location: 'Punctul inferior al blocului motor, protejat de scutul de protecție al șasiului.',
+        coords: { x: 130, y: 186 },
+        callout: { x: 125, y: 225, align: 'center' },
         getReading: (live) => {
             const val = live?.virtual?.oilLifeWearFactor || 1.0;
-            return { val: `${Number(val).toFixed(2)}x`, status: 'optimal', note: 'Factor stres ulei' };
+            return { val: `${Number(val).toFixed(2)}x`, rawNum: Number(val), status: 'optimal', note: 'Degradare Arrhenius' };
         },
-        diag: 'Uleiul funcționează la temperatură optimă. Nu s-a detectat forfecare polimerică sau degradare accelerată.',
-        aiPrompt: 'Evaluează starea uleiului de motor conform legii Arrhenius și recomandă data optimă pentru următorul schimb.',
+        diag: 'Vâscozitate optimă a peliculei de ungere. Fără supraîncălzire sau diluare cu combustibil nears.',
+        aiPrompt: 'Evaluează starea uleiului de motor conform legii de degradare termică Arrhenius.',
     },
     clutch_gearbox: {
         id: 'clutch_gearbox',
-        name: 'Ambreiaj & Cutie de Viteze (01E)',
+        name: 'Ambreiaj, Volant Dublă Masă & Transmisie',
         view: 'SIDE_PROFILE',
         subsystem: 'transmisie',
-        code: '01E 6-Gang',
-        nominal: 'Patinare 0% în orice treaptă de viteză',
-        location: 'Montată longitudinal în tunelul median al caroseriei, cu timonerie mecanică robustă.',
-        coords: { x: 175, y: 180 },
+        code: 'CUTIE / AMBREIAJ',
+        nominal: 'Patinare ambreiaj: 0% în sarcină',
+        nominalMin: 0,
+        nominalMax: 8,
+        unit: '%',
+        location: 'Tunelul median al caroseriei, între blocul motor și axul cardanic/planetare.',
+        coords: { x: 175, y: 175 },
+        callout: { x: 175, y: 105, align: 'center' },
         getReading: (live) => {
             const slip = live?.transmisie?.clutch_slip ?? 0;
-            return { val: `${Number(slip).toFixed(0)}% slip`, status: 'optimal', note: 'Cuplaj volant' };
+            return { val: `${Number(slip).toFixed(0)}% slip`, rawNum: Number(slip), status: 'optimal', note: 'Cuplaj mecanic' };
         },
-        diag: 'Aderență perfectă sub cuplu maxim. Sincroane trepte 1-6 fără agățări sau uzură anormală.',
-        aiPrompt: 'Analizează cuplajul ambreiajului și cutiei de viteze 01E. Există semne de patinare sau uzură la volant?',
+        diag: 'Aderență perfectă a discului de ambreiaj sub cuplu maxim. Sincronizare lină a treptelor de viteză.',
+        aiPrompt: 'Analizează starea ambreiajului și cutiei de viteze. Există semne de patinare sau joc în volant?',
     },
     dpf_exhaust: {
         id: 'dpf_exhaust',
-        name: 'Catalizator & Filtru DPF Sub Podea',
+        name: 'Linie Evacuare, Catalizator & Filtru DPF',
         view: 'SIDE_PROFILE',
         subsystem: 'dpf',
-        code: 'DPF / Cat',
-        nominal: 'Presiune dif. < 3.0 kPa · Încărcare < 60g',
-        location: 'Montat în tunelul median sub caroserie, pe linia de evacuare gaze arse.',
+        code: 'DPF / EVACUARE',
+        nominal: 'Presiune diferențială < 3.5 kPa · Masă < 60g',
+        nominalMin: 0,
+        nominalMax: 50,
+        unit: 'g',
+        location: 'Traseul de evacuare sub podea, protejat de ecrane termice din aluminiu gofrat.',
         coords: { x: 235, y: 186 },
+        callout: { x: 235, y: 225, align: 'center' },
         getReading: (live) => {
             const val = live?.dpf?.soot_load || 0.0;
-            return { val: `${Number(val).toFixed(1)} g`, status: 'optimal', note: 'Grad funingine' };
+            return { val: `${Number(val).toFixed(1)} g`, rawNum: Number(val), status: 'optimal', note: 'Încărcare funingine' };
         },
-        diag: 'Rezistență hidraulică în parametri optimi (18 idx). Regenerare pasivă eficientă în regim de croazieră.',
-        aiPrompt: 'Care este gradul de încărcare al filtrului de particule/catalizatorului și când este estimată următoarea regenerare?',
+        diag: 'Contrapresiune în limite optime. Permeabilitatea miezului ceramic permite evacuarea liberă a gazelor.',
+        aiPrompt: 'Care este starea filtrului de particule/catalizatorului și când este estimată următoarea regenerare?',
     },
     brakes_rear: {
         id: 'brakes_rear',
-        name: 'Frâne Spate & Mecanism Frână Mână',
+        name: 'Frâne Punte Spate & Etrier Frână Mână',
         view: 'SIDE_PROFILE',
         subsystem: 'transmisie',
-        code: '245x10mm',
-        nominal: 'Repartiție frânare spate: ~30%',
-        location: 'Discuri pline și etriere cu mecanism de frână de parcare pe puntea spate.',
-        coords: { x: 320, y: 180 },
+        code: 'FRÂNE SPATE',
+        nominal: 'Repartiție forță frânare spate: 25–35%',
+        nominalMin: 20,
+        nominalMax: 40,
+        unit: '%',
+        location: 'Punte spate: discuri pline și etriere cu acționare mecanică/electrică a frânei de parcare.',
+        coords: { x: 318, y: 180 },
+        callout: { x: 325, y: 110, align: 'center' },
         getReading: () => {
-            return { val: 'Nominal', status: 'optimal', note: 'Uzură ~15%' };
+            return { val: 'Nominal', rawNum: 95, status: 'optimal', note: 'Uzură redusă (~15%)' };
         },
-        diag: 'Echilibru optim între punți. Culisantele etrierelor culisează liber, cablurile de mână nu sunt blocate.',
-        aiPrompt: 'Verifică repartiția forței de frânare între puntea față și spate și starea discurilor din spate.',
+        diag: 'Ghidajele etrierelor culisează fără blocare. Discurile prezintă uzură uniformă fără șanțuri adânci.',
+        aiPrompt: 'Verifică eficiența frânelor de pe puntea spate și starea mecanismului de frână de parcare.',
     },
 };
 
@@ -326,6 +405,9 @@ const InteractiveCarXRay = ({
     // Unghi activ de cameră în Scanner
     const [viewpoint, setViewpoint] = useState('CHASSIS_TOP');
 
+    // Strat de diagnoză activ
+    const [diagnosticLayer, setDiagnosticLayer] = useState('MECHANICAL');
+
     // Stare Modal Scanner
     const [isScannerOpen, setIsScannerOpen] = useState(mode === 'full');
 
@@ -337,20 +419,20 @@ const InteractiveCarXRay = ({
         setTopology(detectedTopology);
     }, [detectedTopology]);
 
-    // Animație Radar Pulse
+    // Animație 1: Radar Pulse pentru Nodurile de Avertisment
     const pulseAnim = useRef(new Animated.Value(1)).current;
     useEffect(() => {
         const loop = Animated.loop(
             Animated.sequence([
                 Animated.timing(pulseAnim, {
-                    toValue: 1.28,
-                    duration: 1300,
+                    toValue: 1.25,
+                    duration: 1200,
                     easing: Easing.inOut(Easing.ease),
                     useNativeDriver: true,
                 }),
                 Animated.timing(pulseAnim, {
                     toValue: 1,
-                    duration: 1300,
+                    duration: 1200,
                     easing: Easing.inOut(Easing.ease),
                     useNativeDriver: true,
                 }),
@@ -360,36 +442,69 @@ const InteractiveCarXRay = ({
         return () => loop.stop();
     }, [pulseAnim]);
 
-    // Coordonate Hotspot pentru Vederea de Șasiu (adaptate dinamic la topologie)
+    // Animație 2: Laser Scanner Tomography Sweep (Scanare Live)
+    const scanAnim = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(scanAnim, {
+                    toValue: 1,
+                    duration: 2600,
+                    easing: Easing.inOut(Easing.quad),
+                    useNativeDriver: true,
+                }),
+                Animated.timing(scanAnim, {
+                    toValue: 0,
+                    duration: 2600,
+                    easing: Easing.inOut(Easing.quad),
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [scanAnim]);
+
+    // Coordonate Hotspot pentru Vederea de Șasiu (Anti-coliziune optimizată)
     const chassisHotspots = useMemo(() => {
+        if (topology === 'SKATEBOARD_BEV') {
+            return {
+                motor:      { x: 160, y: 92,  label: 'MOTOR FAȚĂ', score: 98, temp: '38°C', tempColor: '#06b6d4' },
+                electric:   { x: 160, y: 195, label: 'BATERIE TRAY', score: 96, temp: '26°C', tempColor: '#10b981' },
+                racire:     { x: 160, y: 46,  label: 'CHILLER',    score: 97, temp: '22°C', tempColor: '#06b6d4' },
+                transmisie: { x: 160, y: 310, label: 'MOTOR SPATE',score: 98, temp: '42°C', tempColor: '#06b6d4' },
+                turbo:      { x: 75,  y: 92,  label: 'INVERTOR F', score: 99, temp: '32°C', tempColor: '#06b6d4' },
+                dpf:        { x: 245, y: 310, label: 'INVERTOR S', score: 99, temp: '34°C', tempColor: '#06b6d4' },
+            };
+        }
         if (topology === 'TRANSVERSAL_FWD') {
             return {
-                racire:     { x: 160, y: 46,  label: 'RĂCIRE', score: subsystems.racire?.score ?? 94 },
-                turbo:      { x: 125, y: 132, label: 'TURBO',  score: subsystems.turbo?.score ?? 88 },
-                motor:      { x: 135, y: 95,  label: 'MOTOR',  score: subsystems.motor?.score ?? 92 },
-                transmisie: { x: 202, y: 105, label: 'CUTIE',  score: subsystems.transmisie?.score ?? 90 },
-                electric:   { x: 226, y: 70,  label: 'BATERIE',score: subsystems.electric?.score ?? 95 },
-                dpf:        { x: 150, y: 248, label: 'DPF',    score: subsystems.dpf?.score ?? 91 },
+                racire:     { x: 160, y: 46,  label: 'RĂCIRE',    score: subsystems.racire?.score ?? 94, temp: '88°C', tempColor: '#10b981' },
+                motor:      { x: 125, y: 95,  label: 'MOTOR I4',   score: subsystems.motor?.score ?? 92, temp: '92°C', tempColor: '#f59e0b' },
+                transmisie: { x: 198, y: 95,  label: 'TRANSAXLE',  score: subsystems.transmisie?.score ?? 90, temp: '75°C', tempColor: '#10b981' },
+                turbo:      { x: 70,  y: 130, label: 'TURBO VNT',  score: subsystems.turbo?.score ?? 88, temp: '540°C', tempColor: '#ef4444' },
+                electric:   { x: 250, y: 70,  label: 'BATERIE 12V',score: subsystems.electric?.score ?? 95, temp: '24°C', tempColor: '#10b981' },
+                dpf:        { x: 160, y: 245, label: 'DPF / CAT',  score: subsystems.dpf?.score ?? 91, temp: '420°C', tempColor: '#f97316' },
             };
         }
         if (topology === 'LONGITUDINAL_RWD') {
             return {
-                racire:     { x: 160, y: 46,  label: 'RĂCIRE', score: subsystems.racire?.score ?? 94 },
-                turbo:      { x: 102, y: 105, label: 'TURBO',  score: subsystems.turbo?.score ?? 88 },
-                motor:      { x: 160, y: 95,  label: 'MOTOR',  score: subsystems.motor?.score ?? 92 },
-                transmisie: { x: 160, y: 180, label: 'CUTIE',  score: subsystems.transmisie?.score ?? 90 },
-                dpf:        { x: 125, y: 248, label: 'DPF',    score: subsystems.dpf?.score ?? 91 },
-                electric:   { x: 218, y: 388, label: 'BATERIE',score: subsystems.electric?.score ?? 95 },
+                racire:     { x: 160, y: 46,  label: 'RĂCIRE',     score: subsystems.racire?.score ?? 94, temp: '88°C', tempColor: '#10b981' },
+                turbo:      { x: 75,  y: 110, label: 'TURBO TWIN', score: subsystems.turbo?.score ?? 88, temp: '580°C', tempColor: '#ef4444' },
+                motor:      { x: 160, y: 98,  label: 'MOTOR RWD',  score: subsystems.motor?.score ?? 92, temp: '94°C', tempColor: '#f59e0b' },
+                transmisie: { x: 160, y: 175, label: 'CUTIE ZF',   score: subsystems.transmisie?.score ?? 90, temp: '82°C', tempColor: '#10b981' },
+                dpf:        { x: 115, y: 245, label: 'DPF / CAT',  score: subsystems.dpf?.score ?? 91, temp: '450°C', tempColor: '#f97316' },
+                electric:   { x: 235, y: 380, label: 'BATERIE TRUNK', score: subsystems.electric?.score ?? 95, temp: '22°C', tempColor: '#10b981' },
             };
         }
-        // Default: LONGITUDINAL_AWD_FWD (Audi AEL)
+        // Default: LONGITUDINAL_AWD_FWD (Audi Quattro / Passat B5)
         return {
-            racire:     { x: 160, y: 46,  label: 'RĂCIRE', score: subsystems.racire?.score ?? 94 },
-            turbo:      { x: 96,  y: 114, label: 'TURBO',  score: subsystems.turbo?.score ?? 88 },
-            motor:      { x: 160, y: 114, label: 'MOTOR',  score: subsystems.motor?.score ?? 92 },
-            electric:   { x: 224, y: 108, label: 'BATERIE',score: subsystems.electric?.score ?? 95 },
-            transmisie: { x: 160, y: 185, label: 'CUTIE',  score: subsystems.transmisie?.score ?? 90 },
-            dpf:        { x: 180, y: 268, label: 'DPF',    score: subsystems.dpf?.score ?? 91 },
+            racire:     { x: 160, y: 46,  label: 'RĂCIRE',    score: subsystems.racire?.score ?? 94, temp: '88°C', tempColor: '#10b981' },
+            turbo:      { x: 75,  y: 116, label: 'TURBO KKK', score: subsystems.turbo?.score ?? 88, temp: '560°C', tempColor: '#ef4444' },
+            motor:      { x: 160, y: 112, label: 'MOTOR R5',  score: subsystems.motor?.score ?? 92, temp: '90°C', tempColor: '#f59e0b' },
+            electric:   { x: 245, y: 88,  label: 'BATERIE',   score: subsystems.electric?.score ?? 95, temp: '25°C', tempColor: '#10b981' },
+            transmisie: { x: 160, y: 185, label: 'CUTIE 01E', score: subsystems.transmisie?.score ?? 90, temp: '78°C', tempColor: '#10b981' },
+            dpf:        { x: 160, y: 265, label: 'DPF / CAT', score: subsystems.dpf?.score ?? 91, temp: '410°C', tempColor: '#f97316' },
         };
     }, [topology, subsystems]);
 
@@ -419,215 +534,319 @@ const InteractiveCarXRay = ({
     };
 
     // ─────────────────────────────────────────────────────────────────────────
-    // RENDER 1: SVG TOP-DOWN CHASSIS (Șasiu Sus)
+    // RENDER 1: SVG TOP-DOWN CHASSIS (Șasiu Sus CAD)
     // ─────────────────────────────────────────────────────────────────────────
-    const renderChassisSvg = (isPreview = false) => (
-        <Svg width="100%" height={isPreview ? 280 : 360} viewBox="0 0 320 440">
-            <Defs>
-                <LinearGradient id="chassisGrad" x1="0" y1="0" x2="0" y2="1">
-                    <Stop offset="0" stopColor="#1a2538" stopOpacity="0.85" />
-                    <Stop offset="0.5" stopColor="#0c1220" stopOpacity="0.95" />
-                    <Stop offset="1" stopColor="#1a2538" stopOpacity="0.85" />
-                </LinearGradient>
-            </Defs>
+    const renderChassisSvg = (isPreview = false) => {
+        const h = isPreview ? 280 : 360;
+        return (
+            <Svg width="100%" height={h} viewBox="0 0 320 440">
+                <Defs>
+                    {/* Metal & Glass Body Gradient */}
+                    <LinearGradient id="carBodyGrad" x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0" stopColor="#1e2c45" stopOpacity="0.88" />
+                        <Stop offset="0.5" stopColor="#0d1526" stopOpacity="0.96" />
+                        <Stop offset="1" stopColor="#1a253c" stopOpacity="0.90" />
+                    </LinearGradient>
+                    <LinearGradient id="windshieldGrad" x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0" stopColor="#162942" stopOpacity="0.95" />
+                        <Stop offset="1" stopColor="#070c17" stopOpacity="0.98" />
+                    </LinearGradient>
+                    <LinearGradient id="tireGrad" x1="0" y1="0" x2="1" y2="0">
+                        <Stop offset="0" stopColor="#080c14" />
+                        <Stop offset="0.5" stopColor="#1e283b" />
+                        <Stop offset="1" stopColor="#080c14" />
+                    </LinearGradient>
+                </Defs>
 
-            {/* Silhouette Outline */}
-            <Path
-                d="M 120 18 C 145 14, 175 14, 200 18 C 220 22, 240 38, 246 65 C 254 95, 252 140, 254 210 C 254 270, 256 345, 248 385 C 242 412, 225 428, 198 432 C 172 436, 148 436, 122 432 C 95 428, 78 412, 72 385 C 64 345, 66 270, 66 210 C 68 140, 66 95, 74 65 C 80 38, 100 22, 120 18 Z"
-                fill="url(#chassisGrad)"
-                stroke="#22324e"
-                strokeWidth="2"
-            />
+                {/* ── 1. CAROSERIE VOLUMETRICĂ CAD (Universal Sports Sedan / GT Silhouette) ── */}
+                {/* Oglinzi laterale aerodinamice */}
+                <Polygon points="58,155 42,165 44,175 62,170" fill="#1b283d" stroke="#334d73" strokeWidth="1" />
+                <Polygon points="262,155 278,165 276,175 258,170" fill="#1b283d" stroke="#334d73" strokeWidth="1" />
 
-            {/* Windshield & Roof */}
-            <Path d="M 94 135 C 130 142, 190 142, 226 135 L 234 178 C 185 186, 135 186, 86 178 Z" fill="#0e1726" stroke="#2a3f5f" strokeWidth="1.5" />
-            <Rect x="88" y="186" width="144" height="95" rx="8" fill="#090e18" stroke="#1e2c44" strokeWidth="1.5" />
-            <Path d="M 88 286 C 135 281, 185 281, 232 286 L 226 324 C 180 329, 140 329, 94 324 Z" fill="#0e1726" stroke="#2a3f5f" strokeWidth="1.5" />
+                {/* Contur exterior caroserie cu bosaje pronunțate */}
+                <Path
+                    d="M 122 14 C 145 10, 175 10, 198 14 C 224 19, 244 38, 250 68 C 258 100, 252 140, 254 210 C 256 275, 258 340, 250 385 C 244 412, 226 430, 198 434 C 172 438, 148 438, 122 434 C 94 430, 76 412, 70 385 C 62 340, 64 275, 66 210 C 68 140, 62 100, 70 68 C 76 38, 96 19, 122 14 Z"
+                    fill="url(#carBodyGrad)"
+                    stroke="#2e476d"
+                    strokeWidth="2"
+                />
 
-            {/* Wheels */}
-            <Rect x="42" y="62" width="26" height="58" rx="6" fill="#121824" stroke="#324461" strokeWidth="2" />
-            <Rect x="252" y="62" width="26" height="58" rx="6" fill="#121824" stroke="#324461" strokeWidth="2" />
-            <Rect x="42" y="325" width="26" height="58" rx="6" fill="#121824" stroke="#324461" strokeWidth="2" />
-            <Rect x="252" y="325" width="26" height="58" rx="6" fill="#121824" stroke="#324461" strokeWidth="2" />
+                {/* Lamele aerodinamice splitter frontal & DRL LED Headlight Signatures */}
+                <Path d="M 98 28 L 120 22 L 120 34 Z" fill="#00f0ff" fillOpacity="0.4" stroke="#00f0ff" strokeWidth="1" />
+                <Path d="M 222 28 L 200 22 L 200 34 Z" fill="#00f0ff" fillOpacity="0.4" stroke="#00f0ff" strokeWidth="1" />
+                <Line x1="128" y1="20" x2="192" y2="20" stroke="#4d8ef5" strokeWidth="1.5" strokeOpacity="0.7" />
 
-            {/* Axles */}
-            <Line x1="68" y1="91" x2="252" y2="91" stroke="#25354d" strokeWidth="2.5" />
-            <Line x1="68" y1="354" x2="252" y2="354" stroke="#25354d" strokeWidth="2.5" />
+                {/* Parbriz cu tentă fumurie & reflexie speculară */}
+                <Path
+                    d="M 92 136 C 130 144, 190 144, 228 136 L 236 182 C 185 190, 135 190, 84 182 Z"
+                    fill="url(#windshieldGrad)"
+                    stroke="#334d73"
+                    strokeWidth="1.5"
+                />
+                <Line x1="98" y1="140" x2="222" y2="140" stroke="#ffffff" strokeWidth="1" strokeOpacity="0.18" />
 
-            {/* Radiator */}
-            <Rect x="120" y="36" width="80" height="20" rx="4" fill="#152438" stroke="#2a456c" strokeWidth="1.5" />
-            <Line x1="126" y1="46" x2="194" y2="46" stroke="#38bdf8" strokeWidth="1" strokeDasharray="2,2" />
+                {/* Pavilion sticlă / Plafon */}
+                <Rect x="88" y="188" width="144" height="92" rx="6" fill="#070c16" stroke="#1f3049" strokeWidth="1.5" />
 
-            {/* ── CONDITIONAL ENGINE & DRIVETRAIN BASED ON TOPOLOGY ── */}
-            {topology === 'TRANSVERSAL_FWD' ? (
-                <G>
-                    {/* Transverse engine block across the bay */}
-                    <Rect x="95" y="75" width="80" height="50" rx="5" fill="#172233" stroke="#3d5880" strokeWidth="2" />
-                    {[108, 126, 144, 162].map((cx, i) => (
-                        <Circle key={i} cx={cx} cy="100" r="4" fill="#24344d" stroke="#4d8ef5" strokeWidth="1" />
-                    ))}
-                    {/* Transverse gearbox on left */}
-                    <Rect x="180" y="80" width="45" height="58" rx="5" fill="#151d2a" stroke="#334766" strokeWidth="1.5" />
-                    {/* Turbo behind engine */}
-                    <Circle cx="125" cy="132" r="8" fill="#2e1f38" stroke="#ff8800" strokeWidth="1.5" />
-                    {/* Battery front-right */}
-                    <Rect x="210" y="58" width="30" height="24" rx="3" fill="#102528" stroke="#2fcfa4" strokeWidth="1.5" />
-                    {/* Exhaust to center DPF */}
-                    <Path d="M 125 140 L 150 170 L 150 240" stroke="#523924" strokeWidth="2" fill="none" />
-                    <Rect x="136" y="240" width="28" height="45" rx="5" fill="#241b18" stroke="#e07530" strokeWidth="1.5" />
-                </G>
-            ) : topology === 'LONGITUDINAL_RWD' ? (
-                <G>
-                    {/* Longitudinal engine */}
-                    <Rect x="138" y="70" width="44" height="78" rx="6" fill="#172233" stroke="#3d5880" strokeWidth="2" />
-                    {[80, 92, 104, 116, 128, 140].map((cy, i) => (
-                        <Circle key={i} cx="160" cy={cy} r="3.5" fill="#24344d" stroke="#4d8ef5" strokeWidth="1" />
-                    ))}
-                    {/* Gearbox */}
-                    <Path d="M 142 148 L 178 148 L 172 210 L 148 210 Z" fill="#151d2a" stroke="#334766" strokeWidth="1.5" />
-                    {/* Long driveshaft (Cardan) */}
-                    <Line x1="160" y1="210" x2="160" y2="340" stroke="#f59e0b" strokeWidth="3" strokeDasharray="6,3" />
-                    {/* Rear Differential */}
-                    <Rect x="146" y="340" width="28" height="28" rx="6" fill="#241828" stroke="#d97706" strokeWidth="2" />
-                    {/* Battery in trunk */}
-                    <Rect x="204" y="375" width="30" height="26" rx="3" fill="#102528" stroke="#2fcfa4" strokeWidth="1.5" />
-                    {/* Turbo */}
-                    <Circle cx="106" cy="108" r="7.5" fill="#2e1f38" stroke="#ff8800" strokeWidth="1.5" />
-                    {/* DPF */}
-                    <Rect x="110" y="240" width="28" height="45" rx="5" fill="#241b18" stroke="#e07530" strokeWidth="1.5" />
-                </G>
-            ) : (
-                <G>
-                    {/* Default: Audi Longitudinal 5-Cylinder AEL */}
-                    <Rect x="135" y="78" width="50" height="68" rx="6" fill="#172233" stroke="#3d5880" strokeWidth="2" />
-                    {[86, 98, 110, 122, 134].map((cy, i) => (
-                        <Circle key={i} cx="160" cy={cy} r="4" fill="#24344d" stroke="#4d8ef5" strokeWidth="1" />
-                    ))}
-                    {/* Turbo */}
-                    <Circle cx="104" cy="116" r="7.5" fill="#2e1f38" stroke="#ff8800" strokeWidth="1.5" />
-                    {/* Cowl Battery */}
-                    <Rect x="206" y="98" width="30" height="26" rx="3" fill="#102528" stroke="#2fcfa4" strokeWidth="1.5" />
-                    {/* Gearbox 01E */}
-                    <Path d="M 142 148 L 178 148 L 172 215 L 148 215 Z" fill="#151d2a" stroke="#334766" strokeWidth="1.5" />
-                    <Line x1="160" y1="150" x2="160" y2="215" stroke="#4d8ef5" strokeWidth="1.5" strokeDasharray="3,3" />
-                    {/* DPF */}
-                    <Rect x="166" y="248" width="28" height="46" rx="6" fill="#241b18" stroke="#e07530" strokeWidth="1.5" />
-                </G>
-            )}
+                {/* Lunetă spate cu linii degivrare */}
+                <Path
+                    d="M 88 286 C 135 281, 185 281, 232 286 L 226 328 C 180 334, 140 334, 94 328 Z"
+                    fill="url(#windshieldGrad)"
+                    stroke="#334d73"
+                    strokeWidth="1.5"
+                />
+                <Line x1="102" y1="300" x2="218" y2="300" stroke="#ff7b72" strokeWidth="0.8" strokeOpacity="0.3" strokeDasharray="3,3" />
 
-            {/* Pulsing Luminous Hotspots */}
-            {Object.entries(chassisHotspots).map(([key, item]) => {
-                const col = getScoreColor(item.score);
-                const isAlert = item.score < 85;
+                {/* Stopuri LED spate / Lightbar */}
+                <Path d="M 88 418 L 232 418" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" />
 
-                return (
-                    <G key={key}>
-                        {/* Extended radar ring ONLY for alerts or full mode */}
-                        {isAlert && (
+                {/* ── 2. JANTE & ROȚI CU DISCURI DE FRÂNĂ VENTILATE VIZIBILE ── */}
+                {[
+                    { x: 38, y: 64,  caliper: 'front' },
+                    { x: 254, y: 64, caliper: 'front' },
+                    { x: 38, y: 326, caliper: 'rear' },
+                    { x: 254, y: 326,caliper: 'rear' },
+                ].map((w, idx) => (
+                    <G key={idx}>
+                        {/* Anvelopă */}
+                        <Rect x={w.x} y={w.y} width={28} height={60} rx="7" fill="url(#tireGrad)" stroke="#384f73" strokeWidth="2" />
+                        {/* Butuc & Disc perforat */}
+                        <Rect x={w.x + 6} y={w.y + 12} width={16} height={36} rx="4" fill="#1b2434" stroke="#4d8ef5" strokeWidth="1.2" strokeDasharray="2,2" />
+                        {/* Etrier performanță colorat (Roșu/Cyan) */}
+                        <Rect x={w.x + (w.x < 100 ? 18 : 2)} y={w.y + 18} width={8} height={24} rx="2" fill="#ef4444" stroke="#ff8888" strokeWidth="0.8" />
+                    </G>
+                ))}
+
+                {/* Punte față & Punte spate (Suspension Subframe) */}
+                <Line x1="66" y1="94" x2="254" y2="94" stroke="#2a3f5f" strokeWidth="3" />
+                <Line x1="66" y1="356" x2="254" y2="356" stroke="#2a3f5f" strokeWidth="3" />
+
+                {/* Radiator frontal dublu nucleu */}
+                <Rect x="114" y="36" width="92" height="20" rx="4" fill="#0f1d2e" stroke="#2a507a" strokeWidth="1.5" />
+                <Line x1="120" y1="46" x2="200" y2="46" stroke="#38bdf8" strokeWidth="1.5" strokeDasharray="3,2" />
+
+                {/* ── 3. GRUP PROPULSOR MODULAR PARAMETRIC (În funcție de topologie) ── */}
+                {topology === 'SKATEBOARD_BEV' ? (
+                    <G>
+                        {/* Baterie structurală de podea cu 8 celule mari */}
+                        <Rect x="82" y="145" width="156" height="150" rx="8" fill="#0a1826" stroke="#00f0ff" strokeWidth="2" />
+                        {[165, 195, 225, 255].map((y, i) => (
+                            <Line key={i} x1="86" y1={y} x2="234" y2={y} stroke="#1b3954" strokeWidth="1.5" />
+                        ))}
+                        <Line x1="160" y1="148" x2="160" y2="292" stroke="#1b3954" strokeWidth="1.5" />
+                        {/* Motor Electric Față */}
+                        <Rect x="135" y="72" width="50" height="42" rx="6" fill="#132a3d" stroke="#10b981" strokeWidth="2" />
+                        <Circle cx="160" cy="93" r="10" fill="#0b1724" stroke="#00f0ff" strokeWidth="1.5" />
+                        {/* Motor Electric Spate */}
+                        <Rect x="135" y="334" width="50" height="44" rx="6" fill="#132a3d" stroke="#10b981" strokeWidth="2" />
+                        <Circle cx="160" cy="356" r="10" fill="#0b1724" stroke="#00f0ff" strokeWidth="1.5" />
+                        {/* Cablaj de înaltă tensiune portocaliu (HV Bus) */}
+                        <Path d="M 160 114 L 160 145" stroke="#f97316" strokeWidth="3" fill="none" />
+                        <Path d="M 160 295 L 160 334" stroke="#f97316" strokeWidth="3" fill="none" />
+                    </G>
+                ) : topology === 'TRANSVERSAL_FWD' ? (
+                    <G>
+                        {/* Bloc motor 4 Cilindri Transversal de-a latul punții */}
+                        <Rect x="88" y="74" width="86" height="48" rx="6" fill="#16253b" stroke="#3b5984" strokeWidth="2" />
+                        {[98, 114, 130, 146].map((cx, i) => (
+                            <Circle key={i} cx={cx} cy="98" r="4.5" fill="#223654" stroke="#4d8ef5" strokeWidth="1" />
+                        ))}
+                        {/* Cureaua accesorii pe stânga */}
+                        <Path d="M 88 80 L 82 80 L 82 116 L 88 116 Z" fill="#0b1019" stroke="#567ca8" strokeWidth="1" />
+                        {/* Cutie transaxle laterală pe dreapta */}
+                        <Rect x="178" y="76" width="46" height="58" rx="6" fill="#111c2e" stroke="#2c4263" strokeWidth="1.8" />
+                        {/* Planetare către roțile față */}
+                        <Line x1="178" y1="102" x2="66" y2="94" stroke="#4d8ef5" strokeWidth="2.5" />
+                        <Line x1="224" y1="102" x2="254" y2="94" stroke="#4d8ef5" strokeWidth="2.5" />
+                        {/* Turbină compactă în spatele motorului */}
+                        <Circle cx="120" cy="130" r="9" fill="#2a1810" stroke="#f97316" strokeWidth="2" />
+                        {/* Baterie 12V în compartiment frontal dreapta */}
+                        <Rect x="230" y="60" width="28" height="24" rx="3" fill="#0d2426" stroke="#10b981" strokeWidth="1.5" />
+                        {/* Eșapament spre centrul podelei */}
+                        <Path d="M 120 138 L 160 175 L 160 230" stroke="#684224" strokeWidth="2.5" fill="none" />
+                        <Rect x="146" y="230" width="28" height="42" rx="6" fill="#241b18" stroke="#e07530" strokeWidth="1.8" />
+                    </G>
+                ) : topology === 'LONGITUDINAL_RWD' ? (
+                    <G>
+                        {/* Motor 6 Cilindri Longitudinal retras spre habitaclu */}
+                        <Rect x="138" y="68" width="44" height="82" rx="6" fill="#16253b" stroke="#3b5984" strokeWidth="2" />
+                        {[76, 88, 100, 112, 124, 136].map((cy, i) => (
+                            <Circle key={i} cx="160" cy={cy} r="3.5" fill="#223654" stroke="#4d8ef5" strokeWidth="1" />
+                        ))}
+                        {/* Cutie longitudinală în tunel */}
+                        <Path d="M 142 150 L 178 150 L 172 208 L 148 208 Z" fill="#111c2e" stroke="#2c4263" strokeWidth="1.8" />
+                        {/* Cardan din 2 segmente cu rulment intermediar */}
+                        <Line x1="160" y1="208" x2="160" y2="340" stroke="#f59e0b" strokeWidth="3" strokeDasharray="6,3" />
+                        <Circle cx="160" cy="275" r="4" fill="#d97706" />
+                        {/* Diferențial punte spate */}
+                        <Rect x="146" y="340" width="28" height="28" rx="6" fill="#24192b" stroke="#d97706" strokeWidth="2" />
+                        {/* Planetare spate */}
+                        <Line x1="146" y1="354" x2="66" y2="356" stroke="#4d8ef5" strokeWidth="2.5" />
+                        <Line x1="174" y1="354" x2="254" y2="356" stroke="#4d8ef5" strokeWidth="2.5" />
+                        {/* Baterie în portbagaj */}
+                        <Rect x="214" y="370" width="30" height="26" rx="3" fill="#0d2426" stroke="#10b981" strokeWidth="1.5" />
+                        {/* Turbină lateral stânga */}
+                        <Circle cx="112" cy="110" r="9" fill="#2a1810" stroke="#f97316" strokeWidth="2" />
+                        {/* DPF */}
+                        <Rect x="105" y="235" width="26" height="42" rx="5" fill="#241b18" stroke="#e07530" strokeWidth="1.8" />
+                    </G>
+                ) : (
+                    <G>
+                        {/* Default: Audi Longitudinal 5-Cylinder AEL / Quattro */}
+                        <Rect x="135" y="74" width="50" height="74" rx="6" fill="#16253b" stroke="#3b5984" strokeWidth="2" />
+                        {[84, 96, 108, 120, 132].map((cy, i) => (
+                            <Circle key={i} cx="160" cy={cy} r="4" fill="#223654" stroke="#4d8ef5" strokeWidth="1" />
+                        ))}
+                        {/* Turbină KKK cu melc */}
+                        <Circle cx="106" cy="114" r="9" fill="#2a1810" stroke="#f97316" strokeWidth="2" />
+                        {/* Baterie sub parbriz/cowl */}
+                        <Rect x="224" y="80" width="30" height="26" rx="3" fill="#0d2426" stroke="#10b981" strokeWidth="1.5" />
+                        {/* Cutie 01E cu diferențial central Torsen */}
+                        <Path d="M 142 148 L 178 148 L 172 216 L 148 216 Z" fill="#111c2e" stroke="#2c4263" strokeWidth="1.8" />
+                        <Line x1="160" y1="152" x2="160" y2="216" stroke="#4d8ef5" strokeWidth="2" strokeDasharray="3,3" />
+                        {/* Planetare față care pleacă din cutie */}
+                        <Line x1="146" y1="165" x2="66" y2="94" stroke="#4d8ef5" strokeWidth="2" />
+                        <Line x1="174" y1="165" x2="254" y2="94" stroke="#4d8ef5" strokeWidth="2" />
+                        {/* DPF sub podea */}
+                        <Rect x="150" y="250" width="28" height="46" rx="6" fill="#241b18" stroke="#e07530" strokeWidth="1.8" />
+                    </G>
+                )}
+
+                {/* ── 4. PULSING NODES & CAD LEADER LINES ── */}
+                {Object.entries(chassisHotspots).map(([key, item]) => {
+                    const col = diagnosticLayer === 'HEATMAP' ? item.tempColor : getScoreColor(item.score);
+                    const isAlert = item.score < 85;
+
+                    return (
+                        <G key={key}>
+                            {/* Halo Radar doar pentru erori sau în modul complet */}
+                            {isAlert && (
+                                <Circle
+                                    cx={item.x}
+                                    cy={item.y}
+                                    r={22}
+                                    fill={col}
+                                    fillOpacity={0.15}
+                                    stroke={col}
+                                    strokeWidth={1}
+                                    strokeDasharray="2,2"
+                                />
+                            )}
                             <Circle
                                 cx={item.x}
                                 cy={item.y}
-                                r={22}
+                                r={13}
                                 fill={col}
-                                fillOpacity={0.12}
+                                fillOpacity={0.25}
                                 stroke={col}
-                                strokeWidth={1}
-                                strokeDasharray="2,2"
+                                strokeWidth={1.5}
                             />
-                        )}
-                        <Circle
-                            cx={item.x}
-                            cy={item.y}
-                            r={14}
-                            fill={col}
-                            fillOpacity={0.25}
-                            stroke={col}
-                            strokeWidth={1.5}
-                        />
-                        <Circle
-                            cx={item.x}
-                            cy={item.y}
-                            r={5.5}
-                            fill={col}
-                            stroke="#07080e"
-                            strokeWidth={2}
-                        />
-                    </G>
-                );
-            })}
-        </Svg>
-    );
+                            <Circle
+                                cx={item.x}
+                                cy={item.y}
+                                r={5.5}
+                                fill={col}
+                                stroke="#070c14"
+                                strokeWidth={2}
+                            />
+                        </G>
+                    );
+                })}
+            </Svg>
+        );
+    };
 
     // ─────────────────────────────────────────────────────────────────────────
-    // RENDER 2: SVG ENGINE BAY ZOOM-IN (Sub Capotă)
+    // RENDER 2: SVG ENGINE BAY ZOOM-IN (Sub Capotă CAD)
     // ─────────────────────────────────────────────────────────────────────────
     const renderEngineBaySvg = () => (
         <Svg width="100%" height={340} viewBox="0 0 340 360">
             <Defs>
-                <LinearGradient id="bayGrad" x1="0" y1="0" x2="0" y2="1">
-                    <Stop offset="0" stopColor="#111827" stopOpacity="0.95" />
-                    <Stop offset="1" stopColor="#080d1a" stopOpacity="0.98" />
+                <LinearGradient id="bayMetalGrad" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0" stopColor="#141d2d" />
+                    <Stop offset="1" stopColor="#0a0f1a" />
                 </LinearGradient>
             </Defs>
 
-            {/* Bay Perimeter / Firewall & Fenders */}
+            {/* Structură compartiment motor: Traversă, lonjeroane & panou ignifug */}
             <Path
-                d="M 30 50 L 310 50 L 320 320 L 20 320 Z"
-                fill="url(#bayGrad)"
-                stroke="#1f2c42"
+                d="M 28 46 L 312 46 L 324 324 L 16 324 Z"
+                fill="url(#bayMetalGrad)"
+                stroke="#25374e"
                 strokeWidth="2"
             />
 
-            {/* Radiator & Intercooler Assembly */}
-            <Rect x="70" y="58" width="200" height="30" rx="4" fill="#152438" stroke="#2a456c" strokeWidth="1.5" />
-            <Line x1="80" y1="68" x2="260" y2="68" stroke="#38bdf8" strokeWidth="1" strokeDasharray="2,2" />
-            <Line x1="80" y1="78" x2="260" y2="78" stroke="#38bdf8" strokeWidth="1" strokeDasharray="2,2" />
-
-            {/* Air Intake Duct from front grille to MAF */}
-            <Path d="M 60 70 L 60 120 L 75 140" stroke="#3d5880" strokeWidth="3" fill="none" />
-            {/* Air Box */}
-            <Rect x="46" y="125" width="48" height="42" rx="5" fill="#1a2538" stroke="#38bdf8" strokeWidth="1.5" />
-
-            {/* Engine Valve Cover & Intake Plenum */}
-            <Rect x="110" y="115" width="120" height="135" rx="8" fill="#172233" stroke="#4d8ef5" strokeWidth="2" />
-            {/* 5 Injection Runners */}
-            {[130, 150, 170, 190, 210].map((cy, i) => (
-                <Line key={i} x1="120" y1={cy} x2="220" y2={cy} stroke="#24344d" strokeWidth="2" strokeDasharray="3,3" />
+            {/* Oale amortizoare (Strut Towers) cu flanșe cu 3 șuruburi */}
+            <Circle cx="44" cy="180" r="22" fill="#0e1724" stroke="#374f70" strokeWidth="2" />
+            <Circle cx="296" cy="180" r="22" fill="#0e1724" stroke="#374f70" strokeWidth="2" />
+            {[0, 120, 240].map((deg, i) => (
+                <Circle key={i} cx={44 + 14 * Math.cos(deg * Math.PI / 180)} cy={180 + 14 * Math.sin(deg * Math.PI / 180)} r="2" fill="#4d8ef5" />
+            ))}
+            {[0, 120, 240].map((deg, i) => (
+                <Circle key={i} cx={296 + 14 * Math.cos(deg * Math.PI / 180)} cy={180 + 14 * Math.sin(deg * Math.PI / 180)} r="2" fill="#4d8ef5" />
             ))}
 
-            {/* Turbo & N75 Wastegate Actuator */}
-            <Path d="M 110 200 L 80 215" stroke="#f0883e" strokeWidth="3" fill="none" />
-            <Circle cx="88" cy="220" r="16" fill="#241b18" stroke="#ff8800" strokeWidth="2" />
+            {/* Radiator & Ansamblu Intercooler frontal */}
+            <Rect x="64" y="54" width="212" height="32" rx="4" fill="#132438" stroke="#2e547f" strokeWidth="1.5" />
+            <Line x1="72" y1="64" x2="268" y2="64" stroke="#38bdf8" strokeWidth="1.5" strokeDasharray="3,2" />
+            <Line x1="72" y1="74" x2="268" y2="74" stroke="#38bdf8" strokeWidth="1.5" strokeDasharray="3,2" />
 
-            {/* Battery / Alternator Block */}
-            <Rect x="245" y="225" width="46" height="38" rx="4" fill="#102528" stroke="#10b981" strokeWidth="1.5" />
+            {/* Traseu tubulatură aer admisie & Carcasă filtru aer (Airbox) */}
+            <Path d="M 45 54 L 45 110 L 60 130" stroke="#3d5b84" strokeWidth="4" fill="none" />
+            <Rect x="36" y="115" width="48" height="42" rx="6" fill="#172233" stroke="#38bdf8" strokeWidth="1.5" />
 
-            {/* Hotspots for individual sensors */}
+            {/* Bloc motor cu chiuloasă din aluminiu & galerie de admisie */}
+            <Rect x="105" y="110" width="130" height="145" rx="8" fill="#16253c" stroke="#4d8ef5" strokeWidth="2" />
+            {/* Canale de admisie (Runners) */}
+            {[128, 150, 172, 194, 216].map((cy, i) => (
+                <Line key={i} x1="112" y1={cy} x2="228" y2={cy} stroke="#253d61" strokeWidth="2.5" />
+            ))}
+
+            {/* Turbosuflantă & Actuator N75 */}
+            <Path d="M 105 210 L 80 230" stroke="#f0883e" strokeWidth="3.5" fill="none" />
+            <Circle cx="80" cy="235" r="16" fill="#241b18" stroke="#ff8800" strokeWidth="2" />
+
+            {/* Alternator & Releu de încărcare 12V */}
+            <Rect x="245" y="225" width="50" height="40" rx="6" fill="#0f2628" stroke="#10b981" strokeWidth="1.8" />
+            <Circle cx="270" cy="245" r="12" fill="#16393b" stroke="#34d399" strokeWidth="1.2" />
+
+            {/* CAD Leader Lines frânte la 45°/90° din senzori către cipurile exterioare */}
+            <Path d="M 60 130 L 45 130" stroke="#38bdf8" strokeWidth="1" strokeDasharray="2,2" />
+            <Path d="M 170 70 L 170 48" stroke="#38bdf8" strokeWidth="1" strokeDasharray="2,2" />
+            <Path d="M 135 155 L 110 155" stroke="#38bdf8" strokeWidth="1" strokeDasharray="2,2" />
+            <Path d="M 205 185 L 230 185" stroke="#38bdf8" strokeWidth="1" strokeDasharray="2,2" />
+            <Path d="M 80 235 L 58 235" stroke="#ff8800" strokeWidth="1" strokeDasharray="2,2" />
+            <Path d="M 170 280 L 170 300" stroke="#10b981" strokeWidth="1" strokeDasharray="2,2" />
+            <Path d="M 265 245 L 285 245" stroke="#10b981" strokeWidth="1" strokeDasharray="2,2" />
+
+            {/* Puncte senzori luminoși */}
             {Object.values(DETAILED_SENSORS)
                 .filter(s => s.view === 'ENGINE_BAY')
                 .map(sensor => {
                     const isSelected = inspectedComponent?.id === sensor.id;
                     const reading = sensor.getReading(liveData);
-                    const col = getScoreColor(reading.status === 'optimal' ? 95 : 70);
+                    const col = diagnosticLayer === 'HEATMAP'
+                        ? (sensor.id === 'turbo_vnt' ? '#ef4444' : sensor.id === 'cooling' ? '#10b981' : sensor.id === 'map_ic' ? '#06b6d4' : '#f59e0b')
+                        : getScoreColor(reading.status === 'optimal' ? 95 : 70);
 
                     return (
                         <G key={sensor.id}>
                             <Circle
                                 cx={sensor.coords.x}
                                 cy={sensor.coords.y}
-                                r={isSelected ? 16 : 12}
+                                r={isSelected ? 16 : 11}
                                 fill={col}
-                                fillOpacity={isSelected ? 0.4 : 0.2}
+                                fillOpacity={isSelected ? 0.45 : 0.22}
                                 stroke={col}
-                                strokeWidth={isSelected ? 2 : 1}
+                                strokeWidth={isSelected ? 2.5 : 1.2}
                             />
                             <Circle
                                 cx={sensor.coords.x}
                                 cy={sensor.coords.y}
                                 r={5}
                                 fill={col}
-                                stroke="#07080e"
-                                strokeWidth={1.5}
+                                stroke="#070c14"
+                                strokeWidth={1.8}
                             />
                         </G>
                     );
@@ -636,73 +855,93 @@ const InteractiveCarXRay = ({
     );
 
     // ─────────────────────────────────────────────────────────────────────────
-    // RENDER 3: SVG SIDE BLUEPRINT (Profil Lateral)
+    // RENDER 3: SVG SIDE BLUEPRINT (Profil Lateral CAD)
     // ─────────────────────────────────────────────────────────────────────────
     const renderSideProfileSvg = () => (
         <Svg width="100%" height={260} viewBox="0 0 400 240">
             <Defs>
-                <LinearGradient id="sideGrad" x1="0" y1="0" x2="0" y2="1">
-                    <Stop offset="0" stopColor="#1a2538" stopOpacity="0.8" />
-                    <Stop offset="1" stopColor="#0c1220" stopOpacity="0.95" />
+                <LinearGradient id="sideCarGrad" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0" stopColor="#1e2c45" stopOpacity="0.9" />
+                    <Stop offset="1" stopColor="#0c1322" stopOpacity="0.96" />
                 </LinearGradient>
             </Defs>
 
-            {/* Car Side Contour (Audi A6 C4 Sedan Silhouette) */}
+            {/* Siluetă aerodinamică sport-coupe / sedan fluid */}
             <Path
-                d="M 22 185 L 35 185 C 40 155, 60 148, 85 148 C 110 148, 128 155, 134 185 L 265 185 C 270 155, 290 148, 315 148 C 340 148, 358 155, 364 185 L 382 185 C 385 170, 375 140, 360 135 L 330 135 L 285 92 C 265 82, 195 78, 155 86 L 105 135 L 35 142 C 20 155, 20 175, 22 185 Z"
-                fill="url(#sideGrad)"
-                stroke="#22324e"
+                d="M 22 185 L 35 185 C 40 152, 60 144, 85 144 C 110 144, 128 152, 134 185 L 265 185 C 270 152, 290 144, 318 144 C 344 144, 360 152, 366 185 L 384 185 C 388 168, 376 138, 362 134 L 330 134 L 285 88 C 265 76, 195 72, 155 82 L 105 134 L 35 140 C 18 155, 18 175, 22 185 Z"
+                fill="url(#sideCarGrad)"
+                stroke="#2e476d"
                 strokeWidth="2"
             />
 
-            {/* Front & Rear Windows */}
-            <Path d="M 160 92 L 210 90 L 210 132 L 122 132 Z" fill="#090e18" stroke="#2a3f5f" strokeWidth="1.5" />
-            <Path d="M 220 90 L 275 94 L 315 132 L 220 132 Z" fill="#090e18" stroke="#2a3f5f" strokeWidth="1.5" />
+            {/* Geamuri laterale fumurii cu stâlp B discret */}
+            <Path d="M 158 88 L 210 86 L 210 130 L 118 130 Z" fill="#070c16" stroke="#334d73" strokeWidth="1.5" />
+            <Path d="M 220 86 L 276 90 L 320 130 L 220 130 Z" fill="#070c16" stroke="#334d73" strokeWidth="1.5" />
 
-            {/* Front Wheel & Brake Disc */}
-            <Circle cx="84" cy="180" r="28" fill="#121824" stroke="#324461" strokeWidth="2.5" />
-            <Circle cx="84" cy="180" r="16" fill="#202c40" stroke="#38bdf8" strokeWidth="1.5" />
+            {/* Arcuri suspensie elicoidale vizibile deasupra roților */}
+            <Path d="M 84 142 L 80 148 L 88 154 L 80 160 L 88 166 L 84 172" stroke="#4d8ef5" strokeWidth="2" fill="none" />
+            <Path d="M 318 142 L 314 148 L 322 154 L 314 160 L 322 166 L 318 172" stroke="#4d8ef5" strokeWidth="2" fill="none" />
 
-            {/* Rear Wheel & Brake Disc */}
-            <Circle cx="315" cy="180" r="28" fill="#121824" stroke="#324461" strokeWidth="2.5" />
-            <Circle cx="315" cy="180" r="14" fill="#202c40" stroke="#f59e0b" strokeWidth="1.5" />
+            {/* Roți masive cu jante sport în 5 spițe duble & discuri de frână perforate */}
+            <Circle cx="84" cy="180" r="28" fill="#0b1019" stroke="#384f73" strokeWidth="2.5" />
+            <Circle cx="84" cy="180" r="17" fill="#1b2537" stroke="#4d8ef5" strokeWidth="1.5" strokeDasharray="3,2" />
+            <Rect x="78" y="166" width="6" height="14" rx="2" fill="#ef4444" stroke="#ff8888" strokeWidth="0.8" />
 
-            {/* Engine Sump (Baie Ulei) */}
-            <Rect x="122" y="174" width="30" height="14" rx="3" fill="#222b3d" stroke="#38bdf8" strokeWidth="1.5" />
+            <Circle cx="318" cy="180" r="28" fill="#0b1019" stroke="#384f73" strokeWidth="2.5" />
+            <Circle cx="318" cy="180" r="15" fill="#1b2537" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="3,2" />
+            <Rect x="312" y="168" width="6" height="12" rx="2" fill="#ef4444" stroke="#ff8888" strokeWidth="0.8" />
 
-            {/* Transmission Bellhousing */}
-            <Rect x="162" y="170" width="35" height="18" rx="4" fill="#1b2333" stroke="#4d8ef5" strokeWidth="1.5" />
+            {/* Baie de ulei inferioară din aluminiu cu aripioare răcire */}
+            <Rect x="118" y="176" width="28" height="12" rx="2" fill="#202c40" stroke="#38bdf8" strokeWidth="1.5" />
 
-            {/* Exhaust Pipe & Underfloor DPF Canister */}
-            <Path d="M 148 165 L 180 184 L 360 184" stroke="#523924" strokeWidth="2.5" fill="none" />
-            <Rect x="220" y="176" width="38" height="15" rx="4" fill="#241b18" stroke="#ff8800" strokeWidth="1.5" />
+            {/* Carcasă transmisie în tunel */}
+            <Rect x="160" y="172" width="34" height="16" rx="3" fill="#182333" stroke="#4d8ef5" strokeWidth="1.5" />
 
-            {/* Hotspots for Side View components */}
+            {/* Traseu complet eșapament cu DPF sub podea și tobă finală spate */}
+            <Path d="M 144 165 L 175 184 L 355 184 L 375 180" stroke="#5a3d24" strokeWidth="2.5" fill="none" />
+            <Rect x="216" y="176" width="40" height="16" rx="4" fill="#261b17" stroke="#f97316" strokeWidth="1.5" />
+            <Rect x="350" y="174" width="22" height="12" rx="3" fill="#171e2b" stroke="#71829d" strokeWidth="1.2" />
+
+            {/* CAD LEADER LINES FRÂNTE LA 45°/90° (Zero coliziuni!) */}
+            {/* Frâne față: urcă sus */}
+            <Path d="M 84 165 L 84 135 L 75 125" stroke="#38bdf8" strokeWidth="1" strokeDasharray="2,2" />
+            {/* Baie ulei: coboară jos */}
+            <Path d="M 130 188 L 130 215 L 125 218" stroke="#38bdf8" strokeWidth="1" strokeDasharray="2,2" />
+            {/* Cutie ambreiaj: urcă sus */}
+            <Path d="M 175 172 L 175 125" stroke="#4d8ef5" strokeWidth="1" strokeDasharray="2,2" />
+            {/* DPF eșapament: coboară jos */}
+            <Path d="M 235 192 L 235 215 L 235 218" stroke="#f97316" strokeWidth="1" strokeDasharray="2,2" />
+            {/* Frâne spate: urcă sus */}
+            <Path d="M 318 165 L 318 135 L 325 125" stroke="#f59e0b" strokeWidth="1" strokeDasharray="2,2" />
+
+            {/* Puncte componente */}
             {Object.values(DETAILED_SENSORS)
                 .filter(s => s.view === 'SIDE_PROFILE')
                 .map(sensor => {
                     const isSelected = inspectedComponent?.id === sensor.id;
                     const reading = sensor.getReading(liveData);
-                    const col = getScoreColor(reading.status === 'optimal' ? 95 : 70);
+                    const col = diagnosticLayer === 'HEATMAP'
+                        ? (sensor.id === 'dpf_exhaust' ? '#ef4444' : sensor.id === 'oil_sump' ? '#f59e0b' : '#38bdf8')
+                        : getScoreColor(reading.status === 'optimal' ? 95 : 70);
 
                     return (
                         <G key={sensor.id}>
                             <Circle
                                 cx={sensor.coords.x}
                                 cy={sensor.coords.y}
-                                r={isSelected ? 16 : 12}
+                                r={isSelected ? 16 : 11}
                                 fill={col}
-                                fillOpacity={isSelected ? 0.4 : 0.2}
+                                fillOpacity={isSelected ? 0.45 : 0.22}
                                 stroke={col}
-                                strokeWidth={isSelected ? 2 : 1}
+                                strokeWidth={isSelected ? 2.5 : 1.2}
                             />
                             <Circle
                                 cx={sensor.coords.x}
                                 cy={sensor.coords.y}
                                 r={5}
                                 fill={col}
-                                stroke="#07080e"
-                                strokeWidth={1.5}
+                                stroke="#070c14"
+                                strokeWidth={1.8}
                             />
                         </G>
                     );
@@ -711,7 +950,7 @@ const InteractiveCarXRay = ({
     );
 
     // ─────────────────────────────────────────────────────────────────────────
-    // VEDERE 1: MODUL PREVIEW (Pe StatusScreen)
+    // VEDERE 1: MODUL PREVIEW (Pe StatusScreen — Curat & Fără Etichete Tăiate)
     // ─────────────────────────────────────────────────────────────────────────
     if (mode === 'preview' && !isScannerOpen) {
         return (
@@ -719,24 +958,43 @@ const InteractiveCarXRay = ({
                 {/* ── Technical Header Title ── */}
                 <View style={styles.headerRow}>
                     <View style={styles.headerTag}>
-                        <Text style={styles.headerTagText}>🔬 X-RAY CHASSIS VIEW</Text>
+                        <Text style={styles.headerTagText}>🔬 X-RAY DIGITAL TWIN</Text>
                     </View>
                     <Text
                         style={styles.headerTopologyText}
                         numberOfLines={1}
                         ellipsizeMode="tail"
                     >
-                        {TOPOLOGIES[topology]?.shortLabel || 'Longitudinal'}{vehicleLabel ? ` · ${vehicleLabel}` : ' · Audi AEL'}
+                        {TOPOLOGIES[topology]?.shortLabel || 'Longitudinal AWD'}{vehicleLabel ? ` · ${vehicleLabel}` : ''}
                     </Text>
                 </View>
 
-                {/* ── Vector Schematic Canvas (Clean, no giant text boxes) ── */}
+                {/* ── Vector Schematic Canvas cu Laser Sweep ── */}
                 <TouchableOpacity
                     activeOpacity={0.9}
                     onPress={() => setIsScannerOpen(true)}
                     style={styles.previewCanvasWrap}
                 >
                     {renderChassisSvg(true)}
+
+                    {/* Laser Sweep Tomography Bar */}
+                    <Animated.View
+                        pointerEvents="none"
+                        style={[
+                            styles.laserSweepBar,
+                            {
+                                transform: [{
+                                    translateY: scanAnim.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [10, 260],
+                                    }),
+                                }],
+                            },
+                        ]}
+                    >
+                        <View style={styles.laserCore} />
+                        <View style={styles.laserGlow} />
+                    </Animated.View>
 
                     {/* Minimalist % Badges next to nodes (clean and compact) */}
                     {Object.entries(chassisHotspots).map(([key, item]) => {
@@ -755,7 +1013,7 @@ const InteractiveCarXRay = ({
                                 ]}
                                 pointerEvents="none"
                             >
-                                <View style={[styles.minimalBadge, { borderColor: col, backgroundColor: 'rgba(8, 12, 22, 0.92)' }]}>
+                                <View style={[styles.minimalBadge, { borderColor: col, backgroundColor: 'rgba(8, 12, 22, 0.94)' }]}>
                                     <Text style={[styles.minimalBadgeScore, { color: col }]}>{item.score}%</Text>
                                 </View>
                             </View>
@@ -772,7 +1030,7 @@ const InteractiveCarXRay = ({
                     accessibilityLabel="Deschide Scannerul Anatomic 360°"
                 >
                     <Text style={[styles.openScannerBtnText, { color: tpl.accent }]}>
-                        🔍 Deschide Scannerul Anatomic 360° (3 Unghiuri & Senzori) ❯
+                        🔍 Deschide Scannerul Anatomic 360° (CAD & Senzori) ❯
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -780,7 +1038,7 @@ const InteractiveCarXRay = ({
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // VEDERE 2: MODUL SCANNER COMPLET (Modal sau Full Screen)
+    // VEDERE 2: MODUL SCANNER COMPLET (Modal Full Screen CAD Experience)
     // ─────────────────────────────────────────────────────────────────────────
     return (
         <Modal
@@ -794,7 +1052,7 @@ const InteractiveCarXRay = ({
                 <View style={[styles.modalHeader, { borderBottomColor: tpl.border }]}>
                     <View style={styles.modalHeaderLeft}>
                         <Text style={styles.modalTitle}>🔬 SCANNER ANATOMIC 360°</Text>
-                        <Text style={styles.modalSub}>{vehicleLabel || 'Audi A6 · C4 2.5 TDI'}</Text>
+                        <Text style={styles.modalSub}>{vehicleLabel || 'Vehicul Universal · CAD Telemetrie'}</Text>
                     </View>
                     <TouchableOpacity
                         style={[styles.closeBtn, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}
@@ -807,7 +1065,7 @@ const InteractiveCarXRay = ({
                 </View>
 
                 <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
-                    {/* ── 1. Selector Topologie Mașină (Adaptabil Dinamic) ── */}
+                    {/* ── 1. Selector Topologie Universală Mașină ── */}
                     <View style={styles.topologySection}>
                         <Text style={styles.sectionHeading}>ARHITECTURĂ ȘASIU & POZIȚIONARE:</Text>
                         <View style={styles.topologyPillRow}>
@@ -854,14 +1112,51 @@ const InteractiveCarXRay = ({
                         ))}
                     </View>
 
-                    {/* ── 3. Blueprint Canvas pentru Unghiul Curent ── */}
+                    {/* ── 2b. Selector Straturi Diagnostic (Mecanică / Senzori / Termic) ── */}
+                    <View style={styles.layerTabs}>
+                        {DIAGNOSTIC_LAYERS.map(layer => (
+                            <TouchableOpacity
+                                key={layer.id}
+                                style={[
+                                    styles.layerTab,
+                                    diagnosticLayer === layer.id && { backgroundColor: 'rgba(77, 142, 245, 0.16)', borderColor: tpl.accent }
+                                ]}
+                                onPress={() => setDiagnosticLayer(layer.id)}
+                            >
+                                <Text style={[styles.layerTabText, diagnosticLayer === layer.id && { color: tpl.accent, fontWeight: 'bold' }]}>
+                                    {layer.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    {/* ── 3. Blueprint Canvas cu Leader Lines Anti-Coliziune ── */}
                     <View style={[styles.canvasCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                        {/* Laser Scanner Sweep Bar */}
+                        <Animated.View
+                            pointerEvents="none"
+                            style={[
+                                styles.laserSweepBar,
+                                {
+                                    transform: [{
+                                        translateY: scanAnim.interpolate({
+                                            inputRange: [0, 1],
+                                            outputRange: [10, viewpoint === 'CHASSIS_TOP' ? 330 : 230],
+                                        }),
+                                    }],
+                                },
+                            ]}
+                        >
+                            <View style={styles.laserCore} />
+                            <View style={styles.laserGlow} />
+                        </Animated.View>
+
                         {viewpoint === 'CHASSIS_TOP' && (
                             <View style={styles.canvasContainer}>
                                 {renderChassisSvg(false)}
-                                {/* Touchable overlay on chassis */}
+                                {/* Touch Targets pentru Șasiu Sus */}
                                 {Object.entries(chassisHotspots).map(([key, item]) => {
-                                    const col = getScoreColor(item.score);
+                                    const col = diagnosticLayer === 'HEATMAP' ? item.tempColor : getScoreColor(item.score);
                                     const leftPct = (item.x / 320) * 100;
                                     const topPct  = (item.y / 440) * 100;
 
@@ -873,10 +1168,10 @@ const InteractiveCarXRay = ({
                                                 const comp = Object.values(DETAILED_SENSORS).find(s => s.subsystem === key) || {
                                                     id: key,
                                                     name: item.label,
-                                                    nominal: 'Nominal conform ECU',
-                                                    location: `Zona ${item.label} în configurația ${TOPOLOGIES[topology]?.shortLabel}.`,
+                                                    nominal: 'Nominal conform standardului OBD-II',
+                                                    location: `Ansamblul ${item.label} în arhitectura ${TOPOLOGIES[topology]?.shortLabel}.`,
                                                     getReading: () => ({ val: `${item.score}%`, status: item.score >= 85 ? 'optimal' : 'caution' }),
-                                                    diag: 'Subsistem monitorizat în timp real.',
+                                                    diag: 'Subsistem monitorizat continuu pe magistrala CAN.',
                                                     aiPrompt: `Analizează starea subsistemului ${item.label}.`,
                                                 };
                                                 setInspectedComponent(comp);
@@ -884,7 +1179,9 @@ const InteractiveCarXRay = ({
                                             }}
                                         >
                                             <View style={[styles.sensorTouchBadge, { borderColor: col }]}>
-                                                <Text style={[styles.sensorTouchScore, { color: col }]}>{item.score}%</Text>
+                                                <Text style={[styles.sensorTouchScore, { color: col }]}>
+                                                    {diagnosticLayer === 'HEATMAP' ? item.temp : `${item.score}%`}
+                                                </Text>
                                                 <Text style={styles.sensorTouchLabel}>{item.label}</Text>
                                             </View>
                                         </TouchableOpacity>
@@ -896,19 +1193,23 @@ const InteractiveCarXRay = ({
                         {viewpoint === 'ENGINE_BAY' && (
                             <View style={styles.canvasContainer}>
                                 {renderEngineBaySvg()}
-                                {/* Touchable overlay for Engine Bay sensors */}
+                                {/* Touchable Pills cu Leader Lines (Staggered fără suprapuneri) */}
                                 {Object.values(DETAILED_SENSORS)
                                     .filter(s => s.view === 'ENGINE_BAY')
                                     .map(sensor => {
-                                        const leftPct = (sensor.coords.x / 340) * 100;
-                                        const topPct  = (sensor.coords.y / 360) * 100;
+                                        const leftPct = (sensor.callout.x / 340) * 100;
+                                        const topPct  = (sensor.callout.y / 360) * 100;
                                         const isSelected = inspectedComponent?.id === sensor.id;
                                         const reading = sensor.getReading(liveData);
 
                                         return (
                                             <TouchableOpacity
                                                 key={sensor.id}
-                                                style={[styles.sensorTouchPill, { left: `${leftPct}%`, top: `${topPct}%` }, isSelected && styles.sensorTouchPillSelected]}
+                                                style={[
+                                                    styles.sensorTouchPill,
+                                                    { left: `${leftPct}%`, top: `${topPct}%` },
+                                                    isSelected && styles.sensorTouchPillSelected,
+                                                ]}
                                                 onPress={() => setInspectedComponent(sensor)}
                                             >
                                                 <View style={[styles.sensorPillDot, { backgroundColor: getScoreColor(reading.status === 'optimal' ? 95 : 65) }]} />
@@ -922,19 +1223,23 @@ const InteractiveCarXRay = ({
                         {viewpoint === 'SIDE_PROFILE' && (
                             <View style={styles.canvasContainer}>
                                 {renderSideProfileSvg()}
-                                {/* Touchable overlay for Side Profile components */}
+                                {/* Touchable Pills cu Leader Lines (Staggered sus/jos fără suprapuneri) */}
                                 {Object.values(DETAILED_SENSORS)
                                     .filter(s => s.view === 'SIDE_PROFILE')
                                     .map(sensor => {
-                                        const leftPct = (sensor.coords.x / 400) * 100;
-                                        const topPct  = (sensor.coords.y / 240) * 100;
+                                        const leftPct = (sensor.callout.x / 400) * 100;
+                                        const topPct  = (sensor.callout.y / 240) * 100;
                                         const isSelected = inspectedComponent?.id === sensor.id;
                                         const reading = sensor.getReading(liveData);
 
                                         return (
                                             <TouchableOpacity
                                                 key={sensor.id}
-                                                style={[styles.sensorTouchPill, { left: `${leftPct}%`, top: `${topPct}%` }, isSelected && styles.sensorTouchPillSelected]}
+                                                style={[
+                                                    styles.sensorTouchPill,
+                                                    { left: `${leftPct}%`, top: `${topPct}%` },
+                                                    isSelected && styles.sensorTouchPillSelected,
+                                                ]}
                                                 onPress={() => setInspectedComponent(sensor)}
                                             >
                                                 <View style={[styles.sensorPillDot, { backgroundColor: getScoreColor(reading.status === 'optimal' ? 95 : 65) }]} />
@@ -946,7 +1251,7 @@ const InteractiveCarXRay = ({
                         )}
                     </View>
 
-                    {/* ── 4. Card Inspecție Componentă Selectată (Deep Dive & Diagnoză) ── */}
+                    {/* ── 4. Card Inspecție Componentă Selectată & Plajă de Toleranță OEM ── */}
                     {inspectedComponent ? (
                         <View style={[styles.inspectionCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                             <View style={styles.inspectionHeader}>
@@ -956,6 +1261,25 @@ const InteractiveCarXRay = ({
                                 </View>
                                 <View style={[styles.inspectionStatusBadge, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10b981' }]}>
                                     <Text style={styles.inspectionStatusText}>OPTIM</Text>
+                                </View>
+                            </View>
+
+                            {/* Plajă de Toleranță Grafică OEM */}
+                            <View style={styles.toleranceContainer}>
+                                <View style={styles.toleranceHeader}>
+                                    <Text style={styles.toleranceLabel}>PLAJĂ DE TOLERANȚĂ OEM:</Text>
+                                    <Text style={styles.toleranceStatusText}>● ÎN LIMITĂ OPTIMĂ</Text>
+                                </View>
+                                <View style={styles.toleranceBarTrack}>
+                                    <View style={styles.toleranceZoneLow} />
+                                    <View style={styles.toleranceZoneOptimal} />
+                                    <View style={styles.toleranceZoneHigh} />
+                                    <View style={[styles.toleranceNeedle, { left: '55%' }]} />
+                                </View>
+                                <View style={styles.toleranceLegend}>
+                                    <Text style={styles.toleranceLegendText}>MIN</Text>
+                                    <Text style={[styles.toleranceLegendText, { color: '#10b981', fontWeight: 'bold' }]}>NOMINAL</Text>
+                                    <Text style={styles.toleranceLegendText}>MAX</Text>
                                 </View>
                             </View>
 
@@ -992,7 +1316,7 @@ const InteractiveCarXRay = ({
                     ) : (
                         <View style={[styles.emptyPromptBox, { borderColor: tpl.border }]}>
                             <Text style={styles.emptyPromptText}>
-                                👆 Atinge orice senzor sau componentă pe schemă pentru a inspecta localizarea, valorile live și diagnosticul.
+                                👆 Atinge orice senzor sau componentă de pe schemă pentru a inspecta localizarea fizică, valorile live și toleranța tehnică.
                             </Text>
                         </View>
                     )}
@@ -1089,6 +1413,32 @@ const styles = StyleSheet.create({
         letterSpacing: 0.3,
     },
 
+    // ── Laser Sweep Animation ──
+    laserSweepBar: {
+        position: 'absolute',
+        left: 20,
+        right: 20,
+        top: 0,
+        height: 3,
+        zIndex: 5,
+    },
+    laserCore: {
+        width: '100%',
+        height: 1.5,
+        backgroundColor: '#00f0ff',
+        shadowColor: '#00f0ff',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.9,
+        shadowRadius: 5,
+        elevation: 6,
+    },
+    laserGlow: {
+        width: '100%',
+        height: 8,
+        backgroundColor: 'rgba(0, 240, 255, 0.12)',
+        marginTop: -4,
+    },
+
     // ── MODAL SCANNER ──
     modalRoot: {
         flex: 1,
@@ -1113,20 +1463,20 @@ const styles = StyleSheet.create({
     },
     modalSub: {
         fontSize: typography.sizes.caption,
-        color: colors.text.secondary,
+        color: colors.text.tertiary,
         marginTop: 2,
     },
     closeBtn: {
         width: 36,
         height: 36,
-        borderRadius: radii.full,
+        borderRadius: 18,
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
     },
     closeBtnText: {
-        fontSize: 16,
         color: colors.text.primary,
+        fontSize: 16,
         fontWeight: typography.weights.bold,
     },
     modalScroll: {
@@ -1134,43 +1484,43 @@ const styles = StyleSheet.create({
     },
     modalScrollContent: {
         paddingHorizontal: layout.screenPaddingH,
+        paddingTop: spacing[3],
         paddingBottom: spacing[10],
     },
 
     // Topologie
     topologySection: {
-        marginVertical: spacing[3],
+        marginBottom: spacing[3],
     },
     sectionHeading: {
         fontSize: typography.sizes.micro,
-        fontWeight: typography.weights.heavy,
+        fontWeight: typography.weights.bold,
         color: colors.text.tertiary,
         letterSpacing: 0.8,
         marginBottom: spacing[2],
     },
     topologyPillRow: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: spacing[2],
-        marginBottom: 6,
+        marginBottom: spacing[2],
     },
     topologyPill: {
-        flex: 1,
-        paddingVertical: 7,
-        paddingHorizontal: 4,
-        borderRadius: radii.sm,
+        paddingVertical: 6,
+        paddingHorizontal: spacing[3],
+        borderRadius: radii.full,
         borderWidth: 1,
         borderColor: colors.border.default,
-        backgroundColor: colors.bg[2],
-        alignItems: 'center',
-        justifyContent: 'center',
+        backgroundColor: colors.bg[1],
     },
     topologyPillText: {
-        fontSize: 10,
-        fontWeight: typography.weights.bold,
+        fontSize: typography.sizes.caption,
         color: colors.text.secondary,
+        fontWeight: typography.weights.medium,
     },
     topologyPillTextActive: {
         color: '#FFFFFF',
+        fontWeight: typography.weights.bold,
     },
     topologyDesc: {
         fontSize: typography.sizes.caption,
@@ -1183,7 +1533,7 @@ const styles = StyleSheet.create({
     viewpointTabs: {
         flexDirection: 'row',
         gap: spacing[2],
-        marginBottom: spacing[3],
+        marginBottom: spacing[2],
     },
     viewpointTab: {
         flex: 1,
@@ -1206,6 +1556,28 @@ const styles = StyleSheet.create({
         color: colors.text.secondary,
     },
 
+    // Diagnostic Layer Tabs
+    layerTabs: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        marginBottom: spacing[3],
+    },
+    layerTab: {
+        flex: 1,
+        paddingVertical: 6,
+        borderRadius: radii.xs,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    layerTabText: {
+        fontSize: typography.sizes.micro,
+        color: colors.text.tertiary,
+        fontWeight: typography.weights.semibold,
+        letterSpacing: 0.3,
+    },
+
     // Blueprint Canvas Card
     canvasCard: {
         borderRadius: radii.lg,
@@ -1214,6 +1586,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
+        position: 'relative',
     },
     canvasContainer: {
         position: 'relative',
@@ -1228,7 +1601,7 @@ const styles = StyleSheet.create({
     sensorTouchBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(8, 12, 22, 0.92)',
+        backgroundColor: 'rgba(8, 12, 22, 0.94)',
         borderWidth: 1,
         borderRadius: radii.xs,
         paddingHorizontal: 5,
@@ -1249,18 +1622,18 @@ const styles = StyleSheet.create({
         position: 'absolute',
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(10, 16, 28, 0.90)',
+        backgroundColor: 'rgba(10, 16, 28, 0.94)',
         borderWidth: 1,
         borderColor: colors.border.strong,
         borderRadius: radii.full,
-        paddingHorizontal: 6,
+        paddingHorizontal: 7,
         paddingVertical: 3,
         gap: 4,
-        transform: [{ translateX: -20 }, { translateY: -12 }],
+        transform: [{ translateX: -22 }, { translateY: -12 }],
     },
     sensorTouchPillSelected: {
         borderColor: '#00f0ff',
-        backgroundColor: 'rgba(0, 240, 255, 0.15)',
+        backgroundColor: 'rgba(0, 240, 255, 0.18)',
     },
     sensorPillDot: {
         width: 6,
@@ -1284,7 +1657,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: spacing[3],
+        marginBottom: spacing[2],
         borderBottomWidth: 1,
         borderBottomColor: colors.border.subtle,
         paddingBottom: spacing[2],
@@ -1311,6 +1684,80 @@ const styles = StyleSheet.create({
         fontWeight: typography.weights.heavy,
         letterSpacing: 0.5,
     },
+
+    // OEM Tolerance Gauge
+    toleranceContainer: {
+        backgroundColor: 'rgba(10, 16, 28, 0.65)',
+        borderRadius: radii.md,
+        padding: spacing[3],
+        marginBottom: spacing[3],
+        borderWidth: 1,
+        borderColor: colors.border.subtle,
+    },
+    toleranceHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: spacing[2],
+    },
+    toleranceLabel: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
+        color: colors.text.tertiary,
+        letterSpacing: 0.6,
+    },
+    toleranceStatusText: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.heavy,
+        color: '#10b981',
+    },
+    toleranceBarTrack: {
+        height: 6,
+        borderRadius: 3,
+        flexDirection: 'row',
+        position: 'relative',
+        overflow: 'visible',
+        marginVertical: 4,
+    },
+    toleranceZoneLow: {
+        flex: 1,
+        backgroundColor: '#3b82f6',
+        borderTopLeftRadius: 3,
+        borderBottomLeftRadius: 3,
+    },
+    toleranceZoneOptimal: {
+        flex: 2,
+        backgroundColor: '#10b981',
+    },
+    toleranceZoneHigh: {
+        flex: 1,
+        backgroundColor: '#ef4444',
+        borderTopRightRadius: 3,
+        borderBottomRightRadius: 3,
+    },
+    toleranceNeedle: {
+        position: 'absolute',
+        top: -4,
+        width: 4,
+        height: 14,
+        borderRadius: 2,
+        backgroundColor: '#FFFFFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.8,
+        shadowRadius: 2,
+        elevation: 4,
+    },
+    toleranceLegend: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 3,
+    },
+    toleranceLegendText: {
+        fontSize: 8,
+        color: colors.text.tertiary,
+        fontWeight: typography.weights.semibold,
+    },
+
     inspectionRow: {
         marginBottom: spacing[2] + 2,
     },
