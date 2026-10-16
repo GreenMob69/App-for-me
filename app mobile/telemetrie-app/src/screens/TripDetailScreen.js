@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import { useNavigation } from '@react-navigation/native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import api from '../services/api';
 import { t } from '../i18n';
 import { getActiveServerUrl } from '../utils/config';
@@ -105,9 +107,21 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
         setSharing(true);
         try {
             const url = `${getActiveServerUrl()}/api/calatorii/${effectiveTripId}/export/csv`;
-            await Linking.openURL(url);
+            const localUri = `${FileSystem.documentDirectory}telemetrie_cursa_${effectiveTripId}.csv`;
+
+            const downloadRes = await FileSystem.downloadAsync(url, localUri);
+            if (downloadRes.status === 200 && (await Sharing.isAvailableAsync())) {
+                await Sharing.shareAsync(downloadRes.uri, {
+                    mimeType: 'text/csv',
+                    dialogTitle: `Export CSV Cursa #${effectiveTripId}`,
+                    UTI: 'public.comma-separated-values-text',
+                });
+            } else {
+                await Linking.openURL(url);
+            }
         } catch (e) {
-            Alert.alert('Eroare CSV', `Nu s-a putut descărca exportul: ${e.message}`);
+            Alert.alert('Eroare CSV', `Deschidere prin browser: ${e.message}`);
+            Linking.openURL(`${getActiveServerUrl()}/api/calatorii/${effectiveTripId}/export/csv`).catch(() => {});
         } finally {
             setSharing(false);
         }

@@ -2,10 +2,13 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
     View, Text, StyleSheet, SectionList, ScrollView,
     TouchableOpacity, Share, RefreshControl, Platform, StatusBar,
-    ActivityIndicator, useWindowDimensions, Modal,
+    ActivityIndicator, useWindowDimensions, Modal, Alert, Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import api from '../services/api';
+import { getActiveServerUrl } from '../utils/config';
 import { writeCache } from '../utils/cache';
 import { upsertTrips, queryTrips } from '../services/localDB';
 import {
@@ -611,13 +614,40 @@ const TripHistoryScreen = () => {
 
     const heroInfo = useMemo(() => buildHeroInfo(trips, stats), [trips, stats]);
 
+    const [exportingCsv, setExportingCsv] = useState(false);
+
+    const handleExportCsv = useCallback(async (tripId) => {
+        if (!tripId || exportingCsv) return;
+        setExportingCsv(true);
+        try {
+            const url = `${getActiveServerUrl()}/api/calatorii/${tripId}/export/csv`;
+            const localUri = `${FileSystem.documentDirectory}telemetrie_cursa_${tripId}.csv`;
+
+            const downloadRes = await FileSystem.downloadAsync(url, localUri);
+            if (downloadRes.status === 200 && (await Sharing.isAvailableAsync())) {
+                await Sharing.shareAsync(downloadRes.uri, {
+                    mimeType: 'text/csv',
+                    dialogTitle: `Export CSV Cursa #${tripId}`,
+                    UTI: 'public.comma-separated-values-text',
+                });
+            } else {
+                await Linking.openURL(url);
+            }
+        } catch (e) {
+            Alert.alert('Export CSV', `Deschidere prin browser: ${e.message}`);
+            Linking.openURL(`${getActiveServerUrl()}/api/calatorii/${tripId}/export/csv`).catch(() => {});
+        } finally {
+            setExportingCsv(false);
+        }
+    }, [exportingCsv]);
+
     const handleToggleTag = useCallback(async (trip) => {
         const nextTag = trip.trip_tag === 'BUSINESS' ? 'PERSONAL' : trip.trip_tag === 'PERSONAL' ? null : 'BUSINESS';
         setTrips(prev => prev.map(t => t.id_calatorie === trip.id_calatorie ? { ...t, trip_tag: nextTag } : t));
         try {
             await api.put(`/calatorii/${trip.id_calatorie}/tag`, { tag: nextTag });
         } catch (err) {
-            console.error('Eroare actualizare tag:', err);
+            console.warn('Actualizare tag:', err.message);
             setTrips(prev => prev.map(t => t.id_calatorie === trip.id_calatorie ? { ...t, trip_tag: trip.trip_tag } : t));
         }
     }, []);
@@ -884,7 +914,9 @@ const TripHistoryScreen = () => {
                     <ScrollView
                         style={styles.peekScroll}
                         contentContainerStyle={styles.peekScrollContent}
-                        showsVerticalScrollIndicator={false}
+                        showsVerticalScrollIndicator={true}
+                        bounces={true}
+                        overScrollMode="always"
                     >
                         {/* Header Row */}
                         <View style={styles.peekHeader}>
@@ -1000,7 +1032,7 @@ const TripHistoryScreen = () => {
                         <View style={styles.peekActionRow}>
                             <Button
                                 variant="primary"
-                                label="Deschide analiza completă (Deep Dive) ❯"
+                                label="📈 Deschide Cursa Completă (Deep Dive) ❯"
                                 onPress={() => {
                                     const tripId = selectedTripForPeek.id_calatorie;
                                     setSelectedTripForPeek(null);
@@ -1008,21 +1040,29 @@ const TripHistoryScreen = () => {
                                 }}
                                 style={styles.peekPrimaryBtn}
                             />
-                            <Button
-                                variant="ghost"
-                                label="Partajează rezumat cursă"
-                                onPress={() => {
-                                    const trip = selectedTripForPeek;
-                                    const text = `Cursă ${buildTripTitle(trip)}\n` +
-                                        `Data: ${formatTripDate(trip.timestamp_start)} ${formatTripTime(trip.timestamp_start)}\n` +
-                                        `Distanță: ${parseFloat(trip.km_parcursi || 0).toFixed(1)} km\n` +
-                                        `Consum: ${parseFloat(trip.consum_mediu_100km || 0).toFixed(1)} L/100km\n` +
-                                        `Scor Eco: ${trip.scor_eco ?? 100}/100\n` +
-                                        `Generat de Antigravity OBD-II Telemetry`;
-                                    Share.share({ message: text });
-                                }}
-                                style={styles.peekSecondaryBtn}
-                            />
+                            <View style={styles.peekDualActions}>
+                                <Button
+                                    variant="secondary"
+                                    label={exportingCsv ? "⏳ Se exportă..." : "📊 Exportă CSV"}
+                                    onPress={() => handleExportCsv(selectedTripForPeek.id_calatorie)}
+                                    style={{ flex: 1 }}
+                                />
+                                <Button
+                                    variant="ghost"
+                                    label="Partajează"
+                                    onPress={() => {
+                                        const trip = selectedTripForPeek;
+                                        const text = `Cursă ${buildTripTitle(trip)}\n` +
+                                            `Data: ${formatTripDate(trip.timestamp_start)} ${formatTripTime(trip.timestamp_start)}\n` +
+                                            `Distanță: ${parseFloat(trip.km_parcursi || 0).toFixed(1)} km\n` +
+                                            `Consum: ${parseFloat(trip.consum_mediu_100km || 0).toFixed(1)} L/100km\n` +
+                                            `Scor Eco: ${trip.scor_eco ?? 100}/100\n` +
+                                            `Generat de Antigravity OBD-II Telemetry`;
+                                        Share.share({ message: text });
+                                    }}
+                                    style={{ flex: 1 }}
+                                />
+                            </View>
                         </View>
                     </ScrollView>
                 )}
@@ -1479,7 +1519,8 @@ const styles = StyleSheet.create({
 
     // ── Trip Peek BottomSheet Styles ──────────────────────────────────────────
     peekScroll: {
-        maxHeight: 520,
+        flexShrink: 1,
+        maxHeight: 580,
     },
     peekScrollContent: {
         paddingHorizontal: spacing[5],
@@ -1593,6 +1634,12 @@ const styles = StyleSheet.create({
     },
     peekPrimaryBtn: {
         width: '100%',
+    },
+    peekDualActions: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        width: '100%',
+        marginTop: spacing[1],
     },
     peekSecondaryBtn: {
         width: '100%',

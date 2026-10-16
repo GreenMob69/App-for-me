@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
     View, Text, Modal, Animated, StyleSheet,
     TouchableOpacity, TouchableWithoutFeedback,
-    Platform, Dimensions,
+    Platform, Dimensions, PanResponder,
 } from 'react-native';
 import { colors, typography, radii, spacing } from '../../theme';
 import PropTypes from 'prop-types';
@@ -10,19 +10,21 @@ import PropTypes from 'prop-types';
 const { height: SCREEN_H } = Dimensions.get('window');
 
 /**
- * BottomSheet — înlocuitor animat pentru Modal classic.
- * Slide-in din jos la deschidere, slide-out la închidere.
- * Apelează onClose() după ce animația de ieșire s-a terminat.
+ * BottomSheet — înlocuitor animat și interactiv cu gesturi pentru Modal classic.
+ * Slide-in din jos la deschidere, gest de tragere (PanResponder) pentru dismiss,
+ * rezistență elastică (rubber-band) la tragere în sus.
  */
 const BottomSheet = ({ visible, onClose, title, children, maxHeight }) => {
     const [mounted, setMounted] = useState(false);
     const slideAnim   = useRef(new Animated.Value(SCREEN_H)).current;
     const overlayAnim = useRef(new Animated.Value(0)).current;
+    const panY        = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
         if (visible) {
             setMounted(true);
             slideAnim.setValue(SCREEN_H);
+            panY.setValue(0);
             Animated.parallel([
                 Animated.timing(slideAnim,   { toValue: 0,   duration: 300, useNativeDriver: true }),
                 Animated.timing(overlayAnim, { toValue: 1,   duration: 250, useNativeDriver: true }),
@@ -42,11 +44,44 @@ const BottomSheet = ({ visible, onClose, title, children, maxHeight }) => {
             Animated.timing(overlayAnim, { toValue: 0,        duration: 200, useNativeDriver: true }),
         ]).start(() => {
             setMounted(false);
+            panY.setValue(0);
             onClose?.();
         });
     };
 
+    // ── PanResponder pentru tragere cu degetul (drag-to-dismiss) ───────────
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 4,
+            onPanResponderMove: (_, gesture) => {
+                if (gesture.dy > 0) {
+                    panY.setValue(gesture.dy);
+                } else {
+                    // Rezistență elastică în sus
+                    panY.setValue(gesture.dy * 0.25);
+                }
+            },
+            onPanResponderRelease: (_, gesture) => {
+                // Dacă a fost tras în jos peste 90px sau rapid în jos (vy > 0.5)
+                if (gesture.dy > 90 || (gesture.dy > 40 && gesture.vy > 0.5)) {
+                    handleClose();
+                } else {
+                    // Snap înapoi la poziția deschisă
+                    Animated.spring(panY, {
+                        toValue: 0,
+                        friction: 8,
+                        tension: 50,
+                        useNativeDriver: true,
+                    }).start();
+                }
+            },
+        })
+    ).current;
+
     if (!mounted) return null;
+
+    const combinedTranslateY = Animated.add(slideAnim, panY);
 
     return (
         <Modal
@@ -66,29 +101,31 @@ const BottomSheet = ({ visible, onClose, title, children, maxHeight }) => {
                 style={[
                     styles.sheet,
                     maxHeight ? { maxHeight } : styles.defaultMaxHeight,
-                    { transform: [{ translateY: slideAnim }] },
+                    { transform: [{ translateY: combinedTranslateY }] },
                 ]}
                 accessibilityViewIsModal
                 accessibilityRole="none"
             >
-                {/* Drag handle */}
-                <View style={styles.handle} accessibilityElementsHidden />
+                {/* Zonă de tragere cu degetul: Drag Handle + Header */}
+                <View {...panResponder.panHandlers} style={styles.dragZone}>
+                    <View style={styles.handle} accessibilityElementsHidden />
 
-                {/* Header */}
-                {title ? (
-                    <View style={styles.header}>
-                        <Text style={styles.title}>{title}</Text>
-                        <TouchableOpacity
-                            onPress={handleClose}
-                            style={styles.closeBtn}
-                            accessibilityRole="button"
-                            accessibilityLabel="Închide"
-                            hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-                        >
-                            <Text style={styles.closeBtnText}>✕</Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : null}
+                    {/* Header */}
+                    {title ? (
+                        <View style={styles.header}>
+                            <Text style={styles.title}>{title}</Text>
+                            <TouchableOpacity
+                                onPress={handleClose}
+                                style={styles.closeBtn}
+                                accessibilityRole="button"
+                                accessibilityLabel="Închide"
+                                hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
+                            >
+                                <Text style={styles.closeBtnText}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : null}
+                </View>
 
                 {children}
             </Animated.View>
@@ -115,6 +152,9 @@ const styles = StyleSheet.create({
     },
     defaultMaxHeight: {
         maxHeight: SCREEN_H * 0.9,
+    },
+    dragZone: {
+        width: '100%',
     },
     handle: {
         width: 40,
