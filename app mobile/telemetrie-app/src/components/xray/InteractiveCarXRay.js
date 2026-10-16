@@ -101,6 +101,65 @@ const InteractiveCarXRay = ({
         }
     }, [onSelectSubsystem]);
 
+    // ── GRILĂ TEHNICĂ 2x4 SUB MAȘINĂ (CELE 8 SUBSISTEME) ──
+    const renderSubsystemGrid = (isModal = false) => (
+        <View style={styles.grid2x4}>
+            {PERSPECTIVE_PINS.map((pin, index) => {
+                const isSelected = selectedPin?.id === pin.id;
+                const pinNum = pin.num || (index + 1);
+                const reading = pin.getReading ? pin.getReading(liveData) : { val: 'Nominal' };
+
+                return (
+                    <TouchableOpacity
+                        key={pin.id}
+                        activeOpacity={0.75}
+                        style={[
+                            styles.gridCell,
+                            {
+                                backgroundColor: isSelected ? 'rgba(0, 240, 255, 0.12)' : (tpl.cardBg || colors.bg[1]),
+                                borderColor: isSelected ? tpl.accent : (tpl.border || colors.border.default),
+                            },
+                            isSelected && styles.gridCellSelected,
+                        ]}
+                        onPress={() => {
+                            handleSelectComponent(pin);
+                            if (!isModal && mode === 'preview') {
+                                setIsScannerOpen(true);
+                            }
+                        }}
+                    >
+                        <View style={styles.gridCellTop}>
+                            <View style={[styles.gridCellBadge, isSelected && { backgroundColor: tpl.accent }]}>
+                                <Text style={[styles.gridCellBadgeText, isSelected && { color: '#05070e' }]}>
+                                    {pinNum}
+                                </Text>
+                            </View>
+                            <Text
+                                style={[
+                                    styles.gridCellName,
+                                    { color: isSelected ? tpl.accent : (tpl.text || '#eef0f8') }
+                                ]}
+                                numberOfLines={1}
+                            >
+                                {pin.code}
+                            </Text>
+                            <View style={[styles.gridCellDot, { backgroundColor: isSelected ? tpl.accent : '#10b981' }]} />
+                        </View>
+                        <Text
+                            style={[
+                                styles.gridCellVal,
+                                { color: isSelected ? '#FFFFFF' : (tpl.textSecondary || '#8b96b5') }
+                            ]}
+                            numberOfLines={1}
+                        >
+                            {reading.val}
+                        </Text>
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
+    );
+
     // ─────────────────────────────────────────────────────────────────────────
     // VEDERE 1: PREVIEW PE STATUS SCREEN (Curat, Elegant & Interactiv)
     // ─────────────────────────────────────────────────────────────────────────
@@ -149,12 +208,8 @@ const InteractiveCarXRay = ({
                     </TouchableOpacity>
                 </View>
 
-                {/* Vector Canvas 3D cu Detalii la Suprafață */}
-                <TouchableOpacity
-                    activeOpacity={0.9}
-                    onPress={() => setIsScannerOpen(true)}
-                    style={styles.previewCanvasWrap}
-                >
+                {/* Vector Canvas 3D cu Siluetă Top-Down Simetrică */}
+                <View style={styles.previewCanvasWrap}>
                     <PerspectiveCarSvg
                         visualMode={visualMode}
                         liveData={liveData}
@@ -164,7 +219,10 @@ const InteractiveCarXRay = ({
                             setIsScannerOpen(true);
                         }}
                     />
-                </TouchableOpacity>
+                </View>
+
+                {/* Grilă Tehnică 2x4 Sub Mașină */}
+                {renderSubsystemGrid(false)}
 
                 {/* Buton Deschidere Scanner */}
                 <TouchableOpacity
@@ -266,36 +324,10 @@ const InteractiveCarXRay = ({
                         />
                     </View>
 
-                    {/* ── SECTIUNEA 2: Rând de Selectare Rapidă a Pieselor (Fără Wrap / Fără Suprapuneri) ── */}
+                    {/* ── SECTIUNEA 2: Grilă Tehnică 2x4 Sub Mașină (Cele 8 Subsisteme) ── */}
                     <View style={styles.selectorSection}>
-                        <Text style={styles.selectorHeading}>ALEGE MODULUL PENTRU INSPECȚIE EXPLODATĂ:</Text>
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.selectorScroll}
-                        >
-                            {PERSPECTIVE_PINS.map(pin => {
-                                const isSelected = selectedPin?.id === pin.id;
-                                const reading = pin.getReading ? pin.getReading(liveData) : { val: 'Nominal' };
-
-                                return (
-                                    <TouchableOpacity
-                                        key={pin.id}
-                                        style={[
-                                            styles.moduleChip,
-                                            isSelected && { borderColor: tpl.accent, backgroundColor: 'rgba(77, 142, 245, 0.16)' },
-                                        ]}
-                                        onPress={() => handleSelectComponent(pin)}
-                                    >
-                                        <View style={[styles.moduleChipDot, { backgroundColor: isSelected ? tpl.accent : '#10b981' }]} />
-                                        <Text style={[styles.moduleChipCode, isSelected && { color: tpl.accent }]}>
-                                            {pin.code}
-                                        </Text>
-                                        <Text style={styles.moduleChipVal}>{reading.val}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
+                        <Text style={styles.selectorHeading}>ALEGE MODULUL PENTRU INSPECȚIE EXPLODATĂ (2x4 SUBSISTEME):</Text>
+                        {renderSubsystemGrid(true)}
                     </View>
 
                     {/* ── SECTIUNEA 3 (VARIANTA 3): Card Modular Explodat cu Ilustrație CAD Mare ── */}
@@ -351,7 +383,7 @@ const styles = StyleSheet.create({
         letterSpacing: 0.6,
     },
     headerTopologyText: {
-        color: colors.text.tertiary,
+        color: colors.text.secondary,
         fontSize: typography.sizes.caption,
         flex: 1,
         textAlign: 'right',
@@ -384,13 +416,13 @@ const styles = StyleSheet.create({
     visualModeText: {
         fontSize: 10,
         fontWeight: typography.weights.medium,
-        color: colors.text.tertiary,
+        color: colors.text.secondary,
         letterSpacing: 0.3,
     },
     previewCanvasWrap: {
         position: 'relative',
         width: '100%',
-        minHeight: 280,
+        minHeight: 235,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -434,7 +466,7 @@ const styles = StyleSheet.create({
     },
     modalSub: {
         fontSize: typography.sizes.caption,
-        color: colors.text.tertiary,
+        color: colors.text.secondary,
         marginTop: 2,
     },
     closeBtn: {
@@ -480,7 +512,7 @@ const styles = StyleSheet.create({
     },
     topologyChipLabel: {
         fontSize: typography.sizes.caption,
-        color: colors.text.tertiary,
+        color: colors.text.secondary,
     },
     topologyChipValue: {
         fontSize: typography.sizes.caption,
@@ -505,7 +537,7 @@ const styles = StyleSheet.create({
     modalModeText: {
         fontSize: 10,
         fontWeight: typography.weights.medium,
-        color: colors.text.tertiary,
+        color: colors.text.secondary,
         letterSpacing: 0.2,
     },
 
@@ -519,7 +551,7 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
 
-    // Selector Section
+    // Selector Section & 2x4 Subsystems Grid
     selectorSection: {
         marginTop: spacing[3],
         marginBottom: spacing[1],
@@ -527,39 +559,65 @@ const styles = StyleSheet.create({
     selectorHeading: {
         fontSize: typography.sizes.micro,
         fontWeight: typography.weights.bold,
-        color: colors.text.tertiary,
+        color: colors.text.secondary,
         letterSpacing: 0.6,
         marginBottom: spacing[2],
     },
-    selectorScroll: {
-        gap: spacing[2],
-        paddingRight: spacing[2],
+    grid2x4: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        rowGap: spacing[2],
+        marginVertical: spacing[1],
     },
-    moduleChip: {
+    gridCell: {
+        width: '48.5%',
+        borderRadius: radii.md,
+        borderWidth: 1,
+        paddingVertical: spacing[2],
+        paddingHorizontal: spacing[2],
+    },
+    gridCellSelected: {
+        shadowColor: '#00f0ff',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.35,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    gridCellTop: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 7,
-        paddingHorizontal: spacing[3],
-        borderRadius: radii.full,
-        borderWidth: 1,
-        borderColor: colors.border.default,
-        backgroundColor: colors.bg[1],
-        gap: 5,
+        gap: 6,
+        marginBottom: 3,
     },
-    moduleChipDot: {
+    gridCellBadge: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    gridCellBadgeText: {
+        fontSize: 9,
+        fontWeight: typography.weights.heavy,
+        color: '#eef0f8',
+    },
+    gridCellName: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        flex: 1,
+    },
+    gridCellDot: {
         width: 6,
         height: 6,
         borderRadius: 3,
     },
-    moduleChipCode: {
-        fontSize: typography.sizes.caption,
-        fontWeight: typography.weights.bold,
-        color: colors.text.secondary,
-    },
-    moduleChipVal: {
-        fontSize: typography.sizes.caption,
-        color: colors.text.primary,
+    gridCellVal: {
+        fontSize: 12,
+        fontWeight: typography.weights.heavy,
         fontVariant: ['tabular-nums'],
+        marginLeft: 24,
     },
 });
 

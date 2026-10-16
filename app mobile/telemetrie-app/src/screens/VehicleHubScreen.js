@@ -17,10 +17,10 @@ import { getRootNavigation } from '../utils/navigation';
 const PT = Platform.OS === 'android' ? (StatusBar.currentHeight || 40) + 10 : 44;
 
 const TABS = [
-    { id: 'MENTENANTA', label: 'MENTENANȚĂ' },
-    { id: 'SMART',      label: 'SMART & GPS' },
-    { id: 'PROFIL',     label: 'PROFIL & ACTE' },
-    { id: 'EXPERT',     label: 'ASISTENT AI' },
+    { id: 'MENTENANTA', label: 'REVIZII' },
+    { id: 'SMART',      label: 'SMART GPS' },
+    { id: 'PROFIL',     label: 'ACTE & PROFIL' },
+    { id: 'EXPERT',     label: 'EXPERT AI' },
 ];
 
 const VehicleHubScreen = () => {
@@ -87,7 +87,14 @@ const VehicleHubScreen = () => {
                             accessibilityLabel={tab.label}
                             accessibilityState={{ selected: activeTab === tab.id }}
                         >
-                            <Text style={[styles.tabText, activeTab === tab.id && styles.tabTextActive]}>
+                            <Text
+                                numberOfLines={1}
+                                adjustsFontSizeToFit
+                                style={[
+                                    styles.tabText,
+                                    activeTab === tab.id ? styles.tabTextActive : { color: '#eef0f8' },
+                                ]}
+                            >
                                 {tab.label}
                             </Text>
                         </TouchableOpacity>
@@ -199,21 +206,25 @@ const styles = StyleSheet.create({
     },
     tab: {
         flex: 1,
-        paddingVertical: spacing[2] + 1,
+        paddingVertical: spacing[2],
+        paddingHorizontal: 4,
         alignItems: 'center',
+        justifyContent: 'center',
         borderRadius: radii.xs,
     },
     tabActive: {
         backgroundColor: colors.accent.default,
     },
     tabText: {
-        fontSize: typography.sizes.label2,
+        fontSize: typography.sizes.caption,
         fontWeight: typography.weights.bold,
-        color: colors.text.secondary,
+        color: '#eef0f8',
         letterSpacing: 0.3,
+        textAlign: 'center',
     },
     tabTextActive: {
-        color: '#FFFFFF',
+        color: '#05070e',
+        fontWeight: '800',
     },
     screenSlot: {
         flex: 1,

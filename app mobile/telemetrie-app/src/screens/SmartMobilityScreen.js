@@ -320,14 +320,14 @@ export default function SmartMobilityScreen({ showBack = true }) {
                         onPress={() => navigation.goBack()}
                         accessibilityRole="button"
                     >
-                        <Ionicons name="arrow-back" size={24} color={tpl.text} />
+                        <Ionicons name="arrow-back" size={24} color={tpl.text || '#eef0f8'} />
                     </TouchableOpacity>
                 )}
                 <View style={styles.headerInfo}>
-                    <Text style={[styles.headerTitle, { color: tpl.textSecondary }]}>
+                    <Text style={[styles.headerTitle, { color: tpl.textSecondary || '#8b96b5' }]}>
                         SMART MOBILITY & SECURITATE
                     </Text>
-                    <Text style={[styles.headerSub, { color: tpl.text }]}>
+                    <Text style={[styles.headerSub, { color: tpl.text || '#eef0f8' }]}>
                         {vehicleLabel || activeVin || 'Vehicul Conectat'}
                     </Text>
                 </View>
@@ -355,12 +355,12 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                 <Ionicons
                                     name={tab.icon}
                                     size={15}
-                                    color={isActive ? '#ffffff' : tpl.textSecondary}
+                                    color={isActive ? '#05070e' : (tpl.textSecondary || '#8b96b5')}
                                 />
                                 <Text
                                     style={[
                                         styles.tabBtnText,
-                                        { color: tpl.textSecondary },
+                                        { color: tpl.textSecondary || '#8b96b5' },
                                         isActive && styles.tabBtnTextActive,
                                     ]}
                                 >
@@ -406,7 +406,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     <View style={styles.cardHeader}>
                                         <View style={styles.cardTitleRow}>
                                             <Ionicons name="navigate-circle" size={22} color={tpl.accent} />
-                                            <Text style={[styles.cardTitle, { color: tpl.text }]}>GĂSEȘTE-MI MAȘINA</Text>
+                                            <Text style={[styles.cardTitle, { color: tpl.text || '#eef0f8' }]}>GĂSEȘTE-MI MAȘINA</Text>
                                         </View>
                                         <View style={styles.badgePill}>
                                             <Text style={styles.badgePillText}>
@@ -415,20 +415,20 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                         </View>
                                     </View>
 
-                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary }]}>
+                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary || '#8b96b5' }]}>
                                         Coordonatele GPS sunt memorate automat la oprirea contactului pentru a te ghida pe jos direct la autoturism.
                                     </Text>
 
                                     <View style={styles.coordRow}>
                                         <View style={styles.coordBox}>
-                                            <Text style={[styles.coordLabel, { color: tpl.textSecondary }]}>LATITUDINE</Text>
-                                            <Text style={[styles.coordVal, { color: tpl.text }]}>
+                                            <Text style={[styles.coordLabel, { color: tpl.textSecondary || '#8b96b5' }]}>LATITUDINE</Text>
+                                            <Text style={[styles.coordVal, { color: tpl.text || '#eef0f8' }]}>
                                                 {parkingData.lat?.toFixed(5) || '44.43230'}
                                             </Text>
                                         </View>
                                         <View style={styles.coordBox}>
-                                            <Text style={[styles.coordLabel, { color: tpl.textSecondary }]}>LONGITUDINE</Text>
-                                            <Text style={[styles.coordVal, { color: tpl.text }]}>
+                                            <Text style={[styles.coordLabel, { color: tpl.textSecondary || '#8b96b5' }]}>LONGITUDINE</Text>
+                                            <Text style={[styles.coordVal, { color: tpl.text || '#eef0f8' }]}>
                                                 {parkingData.lon?.toFixed(5) || '26.10630'}
                                             </Text>
                                         </View>
@@ -438,8 +438,8 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                         style={[styles.primaryActionBtn, { backgroundColor: tpl.accent }]}
                                         onPress={handleWalkToCar}
                                     >
-                                        <Ionicons name="walk" size={18} color="#ffffff" />
-                                        <Text style={styles.primaryActionBtnText}>
+                                        <Ionicons name="walk" size={18} color="#05070e" />
+                                        <Text style={[styles.primaryActionBtnText, { color: '#05070e' }]}>
                                             NAVIGHEAZĂ PE JOS LA MAȘINĂ
                                         </Text>
                                     </TouchableOpacity>
@@ -450,7 +450,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     <View style={styles.cardHeader}>
                                         <View style={styles.cardTitleRow}>
                                             <Ionicons name="timer-outline" size={22} color="#f0c04a" />
-                                            <Text style={[styles.cardTitle, { color: tpl.text }]}>TICHET PARCARE CU PLATĂ</Text>
+                                            <Text style={[styles.cardTitle, { color: tpl.text || '#eef0f8' }]}>TICHET PARCARE CU PLATĂ</Text>
                                         </View>
                                         {parkingData.parkingMeter?.active && (
                                             <View style={[styles.badgePill, { backgroundColor: 'rgba(240,192,74,0.15)', borderColor: '#f0c04a' }]}>
@@ -460,13 +460,13 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     </View>
 
                                     <View style={styles.meterDisplay}>
-                                        <Text style={[styles.meterMinutes, { color: parkingData.parkingMeter?.active ? '#f0c04a' : tpl.textSecondary }]}>
+                                        <Text style={[styles.meterMinutes, { color: parkingData.parkingMeter?.active ? '#f0c04a' : (tpl.textSecondary || '#8b96b5') }]}>
                                             {parkingData.parkingMeter?.remainingMinutes || 0}
                                         </Text>
-                                        <Text style={[styles.meterSub, { color: tpl.textSecondary }]}>minute rămase pe tichet</Text>
+                                        <Text style={[styles.meterSub, { color: tpl.textSecondary || '#8b96b5' }]}>minute rămase pe tichet</Text>
                                     </View>
 
-                                    <Text style={[styles.meterPrompt, { color: tpl.textSecondary }]}>
+                                    <Text style={[styles.meterPrompt, { color: tpl.textSecondary || '#8b96b5' }]}>
                                         Setează sau prelungește timpul de parcare pentru a primi notificare înainte de expirare:
                                     </Text>
 
@@ -477,7 +477,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                                 style={[styles.meterChip, { borderColor: tpl.border, backgroundColor: 'rgba(255,255,255,0.03)' }]}
                                                 onPress={() => addParkingMeterMinutes(mins)}
                                             >
-                                                <Text style={[styles.meterChipText, { color: tpl.text }]}>
+                                                <Text style={[styles.meterChipText, { color: tpl.text || '#eef0f8' }]}>
                                                     +{mins >= 60 ? `${mins / 60}h` : `${mins}m`}
                                                 </Text>
                                             </TouchableOpacity>
@@ -490,7 +490,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     <View style={styles.cardHeader}>
                                         <View style={styles.cardTitleRow}>
                                             <Ionicons name="shield-half" size={22} color={colors.status.optimal} />
-                                            <Text style={[styles.cardTitle, { color: tpl.text }]}>SENTINELA DE PARCARE</Text>
+                                            <Text style={[styles.cardTitle, { color: tpl.text || '#eef0f8' }]}>SENTINELA DE PARCARE</Text>
                                         </View>
                                         <Switch
                                             value={parkingData.isArmed}
@@ -500,7 +500,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                         />
                                     </View>
 
-                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary }]}>
+                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary || '#8b96b5' }]}>
                                         Monitorizează pasiv șocurile de caroserie (tamponări), unghiul de înclinare (furt roți / ridicare platformă) și perimetrul antifurt invizibil de 30m.
                                     </Text>
 
@@ -508,31 +508,31 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     <View style={styles.sentrySensorsGrid}>
                                         <View style={[styles.sentrySensorItem, { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: tpl.border }]}>
                                             <Ionicons name="flash-outline" size={20} color={parkingData.lastImpact ? colors.status.caution : colors.status.good} />
-                                            <Text style={[styles.sensorName, { color: tpl.textSecondary }]}>Șoc / Tamponare</Text>
-                                            <Text style={[styles.sensorState, { color: tpl.text }]}>
+                                            <Text style={[styles.sensorName, { color: tpl.textSecondary || '#8b96b5' }]}>Șoc / Tamponare</Text>
+                                            <Text style={[styles.sensorState, { color: tpl.text || '#eef0f8' }]}>
                                                 {parkingData.lastImpact ? `${parkingData.lastImpact.forceG}G` : 'Normal (0.0G)'}
                                             </Text>
                                         </View>
 
                                         <View style={[styles.sentrySensorItem, { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: tpl.border }]}>
                                             <Ionicons name="trending-up-outline" size={20} color={parkingData.lastTilt ? colors.status.caution : colors.status.good} />
-                                            <Text style={[styles.sensorName, { color: tpl.textSecondary }]}>Înclinare Șasiu</Text>
-                                            <Text style={[styles.sensorState, { color: tpl.text }]}>
+                                            <Text style={[styles.sensorName, { color: tpl.textSecondary || '#8b96b5' }]}>Înclinare Șasiu</Text>
+                                            <Text style={[styles.sensorState, { color: tpl.text || '#eef0f8' }]}>
                                                 {parkingData.lastTilt ? `${parkingData.lastTilt.deg}°` : 'Stabil (0.0°)'}
                                             </Text>
                                         </View>
 
                                         <View style={[styles.sentrySensorItem, { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: tpl.border }]}>
                                             <Ionicons name="radio-outline" size={20} color={colors.status.good} />
-                                            <Text style={[styles.sensorName, { color: tpl.textSecondary }]}>Geofence Antifurt</Text>
-                                            <Text style={[styles.sensorState, { color: tpl.text }]}>Rază 30m OK</Text>
+                                            <Text style={[styles.sensorName, { color: tpl.textSecondary || '#8b96b5' }]}>Geofence Antifurt</Text>
+                                            <Text style={[styles.sensorState, { color: tpl.text || '#eef0f8' }]}>Rază 30m OK</Text>
                                         </View>
                                     </View>
 
                                     {/* Evenimente recente sentinela */}
                                     {parkingData.sentryEvents && parkingData.sentryEvents.length > 0 && (
                                         <View style={styles.eventsSection}>
-                                            <Text style={[styles.eventsTitle, { color: tpl.textSecondary }]}>
+                                            <Text style={[styles.eventsTitle, { color: tpl.textSecondary || '#8b96b5' }]}>
                                                 EVENIMENTE DETECTATE ÎN PARCARE
                                             </Text>
                                             {parkingData.sentryEvents.map((ev, idx) => (
@@ -543,8 +543,8 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                                         color={colors.status.caution}
                                                     />
                                                     <View style={{ flex: 1 }}>
-                                                        <Text style={[styles.eventTitlu, { color: tpl.text }]}>{ev.titlu || ev.descriere}</Text>
-                                                        <Text style={[styles.eventDesc, { color: tpl.textSecondary }]}>
+                                                        <Text style={[styles.eventTitlu, { color: tpl.text || '#eef0f8' }]}>{ev.titlu || ev.descriere}</Text>
+                                                        <Text style={[styles.eventDesc, { color: tpl.textSecondary || '#8b96b5' }]}>
                                                             {new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                         </Text>
                                                     </View>
@@ -557,10 +557,10 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                         <View style={styles.cardHeader}>
                                             <View style={styles.cardTitleRow}>
                                                 <Ionicons name="flask-outline" size={20} color={tpl.accent} />
-                                                <Text style={[styles.cardTitle, { color: tpl.text, fontSize: typography.sizes.caption }]}>SIMULARE LIVE / TEST DEMO COMISIE</Text>
+                                                <Text style={[styles.cardTitle, { color: tpl.text || '#eef0f8', fontSize: typography.sizes.caption }]}>SIMULARE LIVE / TEST DEMO COMISIE</Text>
                                             </View>
                                         </View>
-                                        <Text style={[styles.cardDesc, { color: tpl.textSecondary }]}>
+                                        <Text style={[styles.cardDesc, { color: tpl.textSecondary || '#8b96b5' }]}>
                                             Declanșează instant evenimentele de protecție pentru a demonstra reacția senzorilor în timp real:
                                         </Text>
                                         <View style={{ flexDirection: 'row', gap: spacing[2] }}>
@@ -593,7 +593,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     <View style={styles.cardHeader}>
                                         <View style={styles.cardTitleRow}>
                                             <Ionicons name="key" size={22} color={colors.accent.default} />
-                                            <Text style={[styles.cardTitle, { color: tpl.text }]}>MOD VALET & SERVICE</Text>
+                                            <Text style={[styles.cardTitle, { color: tpl.text || '#eef0f8' }]}>MOD VALET & SERVICE</Text>
                                         </View>
                                         <Switch
                                             value={valetData.isActive}
@@ -603,14 +603,14 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                         />
                                     </View>
 
-                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary }]}>
+                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary || '#8b96b5' }]}>
                                         Setează restricții stricte când lași mașina la spălătorie, mecanic sau prieteni. Orice depășire de viteză, turație sau perimetru este înregistrată instant!
                                     </Text>
 
                                     {/* Limită Viteză */}
                                     <View style={styles.settingGroup}>
                                         <View style={styles.settingLabelRow}>
-                                            <Text style={[styles.settingLabel, { color: tpl.text }]}>VITEZĂ MAXIMĂ PERMISĂ</Text>
+                                            <Text style={[styles.settingLabel, { color: tpl.text || '#eef0f8' }]}>VITEZĂ MAXIMĂ PERMISĂ</Text>
                                             <Text style={[styles.settingValue, { color: tpl.accent }]}>{valetData.maxSpeedKmh} km/h</Text>
                                         </View>
                                         <View style={styles.selectorRow}>
@@ -624,7 +624,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                                     ]}
                                                     onPress={() => setValetData(p => ({ ...p, maxSpeedKmh: spd }))}
                                                 >
-                                                    <Text style={[styles.selectorBtnText, { color: tpl.textSecondary }, valetData.maxSpeedKmh === spd && styles.selectorBtnTextActive]}>
+                                                    <Text style={[styles.selectorBtnText, { color: tpl.textSecondary || '#8b96b5' }, valetData.maxSpeedKmh === spd && styles.selectorBtnTextActive]}>
                                                         {spd} km/h
                                                     </Text>
                                                 </TouchableOpacity>
@@ -635,7 +635,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     {/* Limită Turație RPM */}
                                     <View style={styles.settingGroup}>
                                         <View style={styles.settingLabelRow}>
-                                            <Text style={[styles.settingLabel, { color: tpl.text }]}>TURAȚIE MAXIMĂ (RPM LIMITER)</Text>
+                                            <Text style={[styles.settingLabel, { color: tpl.text || '#eef0f8' }]}>TURAȚIE MAXIMĂ (RPM LIMITER)</Text>
                                             <Text style={[styles.settingValue, { color: tpl.accent }]}>{valetData.maxRpm} RPM</Text>
                                         </View>
                                         <View style={styles.selectorRow}>
@@ -649,7 +649,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                                     ]}
                                                     onPress={() => setValetData(p => ({ ...p, maxRpm: rpm }))}
                                                 >
-                                                    <Text style={[styles.selectorBtnText, { color: tpl.textSecondary }, valetData.maxRpm === rpm && styles.selectorBtnTextActive]}>
+                                                    <Text style={[styles.selectorBtnText, { color: tpl.textSecondary || '#8b96b5' }, valetData.maxRpm === rpm && styles.selectorBtnTextActive]}>
                                                         {rpm} RPM
                                                     </Text>
                                                 </TouchableOpacity>
@@ -660,7 +660,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     {/* Rază Geofence față de atelier */}
                                     <View style={styles.settingGroup}>
                                         <View style={styles.settingLabelRow}>
-                                            <Text style={[styles.settingLabel, { color: tpl.text }]}>RAZĂ PERIMETRU (DE LA ATELIER)</Text>
+                                            <Text style={[styles.settingLabel, { color: tpl.text || '#eef0f8' }]}>RAZĂ PERIMETRU (DE LA ATELIER)</Text>
                                             <Text style={[styles.settingValue, { color: tpl.accent }]}>{valetData.maxRadiusKm} km</Text>
                                         </View>
                                         <View style={styles.selectorRow}>
@@ -674,7 +674,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                                     ]}
                                                     onPress={() => setValetData(p => ({ ...p, maxRadiusKm: rad }))}
                                                 >
-                                                    <Text style={[styles.selectorBtnText, { color: tpl.textSecondary }, valetData.maxRadiusKm === rad && styles.selectorBtnTextActive]}>
+                                                    <Text style={[styles.selectorBtnText, { color: tpl.textSecondary || '#8b96b5' }, valetData.maxRadiusKm === rad && styles.selectorBtnTextActive]}>
                                                         {rad} km
                                                     </Text>
                                                 </TouchableOpacity>
@@ -686,8 +686,8 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                         style={[styles.primaryActionBtn, { backgroundColor: tpl.accent, marginTop: spacing[3] }]}
                                         onPress={() => handleSaveValet(true)}
                                     >
-                                        <Ionicons name="save-outline" size={18} color="#ffffff" />
-                                        <Text style={styles.primaryActionBtnText}>
+                                        <Ionicons name="save-outline" size={18} color="#05070e" />
+                                        <Text style={[styles.primaryActionBtnText, { color: '#05070e' }]}>
                                             {valetData.isActive ? 'ACTUALIZEAZĂ LIMITELE VALET' : 'ACTIVEAZĂ MODUL VALET ACUM'}
                                         </Text>
                                     </TouchableOpacity>
@@ -698,7 +698,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     <View style={styles.cardHeader}>
                                         <View style={styles.cardTitleRow}>
                                             <Ionicons name="alert-circle-outline" size={22} color={colors.status.caution} />
-                                            <Text style={[styles.cardTitle, { color: tpl.text }]}>JURNAL VIOLĂRI & ABUZURI</Text>
+                                            <Text style={[styles.cardTitle, { color: tpl.text || '#eef0f8' }]}>JURNAL VIOLĂRI & ABUZURI</Text>
                                         </View>
                                         <View style={[styles.badgePill, { backgroundColor: valetData.violationsCount > 0 ? 'rgba(240,100,100,0.15)' : 'rgba(47,207,164,0.15)' }]}>
                                             <Text style={[styles.badgePillText, { color: valetData.violationsCount > 0 ? colors.status.critical : colors.status.optimal }]}>
@@ -713,8 +713,8 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                                 <View key={index} style={[styles.eventRow, { borderColor: tpl.border }]}>
                                                     <Ionicons name="warning" size={18} color={colors.status.critical} />
                                                     <View style={{ flex: 1 }}>
-                                                        <Text style={[styles.eventTitlu, { color: tpl.text }]}>{vio.descriere}</Text>
-                                                        <Text style={[styles.eventDesc, { color: tpl.textSecondary }]}>
+                                                        <Text style={[styles.eventTitlu, { color: tpl.text || '#eef0f8' }]}>{vio.descriere}</Text>
+                                                        <Text style={[styles.eventDesc, { color: tpl.textSecondary || '#8b96b5' }]}>
                                                             {new Date(vio.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • Coordonate: {vio.lat?.toFixed(4)}, {vio.lon?.toFixed(4)}
                                                         </Text>
                                                     </View>
@@ -722,7 +722,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                             ))}
                                         </View>
                                     ) : (
-                                        <Text style={[styles.cardDesc, { color: tpl.textSecondary, textAlign: 'center', marginVertical: spacing[3] }]}>
+                                        <Text style={[styles.cardDesc, { color: tpl.textSecondary || '#8b96b5', textAlign: 'center', marginVertical: spacing[3] }]}>
                                             Nicio încălcare detectată! Vehiculul se află în parametrii permiși.
                                         </Text>
                                     )}
@@ -751,14 +751,14 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     <View style={styles.cardHeader}>
                                         <View style={styles.cardTitleRow}>
                                             <Ionicons name="trail-sign-outline" size={22} color={tpl.accent} />
-                                            <Text style={[styles.cardTitle, { color: tpl.text }]}>AMPRENTĂ TELEMETRICĂ</Text>
+                                            <Text style={[styles.cardTitle, { color: tpl.text || '#eef0f8' }]}>AMPRENTĂ TELEMETRICĂ</Text>
                                         </View>
-                                        <Text style={[styles.badgePillText, { color: tpl.textSecondary }]}>
+                                        <Text style={[styles.badgePillText, { color: tpl.textSecondary || '#8b96b5' }]}>
                                             {trajectoryData.totalPoints || trajectoryData.points?.length || 0} puncte GPS
                                         </Text>
                                     </View>
 
-                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary }]}>
+                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary || '#8b96b5' }]}>
                                         Fuziune GPS + OBD-II cu evidențierea consumului și solicitării mecanice pe segmente de culoare:
                                     </Text>
 
@@ -766,36 +766,36 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     <View style={styles.legendRow}>
                                         <View style={styles.legendItem}>
                                             <View style={[styles.legendColor, { backgroundColor: '#10b981' }]} />
-                                            <Text style={[styles.legendText, { color: tpl.textSecondary }]}>Economic / Lin</Text>
+                                            <Text style={[styles.legendText, { color: tpl.textSecondary || '#8b96b5' }]}>Economic / Lin</Text>
                                         </View>
                                         <View style={styles.legendItem}>
                                             <View style={[styles.legendColor, { backgroundColor: '#f59e0b' }]} />
-                                            <Text style={[styles.legendText, { color: tpl.textSecondary }]}>Sarcină Medie</Text>
+                                            <Text style={[styles.legendText, { color: tpl.textSecondary || '#8b96b5' }]}>Sarcină Medie</Text>
                                         </View>
                                         <View style={styles.legendItem}>
                                             <View style={[styles.legendColor, { backgroundColor: '#ff453a' }]} />
-                                            <Text style={[styles.legendText, { color: tpl.textSecondary }]}>Sarcină Maximă / Accel</Text>
+                                            <Text style={[styles.legendText, { color: tpl.textSecondary || '#8b96b5' }]}>Sarcină Maximă / Accel</Text>
                                         </View>
                                     </View>
 
                                     {/* Eșantion Traseu GPS */}
                                     {trajectoryData.points && trajectoryData.points.length > 0 ? (
                                         <View style={styles.trajectoryPointsList}>
-                                            <Text style={[styles.subSectionTitle, { color: tpl.text }]}>PUNCTE TRASEU RECENȚI</Text>
+                                            <Text style={[styles.subSectionTitle, { color: tpl.text || '#eef0f8' }]}>PUNCTE TRASEU RECENȚI</Text>
                                             {trajectoryData.points.slice(0, 5).map((pt, i) => (
                                                 <View key={i} style={[styles.trajPointItem, { borderColor: tpl.border }]}>
                                                     <View style={[styles.pointIndicator, { backgroundColor: pt.color }]} />
-                                                    <Text style={[styles.pointCoords, { color: tpl.text }]}>
+                                                    <Text style={[styles.pointCoords, { color: tpl.text || '#eef0f8' }]}>
                                                         {pt.lat.toFixed(4)}, {pt.lon.toFixed(4)}
                                                     </Text>
-                                                    <Text style={[styles.pointMeta, { color: tpl.textSecondary }]}>
+                                                    <Text style={[styles.pointMeta, { color: tpl.textSecondary || '#8b96b5' }]}>
                                                         {Math.round(pt.speedKmh)} km/h • {pt.consumLh.toFixed(1)} L/h
                                                     </Text>
                                                 </View>
                                             ))}
                                         </View>
                                     ) : (
-                                        <Text style={[styles.cardDesc, { color: tpl.textSecondary, textAlign: 'center', marginVertical: spacing[2] }]}>
+                                        <Text style={[styles.cardDesc, { color: tpl.textSecondary || '#8b96b5', textAlign: 'center', marginVertical: spacing[2] }]}>
                                             Porniți o călătorie pentru a înregistra segmentele telemetrice.
                                         </Text>
                                     )}
@@ -806,7 +806,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     <View style={styles.cardHeader}>
                                         <View style={styles.cardTitleRow}>
                                             <Ionicons name="alert" size={22} color={colors.status.caution} />
-                                            <Text style={[styles.cardTitle, { color: tpl.text }]}>DETECȚIE GROPI & DENIVELĂRI</Text>
+                                            <Text style={[styles.cardTitle, { color: tpl.text || '#eef0f8' }]}>DETECȚIE GROPI & DENIVELĂRI</Text>
                                         </View>
                                         <View style={[styles.badgePill, { backgroundColor: 'rgba(240,192,74,0.15)' }]}>
                                             <Text style={[styles.badgePillText, { color: colors.status.monitor }]}>
@@ -815,7 +815,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                         </View>
                                     </View>
 
-                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary }]}>
+                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary || '#8b96b5' }]}>
                                         Accelerometrul vertical inerțial identifică denivelările periculoase din carosabil (&gt; 1.75G) și le mapează exact prin coordonate GPS.
                                     </Text>
 
@@ -827,15 +827,15 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                                         <Text style={[styles.potholeForce, { color: colors.status.caution }]}>
                                                             {ph.forceG?.toFixed(2)} G
                                                         </Text>
-                                                        <Text style={[styles.potholeTime, { color: tpl.textSecondary }]}>
+                                                        <Text style={[styles.potholeTime, { color: tpl.textSecondary || '#8b96b5' }]}>
                                                             {new Date(ph.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                         </Text>
                                                     </View>
                                                     <View style={styles.potholeCenter}>
-                                                        <Text style={[styles.potholeDesc, { color: tpl.text }]}>
+                                                        <Text style={[styles.potholeDesc, { color: tpl.text || '#eef0f8' }]}>
                                                             {ph.descriere || 'Groapă / denivelare violentă'}
                                                         </Text>
-                                                        <Text style={[styles.potholeCoords, { color: tpl.textSecondary }]}>
+                                                        <Text style={[styles.potholeCoords, { color: tpl.textSecondary || '#8b96b5' }]}>
                                                             GPS: {ph.lat?.toFixed(5)}, {ph.lon?.toFixed(5)}
                                                         </Text>
                                                     </View>
@@ -849,7 +849,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                             ))}
                                         </View>
                                     ) : (
-                                        <Text style={[styles.cardDesc, { color: tpl.textSecondary, textAlign: 'center', marginVertical: spacing[3] }]}>
+                                        <Text style={[styles.cardDesc, { color: tpl.textSecondary || '#8b96b5', textAlign: 'center', marginVertical: spacing[3] }]}>
                                             Nicio groapă severă detectată în această sesiune!
                                         </Text>
                                     )}
@@ -877,52 +877,52 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     <View style={styles.cardHeader}>
                                         <View style={styles.cardTitleRow}>
                                             <Ionicons name="heart-dislike" size={22} color={colors.status.critical} />
-                                            <Text style={[styles.cardTitle, { color: tpl.text }]}>DETECȚIE ACCIDENT & eCALL</Text>
+                                            <Text style={[styles.cardTitle, { color: tpl.text || '#eef0f8' }]}>DETECȚIE ACCIDENT & eCALL</Text>
                                         </View>
                                         <View style={[styles.badgePill, { backgroundColor: 'rgba(240,100,100,0.15)' }]}>
                                             <Text style={[styles.badgePillText, { color: colors.status.critical }]}>ACTIVAT (&gt;2.8G)</Text>
                                         </View>
                                     </View>
 
-                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary }]}>
+                                    <Text style={[styles.cardDesc, { color: tpl.textSecondary || '#8b96b5' }]}>
                                         La detectarea unui impact sever (&gt; 2.8G la viteză), aplicația pornește o numărătoare inversă de 30 secunde. Dacă nu este anulată, transmite automat coordonatele Google Maps către persoana de contact!
                                     </Text>
 
                                     {/* Câmp Nume Contact */}
                                     <View style={styles.inputGroup}>
-                                        <Text style={[styles.inputLabel, { color: tpl.textSecondary }]}>NUME PERSOANĂ DE CONTACT</Text>
+                                        <Text style={[styles.inputLabel, { color: tpl.textSecondary || '#8b96b5' }]}>NUME PERSOANĂ DE CONTACT</Text>
                                         <TextInput
-                                            style={[styles.textInput, { backgroundColor: tpl.bg, borderColor: tpl.border, color: tpl.text }]}
+                                            style={[styles.textInput, { backgroundColor: tpl.bg, borderColor: tpl.border, color: tpl.text || '#eef0f8' }]}
                                             value={sosData.nume}
                                             onChangeText={(t) => setSosData(p => ({ ...p, nume: t }))}
                                             placeholder="Ex: Soț / Soție / Părinte"
-                                            placeholderTextColor={tpl.textSecondary}
+                                            placeholderTextColor={tpl.textSecondary || '#8b96b5'}
                                         />
                                     </View>
 
                                     {/* Câmp Telefon */}
                                     <View style={styles.inputGroup}>
-                                        <Text style={[styles.inputLabel, { color: tpl.textSecondary }]}>NUMĂR DE TELEFON (PENTRU SMS & APEL SOS)</Text>
+                                        <Text style={[styles.inputLabel, { color: tpl.textSecondary || '#8b96b5' }]}>NUMĂR DE TELEFON (PENTRU SMS & APEL SOS)</Text>
                                         <TextInput
-                                            style={[styles.textInput, { backgroundColor: tpl.bg, borderColor: tpl.border, color: tpl.text }]}
+                                            style={[styles.textInput, { backgroundColor: tpl.bg, borderColor: tpl.border, color: tpl.text || '#eef0f8' }]}
                                             value={sosData.telefon}
                                             onChangeText={(t) => setSosData(p => ({ ...p, telefon: t }))}
                                             placeholder="Ex: +40722123456"
-                                            placeholderTextColor={tpl.textSecondary}
+                                            placeholderTextColor={tpl.textSecondary || '#8b96b5'}
                                             keyboardType="phone-pad"
                                         />
                                     </View>
 
                                     {/* Mesaj SOS Personalizat */}
                                     <View style={styles.inputGroup}>
-                                        <Text style={[styles.inputLabel, { color: tpl.textSecondary }]}>MESAJ SALVARE PERSONALIZAT</Text>
+                                        <Text style={[styles.inputLabel, { color: tpl.textSecondary || '#8b96b5' }]}>MESAJ SALVARE PERSONALIZAT</Text>
                                         <TextInput
-                                            style={[styles.textInputArea, { backgroundColor: tpl.bg, borderColor: tpl.border, color: tpl.text }]}
+                                            style={[styles.textInputArea, { backgroundColor: tpl.bg, borderColor: tpl.border, color: tpl.text || '#eef0f8' }]}
                                             value={sosData.mesajPersonalizat}
                                             onChangeText={(t) => setSosData(p => ({ ...p, mesajPersonalizat: t }))}
                                             multiline
                                             numberOfLines={3}
-                                            placeholderTextColor={tpl.textSecondary}
+                                            placeholderTextColor={tpl.textSecondary || '#8b96b5'}
                                         />
                                     </View>
 
@@ -933,11 +933,11 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                         disabled={savingSos}
                                     >
                                         {savingSos ? (
-                                            <ActivityIndicator size="small" color="#ffffff" />
+                                            <ActivityIndicator size="small" color="#05070e" />
                                         ) : (
                                             <>
-                                                <Ionicons name="shield-checkmark-outline" size={18} color="#ffffff" />
-                                                <Text style={styles.primaryActionBtnText}>SALVEAZĂ CONTACTUL DE URGENȚĂ</Text>
+                                                <Ionicons name="shield-checkmark-outline" size={18} color="#05070e" />
+                                                <Text style={[styles.primaryActionBtnText, { color: '#05070e' }]}>SALVEAZĂ CONTACTUL DE URGENȚĂ</Text>
                                             </>
                                         )}
                                     </TouchableOpacity>
@@ -999,12 +999,14 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: typography.sizes.tiny,
         fontWeight: typography.weights.heavy,
+        color: '#8b96b5',
         letterSpacing: 0.8,
         textTransform: 'uppercase',
     },
     headerSub: {
         fontSize: typography.sizes.title3,
         fontWeight: typography.weights.bold,
+        color: '#eef0f8',
         marginTop: 1,
     },
     livePill: {
@@ -1051,9 +1053,11 @@ const styles = StyleSheet.create({
     tabBtnText: {
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.bold,
+        color: '#8b96b5',
     },
     tabBtnTextActive: {
-        color: '#ffffff',
+        color: '#05070e',
+        fontWeight: '800',
     },
     scroll: {
         flex: 1,
@@ -1069,6 +1073,7 @@ const styles = StyleSheet.create({
     },
     loaderText: {
         fontSize: typography.sizes.caption,
+        color: '#8b96b5',
     },
     tabContent: {
         gap: spacing[4],
@@ -1092,10 +1097,12 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontSize: typography.sizes.callout,
         fontWeight: typography.weights.heavy,
+        color: '#eef0f8',
         letterSpacing: 0.6,
     },
     cardDesc: {
         fontSize: typography.sizes.caption,
+        color: '#8b96b5',
         lineHeight: 18,
         marginBottom: spacing[3],
     },
@@ -1126,10 +1133,12 @@ const styles = StyleSheet.create({
     coordLabel: {
         fontSize: typography.sizes.tiny,
         fontWeight: typography.weights.bold,
+        color: '#8b96b5',
     },
     coordVal: {
         fontSize: typography.sizes.callout,
         fontWeight: typography.weights.heavy,
+        color: '#eef0f8',
         marginTop: 2,
         fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     },
@@ -1142,7 +1151,7 @@ const styles = StyleSheet.create({
         borderRadius: radii.md,
     },
     primaryActionBtnText: {
-        color: '#ffffff',
+        color: '#05070e',
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.heavy,
         letterSpacing: 0.5,
@@ -1154,13 +1163,16 @@ const styles = StyleSheet.create({
     meterMinutes: {
         fontSize: 54,
         fontWeight: typography.weights.heavy,
+        color: '#8b96b5',
         lineHeight: 58,
     },
     meterSub: {
         fontSize: typography.sizes.caption,
+        color: '#8b96b5',
     },
     meterPrompt: {
         fontSize: typography.sizes.tiny,
+        color: '#8b96b5',
         textAlign: 'center',
         marginBottom: spacing[2],
     },
@@ -1179,6 +1191,7 @@ const styles = StyleSheet.create({
     meterChipText: {
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.heavy,
+        color: '#eef0f8',
     },
     sentrySensorsGrid: {
         flexDirection: 'row',
@@ -1195,12 +1208,14 @@ const styles = StyleSheet.create({
     },
     sensorName: {
         fontSize: typography.sizes.tiny,
+        color: '#8b96b5',
         textAlign: 'center',
         marginTop: 2,
     },
     sensorState: {
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.heavy,
+        color: '#eef0f8',
         textAlign: 'center',
     },
     eventsSection: {
@@ -1212,6 +1227,7 @@ const styles = StyleSheet.create({
     eventsTitle: {
         fontSize: typography.sizes.tiny,
         fontWeight: typography.weights.bold,
+        color: '#8b96b5',
         letterSpacing: 0.6,
         marginBottom: spacing[2],
     },
@@ -1225,9 +1241,11 @@ const styles = StyleSheet.create({
     eventTitlu: {
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.bold,
+        color: '#eef0f8',
     },
     eventDesc: {
         fontSize: typography.sizes.tiny,
+        color: '#8b96b5',
         marginTop: 2,
     },
     settingGroup: {
@@ -1242,6 +1260,7 @@ const styles = StyleSheet.create({
     settingLabel: {
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.bold,
+        color: '#eef0f8',
     },
     settingValue: {
         fontSize: typography.sizes.caption,
@@ -1262,9 +1281,11 @@ const styles = StyleSheet.create({
     selectorBtnText: {
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.bold,
+        color: '#8b96b5',
     },
     selectorBtnTextActive: {
-        color: '#ffffff',
+        color: '#05070e',
+        fontWeight: '800',
     },
     legendRow: {
         flexDirection: 'row',
@@ -1283,6 +1304,7 @@ const styles = StyleSheet.create({
     },
     legendText: {
         fontSize: typography.sizes.tiny,
+        color: '#8b96b5',
     },
     trajectoryPointsList: {
         gap: spacing[2],
@@ -1290,6 +1312,7 @@ const styles = StyleSheet.create({
     subSectionTitle: {
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.bold,
+        color: '#eef0f8',
         marginBottom: 2,
     },
     trajPointItem: {
@@ -1307,10 +1330,12 @@ const styles = StyleSheet.create({
     pointCoords: {
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.bold,
+        color: '#eef0f8',
         fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     },
     pointMeta: {
         fontSize: typography.sizes.tiny,
+        color: '#8b96b5',
         marginLeft: 'auto',
     },
     potholeList: {
@@ -1333,6 +1358,7 @@ const styles = StyleSheet.create({
     },
     potholeTime: {
         fontSize: typography.sizes.tiny,
+        color: '#8b96b5',
     },
     potholeCenter: {
         flex: 1,
@@ -1340,9 +1366,11 @@ const styles = StyleSheet.create({
     potholeDesc: {
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.bold,
+        color: '#eef0f8',
     },
     potholeCoords: {
         fontSize: typography.sizes.tiny,
+        color: '#8b96b5',
         marginTop: 2,
     },
     mapBtn: {
@@ -1356,6 +1384,7 @@ const styles = StyleSheet.create({
     inputLabel: {
         fontSize: typography.sizes.tiny,
         fontWeight: typography.weights.bold,
+        color: '#8b96b5',
         letterSpacing: 0.6,
         marginBottom: spacing[1],
     },
@@ -1365,6 +1394,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing[3],
         paddingVertical: spacing[2],
         fontSize: typography.sizes.caption,
+        color: '#eef0f8',
     },
     textInputArea: {
         borderRadius: radii.md,
@@ -1372,6 +1402,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing[3],
         paddingVertical: spacing[2],
         fontSize: typography.sizes.caption,
+        color: '#eef0f8',
         height: 64,
         textAlignVertical: 'top',
     },

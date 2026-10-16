@@ -19,6 +19,10 @@ export const TEMPLATES = {
         speedColor: '#00f0ff',
         rpmColor: '#ffb800',
         tagBg: 'rgba(0, 240, 255, 0.12)',
+        text: '#eef0f8',
+        textSecondary: '#8b96b5',
+        textTertiary: '#525d7a',
+        textInverse: '#05070e',
     },
     AUDI_RS: {
         id: 'AUDI_RS',
@@ -33,6 +37,10 @@ export const TEMPLATES = {
         speedColor: '#ffffff',
         rpmColor: '#ff2a2a',
         tagBg: 'rgba(255, 42, 42, 0.12)',
+        text: '#eef0f8',
+        textSecondary: '#8b96b5',
+        textTertiary: '#525d7a',
+        textInverse: '#05070e',
     },
     TESLA_MINIMAL: {
         id: 'TESLA_MINIMAL',
@@ -47,6 +55,10 @@ export const TEMPLATES = {
         speedColor: '#f8fafc',
         rpmColor: '#38bdf8',
         tagBg: 'rgba(56, 189, 248, 0.12)',
+        text: '#eef0f8',
+        textSecondary: '#8b96b5',
+        textTertiary: '#525d7a',
+        textInverse: '#05070e',
     },
     NIGHT_HUD: {
         id: 'NIGHT_HUD',
@@ -61,6 +73,10 @@ export const TEMPLATES = {
         speedColor: '#ff453a',
         rpmColor: '#ff453a',
         tagBg: 'rgba(255, 69, 58, 0.15)',
+        text: '#eef0f8',
+        textSecondary: '#8b96b5',
+        textTertiary: '#525d7a',
+        textInverse: '#05070e',
         isHud: true,
     },
 };

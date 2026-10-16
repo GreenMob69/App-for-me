@@ -264,9 +264,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     aiBtnText: {
-        color: '#FFFFFF',
+        color: '#05070e',
         fontSize: typography.sizes.caption,
-        fontWeight: typography.weights.bold,
+        fontWeight: '800',
         letterSpacing: 0.3,
     },
 });
