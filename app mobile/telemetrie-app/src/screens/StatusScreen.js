@@ -18,6 +18,7 @@ import {
     StatusBar,
     StyleSheet,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useScreenFadeIn } from '../utils/animations';
 import { fetchFullStatus } from '../services/vehicleService';
@@ -555,6 +556,29 @@ const StatusScreen = ({ navigation }) => {
                         <Text style={styles.aiText}>{subtitle}</Text>
                     </Card>
                 ) : null}
+
+                {/* ── 2a. BANNER SMART MOBILITY, SENTINELĂ & SECURITATE GPS ── */}
+                <TouchableOpacity
+                    style={[styles.smartMobilityBanner, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}
+                    onPress={() => getRootNavigation(navigation)?.navigate('SmartMobility')}
+                    activeOpacity={0.8}
+                >
+                    <View style={[styles.smartMobilityIconWrapper, { backgroundColor: 'rgba(77,142,245,0.12)' }]}>
+                        <Ionicons name="shield-checkmark" size={24} color={tpl.accent} />
+                    </View>
+                    <View style={styles.smartMobilityInfo}>
+                        <View style={styles.smartMobilityTitleRow}>
+                            <Text style={[styles.smartMobilityTitle, { color: tpl.text }]}>SENTINELĂ & SMART MOBILITY</Text>
+                            <View style={styles.smartMobilityBadge}>
+                                <Text style={styles.smartMobilityBadgeText}>GPS & PRO</Text>
+                            </View>
+                        </View>
+                        <Text style={[styles.smartMobilitySub, { color: tpl.textSecondary }]}>
+                            Găsește-mi mașina, cronometru parcare, mod valet și protecție eCall
+                        </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={tpl.textSecondary} />
+                </TouchableOpacity>
 
                 {/* ── 2b. X-RAY SUBSISTEME (Progressive Disclosure: Interactive Blueprint & Peek) ── */}
                 <View style={styles.section}>
@@ -1134,6 +1158,53 @@ const styles = StyleSheet.create({
         lineHeight: typography.lineHeights.caption,
     },
     tabular: { fontVariant: ['tabular-nums'] },
+
+    // ── Smart Mobility Banner ─────────────────────────────────────────────
+    smartMobilityBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: spacing[3],
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        marginBottom: spacing[4],
+        gap: spacing[3],
+    },
+    smartMobilityIconWrapper: {
+        width: 44,
+        height: 44,
+        borderRadius: radii.md,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    smartMobilityInfo: {
+        flex: 1,
+    },
+    smartMobilityTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[2],
+        marginBottom: 2,
+    },
+    smartMobilityTitle: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.5,
+    },
+    smartMobilityBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: radii.full,
+        backgroundColor: 'rgba(77,142,245,0.15)',
+    },
+    smartMobilityBadgeText: {
+        fontSize: typography.sizes.tiny,
+        fontWeight: typography.weights.heavy,
+        color: colors.accent.default,
+    },
+    smartMobilitySub: {
+        fontSize: typography.sizes.tiny,
+        lineHeight: 14,
+    },
 
     // ── Skeleton ──────────────────────────────────────────────────────────
     skeletonWrap: {},

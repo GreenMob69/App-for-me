@@ -14,6 +14,19 @@ const { syncOdometer }       = require('../services/vehicleSyncService');
 const TOPIC_TELEMETRIE = process.env.MQTT_TOPIC || 'telemetrie/obd2';
 const MQTT_BROKER_URL  = process.env.MQTT_BROKER_URL || 'mqtt://84.235.164.52:1883';
 
+function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
+    if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return 0;
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Number((R * c).toFixed(3));
+}
+
 function createMqttClient(db, io) {
     const client = mqtt.connect(MQTT_BROKER_URL);
 
@@ -114,11 +127,17 @@ function createMqttClient(db, io) {
             const dpf  = pachet.dpf          || {};
             const trans = pachet.transmisie  || {};
 
+            const gps = pachet.gps || {};
+            if (gps.lat && gps.lon) {
+                trip.lastGps = { lat: gps.lat, lon: gps.lon, alt: gps.alt ?? 80, heading: gps.heading ?? 0 };
+            }
+
             db.run(
-                `INSERT INTO telemetrie_flux (id_calatorie, timestamp, rpm, viteza_kmh, sarcina_pct, maf_gs, map_kpa, voltaj_v, temp_apa_c, temp_ulei_c, accel_g, consum_lh, boost_bar, dpf_soot, gear, torque_nm, matrice_completa_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                `INSERT INTO telemetrie_flux (id_calatorie, timestamp, rpm, viteza_kmh, sarcina_pct, maf_gs, map_kpa, voltaj_v, temp_apa_c, temp_ulei_c, accel_g, consum_lh, boost_bar, dpf_soot, gear, torque_nm, matrice_completa_json, lat, lon, alt, heading) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
                 [trip.id_calatorie, pachet.timestamp, m.rpm||0, m.speed||0, m.load||0, a.maf||0, a.map||101,
                  bat.ecu_volt||14.1, t.coolant||35, t.oil||20, m.accel_g||0, c.inst_cons||0,
-                 a.boost_actual||0, dpf.soot_load||0, trans.gear||1, m.torque_actual||0, JSON.stringify(pachet)]
+                 a.boost_actual||0, dpf.soot_load||0, trans.gear||1, m.torque_actual||0, JSON.stringify(pachet),
+                 gps.lat ?? null, gps.lon ?? null, gps.alt ?? null, gps.heading ?? null]
             );
 
             const timp_scurs_ore = (pachet.timestamp - trip.ultimul_timestamp) / 3_600_000;
@@ -167,6 +186,126 @@ function createMqttClient(db, io) {
                 db.run(`INSERT INTO evenimente_alerte (id_calatorie, timestamp, tip_eveniment, valoare_masurata, severitate, descriere) VALUES (?,?,?,?,?,?)`,
                     [trip.id_calatorie, pachet.timestamp, 'OVERSPEED', m.speed, 'WARNING', `Viteză excesivă — ${speedRounded} km/h (>130 km/h)`]);
                 io.emit('alerta_live', { tip: 'OVERSPEED', viteza: m.speed, descriere: `Viteză excesivă — ${speedRounded} km/h`, scor_curent: Math.max(0, 100 - trip.penalizari_eco) });
+            }
+
+            // ── 1. Detecție Gropi & Șocuri Verticale Asfalt ──────────────────────
+            const accelZ = parseFloat(pachet.accelerometru?.accel_z ?? 1.0);
+            const speedNow = m.speed || 0;
+            const nowSec = Math.floor(pachet.timestamp / 1000);
+            if (speedNow >= 15 && accelZ >= 1.75) {
+                if (!trip.lastPotholeSec || (nowSec - trip.lastPotholeSec) >= 3) {
+                    trip.lastPotholeSec = nowSec;
+                    const descriereGroapa = `Groapă / denivelare violentă (${accelZ.toFixed(2)}G la ${Math.round(speedNow)} km/h)`;
+                    db.run(`INSERT INTO evenimente_alerte (id_calatorie, timestamp, tip_eveniment, valoare_masurata, severitate, descriere) VALUES (?,?,?,?,?,?)`,
+                        [trip.id_calatorie, pachet.timestamp, 'GROAPA_DETECTATA', accelZ, 'WARNING', descriereGroapa]);
+                    io.emit('groapa_detectata', {
+                        tripId: trip.id_calatorie,
+                        timestamp: pachet.timestamp,
+                        forceG: accelZ,
+                        speed: Math.round(speedNow),
+                        lat: gps.lat ?? 44.4323,
+                        lon: gps.lon ?? 26.1063,
+                        descriere: descriereGroapa
+                    });
+                    io.emit('alerta_live', { tip: 'GROAPA_DETECTATA', g: accelZ, descriere: descriereGroapa, severitate: 'WARNING' });
+                }
+            }
+
+            // ── 2. Detecție Accident Sever & eCall SOS ──────────────────────────
+            const accelX = parseFloat(m.accel_g ?? pachet.accelerometru?.accel_x ?? 0);
+            const resultantImpactG = pachet.accelerometru ?
+                Math.sqrt(Math.pow(pachet.accelerometru.accel_x || 0, 2) + Math.pow(pachet.accelerometru.accel_y || 0, 2)) :
+                Math.abs(accelX);
+            if (!trip.hasCrashed && speedNow >= 20 && (accelX <= -2.8 || resultantImpactG >= 2.8)) {
+                trip.hasCrashed = true;
+                const crashG = Number((resultantImpactG >= 2.8 ? resultantImpactG : Math.abs(accelX)).toFixed(2));
+                const currentLat = gps.lat ?? trip.lastGps?.lat ?? 44.4323;
+                const currentLon = gps.lon ?? trip.lastGps?.lon ?? 26.1063;
+                const googleMapsUrl = `https://maps.google.com/?q=${currentLat},${currentLon}`;
+                const descriereAccident = `Coliziune violentă detectată (${crashG}G la ${Math.round(speedNow)} km/h)!`;
+
+                db.run(`INSERT INTO evenimente_alerte (id_calatorie, timestamp, tip_eveniment, valoare_masurata, severitate, descriere) VALUES (?,?,?,?,?,?)`,
+                    [trip.id_calatorie, pachet.timestamp, 'ACCIDENT_DETECTAT', crashG, 'CRITICAL', descriereAccident]);
+
+                io.emit('alerta_accident', {
+                    vin,
+                    tripId: trip.id_calatorie,
+                    timestamp: pachet.timestamp,
+                    forceG: crashG,
+                    speed: Math.round(speedNow),
+                    lat: currentLat,
+                    lon: currentLon,
+                    googleMapsUrl,
+                    descriere: descriereAccident
+                });
+                io.emit('alerta_live', { tip: 'ACCIDENT_DETECTAT', g: crashG, descriere: descriereAccident, severitate: 'CRITICAL' });
+                console.error(`🚨 [CRASH DETECTAT] ${descriereAccident} — Coordonate: ${googleMapsUrl}`);
+            }
+
+            // ── 3. Monitorizare Abuz Mod Valet / Mecanic / Împrumut ─────────────
+            if (!trip.valetCheckTime || (pachet.timestamp - trip.valetCheckTime) > 8000) {
+                trip.valetCheckTime = pachet.timestamp;
+                db.get(`SELECT * FROM valet_mode WHERE UPPER(vin) = ? AND is_active = 1`, [vin.toUpperCase()], (vErr, vRow) => {
+                    trip.valetConfig = vRow || null;
+                });
+            }
+            if (trip.valetConfig && trip.valetConfig.is_active) {
+                const cfg = trip.valetConfig;
+                const currentLat = gps.lat ?? trip.lastGps?.lat ?? cfg.center_lat;
+                const currentLon = gps.lon ?? trip.lastGps?.lon ?? cfg.center_lon;
+                const distCenterKm = (currentLat && currentLon && cfg.center_lat && cfg.center_lon) ?
+                    calculateHaversineDistanceKm(currentLat, currentLon, cfg.center_lat, cfg.center_lon) : 0;
+
+                let violType = null;
+                let violVal = 0;
+                let violLim = 0;
+                let violDesc = '';
+
+                if (speedNow > cfg.max_speed_kmh) {
+                    violType = 'VITEZA';
+                    violVal = Math.round(speedNow);
+                    violLim = cfg.max_speed_kmh;
+                    violDesc = `Viteză depășită în Mod Valet: ${Math.round(speedNow)} km/h (limită ${cfg.max_speed_kmh} km/h)`;
+                } else if ((m.rpm || 0) > cfg.max_rpm) {
+                    violType = 'TURATIE';
+                    violVal = Math.round(m.rpm || 0);
+                    violLim = cfg.max_rpm;
+                    violDesc = `Turație depășită în Mod Valet: ${Math.round(m.rpm || 0)} RPM (limită ${cfg.max_rpm} RPM)`;
+                } else if (distCenterKm > cfg.max_radius_km) {
+                    violType = 'GEOFENCE';
+                    violVal = Number(distCenterKm.toFixed(2));
+                    violLim = cfg.max_radius_km;
+                    violDesc = `Părăsire perimetru în Mod Valet: ${distCenterKm.toFixed(2)} km (limită ${cfg.max_radius_km} km)`;
+                }
+
+                if (violType) {
+                    if (!trip.lastValetViolationSec || (nowSec - trip.lastValetViolationSec) >= 20) {
+                        trip.lastValetViolationSec = nowSec;
+                        let violationsList = [];
+                        try { violationsList = JSON.parse(cfg.violations_json || '[]'); } catch (_) { violationsList = []; }
+                        const newViolation = {
+                            tip: violType,
+                            valoare: violVal,
+                            limita: violLim,
+                            timestamp: pachet.timestamp,
+                            descriere: violDesc,
+                            lat: currentLat,
+                            lon: currentLon
+                        };
+                        violationsList.push(newViolation);
+
+                        db.run(`
+                            UPDATE valet_mode
+                            SET violations_count = violations_count + 1,
+                                violations_json = ?
+                            WHERE UPPER(vin) = ?
+                        `, [JSON.stringify(violationsList.slice(-50)), vin.toUpperCase()]);
+
+                        io.emit('alerta_valet', newViolation);
+                        io.emit('alerta_live', { tip: 'ALERTA_VALET', descriere: violDesc, severitate: 'WARNING' });
+                        console.warn(`⚠️ [MOD VALET VIOLARE] ${violDesc}`);
+                    }
+                }
             }
 
             io.emit('telemetrie_live', {
@@ -302,9 +441,111 @@ function createMqttClient(db, io) {
                             }));
                     });
 
+                    // ── Actualizare Locație Parcare & Armare Automată Sentinela ─────────
+                    const parkLat = trip.lastGps?.lat ?? pachet.gps?.lat ?? 44.4323;
+                    const parkLon = trip.lastGps?.lon ?? pachet.gps?.lon ?? 26.1063;
+                    const parkAlt = trip.lastGps?.alt ?? pachet.gps?.alt ?? 85;
+                    const parkedAt = Math.floor(pachet.timestamp / 1000);
+
+                    db.run(`
+                        INSERT INTO parcare_sentinela (vin, lat, lon, alt, parked_at, is_armed, updated_at)
+                        VALUES (?, ?, ?, ?, ?, 1, ?)
+                        ON CONFLICT(vin) DO UPDATE SET
+                            lat = excluded.lat,
+                            lon = excluded.lon,
+                            alt = excluded.alt,
+                            parked_at = excluded.parked_at,
+                            is_armed = 1,
+                            updated_at = excluded.updated_at
+                    `, [vin.toUpperCase(), parkLat, parkLon, parkAlt, parkedAt, parkedAt], (pErr) => {
+                        if (pErr) console.error('[PARCARE EROARE]', pErr.message);
+                        else {
+                            console.log(`🅿️ [PARCARE SALVATĂ] ${vin} la lat=${parkLat}, lon=${parkLon} (Sentinela Armată)`);
+                            io.emit('parcare_actualizata', {
+                                vin,
+                                lat: parkLat,
+                                lon: parkLon,
+                                alt: parkAlt,
+                                parkedAt,
+                                isArmed: true,
+                                navigationUrl: `https://www.google.com/maps/dir/?api=1&destination=${parkLat},${parkLon}&travelmode=walking`
+                            });
+                        }
+                    });
+
                     delete calatoriiActive[vin];
                 }
             );
+            return;
+        }
+
+        // ── 4. SENTINELA DE PARCARE (Șoc, Înclinare, Furt Geofence) ─────────
+        if (pachet.stare_motor === 'PARCAT' || pachet.sentinela || pachet.eveniment === 'SOC_PARCARE') {
+            const sentryData = pachet.sentinela || {};
+            const nowSec = Math.floor(pachet.timestamp / 1000);
+
+            db.get(`SELECT * FROM parcare_sentinela WHERE UPPER(vin) = ?`, [vin.toUpperCase()], (sErr, sentryRow) => {
+                if (sErr || !sentryRow || sentryRow.is_armed !== 1) return;
+
+                let events = [];
+                try { events = JSON.parse(sentryRow.sentry_events_json || '[]'); } catch (_) { events = []; }
+
+                let triggeredAlert = null;
+
+                // A. Șoc / tamponare caroserie în parcare (> 0.65G)
+                const shockG = parseFloat(sentryData.force_g || sentryData.shock_g || pachet.accelerometru?.accel_z || 0);
+                if (shockG >= 0.65) {
+                    triggeredAlert = {
+                        tip: 'IMPACT',
+                        titlu: 'Tamponare / Șoc în Parcare!',
+                        descriere: `Senzorul de impact a înregistrat o forță de ${shockG.toFixed(2)}G. Verifică starea caroseriei!`,
+                        valoare: shockG,
+                        timestamp: pachet.timestamp
+                    };
+                    db.run(`UPDATE parcare_sentinela SET last_impact_at = ?, last_impact_g = ? WHERE UPPER(vin) = ?`,
+                        [nowSec, shockG, vin.toUpperCase()]);
+                }
+
+                // B. Înclinare suspectă (> 3.5 grade — ridicare platformă / furt roți)
+                const tiltDeg = parseFloat(sentryData.tilt_deg || pachet.accelerometru?.tilt_pitch || 0);
+                if (!triggeredAlert && Math.abs(tiltDeg) >= 3.5) {
+                    triggeredAlert = {
+                        tip: 'INCLINARE',
+                        titlu: 'Tentativă Ridicare / Înclinare!',
+                        descriere: `Înclinare anormală la ${tiltDeg.toFixed(1)}° (posibilă tractare / ridicare pe platformă sau furt roți).`,
+                        valoare: tiltDeg,
+                        timestamp: pachet.timestamp
+                    };
+                    db.run(`UPDATE parcare_sentinela SET last_tilt_at = ?, last_tilt_deg = ? WHERE UPPER(vin) = ?`,
+                        [nowSec, tiltDeg, vin.toUpperCase()]);
+                }
+
+                // C. Furt / mișcare neautorizată fără motor pornit (> 35m față de locul parcării)
+                const currLat = pachet.gps?.lat;
+                const currLon = pachet.gps?.lon;
+                if (!triggeredAlert && currLat && currLon && sentryRow.lat && sentryRow.lon) {
+                    const distMeters = calculateHaversineDistanceKm(sentryRow.lat, sentryRow.lon, currLat, currLon) * 1000;
+                    if (distMeters >= 35) {
+                        triggeredAlert = {
+                            tip: 'MISCARE_NEAUTORIZATA',
+                            titlu: 'Mișcare Neautorizată / Geofence Breach!',
+                            descriere: `Vehiculul a fost deplasat cu ${Math.round(distMeters)}m fără pornirea contactului!`,
+                            valoare: Math.round(distMeters),
+                            timestamp: pachet.timestamp
+                        };
+                    }
+                }
+
+                if (triggeredAlert) {
+                    events.push(triggeredAlert);
+                    db.run(`UPDATE parcare_sentinela SET sentry_events_json = ?, updated_at = ? WHERE UPPER(vin) = ?`,
+                        [JSON.stringify(events.slice(-30)), nowSec, vin.toUpperCase()]);
+
+                    io.emit('alerta_sentinela', { vin, ...triggeredAlert });
+                    io.emit('alerta_live', { tip: 'ALERTA_SENTINELA', descriere: triggeredAlert.descriere, severitate: 'CRITICAL' });
+                    console.warn(`🛡️ [SENTINELA ALERTA] ${triggeredAlert.titlu} (${vin}): ${triggeredAlert.descriere}`);
+                }
+            });
         }
     });
 

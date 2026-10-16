@@ -39,6 +39,8 @@ import AIExpertScreen       from './src/screens/AIExpertScreen';
 import NotificationScreen   from './src/screens/NotificationScreen';
 import GlobalSearchScreen   from './src/screens/GlobalSearchScreen';
 import UIPlaygroundScreen  from './src/screens/UIPlaygroundScreen';
+import SmartMobilityScreen  from './src/screens/SmartMobilityScreen';
+import CrashAlertModal      from './src/components/CrashAlertModal';
 import ErrorBoundary        from './src/components/ErrorBoundary';
 
 const Tab       = createBottomTabNavigator();
@@ -204,6 +206,11 @@ function AppNavigator() {
                     component={UIPlaygroundScreen}
                     options={{ animation: 'slide_from_right' }}
                 />
+                <RootStack.Screen
+                    name="SmartMobility"
+                    component={SmartMobilityScreen}
+                    options={{ animation: 'slide_from_right' }}
+                />
             </RootStack.Navigator>
         </NavigationContainer>
     );
@@ -255,6 +262,7 @@ function AppRoot() {
                         <StatusBar style="light" backgroundColor={colors.bg[0]} />
                         <SecurityGate>
                             <AppNavigator />
+                            <CrashAlertModal />
                         </SecurityGate>
                     </View>
                 </SecurityProvider>

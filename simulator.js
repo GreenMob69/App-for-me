@@ -26,18 +26,35 @@ let t_cool = 35.0; let t_oil = 20.0; let t_amb = 18.0; let t_cat1 = 150; let t_c
 let volt_bat = 12.6; let volt_ecu = 14.2; let dpf_soot = 12.4; let dpf_diff = 4.2;
 let rail_press = 35000; let km_total = 328450.0; let run_time = 0; let eng_hours = 4120.5;
 
+// Coordonate GPS & accelerometru inerțial (Traseu București Centru — Splai / Unirii / Victoriei)
+let gps_lat = 44.4323;
+let gps_lon = 26.1063;
+let gps_alt = 78.5;
+let gps_heading = 42.0;
+let acc_z = 1.0;
+let acc_y = 0.0;
+let tilt_pitch = 0.0;
+let tilt_roll = 0.0;
+
 client.on('connect', () => {
     const simStartTimestamp = Date.now();
     console.log(`[SIMULATOR PRO] Conectat la ${MQTT_BROKER_URL} [Topic: ${TOPIC}]`);
     console.log(`[CONFIG DEMO] Durată: ${DURATA}s | Viteză: ${SPEED_MULT}x | Scenariu: ${SCENARIO.toUpperCase()} | VIN: ${VIN}`);
     console.log('[SIMULATOR PRO] Trimit eveniment PORNIRE...');
-    client.publish(TOPIC, JSON.stringify({ ecu: { vin: VIN, model: 'Audi A6 C4 2.5 TDI AEL' }, stare_motor: "PORNIRE", timestamp: simStartTimestamp }));
+    client.publish(TOPIC, JSON.stringify({
+        ecu: { vin: VIN, model: 'Audi A6 C4 2.5 TDI AEL' },
+        stare_motor: "PORNIRE",
+        gps: { lat: gps_lat, lon: gps_lon, alt: gps_alt, heading: gps_heading },
+        timestamp: simStartTimestamp
+    }));
 
     const tickMs = Math.max(50, Math.floor(1000 / SPEED_MULT));
 
     const intv = setInterval(() => {
         sec++; run_time++;
         acc_g = 0.05;
+        acc_z = +(1.0 + (Math.random() * 0.08 - 0.04)).toFixed(2);
+        acc_y = +(Math.sin(sec / 4) * 0.05).toFixed(2);
         const progress = sec / DURATA;
 
         // Ciclul de condus proporțional cu durata aleasă
@@ -77,6 +94,41 @@ client.on('connect', () => {
             spd = 0; rpm = 800; load = 15; thr = 0; acc_g = 0; gear = 1;
         }
 
+        // ── Simulare Gropi Asfalt (Spike vertical Z > 1.7G) ───────────────────
+        const potholeSec1 = Math.floor(DURATA * 0.28);
+        const potholeSec2 = Math.floor(DURATA * 0.62);
+        if ((sec === potholeSec1 || sec === potholeSec2) && spd >= 25) {
+            acc_z = +(1.88 + Math.random() * 0.15).toFixed(2);
+            console.log(`\n🕳️ [SEC ${sec}/${DURATA}] GROAPĂ / DENIVELARE VIOLENTĂ (${acc_z}G la ${Math.floor(spd)} km/h)!`);
+        }
+
+        // ── Simulare Scenariu Accident (Decelerație extremă -3.2G) ────────────
+        if (SCENARIO === 'crash' && sec === Math.floor(DURATA * 0.65)) {
+            console.log(`\n💥 [SEC ${sec}/${DURATA}] SIMULARE IMPACT ACCIDENT RUTIER (-3.25G la ${Math.floor(spd)} km/h)!`);
+            acc_g = -3.25;
+            acc_z = 2.30;
+            spd = 0;
+            rpm = 0;
+        }
+
+        // ── Simulare Scenariu Abuz Mod Valet ──────────────────────────────────
+        if (SCENARIO === 'valet_abuse' && progress >= 0.25) {
+            spd = 92;
+            rpm = 3850;
+        }
+
+        // Deplasare cinematică coordonate GPS (traseu fluid în funcție de viteză)
+        if (spd > 0) {
+            const distPerTickKm = (spd / 3600);
+            gps_lat += Math.sin(sec / 18) * (distPerTickKm * 0.007);
+            gps_lon += Math.cos(sec / 18) * (distPerTickKm * 0.009);
+            gps_heading = +(Math.abs((Math.sin(sec / 12) * 360))).toFixed(1);
+            gps_alt = +(78.0 + Math.sin(sec / 20) * 12).toFixed(1);
+        }
+
+        tilt_pitch = +(-(acc_g * 4.2)).toFixed(1);
+        tilt_roll = +(acc_y * 3.5).toFixed(1);
+
         // Fizică termică și injecție
         t_cool = +(Math.min(90.0, t_cool + 0.18)).toFixed(1);
         if (t_cool > 50) t_oil = +(Math.min(95.0, t_oil + 0.08)).toFixed(1);
@@ -93,13 +145,10 @@ client.on('connect', () => {
 
         // ── Injectare Defecțiuni pe Scenarii Demo ──────────────────────────
         if (SCENARIO === 'fault_turbo' && progress >= 0.40) {
-            // Deficit presiune turbo (Furtun intercooler fisurat / N75 blocat)
             map = Math.floor(108 + (load * 0.25));
         } else if (SCENARIO === 'fault_cooling' && progress >= 0.35) {
-            // Termostat blocat pe închis / supraîncălzire critică
             t_cool = +(Math.min(108.5, t_cool + 0.35)).toFixed(1);
         } else if (SCENARIO === 'fault_alternator' && progress >= 0.30) {
-            // Cădere regulator tensiune alternator sub sarcină
             volt_ecu = +(12.2 + (Math.random() * 0.15)).toFixed(2);
         }
 
@@ -120,10 +169,24 @@ client.on('connect', () => {
         dpf_diff = +(4.0 + (maf * 0.15)).toFixed(1);
 
         // ====================================================================
-        // MATRICEA EXHAUSTIVĂ (~90 PARAMETRI SAE J1979 & UDS VAG)
+        // MATRICEA EXHAUSTIVĂ (~90 PARAMETRI SAE J1979 & UDS VAG) + GPS & IMU
         // ====================================================================
         const pachetExhaustiv = {
             stare_motor: "MERS", timestamp: simStartTimestamp + (sec * 1000),
+            gps: {
+                lat: +gps_lat.toFixed(6),
+                lon: +gps_lon.toFixed(6),
+                alt: gps_alt,
+                heading: gps_heading,
+                speed_kmh: Math.floor(spd)
+            },
+            accelerometru: {
+                accel_x: acc_g,
+                accel_y: acc_y,
+                accel_z: acc_z,
+                tilt_pitch: tilt_pitch,
+                tilt_roll: tilt_roll
+            },
             motor: {
                 rpm: Math.floor(rpm), speed: Math.floor(spd), load: Math.floor(load),
                 calc_load: Math.floor(load * 0.98), abs_load: Math.floor(load * 1.05),
@@ -173,12 +236,38 @@ client.on('connect', () => {
         if (sec >= DURATA) {
             clearInterval(intv);
             setTimeout(() => {
-                client.publish(TOPIC, JSON.stringify({ ecu: { vin: VIN, model: 'Audi A6 C4 2.5 TDI AEL' }, stare_motor: "OPRIRE", timestamp: simStartTimestamp + (DURATA * 1000) }));
-                console.log(`\n🏁 [${DURATA}s] CICLUL EXHAUSTIV FINALIZAT! Pachetul OPRIRE trimis.`);
-                client.end(false, () => {
-                    console.log('[SIMULATOR PRO] Deconectat.');
-                    process.exit(0);
-                });
+                client.publish(TOPIC, JSON.stringify({
+                    ecu: { vin: VIN, model: 'Audi A6 C4 2.5 TDI AEL' },
+                    stare_motor: "OPRIRE",
+                    gps: { lat: +gps_lat.toFixed(6), lon: +gps_lon.toFixed(6), alt: gps_alt, heading: gps_heading },
+                    timestamp: simStartTimestamp + (DURATA * 1000)
+                }));
+                console.log(`\n🏁 [${DURATA}s] CICLUL EXHAUSTIV FINALIZAT! Pachetul OPRIRE trimis cu locația: ${gps_lat.toFixed(6)}, ${gps_lon.toFixed(6)}.`);
+
+                if (SCENARIO === 'sentry_hit') {
+                    console.log('🛡️ [TEST SENTINELA] Trimit eveniment PARCAT + Șoc tamponare parcare în 2 secunde...');
+                    setTimeout(() => {
+                        client.publish(TOPIC, JSON.stringify({
+                            ecu: { vin: VIN },
+                            stare_motor: "PARCAT",
+                            timestamp: Date.now(),
+                            sentinela: { tip: "IMPACT", force_g: 0.82 },
+                            gps: { lat: +gps_lat.toFixed(6), lon: +gps_lon.toFixed(6) }
+                        }));
+                        console.log('🛡️ [TEST SENTINELA] Eveniment șoc parcare (0.82G) transmis către broker!');
+                        setTimeout(() => {
+                            client.end(false, () => {
+                                console.log('[SIMULATOR PRO] Deconectat.');
+                                process.exit(0);
+                            });
+                        }, 1000);
+                    }, 2000);
+                } else {
+                    client.end(false, () => {
+                        console.log('[SIMULATOR PRO] Deconectat.');
+                        process.exit(0);
+                    });
+                }
             }, Math.min(1000, tickMs * 2));
         }
     }, tickMs);

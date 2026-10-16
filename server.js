@@ -109,6 +109,51 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
             UNIQUE(vin, prediction_hash)
         )`);
 
+        // ── Smart Mobility, Sentry & Safety Tables ───────────────────────────
+        db.run(`ALTER TABLE telemetrie_flux ADD COLUMN lat REAL`, () => {});
+        db.run(`ALTER TABLE telemetrie_flux ADD COLUMN lon REAL`, () => {});
+        db.run(`ALTER TABLE telemetrie_flux ADD COLUMN alt REAL`, () => {});
+        db.run(`ALTER TABLE telemetrie_flux ADD COLUMN heading REAL`, () => {});
+
+        db.run(`CREATE TABLE IF NOT EXISTS parcare_sentinela (
+            vin TEXT PRIMARY KEY,
+            is_armed INTEGER DEFAULT 1,
+            lat REAL,
+            lon REAL,
+            alt REAL,
+            parked_at INTEGER,
+            parking_meter_expires_at INTEGER,
+            parking_meter_minutes INTEGER DEFAULT 0,
+            last_impact_at INTEGER,
+            last_impact_g REAL,
+            last_tilt_at INTEGER,
+            last_tilt_deg REAL,
+            sentry_events_json TEXT DEFAULT '[]',
+            updated_at INTEGER
+        )`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS valet_mode (
+            vin TEXT PRIMARY KEY,
+            is_active INTEGER DEFAULT 0,
+            center_lat REAL,
+            center_lon REAL,
+            max_radius_km REAL DEFAULT 3.0,
+            max_speed_kmh REAL DEFAULT 80,
+            max_rpm INTEGER DEFAULT 3500,
+            activated_at INTEGER,
+            violations_count INTEGER DEFAULT 0,
+            violations_json TEXT DEFAULT '[]'
+        )`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS contacte_urgenta (
+            vin TEXT PRIMARY KEY,
+            nume TEXT DEFAULT 'Contact Urgență',
+            telefon TEXT DEFAULT '',
+            mesaj_personalizat TEXT DEFAULT 'Posibil accident detectat! Verifică starea mea la coordonatele GPS atașate.',
+            auto_send_sos INTEGER DEFAULT 1,
+            updated_at INTEGER
+        )`);
+
         db.run(`CREATE INDEX IF NOT EXISTS idx_calatorii_vin ON calatorii(vin, timestamp_start)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_flux_calatorie ON telemetrie_flux(id_calatorie, timestamp)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_trip_summary ON trip_summary(id_calatorie)`);
@@ -129,6 +174,7 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
 app.use('/admin', requireAuth);
 app.use('/api',  require('./routes/trips')(db, io));
 app.use('/api',  require('./routes/vehicles')(db, io));
+app.use('/api',  require('./routes/smartMobility')(db, io));
 app.use('/api',  require('./routes/reports')(db));
 app.use('/api',  require('./routes/ai')(db));
 app.use('/api',  require('./routes/sync')(db));

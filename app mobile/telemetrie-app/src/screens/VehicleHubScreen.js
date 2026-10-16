@@ -7,6 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import MaintenanceScreen    from './MaintenanceScreen';
 import VehicleProfileScreen from './VehicleProfileScreen';
 import AIExpertScreen       from './AIExpertScreen';
+import SmartMobilityScreen  from './SmartMobilityScreen';
 import { useVehicle } from '../context/VehicleContext';
 import { NotificationContext } from '../context/NotificationContext';
 import { colors, typography, radii, spacing, layout, useThemeTemplate } from '../theme';
@@ -17,6 +18,7 @@ const PT = Platform.OS === 'android' ? (StatusBar.currentHeight || 40) + 10 : 44
 
 const TABS = [
     { id: 'MENTENANTA', label: 'MENTENANȚĂ' },
+    { id: 'SMART',      label: 'SMART & GPS' },
     { id: 'PROFIL',     label: 'PROFIL & ACTE' },
     { id: 'EXPERT',     label: 'ASISTENT AI' },
 ];
@@ -102,6 +104,7 @@ const VehicleHubScreen = () => {
                     style={[styles.screenSlot, { display: activeTab === tab.id ? 'flex' : 'none' }]}
                 >
                     {tab.id === 'MENTENANTA' && <MaintenanceScreen />}
+                    {tab.id === 'SMART'      && <SmartMobilityScreen showBack={false} />}
                     {tab.id === 'PROFIL'     && <VehicleProfileScreen showBack={false} />}
                     {tab.id === 'EXPERT'     && <AIExpertScreen />}
                 </View>
