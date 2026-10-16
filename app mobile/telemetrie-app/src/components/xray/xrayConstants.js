@@ -356,3 +356,160 @@ export const SENSORS_BY_CATEGORY = {
         },
     ],
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8 PIN-URI CHEIE PENTRU PERSPECTIVA 3D / CUTAWAY WIRING (Inspirat de referința Audi)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const PERSPECTIVE_PINS = [
+    {
+        id: 'engine',
+        code: 'MOTOR',
+        name: 'Grup Motopropulsor & Chiuloasă',
+        subsystem: 'motor',
+        pin: { x: 135, y: 145 },
+        chip: { x: 105, y: 118 },
+        nominal: '90 – 95% eficiență termică & mecanică',
+        nominalMin: 70,
+        nominalMax: 100,
+        unit: '%',
+        location: 'Montat longitudinal/transversal în compartimentul frontal pe tampoane hidraulice.',
+        diag: 'Compresie echilibrată pe cilindri, fără vibrații parazite sau scăpări de compresie.',
+        aiPrompt: 'Analizează starea de funcționare a motorului, echilibrul mecanic și parametrii ECU.',
+        getReading: (live) => {
+            const sc = live?.motor?.score ?? 92;
+            return { val: `${Math.round(sc)}%`, rawNum: sc, status: 'optimal' };
+        },
+    },
+    {
+        id: 'turbo',
+        code: 'TURBO',
+        name: 'Turbosuflantă VNT & Actuator N75',
+        subsystem: 'turbo',
+        pin: { x: 80, y: 175 },
+        chip: { x: 38, y: 150 },
+        nominal: '0.0 bar relanti · 1.15 – 1.35 bar boost',
+        nominalMin: 0.0,
+        nominalMax: 1.5,
+        unit: 'bar',
+        location: 'Montată pe galeria de evacuare fontă cu actuator pneumatic/electronic de geometrie.',
+        diag: 'Răspuns prompt al geometriei variabile. Fără joc radial/axial în axul turbinei.',
+        aiPrompt: 'Verifică presiunea de boost a turbinei și funcționarea actuatorului N75.',
+        getReading: (live) => {
+            const b = live?.turbo?.boost_bar || live?.aer?.boost_bar || 1.15;
+            return { val: `${Number(b).toFixed(2)} bar`, rawNum: Number(b), status: 'optimal' };
+        },
+    },
+    {
+        id: 'cooling',
+        code: 'RĂCIRE',
+        name: 'Radiator, Pompă Apă & Termostat (G62)',
+        subsystem: 'racire',
+        pin: { x: 65, y: 125 },
+        chip: { x: 32, y: 100 },
+        nominal: '87 – 92°C temperatură de regim optim',
+        nominalMin: 75,
+        nominalMax: 105,
+        unit: '°C',
+        location: 'Radiator frontal dublu nucleu + flanșă laterală senzor temperatură antigel.',
+        diag: 'Schimb termic uniform. Termostatul deschide prompt fără blocaje mecanice.',
+        aiPrompt: 'Evaluează comportamentul termic al motorului și stabilitatea temperaturii antigelului.',
+        getReading: (live) => {
+            const t = live?.temperaturi?.temp_apa_c || live?.coolant || 90;
+            return { val: `${Math.round(t)}°C`, rawNum: Number(t), status: 'optimal' };
+        },
+    },
+    {
+        id: 'battery',
+        code: '12V / ECU',
+        name: 'Alternator, Baterie & Magistrală CAN',
+        subsystem: 'electric',
+        pin: { x: 165, y: 105 },
+        chip: { x: 175, y: 80 },
+        nominal: '13.8 – 14.5 V cu motorul pornit',
+        nominalMin: 12.0,
+        nominalMax: 14.8,
+        unit: 'V',
+        location: 'Alternator pe cureaua accesorii; cablaj electric protejat spre cutia de siguranțe.',
+        diag: 'Tensiune stabilă pe toți consumatorii. Punte redresoare fără riplu anormal.',
+        aiPrompt: 'Analizează tensiunea de încărcare a alternatorului și calitatea rețelei de 12V.',
+        getReading: (live) => {
+            const v = live?.baterie?.ecu_volt || live?.voltage || 14.1;
+            return { val: `${Number(v).toFixed(1)} V`, rawNum: Number(v), status: 'optimal' };
+        },
+    },
+    {
+        id: 'transmission',
+        code: 'CUTIE',
+        name: 'Transmisie, Ambreiaj & Volant',
+        subsystem: 'transmisie',
+        pin: { x: 205, y: 160 },
+        chip: { x: 195, y: 132 },
+        nominal: 'Patinare ambreiaj 0% în orice treaptă',
+        nominalMin: 0,
+        nominalMax: 8,
+        unit: '%',
+        location: 'Montată în tunelul median al caroseriei, cuplată mecanic la arborele cotit.',
+        diag: 'Aderență perfectă a discului de ambreiaj sub cuplu. Sincroane trepte fără uzură.',
+        aiPrompt: 'Analizează starea ambreiajului și cutiei de viteze pentru semne de uzură.',
+        getReading: (live) => {
+            const s = live?.transmisie?.clutch_slip ?? 0;
+            return { val: `${Math.round(s)}% slip`, rawNum: Number(s), status: 'optimal' };
+        },
+    },
+    {
+        id: 'dpf',
+        code: 'DPF / CAT',
+        name: 'Filtru Particule DPF & Traseu Evacuare',
+        subsystem: 'dpf',
+        pin: { x: 260, y: 175 },
+        chip: { x: 265, y: 150 },
+        nominal: 'Presiune diferențială < 3.5 kPa · Masă < 60g',
+        nominalMin: 0,
+        nominalMax: 50,
+        unit: 'g',
+        location: 'Linie de evacuare montată sub caroserie, izolată cu ecrane termice din aluminiu.',
+        diag: 'Contrapresiune în limite optime. Flux liber al gazelor de eșapament.',
+        aiPrompt: 'Care este gradul de încărcare al filtrului de particule DPF și starea catalizatorului?',
+        getReading: (live) => {
+            const g = live?.dpf?.soot_load || 0.0;
+            return { val: `${Number(g).toFixed(1)} g`, rawNum: Number(g), status: 'optimal' };
+        },
+    },
+    {
+        id: 'brakes_front',
+        code: 'FRÂNE F.',
+        name: 'Frâne Față & Discuri Ventilate Perforate',
+        subsystem: 'transmisie',
+        pin: { x: 95, y: 240 },
+        chip: { x: 45, y: 250 },
+        nominal: 'Disipare normală călătorie: < 15 MJ',
+        nominalMin: 0,
+        nominalMax: 20,
+        unit: 'MJ',
+        location: 'Punte față: etriere flotante cu plăcuțe ceramice pe discuri ventilate.',
+        diag: 'Rezistență la rulare nulă. Etrierele culisează perfect fără blocare.',
+        aiPrompt: 'Verifică forța de frânare pe puntea față și modelul Archard de disipare termică.',
+        getReading: (live) => {
+            const m = live?.virtual?.brakeEnergyTripMj || 0.0;
+            return { val: `${Number(m).toFixed(1)} MJ`, rawNum: Number(m), status: 'optimal' };
+        },
+    },
+    {
+        id: 'brakes_rear',
+        code: 'FRÂNE S.',
+        name: 'Frâne Spate & Frână de Parcare',
+        subsystem: 'transmisie',
+        pin: { x: 315, y: 200 },
+        chip: { x: 285, y: 220 },
+        nominal: 'Repartiție frânare spate: 25–35%',
+        nominalMin: 20,
+        nominalMax: 40,
+        unit: '%',
+        location: 'Punte spate: discuri pline și etriere cu acționare a frânei de parcare.',
+        diag: 'Uzură uniformă a suprafeței discurilor. Mecanism de parcare perfect funcțional.',
+        aiPrompt: 'Evaluează eficiența frânelor de pe puntea spate și starea etrierelor.',
+        getReading: () => ({ val: 'Nominal', rawNum: 95, status: 'optimal' }),
+    },
+];
+
