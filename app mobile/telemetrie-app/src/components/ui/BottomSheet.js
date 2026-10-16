@@ -52,19 +52,21 @@ const BottomSheet = ({ visible, onClose, title, children, maxHeight }) => {
     // ── PanResponder pentru tragere cu degetul (drag-to-dismiss) ───────────
     const panResponder = useRef(
         PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 4,
+            onStartShouldSetPanResponder: () => false,
+            onStartShouldSetPanResponderCapture: () => false,
+            onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.2,
+            onMoveShouldSetPanResponderCapture: (_, gesture) => gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.5,
             onPanResponderMove: (_, gesture) => {
                 if (gesture.dy > 0) {
                     panY.setValue(gesture.dy);
                 } else {
                     // Rezistență elastică în sus
-                    panY.setValue(gesture.dy * 0.25);
+                    panY.setValue(gesture.dy * 0.2);
                 }
             },
             onPanResponderRelease: (_, gesture) => {
-                // Dacă a fost tras în jos peste 90px sau rapid în jos (vy > 0.5)
-                if (gesture.dy > 90 || (gesture.dy > 40 && gesture.vy > 0.5)) {
+                // Dacă a fost tras în jos peste 75px sau rapid în jos (vy > 0.4)
+                if (gesture.dy > 75 || (gesture.dy > 30 && gesture.vy > 0.4)) {
                     handleClose();
                 } else {
                     // Snap înapoi la poziția deschisă
@@ -108,7 +110,9 @@ const BottomSheet = ({ visible, onClose, title, children, maxHeight }) => {
             >
                 {/* Zonă de tragere cu degetul: Drag Handle + Header */}
                 <View {...panResponder.panHandlers} style={styles.dragZone}>
-                    <View style={styles.handle} accessibilityElementsHidden />
+                    <View style={styles.handleContainer}>
+                        <View style={styles.handle} accessibilityElementsHidden />
+                    </View>
 
                     {/* Header */}
                     {title ? (
@@ -156,14 +160,19 @@ const styles = StyleSheet.create({
     dragZone: {
         width: '100%',
     },
+    handleContainer: {
+        width: '100%',
+        paddingTop: spacing[2],
+        paddingBottom: spacing[1],
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     handle: {
-        width: 40,
-        height: 4,
+        width: 48,
+        height: 5,
         borderRadius: radii.full,
-        backgroundColor: colors.border.strong,
+        backgroundColor: colors.border.strong || '#475569',
         alignSelf: 'center',
-        marginTop: spacing[2],
-        marginBottom: spacing[2],
     },
     header: {
         flexDirection: 'row',

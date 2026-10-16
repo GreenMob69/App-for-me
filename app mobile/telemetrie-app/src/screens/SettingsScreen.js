@@ -14,6 +14,7 @@ import { Linking } from 'react-native';
 import api from '../services/api';
 import socketService from '../services/socket';
 import { colors, typography, radii, spacing, layout, TEMPLATES } from '../theme';
+import { CockpitVisualPreview } from '../components/ui';
 
 // ─── Connection badge ─────────────────────────────────────────────────────────
 
@@ -590,6 +591,12 @@ const SettingsScreen = () => {
                                 accessibilityRole="button"
                                 accessibilityLabel={`Alege șablonul ${tpl.name}`}
                             >
+                                <CockpitVisualPreview
+                                    templateId={tpl.id}
+                                    isSelected={isSelected}
+                                    width={138}
+                                    height={68}
+                                />
                                 <View style={styles.templateHeader}>
                                     <View style={[styles.templateColorDot, { backgroundColor: tpl.accent }]} />
                                     <View style={[styles.templateBadge, { backgroundColor: tpl.tagBg }]}>
@@ -973,15 +980,20 @@ const styles = StyleSheet.create({
         marginBottom: spacing[2] + 2,
     },
     templateGrid: {
-        gap: spacing[2] + 2,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
         marginTop: spacing[2],
         marginBottom: spacing[1],
     },
     templateCard: {
+        width: '48.5%',
         backgroundColor: colors.bg[0],
         borderRadius: radii.md,
-        padding: spacing[3],
+        padding: spacing[2] + 2,
         borderWidth: 1.5,
+        marginBottom: spacing[3],
+        alignItems: 'center',
     },
     templateCardSelected: {
         backgroundColor: colors.bg[2],
@@ -990,6 +1002,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        width: '100%',
+        marginTop: 2,
         marginBottom: 4,
     },
     templateColorDot: {
@@ -1008,18 +1022,22 @@ const styles = StyleSheet.create({
         letterSpacing: 0.5,
     },
     templateName: {
-        fontSize: typography.sizes.body1,
+        fontSize: typography.sizes.body2,
         fontWeight: typography.weights.bold,
         color: colors.text.primary,
         marginBottom: 2,
+        textAlign: 'center',
+        width: '100%',
     },
     templateSub: {
-        fontSize: typography.sizes.caption,
+        fontSize: typography.sizes.micro,
         color: colors.text.secondary,
         marginBottom: spacing[2],
+        textAlign: 'center',
+        width: '100%',
     },
     templateActiveIndicator: {
-        alignSelf: 'flex-start',
+        alignSelf: 'center',
         paddingHorizontal: spacing[2] + 2,
         paddingVertical: 2,
         borderRadius: radii.xs,

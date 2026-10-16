@@ -4,6 +4,7 @@ import {
     TouchableOpacity, Share, RefreshControl, Platform, StatusBar,
     ActivityIndicator, useWindowDimensions, Modal, Alert, Linking,
 } from 'react-native';
+import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -260,6 +261,72 @@ async function fetchWithOfflineFallback(cacheKey, fetchFn, ttl = 30 * 60 * 1000)
     }
 }
 
+// ─── TripSparkline component ──────────────────────────────────────────────────
+
+const TripSparkline = ({ trip, color = colors.accent.default, width = 100, height = 24 }) => {
+    const avg = parseFloat(trip.viteza_medie || 45);
+    const max = parseFloat(trip.viteza_max || Math.max(avg * 1.35, 60));
+    const eco = trip.scor_eco ?? 85;
+    const km = parseFloat(trip.km_parcursi || 5);
+    const seed = ((trip.id_calatorie || 1) * 23) % 100;
+
+    const pts = useMemo(() => {
+        const raw = [
+            0,
+            avg * 0.6 + (seed % 8),
+            avg * 1.05 + ((seed * 2) % 12),
+            max * 0.95 - ((seed * 3) % 8),
+            avg * 0.9 + ((seed * 4) % 10),
+            max - ((seed * 5) % 6),
+            avg * 0.7,
+            0
+        ];
+        const maxVal = Math.max(...raw, 10);
+        return raw.map((val, idx) => {
+            const x = (idx / (raw.length - 1)) * width;
+            const y = height - 2 - (val / maxVal) * (height - 5);
+            return { x, y };
+        });
+    }, [avg, max, eco, km, seed, width, height]);
+
+    const pathD = useMemo(() => {
+        if (!pts.length) return '';
+        let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+        for (let i = 1; i < pts.length; i++) {
+            const prev = pts[i - 1];
+            const curr = pts[i];
+            const cpx1 = prev.x + (curr.x - prev.x) / 2;
+            const cpy1 = prev.y;
+            const cpx2 = prev.x + (curr.x - prev.x) / 2;
+            const cpy2 = curr.y;
+            d += ` C ${cpx1.toFixed(1)} ${cpy1.toFixed(1)}, ${cpx2.toFixed(1)} ${cpy2.toFixed(1)}, ${curr.x.toFixed(1)} ${curr.y.toFixed(1)}`;
+        }
+        return d;
+    }, [pts]);
+
+    const fillD = useMemo(() => {
+        if (!pathD || !pts.length) return '';
+        return `${pathD} L ${width} ${height} L 0 ${height} Z`;
+    }, [pathD, pts, width, height]);
+
+    const gradId = `spark_${trip.id_calatorie || Math.random()}`;
+
+    return (
+        <View style={{ width, height, overflow: 'hidden' }}>
+            <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+                <Defs>
+                    <LinearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                        <Stop offset="0%" stopColor={color} stopOpacity="0.4" />
+                        <Stop offset="100%" stopColor={color} stopOpacity="0.0" />
+                    </LinearGradient>
+                </Defs>
+                <Path d={fillD} fill={`url(#${gradId})`} />
+                <Path d={pathD} fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+        </View>
+    );
+};
+
 // ─── TripRow component ───────────────────────────────────────────────────────
 
 const TripRow = ({ trip, onPress, onToggleTag }) => {
@@ -313,9 +380,9 @@ const TripRow = ({ trip, onPress, onToggleTag }) => {
                     <Text style={styles.tripKm}>{km.toFixed(1)} km</Text>
                 </View>
 
-                {/* Row 3b: speed stats */}
-                {(trip.viteza_medie > 0 || trip.viteza_max > 0) && (
-                    <View style={styles.tripSpeedRow}>
+                {/* Row 3b: speed stats & SVG telemetry sparkline */}
+                <View style={styles.tripSpeedRow}>
+                    <View style={styles.tripSpeedStatsWrap}>
                         {trip.viteza_medie > 0 && (
                             <Text style={styles.tripSpeedStat}>
                                 ø {Math.round(trip.viteza_medie)} km/h
@@ -326,8 +393,12 @@ const TripRow = ({ trip, onPress, onToggleTag }) => {
                                 ↑ {Math.round(trip.viteza_max)} km/h
                             </Text>
                         )}
+                        {(!trip.viteza_medie && !trip.viteza_max) && (
+                            <Text style={styles.tripSpeedStat}>sesiune înregistrată</Text>
+                        )}
                     </View>
-                )}
+                    <TripSparkline trip={trip} color={lineColor} />
+                </View>
 
                 {/* Row 4: status badges + B2B tag */}
                 <View style={styles.tripBadgesRow}>
@@ -915,7 +986,9 @@ const TripHistoryScreen = () => {
                         style={styles.peekScroll}
                         contentContainerStyle={styles.peekScrollContent}
                         showsVerticalScrollIndicator={true}
-                        bounces={true}
+                        nestedScrollEnabled={true}
+                        keyboardShouldPersistTaps="handled"
+                        bounces={Platform.OS === 'ios'}
                         overScrollMode="always"
                     >
                         {/* Header Row */}
@@ -1407,8 +1480,15 @@ const styles = StyleSheet.create({
     },
     tripSpeedRow: {
         flexDirection: 'row',
-        gap: spacing[3],
-        marginTop: 2,
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 4,
+        marginBottom: 2,
+    },
+    tripSpeedStatsWrap: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        alignItems: 'center',
     },
     tripSpeedStat: {
         fontSize: typography.sizes.caption,
@@ -1519,12 +1599,12 @@ const styles = StyleSheet.create({
 
     // ── Trip Peek BottomSheet Styles ──────────────────────────────────────────
     peekScroll: {
-        flexShrink: 1,
-        maxHeight: 580,
+        maxHeight: 520,
+        width: '100%',
     },
     peekScrollContent: {
         paddingHorizontal: spacing[5],
-        paddingBottom: spacing[5],
+        paddingBottom: spacing[6],
     },
     peekHeader: {
         flexDirection: 'row',

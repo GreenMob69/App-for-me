@@ -16,6 +16,7 @@ import { colors, typography, radii, spacing, layout } from '../theme';
 import { getSubsystemColor } from '../utils/statusUtils';
 import {
     Skeleton, MetricCard, PredictionCard, SectionHeader, EmptyState, CausalChainCard,
+    TelemetryReplayPlayer,
 } from '../components/ui';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -466,10 +467,16 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
                     </>
                 )}
 
-                {/* ── Telemetrie grafic ─────────────────────────────────── */}
+                {/* ── Telemetrie grafic & Replay Dinamic ─────────────────── */}
                 {graficData.length > 0 && (
                     <>
-                        <SectionHeader title="Telemetrie" style={styles.sectionHeader} />
+                        <SectionHeader title="Replay Dinamic Telemetrie" style={styles.sectionHeader} />
+                        <TelemetryReplayPlayer
+                            data={graficData}
+                            trip={trip}
+                            alerts={alerte}
+                        />
+                        <SectionHeader title="Analiză Grafică Semnale" style={styles.sectionHeader} />
                         <View style={styles.card}>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing[3] }}>
                                 {Object.entries(CHART_CONFIGS).map(([key, cfg]) => (
