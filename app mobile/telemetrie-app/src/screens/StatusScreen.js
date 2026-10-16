@@ -540,6 +540,7 @@ const StatusScreen = ({ navigation }) => {
                         subsystems={SUBSYSTEM_PEEK_DATA}
                         selectedKey={selectedSubsystem?.key}
                         onSelectSubsystem={(key, item) => setSelectedSubsystem(item || SUBSYSTEM_PEEK_DATA[key])}
+                        navigation={navigation}
                     />
                     <ScrollView
                         horizontal

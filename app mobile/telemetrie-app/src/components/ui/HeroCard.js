@@ -110,7 +110,7 @@ const HeroCard = React.memo(({
             <View style={styles.topRow}>
                 <View style={styles.titleGroup}>
                     {title ? <Text style={styles.title} numberOfLines={1}>{title}</Text> : null}
-                    {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
+                    {subtitle ? <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text> : null}
                 </View>
                 {icon ? (
                     <View style={[styles.iconWrap, { borderColor, backgroundColor: tintBg }]}>
