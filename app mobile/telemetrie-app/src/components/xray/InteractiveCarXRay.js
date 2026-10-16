@@ -57,6 +57,9 @@ const InteractiveCarXRay = ({
     // Componenta activă pentru cardul explodat (implicit: motorul)
     const [selectedPin, setSelectedPin] = useState(PERSPECTIVE_PINS[0]);
 
+    // Mod vizual activ: 'studio' (3D Studio Fotorealist - Opțiunea B) | 'hologram' (Hologramă CAD - Opțiunea C)
+    const [visualMode, setVisualMode] = useState('studio');
+
     // Stare Modal Scanner
     const [isScannerOpen, setIsScannerOpen] = useState(mode === 'full');
 
@@ -121,6 +124,34 @@ const InteractiveCarXRay = ({
                     </Text>
                 </View>
 
+                {/* Switcher Mod Vizual (Opțiunea B: 3D Studio vs. Opțiunea C: Hologramă CAD) */}
+                <View style={styles.visualModeSwitchWrap}>
+                    <TouchableOpacity
+                        style={[
+                            styles.visualModePill,
+                            visualMode === 'studio' && [styles.visualModePillActive, { borderColor: tpl.accent, backgroundColor: 'rgba(0, 240, 255, 0.12)' }]
+                        ]}
+                        onPress={() => setVisualMode('studio')}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={[styles.visualModeText, visualMode === 'studio' && { color: tpl.accent, fontWeight: 'bold' }]}>
+                            📸 3D STUDIO FOTOREALIST
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[
+                            styles.visualModePill,
+                            visualMode === 'hologram' && [styles.visualModePillActive, { borderColor: tpl.accent, backgroundColor: 'rgba(0, 240, 255, 0.12)' }]
+                        ]}
+                        onPress={() => setVisualMode('hologram')}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={[styles.visualModeText, visualMode === 'hologram' && { color: tpl.accent, fontWeight: 'bold' }]}>
+                            🧬 HOLOGRAMĂ CAD
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
                 {/* Vector Canvas 3D cu Detalii la Suprafață */}
                 <TouchableOpacity
                     activeOpacity={0.9}
@@ -128,6 +159,7 @@ const InteractiveCarXRay = ({
                     style={styles.previewCanvasWrap}
                 >
                     <PerspectiveCarSvg
+                        visualMode={visualMode}
                         liveData={liveData}
                         selectedPinId={selectedPin?.id}
                         onSelectPin={(pin) => {
@@ -186,22 +218,51 @@ const InteractiveCarXRay = ({
                     contentContainerStyle={styles.modalScrollContent}
                     showsVerticalScrollIndicator={false}
                 >
-                    {/* ── Indicator Arhitectură Șasiu (Compact, Un Singur Chip) ── */}
-                    <TouchableOpacity
-                        style={[styles.topologyChip, { borderColor: tpl.border }]}
-                        onPress={handleCycleTopology}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={styles.topologyChipLabel}>Arhitectură:</Text>
-                        <Text style={[styles.topologyChipValue, { color: tpl.accent }]}>
-                            {TOPOLOGIES[topology]?.label} ▾
-                        </Text>
-                        <Text style={styles.topologyChipHint}>(Atinge pt. schimbare)</Text>
-                    </TouchableOpacity>
+                    {/* ── Comenzi Superioare: Topologie + Switcher Mod Vizual ── */}
+                    <View style={styles.modalControlRow}>
+                        <TouchableOpacity
+                            style={[styles.topologyChip, { borderColor: tpl.border }]}
+                            onPress={handleCycleTopology}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.topologyChipLabel}>Topologie:</Text>
+                            <Text style={[styles.topologyChipValue, { color: tpl.accent }]}>
+                                {TOPOLOGIES[topology]?.shortLabel || TOPOLOGIES[topology]?.label} ▾
+                            </Text>
+                        </TouchableOpacity>
+
+                        <View style={styles.modalModeSwitchWrap}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.modalModePill,
+                                    visualMode === 'studio' && [styles.modalModePillActive, { borderColor: tpl.accent, backgroundColor: 'rgba(0, 240, 255, 0.14)' }]
+                                ]}
+                                onPress={() => setVisualMode('studio')}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={[styles.modalModeText, visualMode === 'studio' && { color: tpl.accent, fontWeight: 'bold' }]}>
+                                    📸 3D STUDIO
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.modalModePill,
+                                    visualMode === 'hologram' && [styles.modalModePillActive, { borderColor: tpl.accent, backgroundColor: 'rgba(0, 240, 255, 0.14)' }]
+                                ]}
+                                onPress={() => setVisualMode('hologram')}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={[styles.modalModeText, visualMode === 'hologram' && { color: tpl.accent, fontWeight: 'bold' }]}>
+                                    🧬 HOLO CAD
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
 
                     {/* ── SECTIUNEA 1 (VARIANTA 1): Digital Twin 3D Cutaway cu Puncte Interactive ── */}
                     <View style={[styles.canvasCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                         <PerspectiveCarSvg
+                            visualMode={visualMode}
                             liveData={liveData}
                             selectedPinId={selectedPin?.id}
                             onSelectPin={handleSelectComponent}
@@ -299,6 +360,36 @@ const styles = StyleSheet.create({
         textAlign: 'right',
         marginLeft: spacing[2],
     },
+    visualModeSwitchWrap: {
+        flexDirection: 'row',
+        backgroundColor: colors.bg[2] || '#0d1527',
+        borderRadius: radii.full,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        padding: 3,
+        marginBottom: spacing[2],
+    },
+    visualModePill: {
+        flex: 1,
+        paddingVertical: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: radii.full,
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    visualModePillActive: {
+        shadowColor: '#00f0ff',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.3,
+        shadowRadius: 2,
+    },
+    visualModeText: {
+        fontSize: 10,
+        fontWeight: typography.weights.medium,
+        color: colors.text.tertiary,
+        letterSpacing: 0.3,
+    },
     previewCanvasWrap: {
         position: 'relative',
         width: '100%',
@@ -371,7 +462,14 @@ const styles = StyleSheet.create({
         paddingBottom: spacing[10],
     },
 
-    // Topology Indicator Chip
+    // Modal Upper Controls
+    modalControlRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: spacing[2],
+        marginBottom: spacing[3],
+    },
     topologyChip: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -381,7 +479,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         paddingVertical: 6,
         paddingHorizontal: spacing[3],
-        marginBottom: spacing[3],
         gap: 6,
     },
     topologyChipLabel: {
@@ -392,9 +489,27 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.bold,
     },
-    topologyChipHint: {
+    modalModeSwitchWrap: {
+        flexDirection: 'row',
+        backgroundColor: colors.bg[1] || '#0d1527',
+        borderRadius: radii.full,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        padding: 2,
+    },
+    modalModePill: {
+        paddingVertical: 5,
+        paddingHorizontal: spacing[2],
+        borderRadius: radii.full,
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    modalModePillActive: {},
+    modalModeText: {
         fontSize: 10,
+        fontWeight: typography.weights.medium,
         color: colors.text.tertiary,
+        letterSpacing: 0.2,
     },
 
     // Canvas Card (Varianta 1)
