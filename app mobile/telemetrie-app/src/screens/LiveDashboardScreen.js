@@ -1783,16 +1783,16 @@ const styles = StyleSheet.create({
         marginTop: spacing[1],
     },
     tachoGear: {
-        fontSize: 38,
+        fontSize: 44,
         fontWeight: typography.weights.heavy,
         color: '#ffb800',
         marginBottom: -4,
     },
     tachoSpeed: {
-        fontSize: 54,
+        fontSize: 56,
         fontWeight: typography.weights.heavy,
         fontVariant: ['tabular-nums'],
-        lineHeight: 58,
+        lineHeight: 60,
     },
     tachoSpeedUnit: {
         fontSize: 11,
