@@ -1,0 +1,374 @@
+# RAPORT DE ARHITECTURĂ FRONT-END & UI/UX AUDIT
+Proiect: Telemetrie Licență — Audi A6 C4 2.5 TDI (AEL)
+Destinație: Echipa de Dezvoltare Front-End & UI/UX Architect
+Data generării: 16 Octombrie 2026
+Fișier: FRONTEND_ARCHITECTURE_AUDIT.txt
+
+================================================================================
+CUPRINS
+================================================================================
+1. Sistemul de Teme & Șabloane (src/theme/index.js și src/context/AppContext.js)
+2. Structura Vizuală & JSX din LiveDashboardScreen.js
+3. Structura Vizuală & JSX din StatusScreen.js și VehicleHealthScreen.js
+4. Navigația și Bara de Tab-uri (App.js)
+5. Inventarul Componentelor Reutilizabile & Ceasuri SVG (src/components/)
+6. Ghid de Implementare pentru Noul Redesign de Cockpit
+
+================================================================================
+1. SISTEMUL DE TEME & ȘABLOANE
+================================================================================
+
+Toate ecranele și componentele din aplicație sunt guvernate de sistemul centralizat de design tokens din src/theme/index.js și de starea reactivă din src/context/AppContext.js.
+
+1.1. Codul Complet din src/theme/index.js:
+
+export const colors = {
+    bg: {
+        0: '#07080e',   // fundal principal ecran
+        1: '#0c0e17',   // suprafață card
+        2: '#121520',   // suprafață ridicată (input, row selected)
+        3: '#191d2b',   // modal, bottom sheet
+        4: '#212638',   // hover / pressed state
+        5: '#2a2f45',   // tooltip, popover
+    },
+    border: {
+        subtle:  '#15192a',
+        default: '#1f2438',
+        strong:  '#2e3555',
+    },
+    text: {
+        primary:   '#eef0f8',
+        secondary: '#8b96b5',
+        tertiary:  '#525d7a',
+        disabled:  '#31384f',
+        inverse:   '#07080e',
+    },
+    accent: {
+        default: '#4d8ef5',
+        hover:   '#6aa3ff',
+        muted:   'rgba(77,142,245,0.10)',
+        border:  'rgba(77,142,245,0.25)',
+    },
+    status: {
+        optimal:  '#2fcfa4',   // 90-100 — stare optimă (teal)
+        good:     '#34d172',   // 75-89  — bun, fără acțiune (verde)
+        monitor:  '#f0c04a',   // 55-74  — urmărire recomandată (amber)
+        caution:  '#f0883e',   // 35-54  — atenție necesară (portocaliu)
+        critical: '#f06464',   // 0-34   — acțiune imediată (coral-roșu)
+        neutral:  '#8b96b5',   // neutru / monitorizare
+    },
+    tint: {
+        optimal:  'rgba(47,207,164,0.08)',
+        good:     'rgba(52,209,114,0.08)',
+        monitor:  'rgba(240,192,74,0.08)',
+        caution:  'rgba(240,136,62,0.08)',
+        critical: 'rgba(240,100,100,0.08)',
+        accent:   'rgba(77,142,245,0.08)',
+    },
+};
+
+export const spacing = {
+    0:  0,
+    1:  4,
+    2:  8,
+    3:  12,
+    4:  16,
+    5:  20,
+    6:  24,
+    8:  32,
+    10: 40,
+    12: 48,
+    16: 64,
+};
+
+export const layout = {
+    screenPaddingH:  16,
+    cardPadding:     16,
+    cardPaddingV:    14,
+    sectionGap:      12,
+    sectionTitleGap:  8,
+    interSectionGap: 28,
+    tabBarHeight:    58,
+    headerHeight:    52,
+};
+
+export const radii = {
+    xs:   4,
+    sm:   8,
+    md:   12,
+    lg:   16,
+    xl:   22,
+    full: 999,
+};
+
+export const typography = {
+    sizes: {
+        display: 52,
+        hero:    36,
+        title1:  24,
+        title2:  20,
+        title3:  17,
+        body1:   15,
+        body2:   14,
+        label1:  13,
+        label2:  12,
+        caption: 11,
+        micro:   10,
+    },
+    lineHeights: {
+        display: 56,
+        hero:    40,
+        title1:  30,
+        title2:  26,
+        title3:  22,
+        body1:   22,
+        body2:   20,
+        label1:  18,
+        label2:  16,
+        caption: 14,
+        micro:   13,
+    },
+    weights: {
+        regular:  '400',
+        medium:   '500',
+        semibold: '600',
+        bold:     '700',
+        heavy:    '800',
+    },
+    tabularNums: ['tabular-nums'],
+};
+
+export const TEMPLATES = {
+    MOTORSPORT: {
+        id: 'MOTORSPORT',
+        name: 'Motorsport Pro',
+        subtitle: 'Porsche GT3 & AiM Race Telemetry',
+        badge: 'RACE',
+        accent: '#00f0ff',
+        accentSecondary: '#ffb800',
+        bg: '#05070e',
+        cardBg: '#0b0f1a',
+        border: '#162238',
+        speedColor: '#00f0ff',
+        rpmColor: '#ffb800',
+        tagBg: 'rgba(0, 240, 255, 0.12)',
+    },
+    AUDI_RS: {
+        id: 'AUDI_RS',
+        name: 'Audi Sport RS',
+        subtitle: 'Audi Virtual Cockpit Performance',
+        badge: 'RS',
+        accent: '#ff2a2a',
+        accentSecondary: '#ffffff',
+        bg: '#08080a',
+        cardBg: '#121318',
+        border: '#2a1a1c',
+        speedColor: '#ffffff',
+        rpmColor: '#ff2a2a',
+        tagBg: 'rgba(255, 42, 42, 0.12)',
+    },
+    TESLA_MINIMAL: {
+        id: 'TESLA_MINIMAL',
+        name: 'Minimal Clean',
+        subtitle: 'Tesla OS Clean & Aerodinamic',
+        badge: 'CLEAN',
+        accent: '#38bdf8',
+        accentSecondary: '#10b981',
+        bg: '#08090d',
+        cardBg: '#0f1219',
+        border: '#1a202c',
+        speedColor: '#f8fafc',
+        rpmColor: '#38bdf8',
+        tagBg: 'rgba(56, 189, 248, 0.12)',
+    },
+    NIGHT_HUD: {
+        id: 'NIGHT_HUD',
+        name: 'Night Stealth HUD',
+        subtitle: 'OLED Black & Proiecție Parbriz',
+        badge: 'HUD',
+        accent: '#ff453a',
+        accentSecondary: '#ff9f0a',
+        bg: '#000000',
+        cardBg: '#080808',
+        border: '#2a1010',
+        speedColor: '#ff453a',
+        rpmColor: '#ff453a',
+        tagBg: 'rgba(255, 69, 58, 0.15)',
+        isHud: true,
+    },
+};
+
+1.2. Managementul Șabloanelor în src/context/AppContext.js:
+
+export const AppContext = createContext();
+
+export const AppProvider = ({ children }) => {
+    const [viewMode, setViewMode] = useState('COCKPIT');
+    const [selectedMetric, setSelectedMetric] = useState('RPM');
+    const [activeTemplate, setActiveTemplateState] = useState('MOTORSPORT');
+    const [tripReport, setTripReport] = useState(null);
+    const navigationRef = useRef(null);
+
+    useEffect(() => {
+        AsyncStorage.getItem('@cockpit_template').then(saved => {
+            if (saved && TEMPLATES[saved]) {
+                setActiveTemplateState(saved);
+            }
+        }).catch(() => {});
+    }, []);
+
+    const setActiveTemplate = useCallback(async (tplId) => {
+        if (!TEMPLATES[tplId]) return;
+        setActiveTemplateState(tplId);
+        try {
+            await AsyncStorage.setItem('@cockpit_template', tplId);
+        } catch {}
+    }, []);
+
+    const currentTemplate = TEMPLATES[activeTemplate] || TEMPLATES.MOTORSPORT;
+
+    return (
+        <AppContext.Provider value={{
+            viewMode, setViewMode,
+            selectedMetric, setSelectedMetric,
+            activeTemplate, setActiveTemplate, currentTemplate,
+            tripReport, setTripReport, dismissTripReport,
+            navigationRef, setNavigationRef,
+        }}>
+            {children}
+        </AppContext.Provider>
+    );
+};
+
+================================================================================
+2. STRUCTURA VIZUALĂ & JSX DIN LiveDashboardScreen.js
+================================================================================
+
+Ecranul dispune de telemetrie smooth la 60 FPS (useSmoothedTelemetry), comutator voluntar (🚗 RAPID vs ⚡ PRO) și 3 sub-tab-uri interne.
+
+Top-Level Return:
+<View style={[styles.root, { backgroundColor: tpl.bg }]}>
+    {/* Top Bar */}
+    <View style={styles.topBar}>
+        <View style={[styles.connPill, { borderColor: connColor }]}>
+            <View style={[styles.connDot, { backgroundColor: connColor }]} />
+            <Text style={[styles.connLabel, { color: connColor }]}>{connLabel}</Text>
+        </View>
+
+        {/* Comutator RAPID vs PRO */}
+        <TouchableOpacity style={[styles.modeTogglePill, proMode ? styles.modeTogglePro : styles.modeToggleDriver]}>
+            <Text>{proMode ? '⚡ PRO' : '🚗 RAPID'}</Text>
+        </TouchableOpacity>
+
+        {/* HUD Windshield Mirror Toggle */}
+        {tpl.isHud && (
+            <TouchableOpacity style={styles.hudToggleBtn}>
+                <Text>{isHudMirrored ? '🪞 MIRROR ON' : '🪞 HUD'}</Text>
+            </TouchableOpacity>
+        )}
+
+        <Text style={styles.vehicleName}>{getVehicleLabel() || 'Dashboard'}</Text>
+        <TouchableOpacity style={styles.alertBtn}><Text>🔔</Text></TouchableOpacity>
+    </View>
+
+    {/* Scrollable Content */}
+    <ScrollView style={styles.scroll}>
+        {tab === 'LIVE'   && renderLive()}
+        {tab === 'PARAMS' && renderParams()}
+        {tab === 'SCOPE'  && renderScope()}
+    </ScrollView>
+
+    {/* Bottom Tab Bar */}
+    <View style={styles.tabBar}>
+        <TouchableOpacity><Text>Bord</Text></TouchableOpacity>
+        {proMode && <TouchableOpacity><Text>Parametri</Text></TouchableOpacity>}
+        <TouchableOpacity><Text>Grafic</Text></TouchableOpacity>
+    </View>
+</View>
+
+Sub-tab-ul LIVE conține:
+1. Speed Hero (cifră mare în km/h cu tpl.speedColor)
+2. Turometru & Bară RPM cu Redline Dinamic (2500 RPM motor rece, 3200 RPM încălzire, 4500 RPM optim)
+3. Badge Motor Rece / În încălzire
+4. Card Virtual Dyno & ECU Math (Putere CP, Cuplu Nm, Eficiență Volumetrică %, Lambda/AFR)
+5. Indicator Dual Boost (Comandat vs Efectiv în bar cu alertă de pierderi admisie/VNT)
+6. Sensor Fusion & Observatori Virtuali (BSFC în g/kWh, Uzură Ulei Arrhenius, Sănătate Baterie SoH, Energie Frâne MJ)
+7. Grid 2x3 Metric Tiles (Temp, Boost, Voltaj, Consum, Scor Eco, Treaptă)
+8. Asistent AI & Recomandare Contextuală
+
+================================================================================
+3. STRUCTURA VIZUALĂ & JSX DIN StatusScreen.js ȘI VehicleHealthScreen.js
+================================================================================
+
+StatusScreen.js:
+- 0. Identity Strip (Avatar vehicul, VIN, buton Căutare, Notificări, Setări)
+- 0a. DriveModeBanner (Apare când motorul este pornit și redirecționează către Live)
+- 0b. Dashboard Summary Strip (Vehicul, Probleme, Mentenanță, Notificări)
+- 1. HeroCard (Răspunsul central "POT PLECA CU MAȘINA?")
+- 2. X-Ray Subsisteme (Carusel orizontal cu cip-uri interactive cu scor % pentru Motor, Turbo, Răcire, DPF, Electric, Transmisie)
+- 3. Recomandarea Principală (RecommendationCard)
+- 4. Predicții Secundare (PredictionCard)
+- 5. Mentenanță Viitoare (MaintenanceCard)
+- 6. BottomSheet de Peek pentru Subsisteme (cu gesturi PanResponder pentru swipe down)
+
+VehicleHealthScreen.js:
+- 1. HealthGauge SVG Central (Arc semicircular animat de la 0 la scor %)
+- 2. MetricCard Grid pentru cei 4 piloni (Motor, Combustibil, Stil condus, Siguranță)
+- 3. Grafic de Trend Scor Eco pe 8 săptămâni (bare verticale)
+- 4. Carduri de predicții cu acțiuni directe (✓ Rezolvat, ✕ Fals pozitiv, ✨ Întreabă AI)
+- 5. CausalChainCard (Diagramă cauză-efect-simptom pe 3 noduri)
+- 6. Jurnal vehicul (Timeline)
+
+================================================================================
+4. NAVIGAȚIA ȘI BARA DE TAB-URI (App.js)
+================================================================================
+
+Bara de tab-uri inferioară (Tab.Navigator) conține 4 secțiuni:
+1. STARE: StatusStackScreen (StatusMain -> HealthDetail -> SubsystemDetail)
+2. LIVE: LiveDashboardScreen (Cockpit digital în timp real)
+3. CURSE: TripHistoryScreen (Istoric călătorii & export CSV)
+4. VEHICUL: VehicleHubScreen (Mentenanță, profil, documente)
+
+Stil tab-bar:
+- Înălțime: 58px (layout.tabBarHeight)
+- Fundal: #0c0e17 (colors.bg[1])
+- Bordură sus: #1f2438 (colors.border.default)
+- Culoare activă: #4d8ef5 (colors.accent.default)
+- Culoare inactivă: #8b96b5 (colors.text.secondary)
+
+RootStack.Navigator include ecranele modale:
+- TripReport (modal, slide_from_bottom)
+- TripDetail (slide_from_right)
+- Notifications (modal, slide_from_bottom)
+- GlobalSearch (fade)
+- Settings, AIExpert, UIPlayground, VehicleProfile (slide_from_right)
+
+================================================================================
+5. INVENTARUL COMPONENTELOR REUTILIZABILE & CEASURI SVG (src/components/)
+================================================================================
+
+Fișiere componente principale:
+- src/components/CircularGauge.js: Ceas circular SVG complet cu cerc de fundal și cerc de progres (-90° rotație, strokeDasharray, strokeDashoffset)
+- src/components/HealthGauge.js: Arc semicircular SVG pentru scor sănătate
+- src/components/ui/BottomSheet.js: Fereastră glisantă cu gesturi PanResponder
+- src/components/ui/Button.js, Card.js, HeroCard.js, MetricCard.js, RecommendationCard.js, PredictionCard.js, CausalChainCard.js, MaintenanceCard.js, TimelineCard.js, StatusBadge.js, Skeleton.js, SearchBar.js, Input.js
+
+================================================================================
+6. GHID PENTRU NOUL REDESIGN DE COCKPIT
+================================================================================
+
+Pentru ca șabloanele să schimbe geometria reală:
+1. MOTORSPORT (Porsche GT3 / AiM):
+   - Turometru circular mare central (300px)
+   - Viteza în mijlocul turometrului
+   - Ceasuri gemene stânga/dreapta: Boost și Putere CP
+2. AUDI SPORT RS (Virtual Cockpit):
+   - Bară unghiulară orizontală / Boomerang Hockey-Stick în partea de sus pentru RPM
+   - Vitezometru masiv în colțul din dreapta jos
+   - Treapta de viteză afișată mare
+3. MINIMAL CLEAN (Tesla OS):
+   - Cifre mari tipografice, aerisite
+   - Bară orizontală fină de consum/energie
+4. NIGHT STEALTH HUD:
+   - Negru 100% (#000000) pentru ecrane OLED
+   - Oglindire pe orizontală (scaleX: -1) pentru proiecție directă pe parbriz

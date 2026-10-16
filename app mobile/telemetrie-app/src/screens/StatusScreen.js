@@ -43,6 +43,7 @@ import {
     VehicleAvatar,
     BottomSheet,
     DriveModeBanner,
+    InteractiveCarXRay,
 } from '../components/ui';
 import PropTypes from 'prop-types';
 import { useRefreshOnOnline } from '../hooks/useRefreshOnOnline';
@@ -528,11 +529,16 @@ const StatusScreen = ({ navigation }) => {
                     </Card>
                 ) : null}
 
-                {/* ── 2b. X-RAY SUBSISTEME (Progressive Disclosure: Peek) ── */}
+                {/* ── 2b. X-RAY SUBSISTEME (Progressive Disclosure: Interactive Blueprint & Peek) ── */}
                 <View style={styles.section}>
                     <SectionHeader
-                        title="STARE SUBSISTEME (PEEK DIRECȚIONAT)"
+                        title="ANATOMIE & SUBSISTEME (X-RAY INTERACTIV)"
                         size="sm"
+                    />
+                    <InteractiveCarXRay
+                        subsystems={SUBSYSTEM_PEEK_DATA}
+                        selectedKey={selectedSubsystem?.key}
+                        onSelectSubsystem={(key, item) => setSelectedSubsystem(item || SUBSYSTEM_PEEK_DATA[key])}
                     />
                     <ScrollView
                         horizontal
@@ -542,7 +548,10 @@ const StatusScreen = ({ navigation }) => {
                         {Object.entries(SUBSYSTEM_PEEK_DATA).map(([key, item]) => (
                             <TouchableOpacity
                                 key={key}
-                                style={styles.subsystemChip}
+                                style={[
+                                    styles.subsystemChip,
+                                    selectedSubsystem?.key === key && { borderColor: colors.accent.default, borderWidth: 1.5 }
+                                ]}
                                 activeOpacity={0.8}
                                 onPress={() => setSelectedSubsystem(item)}
                             >

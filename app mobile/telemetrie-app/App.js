@@ -59,18 +59,29 @@ function StatusStackScreen() {
 
 function TabNavigator() {
     const { unreadCount } = useContext(NotificationContext);
+    const { currentTemplate } = useContext(AppContext);
+
+    const activeAccent = currentTemplate?.accent || colors.accent.default;
+    const tabBorder = currentTemplate?.border || colors.border.default;
+    const tabBg = currentTemplate?.cardBg || colors.bg[1];
 
     return (
         <Tab.Navigator
             screenOptions={{
                 headerShown: false,
                 tabBarStyle: {
-                    backgroundColor: colors.bg[1],
-                    borderTopColor: colors.border.default,
+                    backgroundColor: tabBg,
+                    borderTopColor: tabBorder,
+                    borderTopWidth: 1,
                     paddingBottom: spacing[1],
                     height: layout.tabBarHeight,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: -3 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 5,
+                    elevation: 10,
                 },
-                tabBarActiveTintColor:   colors.accent.default,
+                tabBarActiveTintColor:   activeAccent,
                 tabBarInactiveTintColor: colors.text.secondary,
                 tabBarLabelStyle: {
                     fontSize:    typography.sizes.caption,

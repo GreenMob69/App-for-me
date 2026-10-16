@@ -1,7 +1,8 @@
 // ── Faza C: Sprint 4 ──────────────────────────────────────────────────────
-export { default as BottomSheet }     from './BottomSheet';
-export { default as VehicleAvatar }   from './VehicleAvatar';
-export { default as DriveModeBanner } from './DriveModeBanner';
+export { default as BottomSheet }        from './BottomSheet';
+export { default as VehicleAvatar }      from './VehicleAvatar';
+export { default as DriveModeBanner }    from './DriveModeBanner';
+export { default as InteractiveCarXRay } from './InteractiveCarXRay';
 
 // ── Faza A: Foundation ─────────────────────────────────────────────────────
 export { default as Card }          from './Card';

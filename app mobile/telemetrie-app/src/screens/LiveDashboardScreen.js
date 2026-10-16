@@ -13,6 +13,38 @@ import { getVehicleLabel } from '../utils/config';
 import RecommendationCard from '../components/ui/RecommendationCard';
 import { colors, typography, radii, spacing, layout, TEMPLATES } from '../theme';
 import { useSmoothedTelemetry } from '../hooks/useSmoothedTelemetry';
+import Svg, {
+    Path,
+    Circle,
+    Line,
+    Rect,
+    G,
+    Defs,
+    LinearGradient,
+    Stop,
+    Text as SvgText,
+} from 'react-native-svg';
+
+// ─── Trigonometric Arc Helpers for Cockpit Gauges ────────────────────────────
+
+function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+    const angleInRadians = (angleInDegrees * Math.PI) / 180.0;
+    return {
+        x: centerX + radius * Math.cos(angleInRadians),
+        y: centerY + radius * Math.sin(angleInRadians),
+    };
+}
+
+function describeClockwiseArc(x, y, radius, startAngle, endAngle) {
+    if (endAngle <= startAngle) return '';
+    const start = polarToCartesian(x, y, radius, startAngle);
+    const end = polarToCartesian(x, y, radius, endAngle);
+    const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+    return [
+        'M', start.x.toFixed(2), start.y.toFixed(2),
+        'A', radius, radius, 0, largeArcFlag, 1, end.x.toFixed(2), end.y.toFixed(2)
+    ].join(' ');
+}
 
 // ─── AI assistant ─────────────────────────────────────────────────────────────
 
@@ -368,28 +400,385 @@ const LiveDashboardScreen = () => {
         const aiColorMap = { critical: colors.status.critical, serious: colors.status.caution, warning: colors.status.monitor, info: colors.accent.default, normal: colors.text.secondary, neutral: colors.text.tertiary ?? colors.text.secondary };
         const aiColor = aiColorMap[assistantMsg.level] ?? colors.text.secondary;
 
+        // ── 1. MOTORSPORT COCKPIT (Porsche GT3 & AiM Radial Tachometer) ──
+        const renderMotorsportCockpit = () => {
+            const ledStartRpm = dynamicRedline * 0.45;
+            const ledStep = (dynamicRedline - ledStartRpm) / 10;
+            const activeLedCount = Math.min(10, Math.max(0, Math.floor((rpm - ledStartRpm) / ledStep)));
+            const isFlashingRedline = rpm >= dynamicRedline * 0.92;
+
+            const gaugeSize = 260;
+            const cx = gaugeSize / 2;
+            const cy = gaugeSize / 2;
+            const r = 100;
+            const strokeW = 12;
+
+            const tachoRatio = Math.min(Math.max(rpm, 0), 5000) / 5000;
+            const curTachoAngle = 150 + tachoRatio * 240;
+            const redlineAngle = 150 + (dynamicRedline / 5000) * 240;
+
+            const bgArcPath = describeClockwiseArc(cx, cy, r, 150, 390);
+            const redlineArcPath = describeClockwiseArc(cx, cy, r, redlineAngle, 390);
+            const progressArcPath = curTachoAngle > 150 ? describeClockwiseArc(cx, cy, r, 150, curTachoAngle) : '';
+
+            const ticks = [];
+            for (let i = 0; i <= 10; i++) {
+                const angle = 150 + i * 24;
+                const isMajor = i % 2 === 0;
+                const p1 = polarToCartesian(cx, cy, r + (isMajor ? 14 : 9), angle);
+                const p2 = polarToCartesian(cx, cy, r + 2, angle);
+                const lp = polarToCartesian(cx, cy, r - 18, angle);
+                ticks.push({
+                    key: i,
+                    x1: p1.x, y1: p1.y,
+                    x2: p2.x, y2: p2.y,
+                    isMajor,
+                    val: i / 2,
+                    lx: lp.x, ly: lp.y,
+                });
+            }
+
+            return (
+                <View style={styles.motorsportRoot}>
+                    {/* Shift Light Strip (10 LEDs) */}
+                    <View style={styles.shiftLightStrip}>
+                        {Array.from({ length: 10 }).map((_, idx) => {
+                            const isLit = idx < activeLedCount;
+                            const isRed = idx >= 8;
+                            const isYellow = idx >= 5 && idx < 8;
+                            const litColor = isRed ? '#ff2a2a' : isYellow ? '#ffb800' : '#10b981';
+                            return (
+                                <View
+                                    key={idx}
+                                    style={[
+                                        styles.shiftLed,
+                                        isLit && { backgroundColor: litColor, borderColor: litColor, shadowColor: litColor, shadowOpacity: 0.8, shadowRadius: 5, elevation: 4 },
+                                        isLit && isFlashingRedline && isRed && styles.shiftLedFlash,
+                                    ]}
+                                />
+                            );
+                        })}
+                    </View>
+
+                    {/* Central Radial Tachometer SVG */}
+                    <View style={styles.tachoWrap}>
+                        <Svg width={gaugeSize} height={gaugeSize} style={styles.tachoSvg}>
+                            <Path d={bgArcPath} stroke="#162238" strokeWidth={strokeW} fill="none" strokeLinecap="round" />
+                            {redlineArcPath ? (
+                                <Path d={redlineArcPath} stroke="rgba(255, 42, 42, 0.4)" strokeWidth={strokeW} fill="none" strokeLinecap="round" />
+                            ) : null}
+                            {progressArcPath ? (
+                                <Path d={progressArcPath} stroke={rpmColor} strokeWidth={strokeW} fill="none" strokeLinecap="round" />
+                            ) : null}
+                            {ticks.map(t => (
+                                <G key={t.key}>
+                                    <Line
+                                        x1={t.x1} y1={t.y1}
+                                        x2={t.x2} y2={t.y2}
+                                        stroke={t.val * 1000 >= dynamicRedline ? '#ff453a' : '#3d5275'}
+                                        strokeWidth={t.isMajor ? 2.5 : 1.5}
+                                    />
+                                    {t.isMajor && (
+                                        <SvgText
+                                            x={t.lx}
+                                            y={t.ly + 4}
+                                            fill={t.val * 1000 >= dynamicRedline ? '#ff6b6b' : '#8b96b5'}
+                                            fontSize="11"
+                                            fontWeight="700"
+                                            textAnchor="middle"
+                                        >
+                                            {t.val}
+                                        </SvgText>
+                                    )}
+                                </G>
+                            ))}
+                        </Svg>
+
+                        {/* Center Viewport: Gear, Speed, RPM */}
+                        <View style={styles.tachoCenterContent}>
+                            <Text style={styles.tachoGear}>{gear ? `G${gear}` : 'N'}</Text>
+                            <Text style={[styles.tachoSpeed, { color: tpl.speedColor }]}>{speed}</Text>
+                            <Text style={styles.tachoSpeedUnit}>km/h</Text>
+                            <Text style={[styles.tachoRpmNum, { color: rpmColor }]}>
+                                {typeof rpm === 'number' ? rpm.toLocaleString('ro-RO') : rpm} <Text style={{ fontSize: 9, color: colors.text.secondary }}>RPM</Text>
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Twin Flanking Performance Gauges */}
+                    <View style={styles.twinPillRow}>
+                        <View style={[styles.twinCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                            <View style={styles.twinCardHeader}>
+                                <Text style={styles.twinCardTitle}>⚡ BOOST</Text>
+                                <Text style={[styles.twinCardDelta, { color: Math.abs(boost - targetBoost) > 0.3 ? colors.status.caution : colors.status.good }]}>
+                                    Δ {((boost - targetBoost) > 0 ? '+' : '') + (boost - targetBoost).toFixed(2)}b
+                                </Text>
+                            </View>
+                            <Text style={[styles.twinBigVal, { color: boostColor }]}>{boost.toFixed(2)} <Text style={styles.twinUnit}>bar</Text></Text>
+                            <View style={styles.twinMiniBarTrack}>
+                                <View style={[styles.twinMiniBarFill, { width: `${Math.min((boost / 2.5) * 100, 100)}%`, backgroundColor: boostColor }]} />
+                            </View>
+                            <Text style={styles.twinSubText}>Cmd: {targetBoost.toFixed(2)} bar</Text>
+                        </View>
+
+                        <View style={[styles.twinCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                            <View style={styles.twinCardHeader}>
+                                <Text style={styles.twinCardTitle}>🏁 DYNO POWER</Text>
+                                <Text style={styles.twinCardDelta}>VE: {vePct}%</Text>
+                            </View>
+                            <Text style={[styles.twinBigVal, { color: colors.status.good }]}>{powerHp} <Text style={styles.twinUnit}>CP</Text></Text>
+                            <View style={styles.twinMiniBarTrack}>
+                                <View style={[styles.twinMiniBarFill, { width: `${Math.min((powerHp / 140) * 100, 100)}%`, backgroundColor: colors.status.good }]} />
+                            </View>
+                            <Text style={styles.twinSubText}>{torqueNm} Nm · {afr.toFixed(1)} AFR</Text>
+                        </View>
+                    </View>
+                </View>
+            );
+        };
+
+        // ── 2. AUDI SPORT RS COCKPIT (Boomerang & G-Meter) ───────────────
+        const renderAudiRsCockpit = () => {
+            const svgW = width - layout.screenPaddingH * 2;
+            const svgH = 120;
+            const bPath = `M 24 110 L 24 28 Q 24 14 38 14 L ${svgW - 14} 14`;
+            const approxLen = svgW + 60;
+            const rpmRatio = Math.min(Math.max(rpm, 0), 5000) / 5000;
+            const strokeOffset = approxLen * (1 - rpmRatio);
+            const isHighRpm = rpm >= 4200;
+
+            const gVal = Number(liveData.accel_g || 0);
+            const clampG = Math.max(-0.6, Math.min(0.6, gVal));
+            const gDotX = 42;
+            const gDotY = 42 - clampG * 35;
+
+            return (
+                <View style={[styles.audiRsRoot, { backgroundColor: tpl.bg }]}>
+                    {/* Top Boomerang Tachometer SVG */}
+                    <View style={styles.audiBoomerangWrap}>
+                        <Svg width={svgW} height={svgH}>
+                            <Defs>
+                                <LinearGradient id="rsTachoGrad" x1="0" y1="0" x2="1" y2="0">
+                                    <Stop offset="0" stopColor="#ffffff" />
+                                    <Stop offset="0.65" stopColor="#ffffff" />
+                                    <Stop offset="0.82" stopColor="#ffb800" />
+                                    <Stop offset="0.92" stopColor="#ff2a2a" />
+                                </LinearGradient>
+                            </Defs>
+                            <Path d={bPath} stroke="#1e181c" strokeWidth={11} fill="none" strokeLinecap="round" />
+                            <Path d={`M ${svgW * 0.76} 14 L ${svgW - 14} 14`} stroke="rgba(255, 42, 42, 0.4)" strokeWidth={11} fill="none" strokeLinecap="round" />
+                            <Path
+                                d={bPath}
+                                stroke="url(#rsTachoGrad)"
+                                strokeWidth={11}
+                                fill="none"
+                                strokeLinecap="round"
+                                strokeDasharray={approxLen}
+                                strokeDashoffset={strokeOffset}
+                            />
+                            <SvgText x={svgW * 0.25} y="32" fill="#606d8a" fontSize="10" fontWeight="700">1</SvgText>
+                            <SvgText x={svgW * 0.45} y="32" fill="#606d8a" fontSize="10" fontWeight="700">2</SvgText>
+                            <SvgText x={svgW * 0.65} y="32" fill="#606d8a" fontSize="10" fontWeight="700">3</SvgText>
+                            <SvgText x={svgW * 0.82} y="32" fill="#ffb800" fontSize="10" fontWeight="700">4</SvgText>
+                            <SvgText x={svgW - 24}   y="32" fill="#ff2a2a" fontSize="10" fontWeight="700">5</SvgText>
+                        </Svg>
+
+                        <View style={styles.rsRpmPill}>
+                            <Text style={[styles.rsRpmPillText, isHighRpm && { color: '#ff2a2a' }]}>
+                                {typeof rpm === 'number' ? rpm.toLocaleString('ro-RO') : rpm} <Text style={{ fontSize: 9 }}>RPM</Text>
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Inside Frame: Speed, RS Badge, Gear & G-Meter */}
+                    <View style={styles.rsCenterGrid}>
+                        <View style={styles.rsSpeedCol}>
+                            <View style={styles.rsBadgeRow}>
+                                <View style={styles.rsBadge}>
+                                    <View style={styles.rsBadgeSquare} />
+                                    <Text style={styles.rsBadgeText}>RS PERFORMANCE</Text>
+                                </View>
+                                <View style={styles.rsGearBox}>
+                                    <Text style={styles.rsGearText}>{gear ? `S${gear}` : 'N'}</Text>
+                                </View>
+                            </View>
+                            <View style={styles.rsSpeedWrap}>
+                                <Text style={styles.rsSpeedNum}>{speed}</Text>
+                                <Text style={styles.rsSpeedUnit}>km/h</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.rsGCol}>
+                            <View style={styles.rsGBox}>
+                                <Text style={styles.rsGTitle}>G-METER</Text>
+                                <Svg width={84} height={84} style={styles.rsGSvg}>
+                                    <Circle cx={42} cy={42} r={38} stroke="#2e1a22" strokeWidth={1.5} fill="#140b0f" />
+                                    <Circle cx={42} cy={42} r={26} stroke="#3d202d" strokeWidth={1} fill="none" strokeDasharray="3,3" />
+                                    <Circle cx={42} cy={42} r={14} stroke="#3d202d" strokeWidth={1} fill="none" />
+                                    <Line x1={4} y1={42} x2={80} y2={42} stroke="#2e1a22" strokeWidth={1} />
+                                    <Line x1={42} y1={4} x2={42} y2={80} stroke="#2e1a22" strokeWidth={1} />
+                                    <Circle cx={gDotX} cy={gDotY} r={5} fill="#ff2a2a" stroke="#ffffff" strokeWidth={1.5} />
+                                </Svg>
+                                <Text style={styles.rsGVal}>{Math.abs(gVal).toFixed(2)} G</Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* RS Performance Bar */}
+                    <View style={[styles.rsPerfRow, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                        <View style={styles.rsPerfItem}>
+                            <Text style={styles.rsPerfLabel}>BOOST</Text>
+                            <Text style={[styles.rsPerfVal, { color: boostColor }]}>{boost.toFixed(2)} <Text style={{ fontSize: 9 }}>bar</Text></Text>
+                        </View>
+                        <View style={styles.rsPerfDivider} />
+                        <View style={styles.rsPerfItem}>
+                            <Text style={styles.rsPerfLabel}>APĂ</Text>
+                            <Text style={[styles.rsPerfVal, { color: coolColor }]}>{cool}°C</Text>
+                        </View>
+                        <View style={styles.rsPerfDivider} />
+                        <View style={styles.rsPerfItem}>
+                            <Text style={styles.rsPerfLabel}>ULEI</Text>
+                            <Text style={styles.rsPerfVal}>{tem.oil ? `${tem.oil}°C` : `${cool + 4}°C`}</Text>
+                        </View>
+                        <View style={styles.rsPerfDivider} />
+                        <View style={styles.rsPerfItem}>
+                            <Text style={styles.rsPerfLabel}>PUTERE</Text>
+                            <Text style={[styles.rsPerfVal, { color: '#ff2a2a' }]}>{powerHp} <Text style={{ fontSize: 9 }}>CP</Text></Text>
+                        </View>
+                    </View>
+                </View>
+            );
+        };
+
+        // ── 3. TESLA MINIMAL COCKPIT (Clean & Aerodynamic) ────────────────
+        const renderTeslaMinimalCockpit = () => {
+            const isPower = powerHp > 5;
+            const isRegen = !isPower && (speed > 10 && (cons < 1 || Number(liveData.accel_g || 0) < -0.05));
+            const powerPct = Math.min(50, (powerHp / 140) * 50);
+            const regenPct = Math.min(50, Math.abs(Number(liveData.accel_g || -0.2)) * 40);
+
+            return (
+                <View style={styles.teslaRoot}>
+                    {/* Horizon Power / Regen Bar */}
+                    <View style={styles.teslaHorizonWrap}>
+                        <View style={styles.teslaHorizonTrack}>
+                            <View style={styles.teslaHorizonCenter} />
+                            {isPower && (
+                                <View style={[styles.teslaHorizonFillPower, { width: `${powerPct}%` }]} />
+                            )}
+                            {isRegen && (
+                                <View style={[styles.teslaHorizonFillRegen, { width: `${regenPct}%` }]} />
+                            )}
+                        </View>
+                        <View style={styles.teslaHorizonLabels}>
+                            <Text style={styles.teslaHorizonLbl}>REGEN</Text>
+                            <Text style={styles.teslaHorizonLbl}>POWER</Text>
+                        </View>
+                    </View>
+
+                    {/* Drive Selector */}
+                    <View style={styles.teslaDriveSelector}>
+                        <Text style={styles.teslaDriveModeText}>P</Text>
+                        <Text style={styles.teslaDriveModeText}>R</Text>
+                        <Text style={styles.teslaDriveModeText}>N</Text>
+                        <Text style={[styles.teslaDriveModeText, styles.teslaDriveModeActive]}>{gear ? 'D' : 'P'}</Text>
+                    </View>
+
+                    {/* Massive Typography Speed */}
+                    <View style={styles.teslaSpeedWrap}>
+                        <Text style={styles.teslaSpeedNum}>{speed}</Text>
+                        <Text style={styles.teslaSpeedUnit}>km/h</Text>
+                    </View>
+
+                    {/* 3 Minimalist Clean Cards */}
+                    <View style={styles.teslaCardsRow}>
+                        <View style={[styles.teslaCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                            <Text style={styles.teslaCardLabel}>EFICIENȚĂ BSFC</Text>
+                            <Text style={styles.teslaCardVal}>{v.bsfcGPerKwh || 208} <Text style={styles.teslaCardUnit}>g/kWh</Text></Text>
+                            <Text style={styles.teslaCardSub}>Optimum TDI</Text>
+                        </View>
+                        <View style={[styles.teslaCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                            <Text style={styles.teslaCardLabel}>TEMPERATURĂ</Text>
+                            <Text style={[styles.teslaCardVal, { color: coolColor }]}>{cool}°C</Text>
+                            <Text style={styles.teslaCardSub}>Lichid răcire</Text>
+                        </View>
+                        <View style={[styles.teslaCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                            <Text style={styles.teslaCardLabel}>PUTERE REALĂ</Text>
+                            <Text style={[styles.teslaCardVal, { color: colors.accent.default }]}>{powerHp} <Text style={styles.teslaCardUnit}>CP</Text></Text>
+                            <Text style={styles.teslaCardSub}>{torqueNm} Nm</Text>
+                        </View>
+                    </View>
+                </View>
+            );
+        };
+
+        // ── 4. NIGHT STEALTH HUD COCKPIT (OLED Parbriz) ───────────────────
+        const renderNightHudCockpit = () => {
+            return (
+                <View style={styles.hudRoot}>
+                    <View style={styles.hudRpmWrap}>
+                        <View style={styles.hudRpmTrack}>
+                            <View style={[styles.hudRpmFill, { width: rpmPct }]} />
+                            <View style={[styles.hudRedlineMarker, { left: `${redlinePct}%` }]} />
+                        </View>
+                        <View style={styles.hudRpmMeta}>
+                            <Text style={styles.hudRpmText}>{typeof rpm === 'number' ? rpm.toLocaleString('ro-RO') : rpm} RPM</Text>
+                            <Text style={styles.hudRedlineText}>LIM: {dynamicRedline}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.hudCenterWrap}>
+                        <Text style={styles.hudSpeedNum}>{speed}</Text>
+                        <Text style={styles.hudGearNum}>{gear ? gear : 'N'}</Text>
+                    </View>
+
+                    <View style={styles.hudBottomRow}>
+                        <View style={styles.hudMetricItem}>
+                            <Text style={styles.hudMetricLbl}>TEMP</Text>
+                            <Text style={styles.hudMetricVal}>{cool}°C</Text>
+                        </View>
+                        <View style={styles.hudMetricItem}>
+                            <Text style={styles.hudMetricLbl}>BOOST</Text>
+                            <Text style={styles.hudMetricVal}>{boost.toFixed(2)}b</Text>
+                        </View>
+                        <View style={styles.hudMetricItem}>
+                            <Text style={styles.hudMetricLbl}>VOLT</Text>
+                            <Text style={styles.hudMetricVal}>{volt.toFixed(1)}V</Text>
+                        </View>
+                    </View>
+
+                    <Text style={styles.hudMirrorHint}>
+                        {isHudMirrored ? '🪞 Oglindire Parbriz Activată (Așază telefonul sub parbriz)' : 'Apasă butonul 🪞 HUD din colțul de sus pentru proiecție'}
+                    </Text>
+                </View>
+            );
+        };
+
+        // Select specialized cockpit geometry based on active template
+        let cockpitContent = null;
+        switch (tpl.id) {
+            case 'AUDI_RS':
+                cockpitContent = renderAudiRsCockpit();
+                break;
+            case 'TESLA_MINIMAL':
+                cockpitContent = renderTeslaMinimalCockpit();
+                break;
+            case 'NIGHT_HUD':
+                cockpitContent = renderNightHudCockpit();
+                break;
+            case 'MOTORSPORT':
+            default:
+                cockpitContent = renderMotorsportCockpit();
+                break;
+        }
+
         return (
             <View style={[styles.liveContainer, isHudMirrored && styles.hudMirrored]}>
-                {/* ── Speed hero ──────────────────────────────────── */}
-                <View style={styles.speedHero}>
-                    <Text style={[styles.speedNum, { color: tpl.speedColor }]}>{speed}</Text>
-                    <Text style={styles.speedUnit}>km/h</Text>
-                </View>
+                {/* ── Active Cockpit Geometry (1 of 4) ── */}
+                {cockpitContent}
 
-                {/* ── RPM bar cu Redline Dinamic ─────────────────── */}
-                <View style={styles.rpmSection}>
-                    <Text style={[styles.rpmNum, { color: rpmColor }]}>
-                        {typeof rpm === 'number' ? rpm.toLocaleString('ro-RO') : rpm}
-                    </Text>
-                    <View style={styles.rpmTrack}>
-                        <View style={[styles.redlineMarker, { left: `${redlinePct}%` }]} />
-                        <View style={[styles.rpmFill, { width: rpmPct, backgroundColor: rpmColor }]} />
-                    </View>
-                    <Text style={styles.rpmLabel}>RPM</Text>
-                </View>
-
-                {/* ── Badge Motor Rece / În încălzire ────────────── */}
-                {tempBadgeText && (
+                {/* ── Cold engine / warming badge (if not HUD) ── */}
+                {tpl.id !== 'NIGHT_HUD' && tempBadgeText && (
                     <View style={[styles.coldBadge, engineTempStatus === 'cold' ? styles.coldBadgeActive : styles.warmingBadgeActive]}>
                         <Text style={[styles.coldBadgeText, { color: engineTempStatus === 'cold' ? '#5AC8FA' : colors.status.monitor }]}>
                             {tempBadgeText}
@@ -397,184 +786,65 @@ const LiveDashboardScreen = () => {
                     </View>
                 )}
 
-                {/* ── DPF regen banner ────────────────────────────── */}
-                {(dpf.regen_status === 'ACTIVE' || dpf.regen_status === 'ON') && (
+                {/* ── DPF regen banner (if not HUD) ── */}
+                {tpl.id !== 'NIGHT_HUD' && (dpf.regen_status === 'ACTIVE' || dpf.regen_status === 'ON') && (
                     <View style={styles.dpfBanner}>
-                        <Text style={styles.dpfText}>♻  Regenerare DPF — drum lung recomandat</Text>
+                        <Text style={styles.dpfText}>♻ Regenerare DPF — drum lung recomandat</Text>
                     </View>
                 )}
 
-                {/* ── Virtual Dyno & ECU Glass Card (Doar în Mod Inginer Pro) ── */}
-                {proMode && (
-                    <>
-                        <View style={[styles.dynoCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
-                            <View style={styles.dynoHeader}>
-                                <View style={styles.dynoTag}>
-                                    <Text style={styles.dynoTagText}>⚡ VIRTUAL DYNO (ECU MATH)</Text>
-                                </View>
-                                {v.smokeRisk ? (
-                                    <View style={[styles.dynoTag, { backgroundColor: 'rgba(239,68,68,0.18)', borderColor: colors.status.critical }]}>
-                                        <Text style={[styles.dynoTagText, { color: colors.status.critical }]}>⚠ RISC FUM NEGRU</Text>
-                                    </View>
-                                ) : (
-                                    <View style={[styles.dynoTag, { backgroundColor: 'rgba(16,185,129,0.14)', borderColor: colors.status.good }]}>
-                                        <Text style={[styles.dynoTagText, { color: colors.status.good }]}>✓ LIMITĂ FUM OK</Text>
-                                    </View>
-                                )}
+                {/* ── Pro Mode: Sensor Fusion Observers (Collapsible / Non-HUD) ── */}
+                {proMode && tpl.id !== 'NIGHT_HUD' && (
+                    <View style={[styles.observersCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                        <View style={styles.dynoHeader}>
+                            <View style={[styles.dynoTag, { backgroundColor: 'rgba(56, 189, 248, 0.14)' }]}>
+                                <Text style={[styles.dynoTagText, { color: colors.accent.default }]}>🔬 SENSOR FUSION & OBSERVERS</Text>
                             </View>
-
-                            <View style={styles.dynoGrid}>
-                                {/* Putere CP */}
-                                <View style={styles.dynoCell}>
-                                    <Text style={styles.dynoLabel}>PUTERE REALĂ</Text>
-                                    <Text style={styles.dynoValue}>{powerHp} <Text style={styles.dynoUnit}>CP</Text></Text>
-                                    <View style={styles.dynoMiniBar}>
-                                        <View style={[styles.dynoMiniFill, { width: `${Math.min((powerHp / 140) * 100, 100)}%`, backgroundColor: colors.status.good }]} />
-                                    </View>
-                                </View>
-
-                                {/* Cuplu Nm */}
-                                <View style={styles.dynoCell}>
-                                    <Text style={styles.dynoLabel}>CUPLU MOTOR</Text>
-                                    <Text style={styles.dynoValue}>{torqueNm} <Text style={styles.dynoUnit}>Nm</Text></Text>
-                                    <View style={styles.dynoMiniBar}>
-                                        <View style={[styles.dynoMiniFill, { width: `${Math.min((torqueNm / 300) * 100, 100)}%`, backgroundColor: colors.accent.default }]} />
-                                    </View>
-                                </View>
-
-                                {/* Volumetric Efficiency */}
-                                <View style={styles.dynoCell}>
-                                    <Text style={styles.dynoLabel}>EFICIENȚĂ VOLUMETRICĂ</Text>
-                                    <Text style={styles.dynoValue}>{vePct}%</Text>
-                                    <Text style={styles.dynoSub}>{m.load < 40 || rpm < 1600 ? 'Sarcină parțială' : (vePct >= 80 ? 'Admisie optimă' : 'Restricție debit')}</Text>
-                                </View>
-
-                                {/* Lambda / AFR */}
-                                <View style={styles.dynoCell}>
-                                    <Text style={styles.dynoLabel}>LAMBDA / AFR</Text>
-                                    <Text style={styles.dynoValue}>λ {typeof lambda === 'number' ? lambda.toFixed(2) : lambda}</Text>
-                                    <Text style={styles.dynoSub}>{typeof afr === 'number' ? `${afr.toFixed(1)}:1 AFR` : 'AFR'}</Text>
-                                </View>
-                            </View>
+                            <Text style={styles.observerSubtitle}>Inginerie Empirică VAG</Text>
                         </View>
 
-                        {/* ── Dual Boost Indicator (Target vs Actual) ───── */}
-                        <View style={[styles.boostCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
-                            <View style={styles.boostHeader}>
-                                <Text style={styles.boostTitle}>TURBO BOOST (COMANDAT vs EFECTIV)</Text>
-                                <Text style={[styles.boostDelta, { color: Math.abs(boost - targetBoost) > 0.3 ? colors.status.caution : colors.status.good }]}>
-                                    Δ {((boost - targetBoost) > 0 ? '+' : '') + (boost - targetBoost).toFixed(2)} bar
+                        <View style={styles.observerGrid}>
+                            <View style={styles.observerCell}>
+                                <Text style={styles.observerLabel}>BSFC (EFICIENȚĂ)</Text>
+                                <Text style={styles.observerVal}>{v.bsfcGPerKwh ? `${v.bsfcGPerKwh}` : '—'} <Text style={styles.observerUnit}>g/kWh</Text></Text>
+                                <Text style={styles.observerSub}>{v.bsfcGPerKwh < 220 ? '✓ Eficiență optimă TDI' : 'Sarcină parțială'}</Text>
+                            </View>
+                            <View style={styles.observerCell}>
+                                <Text style={styles.observerLabel}>UZURĂ ULEI (ARRHENIUS)</Text>
+                                <Text style={styles.observerVal}>{v.oilLifeWearFactor ? `${v.oilLifeWearFactor}×` : '1.0×'}</Text>
+                                <Text style={styles.observerSub}>{v.oilLifeWearFactor > 1.4 ? '⚠ Solicitare termică' : '✓ Degradare normală'}</Text>
+                            </View>
+                            <View style={styles.observerCell}>
+                                <Text style={styles.observerLabel}>SĂNĂTATE BATERIE (SoH)</Text>
+                                <Text style={[styles.observerVal, { color: (v.batterySoHPct || 95) < 70 ? colors.status.critical : colors.status.good }]}>
+                                    {v.batterySoHPct ?? 95}%
                                 </Text>
+                                <Text style={styles.observerSub}>Rint: {v.batteryInternalResistanceMOhms ? `${v.batteryInternalResistanceMOhms} mΩ` : '8.2 mΩ'}</Text>
                             </View>
-                            <View style={styles.boostBarsWrap}>
-                                <View style={styles.boostBarRow}>
-                                    <Text style={styles.boostBarLbl}>Cmd</Text>
-                                    <View style={styles.boostBarTrack}>
-                                        <View style={[styles.boostBarFill, { width: `${Math.min((targetBoost / 2.5) * 100, 100)}%`, backgroundColor: colors.status.monitor }]} />
-                                    </View>
-                                    <Text style={styles.boostBarVal}>{targetBoost.toFixed(2)} bar</Text>
-                                </View>
-                                <View style={styles.boostBarRow}>
-                                    <Text style={styles.boostBarLbl}>Act</Text>
-                                    <View style={styles.boostBarTrack}>
-                                        <View style={[styles.boostBarFill, { width: `${Math.min((boost / 2.5) * 100, 100)}%`, backgroundColor: boostColor }]} />
-                                    </View>
-                                    <Text style={styles.boostBarVal}>{boost.toFixed(2)} bar</Text>
-                                </View>
-                            </View>
-                            {v.turboDiagnostic && v.turboDiagnostic !== 'NORMAL' && (
-                                <View style={styles.turboDiagPill}>
-                                    <Text style={styles.turboDiagText}>
-                                        {v.turboDiagnostic === 'VNT_N75_SPIKE' ? '⚡ Spike suprapresiune VNT / electrovalvă N75' :
-                                         v.turboDiagnostic === 'INTERCOOLER_BOOST_LEAK' ? '⚠ Pierdere presiune admisie / intercooler' :
-                                         v.turboDiagnostic === 'TURBO_UNDERBOOST_WEAR' ? 'ℹ Subpresiune constantă — verificare geometrie' :
-                                         v.turboDiagnostic}
-                                    </Text>
-                                </View>
-                            )}
-                        </View>
-
-                        {/* ── Observatori Fizici & Sănătate Componente (Sensor Fusion) ── */}
-                        <View style={[styles.observersCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
-                            <View style={styles.dynoHeader}>
-                                <View style={[styles.dynoTag, { backgroundColor: 'rgba(56, 189, 248, 0.14)' }]}>
-                                    <Text style={[styles.dynoTagText, { color: colors.accent.default }]}>🔬 SENSOR FUSION & OBSERVERS</Text>
-                                </View>
-                                <Text style={styles.observerSubtitle}>Inginerie Empirică VAG</Text>
-                            </View>
-
-                            <View style={styles.observerGrid}>
-                                {/* BSFC */}
-                                <View style={styles.observerCell}>
-                                    <Text style={styles.observerLabel}>BSFC (EFICIENȚĂ)</Text>
-                                    <Text style={styles.observerVal}>
-                                        {v.bsfcGPerKwh ? `${v.bsfcGPerKwh}` : '—'} <Text style={styles.observerUnit}>g/kWh</Text>
-                                    </Text>
-                                    <Text style={styles.observerSub}>
-                                        {v.bsfcGPerKwh < 220 ? '✓ Eficiență optimă TDI' : 'Sarcină parțială/rece'}
-                                    </Text>
-                                </View>
-
-                                {/* Smart Oil Wear Index (Arrhenius) */}
-                                <View style={styles.observerCell}>
-                                    <Text style={styles.observerLabel}>UZURĂ ULEI (ARRHENIUS)</Text>
-                                    <Text style={styles.observerVal}>
-                                        {v.oilLifeWearFactor ? `${v.oilLifeWearFactor}×` : '1.0×'}
-                                    </Text>
-                                    <Text style={styles.observerSub}>
-                                        {v.oilLifeWearFactor > 1.4 ? '⚠ Solicitare termică/diluție' : '✓ Degradare normală'}
-                                    </Text>
-                                </View>
-
-                                {/* 12V Battery Cranking Health & SoH */}
-                                <View style={styles.observerCell}>
-                                    <Text style={styles.observerLabel}>SĂNĂTATE BATERIE (SoH)</Text>
-                                    <Text style={[styles.observerVal, { color: (v.batterySoHPct || 95) < 70 ? colors.status.critical : colors.status.good }]}>
-                                        {v.batterySoHPct ?? 95}%
-                                    </Text>
-                                    <Text style={styles.observerSub}>
-                                        {v.batteryInternalResistanceMOhms ? `Rint: ${v.batteryInternalResistanceMOhms} mΩ` : 'Pornire optimă'}
-                                    </Text>
-                                </View>
-
-                                {/* Frâne & Energie Disipată */}
-                                <View style={styles.observerCell}>
-                                    <Text style={styles.observerLabel}>ENERGIE FRÂNE (TRIP)</Text>
-                                    <Text style={styles.observerVal}>
-                                        {v.brakeEnergyTripMj ? `${v.brakeEnergyTripMj}` : '0.0'} <Text style={styles.observerUnit}>MJ</Text>
-                                    </Text>
-                                    <Text style={styles.observerSub}>
-                                        {v.estimatedBrakeDiscTempC ? `Disc: ~${v.estimatedBrakeDiscTempC}°C` : 'Plăcuțe reci'}
-                                    </Text>
-                                </View>
+                            <View style={styles.observerCell}>
+                                <Text style={styles.observerLabel}>ENERGIE FRÂNE (TRIP)</Text>
+                                <Text style={styles.observerVal}>{v.brakeEnergyTripMj ? `${v.brakeEnergyTripMj}` : '0.0'} <Text style={styles.observerUnit}>MJ</Text></Text>
+                                <Text style={styles.observerSub}>Discuri: {v.estimatedBrakeDiscTempC ? `~${v.estimatedBrakeDiscTempC}°C` : 'Plăcuțe reci'}</Text>
                             </View>
                         </View>
-                    </>
+                    </View>
                 )}
 
-                {/* ── 2×3 metric tiles ────────────────────────────── */}
-                <View style={styles.tileGrid}>
-                    <MetricTile tileW={tileW} label="TEMP"    value={cool}                  unit="°C"  color={coolColor}  highlight={cool > 95} />
-                    <MetricTile tileW={tileW} label="BOOST"   value={boost}                 unit="bar" color={boostColor} highlight={boost > 1.8} />
-                    <MetricTile tileW={tileW} label="VOLTAJ"  value={volt > 0 ? volt : '—'} unit={volt > 0 ? 'V' : ''} color={voltColor} />
-                    <MetricTile tileW={tileW} label="CONSUM"  value={cons}                  unit="L/h" color={consColor} />
-                    <MetricTile tileW={tileW} label="ECO"     value={eco}                   unit="/100" color={ecoColor} highlight />
-                    <MetricTile tileW={tileW} label="TREAPTĂ" value={gear ?? 'N'}            unit=""    color={colors.accent.default} />
-                </View>
-
-                {/* ── AI message ──────────────────────────────────── */}
-                <View style={[styles.aiCard, { borderLeftColor: aiColor }]}>
-                    <Text style={[styles.aiText, { color: aiColor }]}>{assistantMsg.text}</Text>
-                </View>
-
-                {/* ── Contextual alert ────────────────────────────── */}
-                {contextualAlert && (
-                    <RecommendationCard
-                        title={contextualAlert.title}
-                        description={contextualAlert.description}
-                        priority={contextualAlert.priority}
-                        style={{ marginTop: spacing[2] }}
-                    />
+                {/* ── AI Assistant & Contextual Alert (if not HUD) ── */}
+                {tpl.id !== 'NIGHT_HUD' && (
+                    <>
+                        <View style={[styles.aiCard, { borderLeftColor: aiColor }]}>
+                            <Text style={[styles.aiText, { color: aiColor }]}>{assistantMsg.text}</Text>
+                        </View>
+                        {contextualAlert && (
+                            <RecommendationCard
+                                title={contextualAlert.title}
+                                description={contextualAlert.description}
+                                priority={contextualAlert.priority}
+                                style={{ marginTop: spacing[2] }}
+                            />
+                        )}
+                    </>
                 )}
             </View>
         );
@@ -772,6 +1042,40 @@ const LiveDashboardScreen = () => {
                 </TouchableOpacity>
             </View>
 
+            {/* ── Floating Segmented Pill Bar (Modern Compact Selector) ── */}
+            <View style={[styles.segmentedWrap, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
+                {[
+                    { id: 'LIVE',   label: 'COCKPIT' },
+                    ...(proMode ? [{ id: 'PARAMS', label: 'SENZORI' }] : []),
+                    { id: 'SCOPE',  label: 'GRAFIC' },
+                ].map(item => {
+                    const isActive = tab === item.id;
+                    const isDarkTheme = tpl.id === 'AUDI_RS' || tpl.id === 'NIGHT_HUD';
+                    return (
+                        <TouchableOpacity
+                            key={item.id}
+                            style={[
+                                styles.segmentedPill,
+                                isActive && { backgroundColor: tpl.accent, shadowColor: tpl.accent, shadowOpacity: 0.35, shadowRadius: 4, elevation: 3 },
+                            ]}
+                            onPress={() => setTab(item.id)}
+                            activeOpacity={0.8}
+                            accessibilityRole="tab"
+                            accessibilityState={{ selected: isActive }}
+                        >
+                            <Text
+                                style={[
+                                    styles.segmentedPillText,
+                                    isActive && { color: isDarkTheme ? '#ffffff' : '#05070e', fontWeight: typography.weights.heavy },
+                                ]}
+                            >
+                                {item.label}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+
             {/* ── Offline / reconnecting banner ───────────────────────── */}
             {!isConnected && (
                 <View style={[styles.offlineBanner, isReconnecting && styles.offlineBannerSync]}>
@@ -791,26 +1095,6 @@ const LiveDashboardScreen = () => {
                 {tab === 'PARAMS' && renderParams()}
                 {tab === 'SCOPE'  && renderScope()}
             </ScrollView>
-
-            {/* ── Bottom tab bar ──────────────────────────────────────── */}
-            <View style={styles.tabBar}>
-                {[
-                    { id: 'LIVE',   label: proMode ? 'Bord Pro' : 'Bord Șofer' },
-                    ...(proMode ? [{ id: 'PARAMS', label: 'Parametri' }] : []),
-                    { id: 'SCOPE',  label: 'Grafic'     },
-                ].map(t => (
-                    <TouchableOpacity
-                        key={t.id}
-                        style={styles.tabItem}
-                        onPress={() => setTab(t.id)}
-                        accessibilityRole="tab"
-                        accessibilityState={{ selected: tab === t.id }}
-                    >
-                        <Text style={[styles.tabLabel, tab === t.id && styles.tabLabelActive]}>{t.label}</Text>
-                        {tab === t.id && <View style={styles.tabIndicator} />}
-                    </TouchableOpacity>
-                ))}
-            </View>
 
             {/* ── Alerts modal ────────────────────────────────────────── */}
             <Modal
@@ -860,7 +1144,33 @@ const styles = StyleSheet.create({
     scroll: { flex: 1 },
     scrollContent: {
         paddingHorizontal: layout.screenPaddingH,
-        paddingBottom: TAB_H + spacing[6],
+        paddingBottom: spacing[6],
+    },
+
+    // ── Segmented Pill Bar ───────────────────────────────────────────────────
+    segmentedWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginHorizontal: layout.screenPaddingH,
+        marginTop: spacing[1],
+        marginBottom: spacing[2],
+        padding: 3,
+        borderRadius: radii.full,
+        borderWidth: 1,
+    },
+    segmentedPill: {
+        flex: 1,
+        paddingVertical: 7,
+        borderRadius: radii.full,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    segmentedPillText: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+        letterSpacing: 0.5,
     },
 
     // ── Top bar ──────────────────────────────────────────────────────────────
@@ -868,7 +1178,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: layout.screenPaddingH,
-        paddingBottom: spacing[3],
+        paddingBottom: spacing[2],
         gap: spacing[2],
     },
     connPill: {
@@ -1431,30 +1741,506 @@ const styles = StyleSheet.create({
     crosshairVal: { color: colors.text.primary, fontSize: typography.sizes.label1, fontWeight: typography.weights.heavy },
     crosshairSec: { color: colors.text.secondary, fontSize: 8, marginTop: 1 },
 
-    // ── Bottom tab bar ───────────────────────────────────────────────────────
-    tabBar: {
-        flexDirection: 'row',
-        height: TAB_H,
-        backgroundColor: colors.bg[1],
-        borderTopWidth: 1,
-        borderTopColor: colors.border.default,
+    // ── 1. MOTORSPORT COCKPIT STYLES ────────────────────────────────────────
+    motorsportRoot: {
+        alignItems: 'center',
+        marginBottom: spacing[2],
     },
-    tabItem: {
-        flex: 1,
+    shiftLightStrip: {
+        flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
+        gap: 5,
+        marginBottom: spacing[1],
     },
-    tabLabel:       { fontSize: typography.sizes.caption, color: colors.text.secondary, fontWeight: typography.weights.semibold },
-    tabLabelActive: { color: colors.accent.default, fontWeight: typography.weights.bold },
-    tabIndicator: {
+    shiftLed: {
+        width: 22,
+        height: 9,
+        borderRadius: 2,
+        backgroundColor: '#111827',
+        borderWidth: 1,
+        borderColor: '#1e293b',
+    },
+    shiftLedFlash: {
+        opacity: 0.9,
+    },
+    tachoWrap: {
+        width: 260,
+        height: 260,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+        marginVertical: spacing[1],
+    },
+    tachoSvg: {
         position: 'absolute',
+        top: 0,
+        left: 0,
+    },
+    tachoCenterContent: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: spacing[1],
+    },
+    tachoGear: {
+        fontSize: 38,
+        fontWeight: typography.weights.heavy,
+        color: '#ffb800',
+        marginBottom: -4,
+    },
+    tachoSpeed: {
+        fontSize: 54,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+        lineHeight: 58,
+    },
+    tachoSpeedUnit: {
+        fontSize: 11,
+        color: colors.text.secondary,
+        textTransform: 'uppercase',
+        letterSpacing: 1.5,
+        marginTop: -2,
+    },
+    tachoRpmNum: {
+        fontSize: 12,
+        fontWeight: typography.weights.heavy,
+        fontVariant: ['tabular-nums'],
+        marginTop: 2,
+    },
+    twinPillRow: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        width: '100%',
+        marginTop: spacing[2],
+    },
+    twinCard: {
+        flex: 1,
+        borderRadius: radii.md,
+        padding: spacing[3],
+        borderWidth: 1,
+    },
+    twinCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 3,
+    },
+    twinCardTitle: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.secondary,
+        letterSpacing: 0.5,
+    },
+    twinCardDelta: {
+        fontSize: 10,
+        fontWeight: typography.weights.bold,
+        color: colors.status.good,
+        fontVariant: ['tabular-nums'],
+    },
+    twinBigVal: {
+        fontSize: typography.sizes.title3,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+        marginVertical: 2,
+    },
+    twinUnit: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
+    },
+    twinMiniBarTrack: {
+        height: 4,
+        backgroundColor: colors.bg[2],
+        borderRadius: radii.full,
+        marginVertical: 3,
+        overflow: 'hidden',
+    },
+    twinMiniBarFill: {
+        height: '100%',
+        borderRadius: radii.full,
+    },
+    twinSubText: {
+        fontSize: 9,
+        color: colors.text.secondary,
+        marginTop: 1,
+    },
+
+    // ── 2. AUDI RS COCKPIT STYLES ────────────────────────────────────────────
+    audiRsRoot: {
+        borderRadius: radii.lg,
+        paddingVertical: spacing[1],
+        marginBottom: spacing[2],
+    },
+    audiBoomerangWrap: {
+        position: 'relative',
+        alignItems: 'center',
+        marginBottom: spacing[1],
+    },
+    rsRpmPill: {
+        position: 'absolute',
+        right: layout.screenPaddingH,
+        top: 2,
+        backgroundColor: 'rgba(255, 42, 42, 0.15)',
+        paddingHorizontal: spacing[2],
+        paddingVertical: 2,
+        borderRadius: radii.xs,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 42, 42, 0.4)',
+    },
+    rsRpmPillText: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.heavy,
+        color: '#ffffff',
+        fontVariant: ['tabular-nums'],
+    },
+    rsCenterGrid: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing[2],
+        marginVertical: spacing[2],
+    },
+    rsSpeedCol: {
+        flex: 1,
+    },
+    rsBadgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[2],
+        marginBottom: 2,
+    },
+    rsBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 42, 42, 0.2)',
+        paddingHorizontal: spacing[2],
+        paddingVertical: 3,
+        borderRadius: radii.xs,
+        borderWidth: 1,
+        borderColor: '#ff2a2a',
+        gap: 5,
+    },
+    rsBadgeSquare: {
+        width: 7,
+        height: 7,
+        backgroundColor: '#ff2a2a',
+    },
+    rsBadgeText: {
+        color: '#ffffff',
+        fontSize: 9,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.8,
+    },
+    rsGearBox: {
+        backgroundColor: '#ff2a2a',
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: radii.xs,
+    },
+    rsGearText: {
+        color: '#ffffff',
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+    },
+    rsSpeedWrap: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 6,
+    },
+    rsSpeedNum: {
+        fontSize: 76,
+        fontWeight: typography.weights.heavy,
+        color: '#ffffff',
+        fontVariant: ['tabular-nums'],
+        lineHeight: 80,
+    },
+    rsSpeedUnit: {
+        fontSize: typography.sizes.body1,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+        textTransform: 'uppercase',
+    },
+    rsGCol: {
+        alignItems: 'center',
+    },
+    rsGBox: {
+        backgroundColor: '#120b0f',
+        borderRadius: radii.md,
+        padding: spacing[2],
+        borderWidth: 1,
+        borderColor: '#2e1a22',
+        alignItems: 'center',
+    },
+    rsGTitle: {
+        fontSize: 8,
+        fontWeight: typography.weights.heavy,
+        color: '#ff2a2a',
+        letterSpacing: 0.8,
+        marginBottom: 3,
+    },
+    rsGSvg: {
+        marginVertical: 2,
+    },
+    rsGVal: {
+        fontSize: 10,
+        fontWeight: typography.weights.heavy,
+        color: '#ffffff',
+        fontVariant: ['tabular-nums'],
+    },
+    rsPerfRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        borderRadius: radii.md,
+        paddingVertical: spacing[2],
+        paddingHorizontal: spacing[3],
+        borderWidth: 1,
+        marginTop: spacing[2],
+    },
+    rsPerfItem: {
+        alignItems: 'center',
+    },
+    rsPerfLabel: {
+        fontSize: 8,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.bold,
+        letterSpacing: 0.6,
+        marginBottom: 2,
+    },
+    rsPerfVal: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    rsPerfDivider: {
+        width: 1,
+        height: 20,
+        backgroundColor: colors.border.subtle,
+    },
+
+    // ── 3. TESLA MINIMAL COCKPIT STYLES ──────────────────────────────────────
+    teslaRoot: {
+        alignItems: 'center',
+        paddingVertical: spacing[1],
+        marginBottom: spacing[2],
+    },
+    teslaHorizonWrap: {
+        width: '100%',
+        marginBottom: spacing[2],
+    },
+    teslaHorizonTrack: {
+        width: '100%',
+        height: 6,
+        backgroundColor: '#121926',
+        borderRadius: radii.full,
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    teslaHorizonCenter: {
+        position: 'absolute',
+        left: '50%',
+        top: 0,
         bottom: 0,
-        left: '25%',
-        right: '25%',
-        height: 2,
-        backgroundColor: colors.accent.default,
-        borderTopLeftRadius: 1,
-        borderTopRightRadius: 1,
+        width: 2,
+        backgroundColor: '#334155',
+        zIndex: 2,
+    },
+    teslaHorizonFillPower: {
+        position: 'absolute',
+        left: '50%',
+        top: 0,
+        bottom: 0,
+        backgroundColor: '#38bdf8',
+        borderRadius: radii.full,
+    },
+    teslaHorizonFillRegen: {
+        position: 'absolute',
+        right: '50%',
+        top: 0,
+        bottom: 0,
+        backgroundColor: '#10b981',
+        borderRadius: radii.full,
+    },
+    teslaHorizonLabels: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 3,
+        paddingHorizontal: 2,
+    },
+    teslaHorizonLbl: {
+        fontSize: 8,
+        fontWeight: typography.weights.bold,
+        color: colors.text.tertiary,
+        letterSpacing: 0.5,
+    },
+    teslaDriveSelector: {
+        flexDirection: 'row',
+        gap: spacing[4],
+        marginBottom: spacing[1],
+    },
+    teslaDriveModeText: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        color: colors.text.disabled,
+    },
+    teslaDriveModeActive: {
+        color: '#38bdf8',
+        fontWeight: typography.weights.heavy,
+    },
+    teslaSpeedWrap: {
+        alignItems: 'center',
+        marginVertical: spacing[1],
+    },
+    teslaSpeedNum: {
+        fontSize: 88,
+        fontWeight: '700',
+        color: '#f8fafc',
+        fontVariant: ['tabular-nums'],
+        lineHeight: 90,
+    },
+    teslaSpeedUnit: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+        letterSpacing: 2,
+        textTransform: 'uppercase',
+        marginTop: -4,
+    },
+    teslaCardsRow: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        width: '100%',
+        marginTop: spacing[2],
+    },
+    teslaCard: {
+        flex: 1,
+        borderRadius: radii.md,
+        padding: spacing[3],
+        borderWidth: 1,
+        alignItems: 'center',
+    },
+    teslaCardLabel: {
+        fontSize: 8,
+        fontWeight: typography.weights.bold,
+        color: colors.text.secondary,
+        letterSpacing: 0.6,
+        marginBottom: 4,
+    },
+    teslaCardVal: {
+        fontSize: typography.sizes.label1,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    teslaCardUnit: {
+        fontSize: 9,
+        color: colors.text.secondary,
+    },
+    teslaCardSub: {
+        fontSize: 9,
+        color: colors.text.tertiary,
+        marginTop: 2,
+    },
+
+    // ── 4. NIGHT HUD COCKPIT STYLES ──────────────────────────────────────────
+    hudRoot: {
+        backgroundColor: '#000000',
+        paddingVertical: spacing[2],
+        alignItems: 'center',
+        marginBottom: spacing[2],
+    },
+    hudRpmWrap: {
+        width: '100%',
+        marginBottom: spacing[3],
+    },
+    hudRpmTrack: {
+        width: '100%',
+        height: 14,
+        backgroundColor: '#1a0505',
+        borderRadius: radii.full,
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    hudRpmFill: {
+        height: '100%',
+        backgroundColor: '#ff453a',
+        borderRadius: radii.full,
+    },
+    hudRedlineMarker: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        right: 0,
+        backgroundColor: 'rgba(255, 69, 58, 0.4)',
+        borderLeftWidth: 2,
+        borderLeftColor: '#ffffff',
+    },
+    hudRpmMeta: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 4,
+        paddingHorizontal: 2,
+    },
+    hudRpmText: {
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.heavy,
+        color: '#ff453a',
+        fontVariant: ['tabular-nums'],
+    },
+    hudRedlineText: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
+        color: '#ff9f0a',
+    },
+    hudCenterWrap: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        justifyContent: 'center',
+        gap: spacing[4],
+        marginVertical: spacing[2],
+    },
+    hudSpeedNum: {
+        fontSize: 115,
+        fontWeight: typography.weights.heavy,
+        color: '#ff453a',
+        fontVariant: ['tabular-nums'],
+        lineHeight: 118,
+    },
+    hudGearNum: {
+        fontSize: 64,
+        fontWeight: typography.weights.heavy,
+        color: '#ff9f0a',
+    },
+    hudBottomRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        width: '100%',
+        marginTop: spacing[3],
+        paddingVertical: spacing[2],
+    },
+    hudMetricItem: {
+        alignItems: 'center',
+    },
+    hudMetricLbl: {
+        fontSize: typography.sizes.micro,
+        fontWeight: typography.weights.bold,
+        color: '#8e8e93',
+        letterSpacing: 1,
+        marginBottom: 2,
+    },
+    hudMetricVal: {
+        fontSize: 28,
+        fontWeight: typography.weights.heavy,
+        color: '#ff453a',
+        fontVariant: ['tabular-nums'],
+    },
+    hudMirrorHint: {
+        marginTop: spacing[3],
+        fontSize: typography.sizes.micro,
+        color: '#636366',
+        textAlign: 'center',
     },
 
     // ── Alerts modal ─────────────────────────────────────────────────────────
