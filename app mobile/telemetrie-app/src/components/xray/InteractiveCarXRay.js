@@ -78,13 +78,10 @@ const InteractiveCarXRay = ({
     const handleAskAI = useCallback((comp) => {
         if (!comp) return;
         setIsScannerOpen(false);
-        const rootNav = getRootNavigation(activeNav);
+        const nav = getRootNavigation(activeNav) || activeNav;
         const promptText = comp.aiPrompt || `Analizează starea componentei ${comp.name} și parametrii săi de funcționare.`;
-        if (rootNav) {
-            rootNav.navigate('Vehicul', {
-                screen: 'AIExpert',
-                params: { initialPrompt: promptText },
-            });
+        if (nav?.navigate) {
+            nav.navigate('AIExpert', { initialPrompt: promptText });
         }
     }, [activeNav]);
 
