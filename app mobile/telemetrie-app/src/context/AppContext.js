@@ -8,14 +8,21 @@ export const AppProvider = ({ children }) => {
     const [viewMode, setViewMode] = useState('COCKPIT');
     const [selectedMetric, setSelectedMetric] = useState('RPM');
     const [activeTemplate, setActiveTemplateState] = useState('MOTORSPORT');
+    const [oledBlackMode, setOledBlackModeState] = useState(false);
     const [tripReport, setTripReport] = useState(null);
     const navigationRef = useRef(null);
 
-    // Încarcă șablonul salvat din AsyncStorage la pornire
+    // Încarcă șablonul și starea modului OLED din AsyncStorage la pornire
     useEffect(() => {
-        AsyncStorage.getItem('@cockpit_template').then(saved => {
-            if (saved && TEMPLATES[saved]) {
-                setActiveTemplateState(saved);
+        Promise.all([
+            AsyncStorage.getItem('@cockpit_template'),
+            AsyncStorage.getItem('@oled_black_mode'),
+        ]).then(([savedTpl, savedOled]) => {
+            if (savedTpl && TEMPLATES[savedTpl]) {
+                setActiveTemplateState(savedTpl);
+            }
+            if (savedOled !== null) {
+                setOledBlackModeState(savedOled === 'true');
             }
         }).catch(() => {});
     }, []);
@@ -28,7 +35,21 @@ export const AppProvider = ({ children }) => {
         } catch {}
     }, []);
 
-    const currentTemplate = TEMPLATES[activeTemplate] || TEMPLATES.MOTORSPORT;
+    const setOledBlackMode = useCallback(async (val) => {
+        setOledBlackModeState(val);
+        try {
+            await AsyncStorage.setItem('@oled_black_mode', String(val));
+        } catch {}
+    }, []);
+
+    const baseTemplate = TEMPLATES[activeTemplate] || TEMPLATES.MOTORSPORT;
+    const currentTemplate = oledBlackMode ? {
+        ...baseTemplate,
+        bg: '#000000',
+        cardBg: '#05070c',
+        border: '#181b26',
+        isOledBlack: true,
+    } : baseTemplate;
 
     const setNavigationRef = useCallback((ref) => {
         navigationRef.current = ref;
@@ -43,6 +64,7 @@ export const AppProvider = ({ children }) => {
             viewMode, setViewMode,
             selectedMetric, setSelectedMetric,
             activeTemplate, setActiveTemplate, currentTemplate,
+            oledBlackMode, setOledBlackMode, isOledBlack: oledBlackMode,
             tripReport, setTripReport, dismissTripReport,
             navigationRef, setNavigationRef,
         }}>

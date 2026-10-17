@@ -962,9 +962,10 @@ const TripHistoryScreen = () => {
                 onEndReachedThreshold={0.3}
                 showsVerticalScrollIndicator={false}
                 stickySectionHeadersEnabled={false}
-                initialNumToRender={10}
-                maxToRenderPerBatch={10}
-                windowSize={7}
+                initialNumToRender={6}
+                maxToRenderPerBatch={8}
+                windowSize={5}
+                removeClippedSubviews={Platform.OS === 'android'}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}

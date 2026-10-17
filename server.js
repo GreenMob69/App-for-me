@@ -12,7 +12,7 @@ const { loadRules }               = require('./backend/knowledge/KnowledgeBase')
 const { initVehicleProfile }      = require('./backend/vehicle-profile');
 
 const { startWatchdog }    = require('./services/watchdog');
-const { createMqttClient } = require('./handlers/mqttHandler');
+const { createMqttClient, flushAllActiveTrips } = require('./handlers/mqttHandler');
 const { requireAuth }      = require('./middleware/auth');
 
 const app    = express();
@@ -193,3 +193,34 @@ app.use('/admin', require('./routes/admin')(db));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`[API REST & WS] Server pornit pe http://localhost:${PORT}`));
+
+// Checkpoint periodic WAL la fiecare 15 minute (previne creșterea necontrolată a fișierului -wal)
+const walInterval = setInterval(() => {
+    db.run('PRAGMA wal_checkpoint(PASSIVE);', (err) => {
+        if (err) console.error('[WAL CHECKPOINT ERROR]', err.message);
+    });
+}, 15 * 60 * 1000);
+if (walInterval.unref) walInterval.unref();
+
+// Închidere curată: descarcă pachetele din RAM înainte de ieșire și eliberează WAL
+const handleGracefulShutdown = async (signal) => {
+    console.log(`\n[SERVER] Primit ${signal}. Salvare pachete telemetrie din buffer și închidere DB...`);
+    try {
+        if (typeof flushAllActiveTrips === 'function') {
+            await flushAllActiveTrips(db);
+        }
+        db.run('PRAGMA wal_checkpoint(TRUNCATE);', () => {
+            db.close((err) => {
+                if (err) console.error('[DB CLOSE ERROR]', err.message);
+                else console.log('[DB] Conexiune SQLite închisă curat.');
+                process.exit(0);
+            });
+        });
+    } catch (err) {
+        console.error('[SHUTDOWN ERROR]', err);
+        process.exit(1);
+    }
+};
+
+process.on('SIGINT',  () => handleGracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));

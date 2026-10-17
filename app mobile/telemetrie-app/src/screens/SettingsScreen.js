@@ -95,7 +95,7 @@ const SettingsScreen = () => {
     const navigation = useNavigation();
     const { securityEnabled, lockTimeout, saveSettings } = useContext(SecurityContext);
     const { activeVin, activeVehicle, vehicles, switchVehicle, refreshVehicles } = useVehicle();
-    const { activeTemplate, setActiveTemplate } = useContext(AppContext);
+    const { activeTemplate, setActiveTemplate, oledBlackMode, setOledBlackMode } = useContext(AppContext);
 
     // ── Connection
     const [connStatus, setConnStatus]   = useState('checking');
@@ -639,6 +639,22 @@ const SettingsScreen = () => {
                             </TouchableOpacity>
                         );
                     })}
+                </View>
+
+                {/* ── Toggle Mod OLED True Black (#000000) ── */}
+                <View style={[styles.switchRow, { marginTop: spacing[4], paddingTop: spacing[4], borderTopWidth: 1, borderTopColor: colors.border.subtle }]}>
+                    <View style={{ flex: 1, paddingRight: spacing[2] }}>
+                        <Text style={styles.switchLabel}>🌑 Mod OLED True Black (#000000)</Text>
+                        <Text style={styles.switchDesc}>
+                            Forțează fundalul pe negru absolut (#000000) pe orice șablon, stingând pixelii ecranelor OLED pentru a economisi baterie și a preveni reflexiile de noapte.
+                        </Text>
+                    </View>
+                    <Switch
+                        value={Boolean(oledBlackMode)}
+                        onValueChange={setOledBlackMode}
+                        trackColor={{ false: colors.border.default, true: colors.accent.default }}
+                        thumbColor={oledBlackMode ? '#FFFFFF' : colors.text.secondary}
+                    />
                 </View>
             </View>
 

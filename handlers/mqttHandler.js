@@ -605,4 +605,19 @@ function createMqttClient(db, io) {
     return client;
 }
 
-module.exports = { createMqttClient, flushPendingFlux };
+async function flushAllActiveTrips(db) {
+    if (!calatoriiActive) return;
+    const promises = [];
+    for (const vin of Object.keys(calatoriiActive)) {
+        const trip = calatoriiActive[vin];
+        if (trip && trip.pendingFluxInserts && trip.pendingFluxInserts.length > 0) {
+            promises.push(flushPendingFlux(db, trip));
+        }
+    }
+    if (promises.length > 0) {
+        await Promise.all(promises);
+        console.log(`[FLUX] Descărcat bufferul pentru ${promises.length} călătorii active.`);
+    }
+}
+
+module.exports = { createMqttClient, flushPendingFlux, flushAllActiveTrips };
