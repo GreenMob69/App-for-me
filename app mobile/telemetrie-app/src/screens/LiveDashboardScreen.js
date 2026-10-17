@@ -65,6 +65,8 @@ function buildAssistantMsg(liveData, isConnected, vehicleContext = {}) {
     const critTemp = vehicleContext.critTemp || (optMax + 12);
     const highRpmLimit = vehicleContext.highRpmLimit || 3800;
 
+    if (v.turboCoolDownWarning) return { text: `Protecție Turbo: Miezul CHRA este încins (${Math.round(v.turboCoreTempC)}°C). Menține ralanti încă ${Math.round(v.turboCoolDownSec)}s pentru prevenire calaminare.`, level: 'warning' };
+    if (v.dmfImbalanceWarning) return { text: 'Instabilitate severă la ralanti / vibrații anormale (posibil joc excesiv volantă cu masă dublă DMF).', level: 'warning' };
     if (v.dpfRegenActive) return { text: v.dpfRegenNotice || 'Regenerare DPF în curs! Menține motorul pornit.', level: 'warning' };
     if (v.rollingDragAnomaly) return { text: 'Rezistență anormală la rulare (posibil etrier frână blocat).', level: 'warning' };
     if (coolant > critTemp) return { text: `Temperatura motorului este critică (${coolant}°C). Recomand oprirea imediată.`, level: 'critical' };
@@ -88,6 +90,20 @@ function buildContextualAlert(liveData, latestAlert, vehicleContext = {}) {
     const warnTemp = vehicleContext.warnTemp || (optMax + 5);
     const critTemp = vehicleContext.critTemp || (optMax + 12);
 
+    if (v.turboCoolDownWarning) {
+        return {
+            title: '⏳ Răcire Turbo Necesară',
+            description: `Miez CHRA la ${Math.round(v.turboCoreTempC)}°C. Lasă motorul la ralanti ${Math.round(v.turboCoolDownSec)}s înainte de oprire pentru a preveni cocsarea uleiului.`,
+            priority: 'high'
+        };
+    }
+    if (v.dmfImbalanceWarning) {
+        return {
+            title: '⚠️ Dezechilibru Volantă DMF',
+            description: 'Fluctuații neregulate de turație la ralanti (σ > 26 RPM) corelate cu vibrații torsionale.',
+            priority: 'high'
+        };
+    }
     if (v.dpfRegenActive) {
         return {
             title: '🔥 Regenerare Activă DPF',
@@ -141,8 +157,11 @@ function buildCategoryList(catId, d) {
             { label: 'Turație Motor',       val: m.rpm || 0,                 unit: 'RPM',   max: 5000, nominalMin: 750, nominalMax: 4200, color: colors.accent.default },
             { label: 'Viteză Deplasare',    val: m.speed || 0,               unit: 'km/h',  max: 220,  nominalMin: 0,   nominalMax: 130,  color: colors.status.good },
             { label: 'Putere Estimată Dyno',val: Math.round(v.powerHp || 0), unit: 'CP',    max: 160,  nominalMin: 5,   nominalMax: 140,  color: colors.status.good, isVirtual: true },
+            { label: 'Putere Corectată SAE',val: Math.round(v.saeCorrectedPowerHp || v.powerHp || 0), unit: 'CP', max: 160, nominalMin: 5, nominalMax: 140, color: colors.status.good, isVirtual: true },
             { label: 'Cuplu Motor Real',    val: Math.round(v.torqueNm || 0),unit: 'Nm',    max: 350,  nominalMin: 40,  nominalMax: 290,  color: colors.status.good, isVirtual: true },
             { label: 'Sarcină Motor Calculată', val: m.load || 0,            unit: '%',     max: 100,  nominalMin: 15,  nominalMax: 85 },
+            { label: 'Stabilitate Ralanti', val: Math.round(v.idleStabilityIndex ?? 100), unit: '%', max: 100, nominalMin: 75, nominalMax: 100, color: (v.idleStabilityIndex ?? 100) < 70 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Sarcină Utilă Payload', val: Math.round(v.estimatedPayloadKg || 0), unit: 'kg', max: 600, nominalMin: 0, nominalMax: 450, color: colors.status.monitor, isVirtual: true },
             { label: 'Consum Specific BSFC',val: Math.round(v.bsfcGPerKwh||210), unit: 'g/kWh', max: 450, nominalMin: 195, nominalMax: 280, color: (v.bsfcGPerKwh||0) > 300 ? colors.status.caution : colors.status.good, isVirtual: true },
             { label: 'Eficiență Volumetrică', val: Math.round(v.volumetricEfficiencyPct||85), unit: '%', max: 120, nominalMin: 70, nominalMax: 105, color: colors.accent.default, isVirtual: true },
             { label: 'Poziție Pedală Accel.',val: m.pedal_d || 0,            unit: '%',     max: 100,  nominalMin: 0,   nominalMax: 100, color: colors.status.monitor },
@@ -157,14 +176,20 @@ function buildCategoryList(catId, d) {
             { label: 'Debit Aer Admisie MAF',val: Math.round(a.maf || 0),   unit: 'g/s',   max: 160, nominalMin: 12,  nominalMax: 135, color: colors.status.monitor },
             { label: 'Presiune Galerie MAP', val: Math.round(a.map || 101),  unit: 'kPa',   max: 300, nominalMin: 98,  nominalMax: 235, color: colors.accent.default },
             { label: 'Presiune Barometrică', val: Math.round(a.baro || 101), unit: 'kPa',   max: 110, nominalMin: 95,  nominalMax: 105 },
+            { label: 'Eficiență Intercooler', val: Math.round(v.intercoolerEfficiencyPct || 0), unit: '%', max: 100, nominalMin: 60, nominalMax: 95, color: (v.intercoolerEfficiencyPct || 0) < 55 ? colors.status.caution : colors.status.good, isVirtual: true },
+            { label: 'Temp. Miez CHRA Turbo', val: Math.round(v.turboCoreTempC || 90), unit: '°C', max: 350, nominalMin: 85, nominalMax: 230, color: (v.turboCoreTempC || 0) > 260 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Timp Răcire Cooldown', val: Math.round(v.turboCoolDownSec || 0), unit: 's', max: 120, nominalMin: 0, nominalMax: 20, color: (v.turboCoolDownSec || 0) > 30 ? colors.status.critical : colors.status.good, isVirtual: true },
             { label: 'Recirculare Gaze EGR', val: Math.round(v.egrRatioPct || em.egr_cmd || 0), unit: '%', max: 60, nominalMin: 0, nominalMax: 45, isVirtual: true },
         ];
         case 'TERMIC': return [
             { label: 'Temp. Lichid Răcire', val: Math.round(tem.coolant || 0), unit: '°C', max: 120, nominalMin: 80, nominalMax: 96, color: (tem.coolant||0) > 98 ? colors.status.critical : colors.status.good },
             { label: 'Temp. Ulei Motor',    val: Math.round(tem.oil || (tem.coolant ? tem.coolant + 4 : 0)), unit: '°C', max: 140, nominalMin: 85, nominalMax: 115, color: colors.status.monitor },
             { label: 'Temp. Aer Admisie IAT',val: Math.round(tem.iat || 0),   unit: '°C', max: 80,  nominalMin: 15, nominalMax: 50, color: colors.accent.default },
+            { label: 'Temp. Ieșire Compresor', val: Math.round(v.turboCompressorOutTempC || (tem.iat || 25)), unit: '°C', max: 200, nominalMin: 20, nominalMax: 140, color: colors.status.monitor, isVirtual: true },
             { label: 'Gaze Evacuare EGT S1', val: Math.round(dpf.egt1 || tem.cat_b1s1 || 0), unit: '°C', max: 850, nominalMin: 180, nominalMax: 680, color: colors.status.critical },
             { label: 'Delta Ulei - Răcire',  val: Math.round(v.deltaOilWaterC || 4), unit: '°C', max: 35, nominalMin: 2, nominalMax: 18, isVirtual: true },
+            { label: 'Randament Mecanic Sankey', val: Math.round(v.energySplit?.mechanicalPct || 0), unit: '%', max: 50, nominalMin: 25, nominalMax: 44, color: colors.status.good, isVirtual: true },
+            { label: 'Căldură Evacuare Sankey', val: Math.round(v.energySplit?.exhaustPct || 0), unit: '%', max: 60, nominalMin: 25, nominalMax: 42, color: colors.status.caution, isVirtual: true },
             { label: 'Stres Ulei Arrhenius', val: (v.oilLifeWearFactor || 1.0).toFixed(2), unit: 'x', max: 4.0, nominalMin: 0.8, nominalMax: 1.8, isVirtual: true },
             { label: 'Risc Degradare Weibull',val: Math.round(v.weibullReliability?.oil?.pFail3000kmPct || 0), unit: '%', max: 100, nominalMin: 0, nominalMax: 25, isVirtual: true },
         ];
@@ -184,7 +209,9 @@ function buildCategoryList(catId, d) {
             { label: 'Cădere Tensiune Demaror', val: (v.voltageDropV || 0.18).toFixed(2), unit: 'V', max: 2.0, nominalMin: 0.05, nominalMax: 0.45, isVirtual: true },
             { label: 'Treaptă Cutie Viteze', val: tr.gear ? `Treapta ${tr.gear}` : 'Liber (N)', unit: '', max: 6, nominalMin: 1, nominalMax: 6 },
             { label: 'Alunecare Ambreiaj Slip', val: (v.clutchSlipPct || 0).toFixed(1), unit: '%', max: 100, nominalMin: 0, nominalMax: 3.5, color: (v.clutchSlipPct||0) > 8 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Temp. Discuri Frână', val: Math.round(v.estimatedBrakeDiscTempC || 25), unit: '°C', max: 500, nominalMin: 20, nominalMax: 250, color: (v.estimatedBrakeDiscTempC||0) > 300 ? colors.status.critical : colors.status.good, isVirtual: true },
             { label: 'Disipare Frânare Archard', val: (v.brakeEnergyTripMj || 0).toFixed(1), unit: 'MJ', max: 30, nominalMin: 0, nominalMax: 15, isVirtual: true },
+            { label: 'Pantă Drum Fuzionată', val: Number((v.fusedRoadGradePct ?? v.roadGradePct ?? 0).toFixed(1)), unit: '%', max: 25, min: -25, nominalMin: -12, nominalMax: 12, color: colors.accent.default, isVirtual: true },
         ];
         default: return [];
     }

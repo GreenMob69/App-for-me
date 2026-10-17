@@ -76,7 +76,11 @@ function getSessionState(sessionKey) {
             voltDeltas: [],
             recentRailPressures: [],
             brakeEnergyJoulesTrip: 0, // stocat în MJ
-            discTempC: 20
+            discTempC: 20,
+            learnedVeRef: 0.88,
+            turboCoreTempC: 90,
+            learnedPayloadKg: 0,
+            recentIdleRpms: []
         });
     }
     return sessionState.get(sessionKey);
@@ -103,8 +107,10 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
 
     // Parametri motor & vehicul dinamici per profil
     const capabilities = vehicleConfig.capabilities || {};
-    const cylinders    = vehicleConfig.cylinders || (capabilities.isElectric ? 0 : 4);
-    const displacement = vehicleConfig.displacementL || vehicleConfig.displacement_l || 2.0;
+    const isAudiAelDefault = vin.startsWith('WAUZZZ4A1RN') || (packet.ecu?.model && packet.ecu.model.includes('2.5 TDI'));
+    const isDiesel     = capabilities.isDiesel !== undefined ? capabilities.isDiesel : (vehicleConfig.fuelType === 'diesel' || vehicleConfig.fuel_type === 'diesel' || isAudiAelDefault || !capabilities.isPetrol);
+    const cylinders    = vehicleConfig.cylinders || (capabilities.isElectric ? 0 : (isAudiAelDefault ? 5 : 4));
+    const displacement = vehicleConfig.displacementL || vehicleConfig.displacement_l || (isAudiAelDefault ? 2.5 : 2.0);
     const massKg       = vehicleConfig.massKg || vehicleConfig.curb_weight_kg || vehicleConfig.mass_kg || 1550;
     const cd           = vehicleConfig.cd || vehicleConfig.drag_coefficient || 0.30;
     const frontalArea  = vehicleConfig.frontalAreaM2 || vehicleConfig.frontal_area_m2 || 2.10;
@@ -179,7 +185,7 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     let volumetricEfficiencyPct = 0;
     const tempIntakeC = Number(t.iat ?? t.intake ?? (tempAmbient + 10));
     const tempIntakeK = Math.max(250, tempIntakeC + 273.15);
-    const airDensityKgM3 = (mapKpa * 1000) / (287.05 * tempIntakeK);
+    const airDensityKgM3 = (mapKpa * 1000) / (287.058 * tempIntakeK);
     let theoreticalAirFlowGs = 0;
 
     if (rpm > 400 && airDensityKgM3 > 0.1) {
@@ -187,6 +193,12 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         if (theoreticalAirFlowGs > 0) {
             volumetricEfficiencyPct = Number(Math.min(125, Math.max(0, (filteredMaf / theoreticalAirFlowGs) * 100)).toFixed(1));
         }
+    }
+
+    // Calibrare VE de referință în sesiune când EGR este complet închis (sarcină ridicată Load > 70% și RPM > 1800)
+    if (loadPct > 70 && rpm > 1800 && theoreticalAirFlowGs > 0 && volumetricEfficiencyPct > 60) {
+        const currentVeRatio = volumetricEfficiencyPct / 100;
+        state.learnedVeRef = Number((0.98 * (state.learnedVeRef || 0.88) + 0.02 * Math.min(1.15, Math.max(0.70, currentVeRatio))).toFixed(3));
     }
 
     // ── 3. Virtual Dyno (Cai Putere CP & Cuplu Nm la Volantă / BHP) ──────────
@@ -217,10 +229,15 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         torqueNmThermo = Number(((powerKwThermo * 9549) / rpm).toFixed(1));
     }
 
+    // Densitate atmosferică dinamică în loc de 1.225 kg/m3 fix
+    const pBaroKpa = Math.max(70, Number(a.baro || 101.3));
+    const tempAmbientK = Math.max(240, tempAmbient + 273.15);
+    const rhoAirAmbient = Number(((pBaroKpa * 1000) / (287.058 * tempAmbientK)).toFixed(4));
+
     // Cinematic la roată (F = m*a + F_aero + F_roll)
     let powerHpWheel = 0;
     if (speedMs > 2.0) {
-        const fAero = 0.5 * 1.225 * cd * frontalArea * Math.pow(speedMs, 2);
+        const fAero = 0.5 * rhoAirAmbient * cd * frontalArea * Math.pow(speedMs, 2);
         const fRoll = massKg * 9.81 * crr;
         const fAccel = massKg * (accelG * 9.81);
         const fTotal = fAero + fRoll + Math.max(0, fAccel);
@@ -262,7 +279,7 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     let dpfResistanceIndex = 0;
     let dpfStatus = 'CLEAN';
 
-    const hasDPF = capabilities.hasDPF !== undefined ? capabilities.hasDPF : (vehicleConfig.fuelType === 'diesel' || vehicleConfig.fuel_type === 'diesel');
+    const hasDPF = capabilities.hasDPF !== undefined ? capabilities.hasDPF : (vehicleConfig.fuelType === 'diesel' || vehicleConfig.fuel_type === 'diesel' || isDiesel);
 
     if (hasDPF && filteredMaf > 2.0) {
         const tCatK = Math.max(273.15, tempCat1 + 273.15);
@@ -356,7 +373,7 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         : Number(fOilWear.toFixed(2));
 
     // ── [F3] Pantă Drum (Road Grade θ %) & Detecție Caliper / Drag ───────────
-    const fAeroLong = 0.5 * 1.225 * cd * frontalArea * Math.pow(speedMs, 2);
+    const fAeroLong = 0.5 * rhoAirAmbient * cd * frontalArea * Math.pow(speedMs, 2);
     const fRollLong = massKg * 9.81 * crr;
     const fAccelLong = massKg * (accelG * 9.81);
     const fFlatLong = fAccelLong + fRollLong + fAeroLong;
@@ -429,8 +446,9 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         state.crankMinVolt = batteryVolt;
     }
 
+    const crankCurrentAmps = Math.min(650, Math.max(150, displacement * (isDiesel ? 120 : 75)));
     const tempCorrection = 1 - 0.012 * (20 - tempAmbient);
-    const rIntRaw = ((state.restVolt - state.crankMinVolt) * 1000) / 300 * Math.max(0.5, tempCorrection);
+    const rIntRaw = ((state.restVolt - state.crankMinVolt) * 1000) / crankCurrentAmps * Math.max(0.5, tempCorrection);
     const batteryInternalResistanceMOhms = Number(Math.max(3.0, Math.min(25.0, rIntRaw)).toFixed(2));
     const batterySoHPct = Math.max(20, Math.min(100, Math.round(100 - (batteryInternalResistanceMOhms - 4.0) * 7.5)));
 
@@ -452,9 +470,12 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     const deltaEBrakeMj = (brakePowerKw * dtSec) / 1000;
     state.brakeEnergyJoulesTrip = (state.brakeEnergyJoulesTrip || 0) + deltaEBrakeMj;
 
-    // Model termic disc de frână (convecție + căldură generată)
-    const coolingRate = 0.015 * (1 + speedMs / 20);
-    state.discTempC = Math.max(tempAmbient, (state.discTempC || tempAmbient) + (deltaEBrakeMj * 18) - ((state.discTempC || tempAmbient) - tempAmbient) * coolingRate);
+    // Model termic disc de frână (încălzire strict din pasul curent + convecție)
+    // C_th = m_discuri * c_p = 14 kg * 0.46 kJ/(kg*K) = 6.44 kJ/K (70% distribuție pe puntea față)
+    const deltaEHeatKj = brakePowerKw * dtSec * 0.70;
+    const deltaTempHeatC = deltaEHeatKj / 6.44;
+    const coolingRate = 0.015 * (1 + speedMs / 20) * dtSec;
+    state.discTempC = Math.max(tempAmbient, (state.discTempC || tempAmbient) + deltaTempHeatC - ((state.discTempC || tempAmbient) - tempAmbient) * Math.min(0.5, coolingRate));
     const estimatedBrakeDiscTempC = Math.round(state.discTempC);
     // Conform legii Archard: capacitate disipare plăcuțe set nou ~45 MJ
     const brakePadWearPctTrip = Number(((state.brakeEnergyJoulesTrip / 45.0) * 100).toFixed(3));
@@ -462,11 +483,20 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     // ── [F8] Recirculare EGR (EGR Mass Fraction %) & Detecție Calamină ───────
     let egrRatioPct = 0;
     let egrDiagnostic = 'NORMAL';
+    const veRef = state.learnedVeRef || 0.88;
 
     if (theoreticalAirFlowGs > 2.0 && rpm > 500) {
-        const expectedFreshAirGs = theoreticalAirFlowGs * 0.88; // randament volumetric nominal la admisie fără EGR
-        const rawEgr = (1 - (filteredMaf / expectedFreshAirGs)) * 100;
-        egrRatioPct = Number(Math.max(0, Math.min(60, rawEgr)).toFixed(1));
+        const expectedFreshAirGs = theoreticalAirFlowGs * veRef;
+        if (expectedFreshAirGs > 0) {
+            const rawEgr = (1 - (filteredMaf / expectedFreshAirGs)) * 100;
+            if (loadPct >= 15 && loadPct <= 75) {
+                egrRatioPct = Number(Math.max(0, Math.min(60, rawEgr)).toFixed(1));
+            } else if (loadPct > 75) {
+                egrRatioPct = Number(Math.max(0, Math.min(60, rawEgr)).toFixed(1));
+            } else {
+                egrRatioPct = 0;
+            }
+        }
 
         if (rpm >= 1400 && rpm <= 2200 && loadPct >= 20 && loadPct <= 50) {
             if (egrRatioPct < 3.0) {
@@ -480,6 +510,111 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     }
 
     // =========================================================================
+    // 6 OBSERVATORI NOI DE ÎNALTĂ PRECIZIE (TERMODINAMICĂ, ENERGIE, FIABILITATE)
+    // =========================================================================
+
+    // ── [NOU 1] Randamentul Termic al Intercooler-ului (IC Efficiency) ──────────
+    const pressureRatio = Math.max(1.0, mapKpa / pBaroKpa);
+    const tempCompOutK = tempAmbientK * (1 + (1 / 0.72) * (Math.pow(pressureRatio, 0.2857) - 1));
+    const turboCompressorOutTempC = Number((tempCompOutK - 273.15).toFixed(1));
+
+    let intercoolerEfficiencyPct = 85.0;
+    let intercoolerDiagnostic = 'NORMAL';
+    if (mapKpa > 135 && (turboCompressorOutTempC - tempAmbient) > 8.0) {
+        const deltaIdeal = turboCompressorOutTempC - tempAmbient;
+        const deltaReal = turboCompressorOutTempC - tempIntakeC;
+        intercoolerEfficiencyPct = Number(Math.min(100, Math.max(0, (deltaReal / deltaIdeal) * 100)).toFixed(1));
+        if (intercoolerEfficiencyPct < 55.0 && speedKmh > 60) {
+            intercoolerDiagnostic = 'HEAT_SOAK_OR_CLOGGED';
+        }
+    }
+
+    // ── [NOU 2] Protecție Anti-Cocsificare Turbină la Oprire (CHRA Core Temp) ─
+    if (!state.turboCoreTempC) {
+        state.turboCoreTempC = Number((0.55 * tempCat1 + 0.45 * tempOil).toFixed(1));
+    } else {
+        const targetChra = 0.55 * tempCat1 + 0.45 * tempOil;
+        state.turboCoreTempC = Number((0.96 * state.turboCoreTempC + 0.04 * targetChra).toFixed(1));
+    }
+    const turboCoreTempC = state.turboCoreTempC;
+    const turboCoolDownSec = Math.max(0, Math.round((turboCoreTempC - 260) * 0.75));
+    const turboCoolDownWarning = turboCoolDownSec > 15;
+
+    // ── [NOU 3] Bilanțul Termodinamic Sankey în Timp Real (Energy Split) ───────
+    const qFuelKw = fuelRateGPerS * 42.6;
+    let energySplit = { mechanicalPct: 0, exhaustPct: 0, coolingFrictionPct: 0 };
+    if (qFuelKw > 1.0) {
+        const totalExhaustFlowGs = filteredMaf + fuelRateGPerS;
+        const deltaExhaustTemp = Math.max(0, tempCat1 - tempAmbient);
+        const pExhaustKw = (totalExhaustFlowGs * 1.08 * deltaExhaustTemp) / 1000;
+
+        const mechPct = Math.min(45, Math.max(5, Number(((powerKwThermo / qFuelKw) * 100).toFixed(1))));
+        const exhPct = Math.min(60, Math.max(10, Number(((pExhaustKw / qFuelKw) * 100).toFixed(1))));
+        const coolingFrictionPct = Number(Math.max(5, (100 - mechPct - exhPct)).toFixed(1));
+
+        energySplit = {
+            mechanicalPct: mechPct,
+            exhaustPct: exhPct,
+            coolingFrictionPct: coolingFrictionPct
+        };
+    }
+
+    // ── [NOU 4] Putere Corectată Atmosferic conform SAE J1349 ──────────────────
+    const rawSaeFactor = 1.180 * ((99.0 / pBaroKpa) * Math.sqrt(tempAmbientK / 298.15)) - 0.180;
+    const saeCorrectionFactor = Number(Math.max(0.85, Math.min(1.25, rawSaeFactor)).toFixed(3));
+    const saeCorrectedPowerHp = Number((powerHp * saeCorrectionFactor).toFixed(1));
+
+    // ── [NOU 5] Fuziune Senzorială Pantă & Estimare Sarcină Utilă (Payload) ───
+    const rawTiltPitch = Number(packet.accelerometru?.tilt_pitch || 0);
+    const imuGradePct = Number((Math.tan((rawTiltPitch * Math.PI) / 180) * 100).toFixed(1));
+
+    let fusedRoadGradePct = roadGradePct;
+    if (speedKmh > 15 && torqueNm > 20 && !rollingDragAnomaly) {
+        fusedRoadGradePct = Number((0.60 * roadGradePct + 0.40 * imuGradePct).toFixed(1));
+    } else if (rawTiltPitch !== 0) {
+        fusedRoadGradePct = imuGradePct;
+    }
+
+    if (Math.abs(fusedRoadGradePct) < 1.5 && speedKmh > 20 && gear >= 2 && accelG > 0.12 && torqueNm > 80) {
+        const currentGearRatio = gearRatios[gear] || 1.23;
+        const fDrive = (torqueNm * currentGearRatio * diffRatio * transEff) / wheelRadiusM;
+        const fResist = fAeroLong + fRollLong;
+        const totalCalcMass = (fDrive - fResist) / (accelG * 9.81);
+        const deltaPayload = totalCalcMass - massKg;
+        if (deltaPayload >= 0 && deltaPayload <= 900) {
+            state.learnedPayloadKg = Number((0.95 * (state.learnedPayloadKg || 0) + 0.05 * deltaPayload).toFixed(0));
+        }
+    }
+    const estimatedPayloadKg = Math.round(state.learnedPayloadKg || 0);
+
+    // ── [NOU 6] Indice Stabilitate Ralanti & Diagnoză Volantă DMF ─────────────
+    let idleStabilityIndex = 100;
+    let dmfImbalanceWarning = false;
+    let idleRpmStdDev = 0;
+
+    if (speedKmh < 2 && rpm >= 600 && rpm <= 1050 && tempCoolant > 70) {
+        state.recentIdleRpms.push(rpm);
+        if (state.recentIdleRpms.length > 10) state.recentIdleRpms.shift();
+
+        if (state.recentIdleRpms.length >= 6) {
+            const meanRpm = state.recentIdleRpms.reduce((acc, r) => acc + r, 0) / state.recentIdleRpms.length;
+            const variance = state.recentIdleRpms.reduce((acc, r) => acc + Math.pow(r - meanRpm, 2), 0) / state.recentIdleRpms.length;
+            idleRpmStdDev = Math.sqrt(variance);
+
+            idleStabilityIndex = Math.max(0, Math.min(100, Math.round(100 - idleRpmStdDev * 2.5)));
+            const lateralAccel = Math.abs(Number(packet.accelerometru?.accel_y || 0));
+
+            if (idleRpmStdDev > 26.0 && (lateralAccel > 0.07 || idleRpmStdDev > 40.0)) {
+                dmfImbalanceWarning = true;
+            }
+        }
+    } else {
+        if (state.recentIdleRpms.length > 0 && speedKmh > 10) {
+            state.recentIdleRpms.shift();
+        }
+    }
+
+    // =========================================================================
     // MODULUL 1 & 2: WEIBULL SURVIVAL, ROI B2B & BINARY M2M TELEMETRY ENCODER
     // =========================================================================
     const virtualBasics = {
@@ -489,7 +624,12 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         batteryInternalResistanceMOhms, batterySoHPct, alternatorRippleV,
         brakePowerKw, brakeEnergyTripMj: Number(state.brakeEnergyJoulesTrip.toFixed(2)),
         estimatedBrakeDiscTempC, egrRatioPct,
-        dpfRegenActive, rollingDragAnomaly, smokeRisk, clutchSlipping, alternatorDiodeFault
+        dpfRegenActive, rollingDragAnomaly, smokeRisk, clutchSlipping, alternatorDiodeFault,
+        intercoolerEfficiencyPct, turboCompressorOutTempC, intercoolerDiagnostic,
+        turboCoreTempC, turboCoolDownSec, turboCoolDownWarning,
+        energySplit, saeCorrectedPowerHp, saeCorrectionFactor,
+        fusedRoadGradePct, estimatedPayloadKg,
+        idleStabilityIndex, dmfImbalanceWarning, idleRpmStdDev: Number(idleRpmStdDev.toFixed(1))
     };
 
     const weibullRes = computeWeibullReliability(packet, virtualBasics);
@@ -565,6 +705,22 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         egrRatioPct,
         egrDiagnostic,
 
+        // ── Cei 6 Observatori Noi de Înaltă Precizie ─────────────────────────
+        intercoolerEfficiencyPct,
+        turboCompressorOutTempC,
+        intercoolerDiagnostic,
+        turboCoreTempC,
+        turboCoolDownSec,
+        turboCoolDownWarning,
+        energySplit,
+        saeCorrectedPowerHp,
+        saeCorrectionFactor,
+        fusedRoadGradePct,
+        estimatedPayloadKg,
+        idleStabilityIndex,
+        dmfImbalanceWarning,
+        idleRpmStdDev: Number(idleRpmStdDev.toFixed(1)),
+
         // ── Modulul 1: Fiabilitate Weibull R(t) & ROI Economic (€) ───────────
         weibullReliability: weibullRes.weibullReliability,
         economicImpactEur: weibullRes.economicImpactEur,
@@ -601,9 +757,12 @@ function computeWeibullReliability(packet = {}, v = {}) {
     const dpfKm = 142000;
     const dpfWeibull = calcWeibull(dpfKm, 3000, 180000, 3.2, dpfStress);
 
-    // 3. Turbosuflantă (Boost error & EGT)
-    const cat1 = packet.temperaturi?.cat1 || 240;
-    const turboStress = 1.0 + Math.max(0, (v.boostErrorKpa || 0) / 30.0) + Math.max(0, (cat1 - 450) / 100.0);
+    // 3. Turbosuflantă (Boost error & EGT & Cold Oil RPM penalty)
+    const cat1 = Number(packet.temperaturi?.cat1 ?? 240);
+    const rpm = Number(packet.motor?.rpm ?? 0);
+    const tempOil = Number(packet.temperaturi?.oil ?? 90);
+    const oilColdHighRpmPenalty = (tempOil < 65 && rpm > 2200) ? 1.5 : 0.0;
+    const turboStress = 1.0 + Math.max(0, Math.abs(v.boostErrorKpa || 0) / 30.0) + Math.max(0, (cat1 - 450) / 100.0) + oilColdHighRpmPenalty;
     const turboKm = 165000;
     const turboWeibull = calcWeibull(turboKm, 3000, 220000, 2.5, turboStress);
 

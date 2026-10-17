@@ -35,6 +35,12 @@
    - 2.14. Modelul Termic și Uzura Frânelor: Disipare Energie Cinetică & Legea Archard
    - 2.15. Recircularea Gazelor de Evacuare (EGR Mass Fraction) & Detecție Calaminare
    - 2.16. Diagnoza Pompei de Înaltă Presiune (Common Rail) & Stabilitatea Regulatorului DRV
+   - 2.17. Randamentul Termic al Intercooler-ului (IC Efficiency & Heat Soak)
+   - 2.18. Protecție Anti-Cocsificare Turbină la Oprire (CHRA Core Temp & Cooldown Timer)
+   - 2.19. Bilanțul Termodinamic Sankey în Timp Real (Energy Split: Mecanic, Evacuare, Răcire)
+   - 2.20. Putere Corectată Atmosferic conform Standardului SAE J1349
+   - 2.21. Fuziune Senzorială pentru Panta Drumului și Estimarea Sarcinii Utile (Payload)
+   - 2.22. Indicele de Stabilitate la Ralanti & Diagnoza Volantei cu Masă Dublă (DMF)
 3. [PARTEA III: CALCULUL PANTELOR, REZOLUȚIA UNIVERSALĂ A VEHICULELOR ȘI SMART MOBILITY](#partea-iii-calculul-pantelor-rezoluția-universală-a-vehiculelor-și-smart-mobility)
    - 3.1. Estimarea Pantei Drumului ($\theta\%$) din Balanța Forțelor Fără Senzor Dedicat
    - 3.2. Detecția Rezistențelor Anormale la Rulare (Coast-Down Drag Anomaly / Caliper Blocat)
@@ -399,6 +405,11 @@ $$\dot{m}_{theo}\text{ [g/s]} = \frac{RPM \cdot V_{disp}\text{ [L]} \cdot \rho_{
 ### Eficiența Volumetrică Reală:
 $$\eta_v\text{ [\%]} = \left( \frac{\dot{m}_{MAF\_filtrat}}{\dot{m}_{theo}} \right) \times 100$$
 
+- **Separarea Matematică de Recircularea EGR**:
+  Când supapa EGR este deschisă la sarcini parțiale, gazele inerte de eșapament înlocuiesc o parte din aerul proaspăt, scăzând debitul măsurat de debitmetru ($MAF$) chiar dacă cilindrii sunt plini. Pentru a nu confunda recircularea normală EGR cu o problemă mecanică de respirație, sistemul calibrează și memorează în sesiune **Eficiența Volumetrică de Referință ($\eta_{v, ref}$)** printr-un filtru adaptiv IIR **exclusiv în regimurile în care EGR este comandat 100% închis** ($\text{Load} > 70\%$ și $RPM > 1800$):
+  $$\eta_{v, ref}^{(t)} = 0.98 \cdot \eta_{v, ref}^{(t-1)} + 0.02 \cdot \left(\frac{\eta_v}{100}\right)$$
+  Această valoare calibrată este utilizată ulterior ca reper de bază în ecuația debitului masic recirculat prin EGR.
+
 - **Interpretare Diagnoză**:
   - $\eta_v \in [85\% \dots 105\%]$: Motor turbo diesel în parametri optimi de respirație.
   - $\eta_v < 70\%$ la sarcină mare: Filtru de aer colmatat, depuneri de calamină pe supapele de admisie sau geometrie variabilă blocată pe deschis.
@@ -462,9 +473,11 @@ Pentru validarea puterii sau estimarea tracțiunii când datele de injecție lip
 
 $$F_{propulsie} = F_{aero} + F_{rulare} + F_{inclinare} + F_{inertie}$$
 
-1. **Rezistența Aerodinamică**:
+1. **Rezistența Aerodinamică cu Densitate Atmosferică Dinamică**:
+   În locul unei valori constante ideale de $1.225\text{ kg/m}^3$, densitatea aerului ambiental este recalculată în timp real din presiunea barometrică și temperatura ambiantă:
+   $$\rho_{aer\_amb} = \frac{P_{baro} \cdot 1000}{287.058 \cdot (T_{ambient} + 273.15)}\text{ [kg/m}^3]$$
    $$F_{aero} = \frac{1}{2} \cdot \rho_{aer\_amb} \cdot C_d \cdot A \cdot v_{ms}^2$$
-   unde $\rho_{aer\_amb} = 1.225\text{ kg/m}^3$, $C_d$ este coeficientul de formă aerodinamică ($0.28 \dots 0.35$), iar $A$ este suprafața frontală.
+   unde $C_d$ este coeficientul de formă aerodinamică ($0.27 \dots 0.35$), iar $A$ este suprafața frontală Hucho.
 2. **Rezistența la Rulare a Anvelopelor**:
    $$F_{rulare} = m \cdot g \cdot C_{rr}$$
    unde $C_{rr} \approx 0.013$ pentru pneuri standard de stradă.
@@ -591,7 +604,8 @@ $$BSFC\text{ [g/(kW}\cdot\text{h)]} = \frac{\dot{m}_{fuel\_h}\text{ [g/h]}}{P_{k
    Dacă $\Delta V_{drop} > 0.75\text{ V}$, contactele releului de alimentare principal sau îmbinările de masă sunt corodate (`GROUND_WIRING_DROP`).
 
 2. **Rezistența Internă a Bateriei la Pornire ($R_{int}$)**:
-   În momentul acționării demarorului ($50 < RPM < 600$), curentul absorbit este $I_{crank} \approx 300\text{ A}$:
+   În momentul acționării demarorului ($50 < RPM < 600$), curentul absorbit $I_{crank}$ nu este considerat arbitrar la $300\text{ A}$, ci este scalat direct funcție de cilindreea motorului și tipul de combustibil (raportul de compresie fiind mult mai mare la diesel, $\approx 18:1$ vs $\approx 10:1$ la benzină):
+   $$I_{crank}\text{ [A]} = \max\left(150, \, \min\left(650, \, V_{disp}\text{ [L]} \times (isDiesel \ ? \ 120 : 75)\right)\right)$$
    $$R_{int}\text{ [m}\Omega\text{]} = \left( \frac{V_{repaus} - V_{crank\_min}}{I_{crank}} \right) \cdot 1000 \cdot \left[ 1 - 0.012 \cdot (20 - T_{ambient}) \right]$$
 
 3. **Starea de Sănătate a Bateriei (State of Health - $SoH\%$)**:
@@ -615,10 +629,13 @@ $$BSFC\text{ [g/(kW}\cdot\text{h)]} = \frac{\dot{m}_{fuel\_h}\text{ [g/h]}}{P_{k
 2. **Energia Cinetică Disipată pe Cursă**:
    $$E_{brake}\text{ [MJ]} = \sum \frac{P_{brake}\text{ [kW]} \cdot \Delta t\text{ [s]}}{1000}$$
 
-3. **Modelul Termic al Discului de Frână**:
-   Temperatura discului $T_{disc}$ crește proporțional cu energia absorbită și se răcește prin convecție forțată dependentă de viteza mașinii:
-   $$R_{cooling} = 0.015 \cdot \left( 1 + \frac{v_{ms}}{20} \right)$$
-   $$T_{disc}^{(t)} = T_{disc}^{(t-1)} + (E_{brake} \cdot 18) - (T_{disc}^{(t-1)} - T_{ambient}) \cdot R_{cooling}$$
+3. **Modelul Termic al Discului de Frână (Capacitate Calorică & Convecție)**:
+   Temperatura discului $T_{disc}$ crește strict din **energia termică eliberată în pasul curent de frânare** $\Delta E_{heat}^{(t)} = P_{brake}\text{ [kW]} \cdot \Delta t \cdot 0.70$ (puntea față absorbind $70\%$ din efortul total), raportată la capacitatea calorică a discurilor față ($C_{th} = m_{discuri} \cdot c_p \approx 14\text{ kg} \times 0.46\text{ kJ/(kg}\cdot\text{K)} = 6.44\text{ kJ/K}$):
+   $$\Delta T_{heat}^{(t)} = \frac{P_{brake}^{(t)} \cdot \Delta t \cdot 0.70}{6.44}\text{ [}^{\circ}\text{C]}$$
+   Discul se răcește simultan prin convecție forțată dependentă de viteza mașinii:
+   $$R_{cooling} = 0.015 \cdot \left( 1 + \frac{v_{ms}}{20} \right) \cdot \Delta t$$
+   $$T_{disc}^{(t)} = \max\left(T_{ambient}, \, T_{disc}^{(t-1)} + \Delta T_{heat}^{(t)} - (T_{disc}^{(t-1)} - T_{ambient}) \cdot \min(0.5, R_{cooling})\right)$$
+   Când pedala de frână este eliberată ($P_{brake} = 0$), $\Delta T_{heat}^{(t)} = 0$ și temperatura discului coboară asimptotic spre temperatura mediului ambiant.
 
 4. **Modelul de Uzură a Plăcuțelor (Legea Archard)**:
    Conform teoriei tribologice Archard, volumul de material abrazat este proporțional cu lucrul mecanic al forțelor de frecare. Un set nou de plăcuțe absoarbe nominal $E_{nominal} \approx 45.0\text{ MJ}$ de energie:
@@ -626,13 +643,13 @@ $$BSFC\text{ [g/(kW}\cdot\text{h)]} = \frac{\dot{m}_{fuel\_h}\text{ [g/h]}}{P_{k
 
 ---
 
-## 2.15. Recircularea Gazelor de Evacuare (EGR Mass Fraction)
+## 2.15. Recircularea Gazelor de Evacuare (EGR Mass Fraction) & Detecție Calaminare
 
-Fracția masică a gazelor de eșapament recirculate în admisie este determinată prin deficitul de aer proaspăt măsurat de debitmetru:
+Fracția masică a gazelor de eșapament recirculate în admisie este determinată prin deficitul de aer proaspăt măsurat de debitmetru, raportat la eficiența volumetrică învățată pe vehicul ($\eta_{v, ref}$):
 
-$$EGR\text{ [\%]} = \left( 1 - \frac{\dot{m}_{MAF\_filtrat}}{\dot{m}_{theo} \cdot 0.88} \right) \times 100$$
+$$EGR\text{ [\%]} = \max\left(0, \, \min\left(60, \, \left( 1 - \frac{\dot{m}_{MAF\_filtrat}}{\dot{m}_{theo} \cdot \eta_{v, ref}} \right) \times 100\right)\right)$$
 
-- **Diagnoză**:
+- **Diagnoză Fizică**:
   - La regim parțial ($1400 \le RPM \le 2200$, $\text{Load} \in [20\% \dots 50\%]$): Dacă $EGR < 3\% \implies$ `EGR_STUCK_CLOSED_OR_BLANKED` (Supapa este blocată pe închis sau anulată mecanic cu flanșă oarbă).
   - La sarcină plină ($\text{Load} > 75\%$): Dacă $EGR > 15\% \implies$ `EGR_STUCK_OPEN_CARBON` (Supapa nu se închide complet din cauza calaminei, cauzând pierdere gravă de putere și fum negru).
 
@@ -647,6 +664,90 @@ $$\text{Deviație\%} = \left( \frac{P_{rail\_actual} - P_{rail\_target}}{P_{rail
 
 - **Stabilitatea Regulatorului la Ralanti**:
   Dacă la ralanti ($500 < RPM < 950$, $v < 3\text{ km/h}$) fluctuația presiunii $(\max(P_{rail}) - \min(P_{rail})) > 35\text{ bar}$, regulatorul de presiune de pe rampă (DRV) sau electrovalva de dozaj (IMV) prezintă histerezis mecanic (`DRV_IMV_VALVE_UNSTABLE`).
+
+---
+
+## 2.17. Randamentul Termic al Intercooler-ului (IC Efficiency & Heat Soak)
+
+Aerul comprimat de roata compresor a turbosuflantei se încălzește conform legii transformării adiabatice. Pentru a măsura starea radiatoarelor de aer (intercooler aer-aer sau aer-apă) fără senzori suplimentari, sistemul deduce temperatura teoretică de ieșire din compresor:
+
+### Temperatura Aerului la Ieșirea din Compresor:
+$$PR = \max\left(1.0, \, \frac{P_{MAP}}{P_{baro}}\right)$$
+$$T_{comp\_out}\text{ [}^{\circ}\text{C]} = (T_{ambient} + 273.15) \cdot \left[ 1 + \frac{1}{\eta_{comp}} \cdot \left( PR^{\frac{\gamma - 1}{\gamma}} - 1 \right) \right] - 273.15$$
+unde $\eta_{comp} \approx 0.72$ (randamentul izentropic tipic al compresorului radial), iar $\frac{\gamma - 1}{\gamma} \approx \frac{1.4 - 1}{1.4} \approx 0.2857$.
+
+### Eficiența Termică Reală a Intercooler-ului:
+$$\eta_{IC}\text{ [\%]} = \left( \frac{T_{comp\_out} - T_{IAT}}{T_{comp\_out} - T_{ambient}} \right) \times 100$$
+- **Criteriu Diagnoză Heat Soak**: Când $P_{MAP} > 135\text{ kPa}$, $v > 60\text{ km/h}$ și $\eta_{IC} < 55.0\%$, se activează starea `HEAT_SOAK_OR_CLOGGED` (intercooler acoperit cu noroi/ulei pe interior sau debit de aer de răcire insuficient).
+
+---
+
+## 2.18. Protecție Anti-Cocsificare Turbină la Oprire (CHRA Core Temp & Cooldown Timer)
+
+Oprirea imediată a motorului după rulare în sarcină mare întrerupe fluxul de ulei de la pompă, în timp ce căldura reziduală din carcasă migrează în miezul lagărului (CHRA - Center Housing Rotating Assembly), ducând la carbonizarea uleiului sintetic și distrugerea lagărelor hidrodinamice.
+
+### Modelul Termic de Estimare a Miezului CHRA:
+$$T_{CHRA}^{(t)} = 0.96 \cdot T_{CHRA}^{(t-1)} + 0.04 \cdot (0.55 \cdot T_{cat1} + 0.45 \cdot T_{oil})$$
+
+### Cronometrul de Răcire la Ralanti (Turbo Cooldown Timer):
+Dacă temperatura miezului depășește $260^{\circ}\text{C}$ (pragul de piroliză a uleiului de motor):
+$$t_{cooldown}\text{ [secunde]} = \max\left(0, \, \text{round}\left((T_{CHRA} - 260) \cdot 0.75\right)\right)$$
+Dacă $t_{cooldown} > 15\text{ secunde}$, aplicația afișează o avertizare vizuală cu timpul rămas necesar de menținere la ralanti înainte de oprirea contactului.
+
+---
+
+## 2.19. Bilanțul Termodinamic Sankey în Timp Real (Energy Split)
+
+Sistemul calculează distribuția energiei primare introduse prin combustibil în trei componente fundamentale:
+
+1. **Puterea Chimică Totală a Combustibilului**:
+   $$\dot{Q}_{fuel}\text{ [kW]} = \dot{m}_{fuel}\text{ [g/s]} \cdot 42.6\text{ kW}\cdot\text{s/g}$$
+2. **Puterea Termică Pierdută pe Eșapament**:
+   $$\dot{m}_{exh}\text{ [g/s]} = \dot{m}_{MAF} + \dot{m}_{fuel}$$
+   $$P_{exh}\text{ [kW]} = \frac{\dot{m}_{exh} \cdot 1.08\text{ [kJ/(kg}\cdot\text{K)]} \cdot \max(0, \, T_{cat1} - T_{ambient})}{1000}$$
+3. **Procentele Bilanțului Energetic (Conservarea Energiei)**:
+   $$\eta_{mecanic}\% = \left( \frac{P_{kW\_thermo}}{\dot{Q}_{fuel}} \right) \times 100 \quad [30\% \dots 42\%]$$
+   $$\eta_{evacuare}\% = \left( \frac{P_{exh}}{\dot{Q}_{fuel}} \right) \times 100 \quad [18\% \dots 35\%]$$
+   $$\eta_{racire\_frecare}\% = 100 - (\eta_{mecanic}\% + \eta_{evacuare}\%) \quad [30\% \dots 45\%]$$
+
+---
+
+## 2.20. Putere Corectată Atmosferic conform Standardului SAE J1349
+
+Puterea dezvoltată de motoarele cu ardere internă depinde de altitudine, presiune atmosferică și temperatura aerului ambiant. Pentru a permite comparabilitatea datelor telemetrice măsurate la mare sau la munte, sistemul aplică **factorul de corecție standard SAE J1349**:
+
+$$CF_{SAE} = 1.180 \cdot \left[ \left( \frac{99.0}{P_{baro}\text{ [kPa]}} \right) \cdot \sqrt{\frac{T_{ambient} + 273.15}{298.15}} \right] - 0.180$$
+clamped în intervalul $[0.85 \dots 1.25]$.
+
+$$P_{SAE}\text{ [CP]} = P_{dyno} \cdot CF_{SAE}$$
+
+---
+
+## 2.21. Fuziune Senzorială pentru Panta Drumului și Estimarea Sarcinii Utile (Payload)
+
+1. **Fuziune Complementară Pantă**:
+   Panta dedusă din echilibrul forțelor dinamice ($\theta_{force}\%$) este fuzionată cu panta unghiulară citită din accelerometrul IMU ($\theta_{imu}\% = \tan(\alpha_{pitch}) \times 100$):
+   $$\theta_{fused}\% = \begin{cases} 0.60 \cdot \theta_{force}\% + 0.40 \cdot \theta_{imu}\%, & v > 15\text{ km/h} \text{ și } M > 20\text{ Nm} \\ \theta_{imu}\%, & \text{în staționare sau frână de motor} \end{cases}$$
+
+2. **Estimarea Masei Suplimentare de Încărcătură (Payload Estimator)**:
+   Pe drum orizontal ($|\theta_{fused}| < 1.5\%$), când vehiculul accelerează energic în treptele medii ($v > 20\text{ km/h}$, $a_g > 0.12\text{ G}$):
+   $$m_{calculat} = \frac{F_{drive} - F_{aero} - F_{roll}}{a_g \cdot 9.81}$$
+   $$\Delta m_{payload} = m_{calculat} - m_{proprie\_vehicul}$$
+   Valoarea este filtrată în timp real:
+   $$m_{payload}^{(t)} = 0.95 \cdot m_{payload}^{(t-1)} + 0.05 \cdot \max(0, \, \min(900, \, \Delta m_{payload}))$$
+
+---
+
+## 2.22. Indicele de Stabilitate la Ralanti & Diagnoza Volantei cu Masă Dublă (DMF)
+
+La regim de ralanti cald ($v < 2\text{ km/h}$, $T_{coolant} > 70^{\circ}\text{C}$, $600 \le RPM \le 1050$), sistemul monitorizează dispersia turației prin deviația standard $RPM_{std}$ pe o fereastră glisantă de 10 eșantioane:
+
+$$RPM_{medie} = \frac{1}{N} \sum_{i=1}^N RPM_i, \quad RPM_{std} = \sqrt{\frac{1}{N} \sum_{i=1}^N (RPM_i - RPM_{medie})^2}$$
+
+$$Index_{stabilitate} = \max(0, \, \min(100, \, 100 - RPM_{std} \cdot 2.5))$$
+
+- **Criteriu Alertă Volantă DMF Defectă**:
+  Dacă $RPM_{std} > 26.0\text{ RPM}$ și accelerometrul transversal înregistrează vibrație rezonantă $|A_y| > 0.07\text{ G}$, se emite avertizarea de dezechilibru mecanic al volantei bi-masice (`DMF_IMBALANCE_WARNING`).
 
 ---
 
@@ -798,7 +899,9 @@ unde:
 | :--- | :---: | :---: | :--- |
 | **Ulei Motor** | $15\,000\text{ km}$ | $2.8$ | $s = \max(0.8, \, f_{oil\_wear})$ |
 | **Filtru DPF** | $180\,000\text{ km}$ | $3.2$ | $s = \max(0.8, \, R_{DPF} / 6.0)$ |
-| **Turbosuflantă** | $220\,000\text{ km}$ | $2.5$ | $s = 1.0 + \frac{\Delta P_{boost}}{30} + \frac{T_{cat1} - 450}{100}$ |
+| **Turbosuflantă** | $220\,000\text{ km}$ | $2.5$ | $s = 1.0 + \frac{|\Delta P_{boost}|}{30} + \max\left(0, \, \frac{T_{cat1} - 450}{100}\right) + Penalty_{cold\_oil}$ |
+
+*Notă*: Pentru turbosuflantă, se utilizează valoarea absolută $|\Delta P_{boost}|$ (deoarece și o pierdere de presiune prin furtun spart forțează turbina la supraturare periculosă), iar dacă șoferul solicită turații mari cu motorul rece ($T_{oil} < 65^{\circ}\text{C}$ și $RPM > 2200$), se aplică penalizarea masivă de forfecare $Penalty_{cold\_oil} = +1.5$.
 | **Plăcuțe Frână** | $45\,000\text{ km}$ | $1.9$ | $s = \max\left(0.8, \, \frac{T_{disc}}{120} \cdot \left(1 + \frac{P_{brake}}{60}\right)\right)$ |
 | **Acumulator** | $80\,000\text{ km}$ | $2.2$ | $s = \max\left(0.8, \, \frac{R_{int}}{5.0} \cdot (AlternatorFault \ ? \ 2.5 : 1.0)\right)$ |
 

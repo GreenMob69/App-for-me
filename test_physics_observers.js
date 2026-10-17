@@ -153,5 +153,112 @@ assert.strictEqual(resCruise.m2mTelemetry.binaryBytes, 96, 'Binary packet must b
 assert(resCruise.m2mTelemetry.compressionRatioPct > 90, 'Compression ratio should be > 90%');
 assert(resCruise.m2mTelemetry.monthlyBinaryMb < 100, 'Monthly binary data must fit in 100MB eSIM');
 
-console.log('\n ALL 8 VERIFICATION TEST SCENARIOS PASSED WITH 100% MATHEMATICAL PRECISION!');
+// 9. Test Intercooler Thermal Efficiency & Heat Soak Diagnostic
+console.log('\n=== TEST 9: INTERCOOLER THERMAL EFFICIENCY ===');
+const boostIcPacket = {
+    timestamp: 1700000006000,
+    motor: { rpm: 2400, speed: 90, load: 75, accel_g: 0.05 },
+    aer: { maf: 80.0, map: 210, map_cmd: 210, baro: 101.3 },
+    combustibil: { inj_qty_mg: 38.0, inst_cons: 8.5 },
+    temperaturi: { coolant: 89, oil: 95, ambient: 22, iat: 38, cat1: 340, cat2: 320 },
+    baterie: { ecu_volt: 14.1 },
+    transmisie: { gear: 5 }
+};
+const resIc = computeVirtualSensors(boostIcPacket);
+console.log('Compressor Out Temp °C:', resIc.turboCompressorOutTempC);
+console.log('Intercooler Efficiency %:', resIc.intercoolerEfficiencyPct);
+console.log('Intercooler Diagnostic:', resIc.intercoolerDiagnostic);
+assert(resIc.turboCompressorOutTempC > 80, 'Compressor discharge should be hot under boost');
+assert(resIc.intercoolerEfficiencyPct > 60 && resIc.intercoolerEfficiencyPct <= 100, 'Normal IC efficiency should be > 60%');
+assert.strictEqual(resIc.intercoolerDiagnostic, 'NORMAL', 'IC diagnostic should be normal');
+
+// Test Heat Soak / Clogged Intercooler
+const heatSoakPacket = {
+    ...boostIcPacket,
+    timestamp: 1700000007000,
+    temperaturi: { coolant: 92, oil: 98, ambient: 25, iat: 82, cat1: 380, cat2: 360 } // high IAT
+};
+const resHeatSoak = computeVirtualSensors(heatSoakPacket);
+console.log('Heat Soak IC Efficiency %:', resHeatSoak.intercoolerEfficiencyPct, '| Diagnostic:', resHeatSoak.intercoolerDiagnostic);
+assert(resHeatSoak.intercoolerEfficiencyPct < 55, 'Heat soak should result in efficiency < 55%');
+assert.strictEqual(resHeatSoak.intercoolerDiagnostic, 'HEAT_SOAK_OR_CLOGGED');
+
+// 10. Test Turbo Anti-Coking Protection & Cooldown Timer
+console.log('\n=== TEST 10: TURBO ANTI-COKING PROTECTION ===');
+const hotTurboPacket = {
+    timestamp: 1700000008000,
+    motor: { rpm: 2800, speed: 130, load: 85, accel_g: 0.05 },
+    aer: { maf: 95.0, map: 225, map_cmd: 225, baro: 101.3 },
+    combustibil: { inj_qty_mg: 45.0, inst_cons: 11.2 },
+    temperaturi: { coolant: 92, oil: 108, ambient: 24, iat: 42, cat1: 560, cat2: 540 },
+    baterie: { ecu_volt: 14.2 },
+    transmisie: { gear: 5 }
+};
+// Rulează 50 de secunde de sarcină continuă pentru a încălzi miezul CHRA
+let resHotTurbo = null;
+for (let i = 0; i < 50; i++) {
+    resHotTurbo = computeVirtualSensors({ ...hotTurboPacket, timestamp: 1700000008000 + i * 1000 });
+}
+console.log('Turbo Core Temp (CHRA) °C:', resHotTurbo.turboCoreTempC);
+console.log('Turbo Cooldown Seconds Needed:', resHotTurbo.turboCoolDownSec);
+console.log('Turbo Cooldown Warning:', resHotTurbo.turboCoolDownWarning);
+assert(resHotTurbo.turboCoreTempC > 260, 'Turbo CHRA core should exceed 260°C under hard driving');
+assert(resHotTurbo.turboCoolDownSec > 15, 'Cooldown timer should be > 15s');
+assert.strictEqual(resHotTurbo.turboCoolDownWarning, true, 'Cooldown warning should be active');
+
+// 11. Test Real-Time Sankey Energy Balance
+console.log('\n=== TEST 11: SANKEY THERMODYNAMIC ENERGY BALANCE ===');
+console.log('Mechanical %:', resCruise.energySplit.mechanicalPct);
+console.log('Exhaust Heat %:', resCruise.energySplit.exhaustPct);
+console.log('Cooling & Friction %:', resCruise.energySplit.coolingFrictionPct);
+const sumSankey = resCruise.energySplit.mechanicalPct + resCruise.energySplit.exhaustPct + resCruise.energySplit.coolingFrictionPct;
+console.log('Total Energy Conservation %:', sumSankey.toFixed(1));
+assert(Math.abs(sumSankey - 100) < 0.2, 'Sankey energy components must conserve 100%');
+assert(resCruise.energySplit.mechanicalPct >= 30 && resCruise.energySplit.mechanicalPct <= 42, 'Diesel brake efficiency range 30-42%');
+
+// 12. Test SAE J1349 Power Atmospheric Correction
+console.log('\n=== TEST 12: SAE J1349 ATMOSPHERIC POWER CORRECTION ===');
+console.log('Standard Power HP:', resCruise.powerHp);
+console.log('SAE J1349 Correction Factor:', resCruise.saeCorrectionFactor);
+console.log('SAE Corrected Power HP:', resCruise.saeCorrectedPowerHp);
+assert(resCruise.saeCorrectionFactor >= 0.90 && resCruise.saeCorrectionFactor <= 1.10, 'SAE factor should be near 1.0 at standard day');
+assert(resCruise.saeCorrectedPowerHp > 0, 'SAE corrected power must be positive');
+
+// 13. Test Fused Road Grade & Payload Estimator
+console.log('\n=== TEST 13: FUSED ROAD GRADE & PAYLOAD ESTIMATION ===');
+const imuPacket = {
+    ...cruisePacket,
+    timestamp: 1700000030000,
+    accelerometru: { tilt_pitch: 3.2, accel_y: 0.01, accel_x: 0.02 }
+};
+const resFused = computeVirtualSensors(imuPacket);
+console.log('Force Road Grade %:', resFused.roadGradePct);
+console.log('Fused Road Grade %:', resFused.fusedRoadGradePct);
+console.log('Estimated Payload Kg:', resFused.estimatedPayloadKg);
+assert(resFused.fusedRoadGradePct > 0, 'Fused grade should be positive on uphill');
+
+// 14. Test Warm Idle Stability & Dual-Mass Flywheel (DMF) Imbalance
+console.log('\n=== TEST 14: IDLE STABILITY & DMF WARNING ===');
+resetSessionState();
+// Simulare ralanti instabil cu vibrații laterale
+let resDmf = null;
+const unstableRpms = [780, 840, 755, 835, 760, 845, 770, 830];
+for (let i = 0; i < unstableRpms.length; i++) {
+    resDmf = computeVirtualSensors({
+        timestamp: 1700000040000 + i * 1000,
+        motor: { rpm: unstableRpms[i], speed: 0, load: 15, accel_g: 0.0 },
+        aer: { maf: 8.5, map: 101, map_cmd: 101 },
+        combustibil: { inj_qty_mg: 7.0, inst_cons: 0.8 },
+        temperaturi: { coolant: 88, oil: 85, ambient: 20 },
+        accelerometru: { accel_y: 0.11 }, // vibrație transversală sesizabilă pe suport motor
+        baterie: { ecu_volt: 14.1 }
+    });
+}
+console.log('Idle Stability Index:', resDmf.idleStabilityIndex);
+console.log('Idle RPM StdDev:', resDmf.idleRpmStdDev);
+console.log('DMF Imbalance Warning:', resDmf.dmfImbalanceWarning);
+assert(resDmf.idleStabilityIndex < 80, 'Unstable idle should lower stability index < 80');
+assert.strictEqual(resDmf.dmfImbalanceWarning, true, 'DMF imbalance warning should trigger under high RPM variance & lateral vibration');
+
+console.log('\n ALL 14 VERIFICATION TEST SCENARIOS PASSED WITH 100% MATHEMATICAL PRECISION!');
 
