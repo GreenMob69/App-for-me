@@ -156,6 +156,7 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
 
         db.run(`CREATE INDEX IF NOT EXISTS idx_calatorii_vin ON calatorii(vin, timestamp_start)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_flux_calatorie ON telemetrie_flux(id_calatorie, timestamp)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_flux_timestamp ON telemetrie_flux(timestamp)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_trip_summary ON trip_summary(id_calatorie)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_evenimente_calatorie ON evenimente_alerte(id_calatorie)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_realimentari_vin ON realimentari(vin, timestamp DESC)`);

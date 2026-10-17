@@ -43,7 +43,8 @@ export function useSmoothedTelemetry(liveData) {
         const duration = 900;
         const easing = Easing.out(Easing.cubic);
 
-        // Actualizăm starea numerică la 20Hz (~50ms) pentru a preveni saturarea React reconciler
+        // Actualizăm starea numerică la ~6.6Hz (150ms) în loc de 20Hz (50ms).
+        // Aceasta reduce cu 70% numărul de randări React pe secundă, păstrând cifrele perfect lizibile fără consum excesiv de baterie.
         const updateInterval = setInterval(() => {
             setSmoothNumbers({
                 rpm: Math.round(animRpm._value ?? targetRpm),
@@ -54,7 +55,7 @@ export function useSmoothedTelemetry(liveData) {
                 load: Math.round(animLoad._value ?? targetLoad),
                 coolant: Number((animCoolant._value ?? targetCoolant).toFixed(1))
             });
-        }, 50);
+        }, 150);
 
         const animGroup = Animated.parallel([
             Animated.timing(animRpm,         { toValue: targetRpm,     duration, easing, useNativeDriver: false }),

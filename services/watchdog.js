@@ -28,16 +28,29 @@ function startWatchdog(db) {
         );
     }, 5 * 60 * 1000);
 
-    // Șterge telemetrie_flux mai veche de 90 zile
-    const runCleanup = () => {
-        const cutoff = Date.now() - 90 * 24 * 3600 * 1000;
-        db.run(`DELETE FROM telemetrie_flux WHERE timestamp < ?`, [cutoff], function(err) {
-            if (!err && this.changes > 0)
-                console.log(`[CLEANUP] ${this.changes} rânduri vechi șterse din telemetrie_flux (>90 zile).`);
-        });
+    // Politică automată de retenție: Șterge telemetrie_flux brută mai veche de 14 zile
+    // (Păstrează permanent sinteza din trip_summary, calatorii, alerte și predicții AI, economisind spațiul pe disc)
+    const runCleanup = (daysToKeep = 14) => {
+        cleanOldTelemetryFlux(db, daysToKeep);
     };
-    runCleanup();
-    setInterval(runCleanup, 24 * 60 * 60 * 1000);
+    runCleanup(14);
+    setInterval(() => runCleanup(14), 24 * 60 * 60 * 1000);
 }
 
-module.exports = { startWatchdog };
+function cleanOldTelemetryFlux(db, daysToKeep = 14) {
+    return new Promise((resolve, reject) => {
+        const cutoff = Date.now() - daysToKeep * 24 * 3600 * 1000;
+        db.run(`DELETE FROM telemetrie_flux WHERE timestamp < ?`, [cutoff], function(err) {
+            if (err) {
+                console.error('[CLEANUP EROARE]', err.message);
+                return reject(err);
+            }
+            if (this.changes > 0) {
+                console.log(`[CLEANUP] Retenție ${daysToKeep} zile: ${this.changes} rânduri brute șterse din telemetrie_flux.`);
+            }
+            resolve(this.changes);
+        });
+    });
+}
+
+module.exports = { startWatchdog, cleanOldTelemetryFlux };

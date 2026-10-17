@@ -27,6 +27,43 @@ function calculateHaversineDistanceKm(lat1, lon1, lat2, lon2) {
     return Number((R * c).toFixed(3));
 }
 
+/**
+ * Salvează un lot de pachete telemetrie_flux în SQLite folosind o singură tranzacție
+ * multi-row INSERT, reducând ciclurile de I/O pe disc cu până la 80%.
+ */
+function flushPendingFlux(db, trip) {
+    if (!trip || !trip.pendingFluxInserts || trip.pendingFluxInserts.length === 0) {
+        return Promise.resolve();
+    }
+    const batch = trip.pendingFluxInserts;
+    trip.pendingFluxInserts = [];
+    trip.lastFluxFlush = Date.now();
+
+    return new Promise((resolve) => {
+        const CHUNK_SIZE = 20; // 20 rânduri x 21 parametri = 420 parametri (sub limita SQLite de 999)
+        const chunks = [];
+        for (let i = 0; i < batch.length; i += CHUNK_SIZE) {
+            chunks.push(batch.slice(i, i + CHUNK_SIZE));
+        }
+
+        db.serialize(() => {
+            let pendingChunks = chunks.length;
+            if (pendingChunks === 0) return resolve();
+
+            chunks.forEach((chunk) => {
+                const placeholders = chunk.map(() => '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').join(',');
+                const flatParams = chunk.flat();
+                const sql = `INSERT INTO telemetrie_flux (id_calatorie, timestamp, rpm, viteza_kmh, sarcina_pct, maf_gs, map_kpa, voltaj_v, temp_apa_c, temp_ulei_c, accel_g, consum_lh, boost_bar, dpf_soot, gear, torque_nm, matrice_completa_json, lat, lon, alt, heading) VALUES ${placeholders}`;
+                db.run(sql, flatParams, (err) => {
+                    if (err) console.error('[FLUX BATCH INSERT ERROR]', err.message);
+                    pendingChunks--;
+                    if (pendingChunks === 0) resolve();
+                });
+            });
+        });
+    });
+}
+
 function createMqttClient(db, io) {
     const client = mqtt.connect(MQTT_BROKER_URL);
 
@@ -95,16 +132,18 @@ function createMqttClient(db, io) {
                     db.run(`INSERT INTO calatorii (vin, timestamp_start) VALUES (?, ?)`, [vin, pachet.timestamp], function(tripErr) {
                         if (!tripErr) {
                             calatoriiActive[vin] = {
-                                id_calatorie:     this.lastID,
-                                timestamp_start:  pachet.timestamp,
-                                km:               0,
-                                consum_l:         0,
-                                penalizari_eco:   0,
-                                ultimul_timestamp: pachet.timestamp,
-                                alerts:           0,
-                                analysis:         createAnalysis(),
-                                packetCount:      0,
-                                sampledPackets:   [],
+                                id_calatorie:       this.lastID,
+                                timestamp_start:    pachet.timestamp,
+                                km:                 0,
+                                consum_l:           0,
+                                penalizari_eco:     0,
+                                ultimul_timestamp:  pachet.timestamp,
+                                alerts:             0,
+                                analysis:           createAnalysis(),
+                                packetCount:        0,
+                                sampledPackets:     [],
+                                pendingFluxInserts: [],
+                                lastFluxFlush:      Date.now(),
                                 vehiclePhysics,
                             };
                             console.log(`[TRIP START] Sesiunea #${this.lastID} a început pentru ${vin}! (${vehiclePhysics.model} - ${vehiclePhysics.massKg}kg, Redline: ${vehiclePhysics.thresholds.redlineRpm} RPM)`);
@@ -132,13 +171,23 @@ function createMqttClient(db, io) {
                 trip.lastGps = { lat: gps.lat, lon: gps.lon, alt: gps.alt ?? 80, heading: gps.heading ?? 0 };
             }
 
-            db.run(
-                `INSERT INTO telemetrie_flux (id_calatorie, timestamp, rpm, viteza_kmh, sarcina_pct, maf_gs, map_kpa, voltaj_v, temp_apa_c, temp_ulei_c, accel_g, consum_lh, boost_bar, dpf_soot, gear, torque_nm, matrice_completa_json, lat, lon, alt, heading) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-                [trip.id_calatorie, pachet.timestamp, m.rpm||0, m.speed||0, m.load||0, a.maf||0, a.map||101,
-                 bat.ecu_volt||14.1, t.coolant||35, t.oil||20, m.accel_g||0, c.inst_cons||0,
-                 a.boost_actual||0, dpf.soot_load||0, trans.gear||1, m.torque_actual||0, JSON.stringify(pachet),
-                 gps.lat ?? null, gps.lon ?? null, gps.alt ?? null, gps.heading ?? null]
-            );
+            // Batching scrieri telemetrie_flux (tampon 5 secunde / 5 rânduri)
+            const fluxRow = [
+                trip.id_calatorie, pachet.timestamp, m.rpm || 0, m.speed || 0, m.load || 0, a.maf || 0, a.map || 101,
+                bat.ecu_volt || 14.1, t.coolant || 35, t.oil || 20, m.accel_g || 0, c.inst_cons || 0,
+                a.boost_actual || 0, dpf.soot_load || 0, trans.gear || 1, m.torque_actual || 0, JSON.stringify(pachet),
+                gps.lat ?? null, gps.lon ?? null, gps.alt ?? null, gps.heading ?? null
+            ];
+            if (!trip.pendingFluxInserts) {
+                trip.pendingFluxInserts = [];
+                trip.lastFluxFlush = Date.now();
+            }
+            trip.pendingFluxInserts.push(fluxRow);
+
+            const acumFlux = Date.now();
+            if (trip.pendingFluxInserts.length >= 5 || (acumFlux - (trip.lastFluxFlush || 0)) >= 5000) {
+                flushPendingFlux(db, trip);
+            }
 
             const timp_scurs_ore = (pachet.timestamp - trip.ultimul_timestamp) / 3_600_000;
             if (timp_scurs_ore > 0 && timp_scurs_ore < 0.1) {
@@ -320,6 +369,10 @@ function createMqttClient(db, io) {
         // ── OPRIRE ───────────────────────────────────────────────────────────
         if (eveniment_motor === 'OPRIRE' && calatoriiActive[vin]) {
             const trip       = calatoriiActive[vin];
+
+            // Golește orice scrieri de telemetrie_flux rămase în buffer înainte de finalizare
+            await flushPendingFlux(db, trip);
+
             const scor_final = Math.max(0, 100 - trip.penalizari_eco);
             const consum_mediu = trip.km > 0.01 ? (trip.consum_l / trip.km) * 100 : null;
 
@@ -552,4 +605,4 @@ function createMqttClient(db, io) {
     return client;
 }
 
-module.exports = { createMqttClient };
+module.exports = { createMqttClient, flushPendingFlux };
