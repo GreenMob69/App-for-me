@@ -7,7 +7,7 @@ import { Animated, Easing } from 'react-native';
  * Transformă salturile bruște de 1 secundă în tranziții fluide la 60 cadre/secundă,
  * eliminând complet sacadarea acelor și a indicatoarelor digitale.
  */
-export function useSmoothedTelemetry(liveData) {
+export function useSmoothedTelemetry(liveData, enabled = true) {
     // ── Animated values pentru randare fluidă la 60 FPS ───────────────────────
     const animRpm     = useRef(new Animated.Value(0)).current;
     const animSpeed   = useRef(new Animated.Value(0)).current;
@@ -38,6 +38,27 @@ export function useSmoothedTelemetry(liveData) {
         const targetCmdBoost= Number(liveData.aer?.boost_cmd ?? ((liveData.aer?.map_cmd ? liveData.aer.map_cmd - 101 : 0) / 100));
         const targetLoad    = Number(liveData.motor?.load || 0);
         const targetCoolant = Number(liveData.temperaturi?.coolant || 88);
+
+        // Optimizare de fundal: dacă ecranul este în background sau pe tab static, oprim bucla 60FPS
+        if (!enabled) {
+            animRpm.setValue(targetRpm);
+            animSpeed.setValue(targetSpeed);
+            animPowerHp.setValue(targetPowerHp);
+            animBoost.setValue(targetBoost);
+            animTargetBoost.setValue(targetCmdBoost);
+            animLoad.setValue(targetLoad);
+            animCoolant.setValue(targetCoolant);
+            setSmoothNumbers({
+                rpm: targetRpm,
+                speed: targetSpeed,
+                powerHp: targetPowerHp,
+                boost: targetBoost,
+                targetBoost: targetCmdBoost,
+                load: targetLoad,
+                coolant: targetCoolant
+            });
+            return;
+        }
 
         // Netezire pe 900ms (chiar înainte de următorul pachet de 1000ms)
         const duration = 900;
@@ -84,7 +105,7 @@ export function useSmoothedTelemetry(liveData) {
             clearInterval(updateInterval);
             animGroup.stop();
         };
-    }, [liveData]);
+    }, [liveData, enabled]);
 
     return {
         animated: {

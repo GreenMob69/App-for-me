@@ -460,7 +460,7 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     </View>
 
                                     <View style={styles.meterDisplay}>
-                                        <Text style={[styles.meterMinutes, { color: parkingData.parkingMeter?.active ? '#f0c04a' : (tpl.textSecondary || '#8b96b5') }]}>
+                                        <Text style={[styles.meterMinutes, { color: parkingData.parkingMeter?.active ? '#f0c04a' : '#eef0f8' }]}>
                                             {parkingData.parkingMeter?.remainingMinutes || 0}
                                         </Text>
                                         <Text style={[styles.meterSub, { color: tpl.textSecondary || '#8b96b5' }]}>minute rămase pe tichet</Text>
@@ -1171,7 +1171,7 @@ const styles = StyleSheet.create({
     meterMinutes: {
         fontSize: 54,
         fontWeight: typography.weights.heavy,
-        color: '#8b96b5',
+        color: '#eef0f8',
         lineHeight: 58,
     },
     meterSub: {

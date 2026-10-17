@@ -50,6 +50,30 @@ const InteractiveCarXRay = ({
     const { liveData: rawLiveData } = useContext(LiveContext) || {};
     const liveData = useSmoothedTelemetry(rawLiveData || {});
 
+    // Telemetrie combinată: structură completă din rawLiveData + interpolare netedă din numeric
+    const combinedTelemetry = useMemo(() => ({
+        ...(rawLiveData || {}),
+        ...(liveData?.numeric || {}),
+        motor: {
+            ...(rawLiveData?.motor || {}),
+            ...(liveData?.numeric?.rpm != null ? { rpm: liveData.numeric.rpm } : {}),
+            ...(liveData?.numeric?.speed != null ? { speed: liveData.numeric.speed } : {}),
+            ...(liveData?.numeric?.load != null ? { load: liveData.numeric.load } : {}),
+        },
+        aer: {
+            ...(rawLiveData?.aer || {}),
+            ...(liveData?.numeric?.boost != null ? { boost_actual: liveData.numeric.boost, boost_bar: liveData.numeric.boost } : {}),
+        },
+        temperaturi: {
+            ...(rawLiveData?.temperaturi || {}),
+            ...(liveData?.numeric?.coolant != null ? { temp_apa_c: liveData.numeric.coolant, coolant: liveData.numeric.coolant } : {}),
+        },
+        turbo: {
+            ...(rawLiveData?.turbo || {}),
+            ...(liveData?.numeric?.boost != null ? { boost_bar: liveData.numeric.boost } : {}),
+        },
+    }), [rawLiveData, liveData?.numeric]);
+
     // Topologie activă (detectată sau selectată)
     const detectedTopology = useMemo(() => detectVehicleTopology(activeVehicle || vehicleLabel), [activeVehicle, vehicleLabel]);
     const [topology, setTopology] = useState(detectedTopology);
@@ -107,7 +131,7 @@ const InteractiveCarXRay = ({
             {PERSPECTIVE_PINS.map((pin, index) => {
                 const isSelected = selectedPin?.id === pin.id;
                 const pinNum = pin.num || (index + 1);
-                const reading = pin.getReading ? pin.getReading(liveData) : { val: 'Nominal' };
+                const reading = pin.getReading ? pin.getReading(combinedTelemetry) : { val: 'Nominal' };
 
                 return (
                     <TouchableOpacity
@@ -212,7 +236,7 @@ const InteractiveCarXRay = ({
                 <View style={styles.previewCanvasWrap}>
                     <PerspectiveCarSvg
                         visualMode={visualMode}
-                        liveData={liveData}
+                        liveData={combinedTelemetry}
                         selectedPinId={selectedPin?.id}
                         onSelectPin={(pin) => {
                             handleSelectComponent(pin);
@@ -318,7 +342,7 @@ const InteractiveCarXRay = ({
                     <View style={[styles.canvasCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                         <PerspectiveCarSvg
                             visualMode={visualMode}
-                            liveData={liveData}
+                            liveData={combinedTelemetry}
                             selectedPinId={selectedPin?.id}
                             onSelectPin={handleSelectComponent}
                         />
@@ -334,7 +358,7 @@ const InteractiveCarXRay = ({
                     {selectedPin ? (
                         <ExplodedModuleCard
                             component={selectedPin}
-                            liveData={liveData}
+                            liveData={combinedTelemetry}
                             theme={tpl}
                             onAskAI={handleAskAI}
                         />

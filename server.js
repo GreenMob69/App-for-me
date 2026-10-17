@@ -25,7 +25,10 @@ app.get('/fleet', (req, res) => {
 });
 
 const server = http.createServer(app);
-const io     = new Server(server, { cors: { origin: '*' } });
+const io     = new Server(server, {
+    cors: { origin: '*' },
+    perMessageDeflate: { threshold: 1024 }
+});
 
 io.on('connection', (socket) => {
     console.log(`[WEBSOCKET] Client conectat (${socket.id})`);
@@ -37,7 +40,12 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
     if (err) return console.error('[EROARE DB]', err.message);
     console.log('[DB] Conectat.');
     db.run('PRAGMA foreign_keys = ON;');
-    db.run('PRAGMA journal_mode=WAL;');
+    db.run('PRAGMA journal_mode = WAL;');
+    db.run('PRAGMA synchronous = NORMAL;');
+    db.run('PRAGMA cache_size = -32000;');
+    db.run('PRAGMA temp_store = MEMORY;');
+    db.run('PRAGMA mmap_size = 268435456;');
+    db.run('PRAGMA busy_timeout = 5000;');
 
     db.serialize(() => {
         db.run(`CREATE TABLE IF NOT EXISTS vehicule (
@@ -155,7 +163,9 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
         )`);
 
         db.run(`CREATE INDEX IF NOT EXISTS idx_calatorii_vin ON calatorii(vin, timestamp_start)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_calatorii_vin_start ON calatorii(vin, timestamp_start DESC)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_flux_calatorie ON telemetrie_flux(id_calatorie, timestamp)`);
+        db.run(`CREATE INDEX IF NOT EXISTS idx_telemetrie_flux_trip_ts ON telemetrie_flux(id_calatorie, timestamp)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_flux_timestamp ON telemetrie_flux(timestamp)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_trip_summary ON trip_summary(id_calatorie)`);
         db.run(`CREATE INDEX IF NOT EXISTS idx_evenimente_calatorie ON evenimente_alerte(id_calatorie)`);

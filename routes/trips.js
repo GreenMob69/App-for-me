@@ -4,6 +4,148 @@ const express = require('express');
 const { THRESHOLDS } = require('../backend/analyzers/config');
 const { requireAuth } = require('../middleware/auth');
 
+/**
+ * Formatare canonică punct de telemetrie pentru grafice și scrubber player.
+ * Păstrează atât aliasurile directe (speed, rpm, coolant, boost), cât și obiectele ierarhice (motor, aer).
+ */
+function formatTelemetryPoint(row, tripStartTs) {
+    let parsed = null;
+    if (row.matrice_completa_json) {
+        try { parsed = JSON.parse(row.matrice_completa_json); } catch(_) {}
+    }
+    const speed = row.viteza_kmh ?? parsed?.motor?.speed ?? parsed?.speed ?? 0;
+    const rpm = row.rpm ?? parsed?.motor?.rpm ?? parsed?.rpm ?? 0;
+    const coolant = row.temp_apa_c ?? parsed?.temperaturi?.coolant ?? parsed?.coolant ?? 0;
+    const oil = row.temp_ulei_c ?? parsed?.temperaturi?.oil ?? parsed?.oil ?? 0;
+    const boost = row.boost_bar ?? parsed?.aer?.boost_actual ?? parsed?.boost ?? 0;
+    const maf = row.maf_gs ?? parsed?.aer?.maf ?? parsed?.maf ?? 0;
+    const load = row.sarcina_pct ?? parsed?.motor?.load ?? parsed?.load ?? 0;
+    const gear = row.gear ?? parsed?.transmisie?.gear ?? parsed?.gear ?? (speed > 5 ? 'G1' : 'N');
+    const volt = row.voltaj_v ?? parsed?.baterie?.ecu_volt ?? 14.1;
+    const bsfc = parsed?.virtual?.bsfc ?? 0;
+    const secunda = Math.round((row.timestamp - (tripStartTs || row.timestamp)) / 1000);
+
+    return {
+        timestamp: row.timestamp,
+        secunda,
+        speed,
+        viteza: speed,
+        rpm,
+        coolant,
+        temp_apa_c: coolant,
+        oil,
+        temp_ulei_c: oil,
+        boost,
+        boost_bar: boost,
+        maf,
+        maf_gs: maf,
+        load,
+        sarcina_pct: load,
+        consum_lh: row.consum_lh ?? parsed?.combustibil?.inst_cons ?? 0,
+        gear,
+        treapta: gear,
+        bsfc,
+        voltaj: volt,
+        voltaj_v: volt,
+        motor: {
+            speed,
+            rpm,
+            load,
+            temp_apa_c: coolant,
+            ...(parsed?.motor || {})
+        },
+        aer: {
+            boost_actual: boost,
+            boost_bar: boost,
+            maf,
+            map: row.map_kpa ?? 101,
+            ...(parsed?.aer || {})
+        },
+        temperaturi: {
+            coolant,
+            oil,
+            temp_apa_c: coolant,
+            temp_ulei_c: oil,
+            ...(parsed?.temperaturi || {})
+        },
+        virtual: {
+            bsfc,
+            ...(parsed?.virtual || {})
+        },
+        gps: parsed?.gps || {},
+        dtc: parsed?.dtc || []
+    };
+}
+
+/**
+ * Downsampling inteligent Peak-Preserving la maximum 150 puncte.
+ * Păstrează garantat vârfurile extreme (Vmax, Peak Boost, RPM max, Temp max)
+ * precum și primul și ultimul punct al cursei.
+ */
+function downsampleTripTelemetry(rows, tripStartTs, maxPoints = 150) {
+    if (!rows || rows.length === 0) return [];
+    if (rows.length <= maxPoints) {
+        return rows.map(r => formatTelemetryPoint(r, tripStartTs));
+    }
+
+    // 1. Identifică indecșii vârfurilor globale ale cursei
+    let maxSpeedIdx = 0, maxSpeedVal = -1;
+    let maxBoostIdx = 0, maxBoostVal = -1;
+    let maxRpmIdx = 0,   maxRpmVal = -1;
+    let maxTempIdx = 0,  maxTempVal = -1;
+
+    for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const s = r.viteza_kmh || 0;
+        const b = r.boost_bar || 0;
+        const rpm = r.rpm || 0;
+        const t = r.temp_apa_c || 0;
+
+        if (s > maxSpeedVal) { maxSpeedVal = s; maxSpeedIdx = i; }
+        if (b > maxBoostVal) { maxBoostVal = b; maxBoostIdx = i; }
+        if (rpm > maxRpmVal) { maxRpmVal = rpm; maxRpmIdx = i; }
+        if (t > maxTempVal) { maxTempVal = t; maxTempIdx = i; }
+    }
+
+    const selectedIndicesSet = new Set();
+    selectedIndicesSet.add(0); // Primul cadru
+    selectedIndicesSet.add(rows.length - 1); // Ultimul cadru
+    selectedIndicesSet.add(maxSpeedIdx);
+    selectedIndicesSet.add(maxBoostIdx);
+    selectedIndicesSet.add(maxRpmIdx);
+    selectedIndicesSet.add(maxTempIdx);
+
+    // 2. Împărțire în bucket-uri uniforme pentru a selecta punctele reprezentative / extreme locale
+    const numBuckets = Math.max(1, maxPoints - selectedIndicesSet.size);
+    const bucketSize = (rows.length - 1) / numBuckets;
+
+    for (let b = 0; b < numBuckets; b++) {
+        const start = Math.floor(b * bucketSize);
+        const end = Math.min(rows.length - 1, Math.floor((b + 1) * bucketSize));
+        if (start >= end) continue;
+
+        let bestIdx = start;
+        let maxScore = -1;
+
+        for (let i = start; i <= end; i++) {
+            const r = rows[i];
+            const sNorm = (r.viteza_kmh || 0) / (maxSpeedVal || 1);
+            const bNorm = (r.boost_bar || 0) / (maxBoostVal || 1);
+            const rpmNorm = (r.rpm || 0) / (maxRpmVal || 1);
+            const score = sNorm * 1.0 + bNorm * 1.5 + rpmNorm * 1.0;
+
+            if (score > maxScore) {
+                maxScore = score;
+                bestIdx = i;
+            }
+        }
+        selectedIndicesSet.add(bestIdx);
+    }
+
+    const sortedIndices = Array.from(selectedIndicesSet).sort((a, b) => a - b);
+    return sortedIndices.map(idx => formatTelemetryPoint(rows[idx], tripStartTs));
+}
+
 module.exports = function(db, io) {
     const router = express.Router();
 
@@ -92,12 +234,17 @@ module.exports = function(db, io) {
         db.get(`SELECT * FROM calatorii WHERE id_calatorie = ?`, [id], (err, trip) => {
             if (!trip) return res.status(404).json({ eroare: 'Călătoria nu a fost găsită' });
             db.all(`SELECT * FROM evenimente_alerte WHERE id_calatorie = ? ORDER BY timestamp ASC`, [id], (err, alerte) => {
-                db.all(`SELECT timestamp, matrice_completa_json FROM telemetrie_flux WHERE id_calatorie = ? ORDER BY timestamp ASC`, [id], (err, grafic) => {
-                    const date_complete = (grafic || []).map(row => {
-                        try { return JSON.parse(row.matrice_completa_json); } catch(e) { return null; }
-                    }).filter(i => i !== null);
-                    res.json({ rezumat: trip, alerte: alerte || [], date_grafic: date_complete });
-                });
+                db.all(
+                    `SELECT id_flux, timestamp, rpm, viteza_kmh, sarcina_pct, maf_gs, map_kpa, voltaj_v,
+                            temp_apa_c, temp_ulei_c, accel_g, consum_lh, boost_bar, dpf_soot, gear,
+                            torque_nm, matrice_completa_json
+                     FROM telemetrie_flux WHERE id_calatorie = ? ORDER BY timestamp ASC`,
+                    [id],
+                    (err, rows) => {
+                        const downsampled = downsampleTripTelemetry(rows || [], trip.timestamp_start, 150);
+                        res.json({ rezumat: trip, alerte: alerte || [], date_grafic: downsampled });
+                    }
+                );
             });
         });
     });
@@ -294,6 +441,18 @@ module.exports = function(db, io) {
                 if (row.coolant_max)   doc.text(`Temp. racire max:  ${row.coolant_max} C`);
                 if (row.boost_max > 0) doc.text(`Boost max:         ${row.boost_max.toFixed(2)} bar`);
                 if (row.voltaj_min)    doc.text(`Tensiune min/max:  ${row.voltaj_min} / ${row.voltaj_max || '-'} V`);
+                doc.moveDown(1);
+
+                // Suită PHM & Prognostic Mecanic
+                const phm = ai?.intelligence || {};
+                const rulMatrix = phm.componentRulKm || {};
+                doc.fillColor('#1A1A2E').fontSize(12).text('INDICATORI PROGNOSTIC & SĂNĂTATE (PHM)', { underline: true });
+                doc.moveDown(0.4).fillColor('#333333').fontSize(10);
+                if (phm.minRulKm != null) doc.text(`RUL Minim Estimat: ${phm.minRulKm.toLocaleString('ro-RO')} km (${phm.weakestComponent || 'General'})`);
+                if (phm.roadsideBreakdownRisk != null) doc.text(`Risc Avarie Traseu: ${phm.roadsideBreakdownRisk}%`);
+                if (phm.bsfcAvgGPerKwh) doc.text(`Consum Specific BSFC: ${phm.bsfcAvgGPerKwh} g/kWh (Eficiență: ${phm.engineThermalEffPct || 36}%)`);
+                if (phm.oilWearFactor) doc.text(`Uzură Ulei (Arrhenius): factor ${phm.oilWearFactor}x`);
+                if (phm.batterySoHPct) doc.text(`Sănătate Baterie (SoH): ${phm.batterySoHPct}%`);
                 doc.moveDown(2);
 
                 doc.fillColor('#AAAAAA').fontSize(8)
@@ -382,3 +541,6 @@ module.exports = function(db, io) {
 
     return router;
 };
+
+module.exports.downsampleTripTelemetry = downsampleTripTelemetry;
+module.exports.formatTelemetryPoint = formatTelemetryPoint;

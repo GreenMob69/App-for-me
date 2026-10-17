@@ -1,5 +1,5 @@
 'use strict';
-import React, { useContext, useState, useMemo, useRef } from 'react';
+import React, { useContext, useState, useMemo, useRef, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView,
     useWindowDimensions, Modal, Platform, StatusBar, PanResponder,
@@ -12,7 +12,7 @@ import { AlertContext } from '../context/AlertContext';
 import { AppContext }   from '../context/AppContext';
 import { useVehicle }   from '../context/VehicleContext';
 import { getVehicleLabel } from '../utils/config';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getRootNavigation } from '../utils/navigation';
 import { BottomSheet } from '../components/ui';
 import { getSensorInfo } from '../data/sensorDictionary';
@@ -507,7 +507,10 @@ const MetricTile = ({ label, value, unit, color = colors.text.primary, highlight
     </View>
 );
 
-const ParamRow = ({ keyName, label, val, unit, max = 100, min = 0, nominalMin, nominalMax, isVirtual = false, color = colors.accent.default, last = false, onPress }) => {
+const ParamRow = React.memo(({
+    keyName, label, val, unit, max = 100, min = 0, nominalMin, nominalMax,
+    isVirtual = false, color = colors.accent.default, last = false, onPress, item
+}) => {
     const numVal = parseFloat(val);
     const range = max - min;
     const pct = range > 0 && !isNaN(numVal) ? `${Math.min(Math.max(((numVal - min) / range) * 100, 0), 100)}%` : '0%';
@@ -527,10 +530,14 @@ const ParamRow = ({ keyName, label, val, unit, max = 100, min = 0, nominalMin, n
         ? (Number.isInteger(val) ? val.toLocaleString('ro-RO') : val.toFixed(1))
         : formatStatusVal(val);
 
+    const handlePress = useCallback(() => {
+        if (onPress) onPress(item);
+    }, [onPress, item]);
+
     return (
         <TouchableOpacity
             style={[styles.paramRow, last && { borderBottomWidth: 0 }]}
-            onPress={onPress}
+            onPress={handlePress}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={`Senzor ${label}, valoare ${displayVal} ${unit || ''}. Atinge pentru diagnoză și grafic`}
@@ -555,7 +562,21 @@ const ParamRow = ({ keyName, label, val, unit, max = 100, min = 0, nominalMin, n
             </View>
         </TouchableOpacity>
     );
-};
+}, (prev, next) => {
+    return (
+        prev.val === next.val &&
+        prev.label === next.label &&
+        prev.unit === next.unit &&
+        prev.max === next.max &&
+        prev.min === next.min &&
+        prev.nominalMin === next.nominalMin &&
+        prev.nominalMax === next.nominalMax &&
+        prev.isVirtual === next.isVirtual &&
+        prev.color === next.color &&
+        prev.last === next.last &&
+        prev.onPress === next.onPress
+    );
+});
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -565,6 +586,10 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
     // Menține ecranul aprins continuu în suportul auto în timpul telemetriei live
     useKeepAwake();
 
+    const isFocused = useIsFocused();
+    const [tab, setTab] = useState('LIVE');
+    const isSmoothingActive = isFocused && tab !== 'PARAMS';
+
     const hookNav = useNavigation();
     const navigation = propNav || hookNav;
     const { width } = useWindowDimensions();
@@ -572,15 +597,18 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
     const { latestAlert, alertsList, unreadCount, markAlertsAsRead } = useContext(AlertContext);
     const { selectedMetric, setSelectedMetric, activeTemplate, currentTemplate } = useContext(AppContext);
 
-    // ── 60 FPS Smoothed Telemetry ─────────────────────────────────────────────
-    const { animated, numeric } = useSmoothedTelemetry(liveData);
+    // ── 60 FPS Smoothed Telemetry (Pauză automată când ecranul e în fundal sau pe tab static) ──
+    const { animated, numeric } = useSmoothedTelemetry(liveData, isSmoothingActive);
 
-    const [tab,           setTab]           = useState('LIVE');
     const [proMode,       setProMode]       = useState(false); // Mod Rapid vs Telemetrie Completă
     const [isHudMirrored, setIsHudMirrored] = useState(false); // Oglindă HUD Parbriz
     const [showLandscapeHud, setShowLandscapeHud] = useState(false); // Ecran HUD Orizontal Complet
     const [category,      setCategory]      = useState('MOTOR');
     const [inspectedParam, setInspectedParam] = useState(null); // Parametru selectat pentru inspecție detaliată
+
+    const handleSelectParam = useCallback((paramItem) => {
+        setInspectedParam(paramItem);
+    }, []);
 
     const tpl = currentTemplate || TEMPLATES.MOTORSPORT;
     const [showAlerts, setShowAlerts] = useState(false);
@@ -1267,7 +1295,8 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                             key={rowKey}
                             id={p.id || p.key}
                             {...restProps}
-                            onPress={() => setInspectedParam(p)}
+                            item={p}
+                            onPress={handleSelectParam}
                             last={i === params.length - 1}
                         />
                     );
