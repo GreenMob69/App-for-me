@@ -41,6 +41,12 @@
    - 2.20. Putere Corectată Atmosferic conform Standardului SAE J1349
    - 2.21. Fuziune Senzorială pentru Panta Drumului și Estimarea Sarcinii Utile (Payload)
    - 2.22. Indicele de Stabilitate la Ralanti & Diagnoza Volantei cu Masă Dublă (DMF)
+   - 2.23. Detecție Autoturare Diesel pe Uleiul din Turbină (Runaway Engine Risk)
+   - 2.24. Conductanța Termică a Sistemului de Răcire ($UA_{rad}$) — Pompă de Apă & Garnitură Chiulasă
+   - 2.25. Diagnoza Duzei Injectoarelor & Capului Hidraulic la Ralanti Cald
+   - 2.26. Sănătatea Amortizoarelor Suspensiei ($\zeta$) & Echilibrul Roților pe Autostradă
+   - 2.27. Analiza Dinamică a Schimbării Treptelor: Tampoane Motor/Cutie & Sincroane
+   - 2.28. Indicele de Șoc Termo-Mecanic pe Chiulasă (Legea Palmgren-Miner)
 3. [PARTEA III: CALCULUL PANTELOR, REZOLUȚIA UNIVERSALĂ A VEHICULELOR ȘI SMART MOBILITY](#partea-iii-calculul-pantelor-rezoluția-universală-a-vehiculelor-și-smart-mobility)
    - 3.1. Estimarea Pantei Drumului ($\theta\%$) din Balanța Forțelor Fără Senzor Dedicat
    - 3.2. Detecția Rezistențelor Anormale la Rulare (Coast-Down Drag Anomaly / Caliper Blocat)
@@ -51,6 +57,7 @@
    - 4.2. Ponderarea Calității Senzorilor (Sensor Quality & Reliability Index)
    - 4.3. Distribuția Weibull cu 2 Parametri pentru Estimarea Ramei de Defectare $R(t)$ și $P_{fail}$
    - 4.4. Modelul Economic B2B: Prevenirea Defecțiunilor Catastrofale și Rentabilitatea Investiției (ROI)
+   - 4.5. Calculul Invers RUL (Remaining Useful Life în km) & Riscul de Imobilizare în Drum
 
 ---
 
@@ -751,6 +758,117 @@ $$Index_{stabilitate} = \max(0, \, \min(100, \, 100 - RPM_{std} \cdot 2.5))$$
 
 ---
 
+## 2.23. Detecție Autoturare Diesel pe Uleiul din Turbină (Runaway Engine Risk)
+
+Autoturarea motoarelor diesel (*diesel engine runaway*) este un fenomen mecanic extrem de periculos, cauzat de cedarea etanșărilor dinamice ale lagărului turbosuflantei (segmenții de etanșare CHRA). Uleiul sub presiune din circuitul de ungere al motorului pătrunde masiv în carcasa compresorului, este pulverizat prin intercooler în galeria de admisie și funcționează ca un combustibil necontrolat în cilindri, motorul accelerând până la distrugere mecanică chiar și după oprirea contactului de la cheie.
+
+### Modelul Matematic de Detecție Cinetică:
+Sistemul monitorizează conjuncția a 4 condiții fizice incompatibile cu funcționarea normală a motorului:
+1. Clapeta de aer / pedala de accelerație este complet eliberată:
+   $$\text{Throttle} \le 2\% \quad \text{sau} \quad \text{Pedal} \le 2\%$$
+2. Cantitatea injectată de motorină este decuplată de calculatorul ECU:
+   $$m_{inj} < 0.8\text{ mg/cursă}$$
+3. Turația arborelui cotit este ridicată:
+   $$RPM > 2600\text{ rot/min}$$
+4. Rata de accelerare unghiulară a arborelui este strict pozitivă:
+   $$\frac{\Delta RPM}{\Delta t} > +150\text{ rot/(min}\cdot\text{s)}$$
+
+$$\text{RunawayRisk} = \left(\text{Throttle} \le 2\%\right) \land \left(m_{inj} < 0.8\text{ mg}\right) \land \left(RPM > 2600\right) \land \left(\frac{\Delta RPM}{\Delta t} > 150\right)$$
+
+- **Protocol de Salvare Motor**: Când $\text{RunawayRisk} = \mathbf{TRUE}$, sistemul declanșează instantaneu semnalul de alertă maximă pe ecran:
+  `🚨 PERICOL AUTOTURARE PE ULEI! Cuplează ultima treaptă, calcă frâna la podea și eliberează ambreiajul pentru a cala forțat motorul!`
+
+---
+
+## 2.24. Conductanța Termică a Sistemului de Răcire ($UA_{rad}$) — Pompă de Apă & Garnitură Chiulasă
+
+Capacitatea radiatorului și a pompei de apă de a evacua căldura generată în camera de ardere este cuantificată prin **conductanța termică globală normalizată** ($UA_{rad}$):
+
+### Formula Conductanței Termice ($UA_{rad}$):
+$$UA_{rad}\text{ [kW/K]} = \frac{\dot{Q}_{cool}}{(T_{coolant} - T_{ambient}) \cdot \sqrt{\max(0.5, \, v / 60)}}$$
+
+unde:
+- $\dot{Q}_{cool}\text{ [kW]}$: Puterea termică transferată lichidului de răcire, dedusă din bilanțul termodinamic Sankey:
+  $$\dot{Q}_{cool} = \dot{Q}_{fuel} \cdot \left(\frac{\eta_{racire\_frecare}\%}{100}\right)$$
+- $(T_{coolant} - T_{ambient})$: Gradientul termic radiator-aer ambiant.
+- $\sqrt{\max(0.5, \, v / 60)}$: Factorul de convecție forțată generat de viteza de deplasare a vehiculului (tirajul dinamic de aer prin grilă).
+
+### Criteriu de Diagnoză Defecțiune Rotor Pompă Apă / Garnitură Chiulasă:
+La regim susținut de autostradă ($v > 40\text{ km/h}$, $T_{coolant} > 85^{\circ}\text{C}$):
+$$\text{Status} = \begin{cases} \mathbf{WATER\_PUMP\_IMPELLER\_OR\_HEAD\_GASKET\_RISK}, & UA_{rad} < 0.45\text{ kW/K} \land RPM > 2600 \land \frac{\Delta T_{coolant}}{\Delta t} > +0.25^{\circ}\text{C/s} \\ \mathbf{NORMAL}, & \text{altfel} \end{cases}$$
+
+O scădere a $UA_{rad}$ sub $0.45\text{ kW/K}$ indică patinarea sau dezlipirea paletelor rotorului de plastic al pompei de apă de pe ax sau trecerea gazelor fierbinți de compresie prin garnitura de chiulasă în mantaua de răcire.
+
+---
+
+## 2.25. Diagnoza Duzei Injectoarelor & Capului Hidraulic la Ralanti Cald
+
+La turație de ralanti cald ($v < 2\text{ km/h}$, $T_{coolant} > 80^{\circ}\text{C}$, $740 \le RPM \le 880$), cuplul rezistent este generat exclusiv de frecările interne ale motorului și de antrenarea alternatorului/compresorului AC. Cantitatea de combustibil injectată per ciclu ($m_{inj}$) reflectă fidel starea de etanșare și calibrare a injectoarelor.
+
+### Deriva Cantității Injectate ($\Delta m_{inj}$):
+$$\Delta m_{inj}\text{ [mg/str]} = m_{inj} - m_{nominal\_idle}$$
+unde pentru un propulsor diesel de referință $m_{nominal\_idle} = 4.4\text{ mg/cursă}$.
+
+### Criterii de Diagnoză:
+- **Duze Colmatate / Cap Hidraulic Uzat**:
+  $$m_{inj} > 7.2\text{ mg/cursă} \implies \mathbf{NOZZLE\_COKING\_OR\_PUMP\_WEAR}$$
+  (ECU crește timpul de injecție pentru a compensa secțiunea micșorată de curgere a orificiilor duzei colmatate cu lacuri/calamină sau pierderile hidraulice interne ale pompei de înaltă presiune la motor cald).
+- **Injector care Picură Necontrolat**:
+  $$m_{inj} < 2.2\text{ mg/cursă} \implies \mathbf{LEAKING\_INJECTOR\_RISK}$$
+  (Acul injectorului nu închide etanș pe scaun, lăsând combustibilul să se scurgă în cilindru; ECU reduce drastic debitul comandat pentru a menține turația stabilă).
+- **Funcționare Nominală**:
+  $$2.2 \le m_{inj} \le 7.2\text{ mg/cursă} \implies \mathbf{NORMAL}$$
+
+---
+
+## 2.26. Sănătatea Amortizoarelor Suspensiei ($\zeta$) & Echilibrul Roților pe Autostradă
+
+Din semnalele accelerometrului triaxial integrat pe magistrala OBD/IMU ($A_x, A_y, A_z$):
+
+### 1. Factorul de Amortizare al Suspensiei ($\zeta$ - Damping Ratio):
+După trecerea peste neregularități de carosabil ($|A_z - 1.0| > 0.30\text{ G}$), caroseria oscilează vertical conform ecuației oscilatorului armonic amortizat:
+$$m \ddot{z} + c \dot{z} + k z = 0$$
+Din raportul amplitudinilor oscilațiilor consecutive de recul ($A_1, A_2$):
+$$\delta = \ln\left(\frac{A_1}{A_2}\right), \quad \zeta = \frac{\delta}{\sqrt{4\pi^2 + \delta^2}}$$
+- **Criteriu Diagnoză Amortizoare**:
+  $$\zeta < 0.18 \implies \mathbf{WORN\_SHOCK\_ABSORBERS}$$
+  (Amortizor curs sau fără presiune de gaz, mărind distanța de frânare și favorizând acvaplanarea).
+
+### 2. Echilibrul Dinamic al Roților și Ovalizarea Anvelopelor:
+La viteze de croazieră pe autostradă ($90 \le v \le 140\text{ km/h}$) în regim stabilizat ($|A_x| < 0.08\text{ G}$):
+$$RMS_{vibrație} = \sqrt{\frac{A_y^2 + (A_z - 1.0)^2}{2}}$$
+- **Criteriu Diagnoză Jante/Anvelope**:
+  $$RMS_{vibrație} > 0.12\text{ G} \implies \mathbf{WHEEL\_IMBALANCE\_OR\_TIRE\_RUNOUT}$$
+
+---
+
+## 2.27. Analiza Dinamică a Schimbării Treptelor: Tampoane Motor/Cutie & Sincroane
+
+La schimbarea treptelor de viteză ($g_{t-1} \ne g_t$), cuplul motor este decuplat și re-cuplat prin discul de ambreiaj pe trenul fix al cutiei de viteze:
+
+### 1. Detecția Șocului pe Tampoanele Antibalans:
+Sistemul măsoară variația bruscă a accelerației longitudinale $|\Delta a_x| = |a_x^{(t)} - a_x^{(t-1)}|$ în fereastra de tranziție a ambreiajului:
+$$|\Delta a_x| > 0.25\text{ G} \implies \mathbf{WORN\_ENGINE\_OR\_GEARBOX\_MOUNTS}$$
+(Tampoane hidro-elastice sparte sau bucșe antibalans uzate, permițând motorului să se balanseze violent).
+
+### 2. Scorul Calității Schimbării Treptelor ($Score_{shift}$):
+$$Score_{shift} = \max\left(10, \, \min\left(100, \, \text{round}\left(100 - |\Delta a_x| \cdot 160 - RPM_{flare} \cdot 0.05\right)\right)\right)$$
+unde $RPM_{flare}$ este supraturarea produsă la patinarea discului de ambreiaj sau la întârzierea sincronizatoarelor cutiei.
+
+---
+
+## 2.28. Indicele de Șoc Termo-Mecanic pe Chiulasă (Legea Palmgren-Miner)
+
+Gradientul termic dintre galeria de evacuare/supape și mantaua de răcire creează tensiuni mecanice de forfecare enorme în materialul de fontă/aluminiu al chiulasei. Când șoferul accelerează puternic cu motorul rece ($T_{coolant} < 70^{\circ}\text{C}$), gazele de evacuare ajung rapid la $T_{cat1} > 500^{\circ}\text{C}$, producând micro-fisuri între scaunele supapelor.
+
+### Formula Indicelui de Șoc Termic ($I_{thermal\_shock}$):
+$$I_{thermal\_shock} = \left(\frac{\max(0, \, T_{cat1} - T_{coolant})}{400}\right)^3 \cdot \max\left(1.0, \, \frac{75 - T_{coolant}}{25}\right)$$
+
+- **Criteriu Diagnoză Risc Fisurare Chiulasă**:
+  $$T_{coolant} < 70^{\circ}\text{C} \land T_{cat1} > 450^{\circ}\text{C} \land I_{thermal\_shock} > 1.8 \implies \mathbf{COLD\_THERMAL\_SHOCK\_HEAD\_RISK}$$
+
+---
+
 # PARTEA III: CALCULUL PANTELOR, REZOLUȚIA UNIVERSALĂ A VEHICULELOR ȘI SMART MOBILITY
 
 ## 3.1. Estimarea Pantei Drumului ($\theta\%$) din Balanța Forțelor Fără Senzor Dedicat
@@ -932,6 +1050,37 @@ La un rulaj mediu de flotă comercială de $40\,000\text{ km/an}$ și un preț d
 $$EconomieCombustibil\text{ [€/an]} = \Delta Fuel \times 400 \times 1.50$$
 
 $$ROI_{Total\_Flota}\text{ [Euro]} = ROI_{daune} + EconomieCombustibil$$
+
+---
+
+## 4.5. Calculul Invers RUL (Remaining Useful Life în km) & Riscul de Imobilizare în Drum
+
+Pentru a transforma probabilitățile abstracte Weibull în valori kilometrice direct acționabile de către șofer sau dispeceratul de flotă, sistemul inversează analitic ecuația de supraviețuire Weibull pentru pragul median de fiabilitate $R(t) = 0.50$ (punctul temporal la care $50\%$ din componentele identice supuse aceluiași profil de stres ar ceda):
+
+### Formula de Inversare Analitică a Duratei Mediene ($t_{50}$):
+$$R(t_{50}) = \exp\left( -\left(\frac{s \cdot t_{50}}{\eta}\right)^\beta \right) = 0.50$$
+$$\ln(0.50) = -\left(\frac{s \cdot t_{50}}{\eta}\right)^\beta \implies (-\ln(0.50))^{1/\beta} = \frac{s \cdot t_{50}}{\eta}$$
+$$t_{50}\text{ [km]} = \frac{\eta}{s} \cdot (-\ln(0.50))^{1/\beta}$$
+
+### Kilometrajul Rezidual RUL ($RUL_{km}$):
+$$RUL_{km} = \max\left(0, \, \text{round}\left(t_{50} - t_{km}\right)\right)$$
+
+unde:
+- $\eta$: Parametrul de scară nominal OEM (ex. $15\,000\text{ km}$ ulei, $180\,000\text{ km}$ DPF, $220\,000\text{ km}$ turbo, $45\,000\text{ km}$ frâne, $80\,000\text{ km}$ baterie).
+- $\beta$: Panta Weibull de uzură a componentei ($1.9 \dots 3.2$).
+- $s$: Factorul instantaneu de stres termic, mecanic și hidraulic calculat din telemetrie.
+- $t_{km}$: Rulajul acumulat de la ultima revizie.
+
+### Identificarea Verigii Slabe a Propulsiei:
+Se calculează matricea $RUL$ pentru toate cele 5 subsisteme critice:
+$$RUL_{matrice} = \left\{ RUL_{oil}, \, RUL_{dpf}, \, RUL_{turbo}, \, RUL_{brakes}, \, RUL_{battery} \right\}$$
+$$\text{WeakestComponent} = \arg\min_{c \in \{oil, dpf, turbo, brakes, battery\}} RUL_c$$
+$$MinRemainingKm = \min(RUL_{matrice})$$
+
+### Riscul Cumulat de Imobilizare în Drum (Roadside Breakdown Risk):
+Probabilitatea ca vehiculul să sufere cel puțin o pană imobilizantă în următorii $\Delta t = 3000\text{ km}$ este calculată din probabilitățile de cedare individuale $P_{fail, i}\%$:
+$$P_{supraviețuire\_flotă} = \prod_{i=1}^5 \left( 1 - \frac{P_{fail, i}}{100} \right)$$
+$$RoadsideBreakdownRisk\text{ [\%]} = \left( 1 - P_{supraviețuire\_flotă} \right) \times 100$$
 
 ---
 

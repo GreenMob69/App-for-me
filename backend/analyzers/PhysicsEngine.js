@@ -80,7 +80,19 @@ function getSessionState(sessionKey) {
             learnedVeRef: 0.88,
             turboCoreTempC: 90,
             learnedPayloadKg: 0,
-            recentIdleRpms: []
+            recentIdleRpms: [],
+
+            // Stare Nivel 3 PHM (Prognostics & Health Management)
+            lastRpm: null,
+            lastCoolantTemp: null,
+            lastAx: null,
+            lastGear: null,
+            lastShiftQualityScore: 95,
+            lastPowertrainMountStatus: 'NORMAL',
+            lastInjectorHealthStatus: 'NORMAL',
+            lastIdleInjectionDriftMg: 0.0,
+            suspensionDampingRatio: 0.28,
+            lastVertShock: null
         });
     }
     return sessionState.get(sessionKey);
@@ -614,6 +626,122 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         }
     }
 
+    // ═════════════════════════════════════════════════════════════════════════
+    // SUITA NIVEL 3 PHM (PROGNOSTICS & HEALTH MANAGEMENT) — 7 MODELE PREDICTIVE
+    // ═════════════════════════════════════════════════════════════════════════
+
+    // ── [PHM 1] Detecție Autoturare Diesel pe Uleiul din Turbină (Runaway Engine)
+    const rpmRate = (state.lastRpm != null && dtSec > 0) ? ((rpm - state.lastRpm) / dtSec) : 0;
+    const throttlePos = Number(m.throttle_pos ?? m.pedal_d ?? 0);
+    let dieselRunawayRisk = false;
+    let runawayAlertMessage = null;
+
+    if (throttlePos <= 2.0 && injQtyMg < 0.8 && rpm > 2600 && rpmRate > 150) {
+        dieselRunawayRisk = true;
+        runawayAlertMessage = '🚨 PERICOL AUTOTURARE PE ULEI! Cuplează ultima treaptă, calcă frâna la podea și eliberează ambreiajul pentru a cala forțat motorul!';
+    }
+    state.lastRpm = rpm;
+
+    // ── [PHM 2] Conductanța Termică a Sistemului de Răcire (UA_rad) ───────────
+    const coolantTempRate = (state.lastCoolantTemp != null && dtSec > 0) ? ((tempCoolant - state.lastCoolantTemp) / dtSec) : 0;
+    state.lastCoolantTemp = tempCoolant;
+
+    let coolingConductanceKwPerK = 0.85;
+    let waterPumpOrHeadGasketStatus = 'NORMAL';
+
+    if (packet.racire?.conductance_kw_k != null) {
+        coolingConductanceKwPerK = Number(packet.racire.conductance_kw_k);
+    } else if (speedKmh > 40 && tempCoolant > 85) {
+        const qCoolKw = Math.max(1.0, (qFuelKw * (energySplit.coolingFrictionPct / 100)));
+        const deltaTRad = Math.max(5.0, tempCoolant - tempAmbient);
+        const airFlowFactor = Math.sqrt(Math.max(0.5, speedKmh / 60.0));
+        coolingConductanceKwPerK = Number((qCoolKw / (deltaTRad * airFlowFactor)).toFixed(2));
+    }
+
+    if (coolingConductanceKwPerK < 0.45 && rpm > 2600 && coolantTempRate > 0.25) {
+        waterPumpOrHeadGasketStatus = 'WATER_PUMP_IMPELLER_OR_HEAD_GASKET_RISK';
+    }
+
+    // ── [PHM 3] Diagnoza Duzei Injectoarelor & Capului Hidraulic la Ralanti Cald
+    let idleInjectionDriftMg = state.lastIdleInjectionDriftMg ?? 0.0;
+    let injectorHealthStatus = state.lastInjectorHealthStatus ?? 'NORMAL';
+
+    if (speedKmh < 2 && tempCoolant > 80 && rpm >= 740 && rpm <= 880) {
+        const nominalIdleMg = 4.4;
+        idleInjectionDriftMg = Number((injQtyMg - nominalIdleMg).toFixed(2));
+
+        if (injQtyMg > 7.2) {
+            injectorHealthStatus = 'NOZZLE_COKING_OR_PUMP_WEAR';
+        } else if (injQtyMg < 2.2) {
+            injectorHealthStatus = 'LEAKING_INJECTOR_RISK';
+        } else {
+            injectorHealthStatus = 'NORMAL';
+        }
+        state.lastInjectorHealthStatus = injectorHealthStatus;
+        state.lastIdleInjectionDriftMg = idleInjectionDriftMg;
+    }
+
+    // ── [PHM 4] Sănătatea Amortizoarelor Suspensiei (ζ) & Echilibrul Roților ───
+    const accelZ = Number(packet.accelerometru?.accel_z ?? 1.0);
+    const accelY = Number(packet.accelerometru?.accel_y ?? 0.0);
+    const vertShock = Math.abs(accelZ - 1.0);
+
+    let suspensionDampingRatio = Number(packet.suspension?.damping_ratio ?? packet.accelerometru?.damping_ratio ?? state.suspensionDampingRatio ?? 0.28);
+    if (vertShock > 0.30) {
+        if (state.lastVertShock != null && state.lastVertShock > 0.15) {
+            const reboundRatio = vertShock / state.lastVertShock;
+            if (reboundRatio > 0.65) suspensionDampingRatio = 0.14;
+            else if (reboundRatio < 0.35) suspensionDampingRatio = 0.29;
+        }
+        state.lastVertShock = vertShock;
+        state.suspensionDampingRatio = suspensionDampingRatio;
+    }
+    suspensionDampingRatio = Number(suspensionDampingRatio.toFixed(2));
+    const suspensionStatus = suspensionDampingRatio < 0.18 ? 'WORN_SHOCK_ABSORBERS' : 'NORMAL';
+
+    let wheelBalanceStatus = 'NORMAL';
+    if (speedKmh >= 90 && speedKmh <= 140) {
+        const accelZDev = Math.abs(accelZ - 1.0);
+        const vibrationRms = Number(packet.accelerometru?.vibration_rms ?? Math.sqrt((accelY * accelY + accelZDev * accelZDev) / 2));
+        if (vibrationRms > 0.12 && Math.abs(accelG) < 0.08) {
+            wheelBalanceStatus = 'WHEEL_IMBALANCE_OR_TIRE_RUNOUT';
+        }
+    }
+
+    // ── [PHM 5] Analiza Schimbării Treptelor: Tampoane Motor/Cutie & Sincroane
+    const prevGear = state.lastGear;
+    const currentGear = gear;
+    const ax = Number(packet.accelerometru?.accel_x ?? accelG ?? 0);
+    const deltaAx = state.lastAx != null ? Math.abs(ax - state.lastAx) : 0;
+    state.lastAx = ax;
+    state.lastGear = currentGear;
+
+    const rpmFlare = Math.max(0, Number(packet.transmisie?.rpm_flare ?? 0));
+    let shiftQualityScore = state.lastShiftQualityScore ?? 95;
+    let powertrainMountStatus = state.lastPowertrainMountStatus ?? 'NORMAL';
+
+    const isGearShift = (prevGear != null && prevGear !== currentGear && prevGear > 0 && currentGear > 0) || packet.transmisie?.gear_shift_active;
+    if (isGearShift) {
+        const effectiveShock = Math.max(deltaAx, Number(packet.transmisie?.mount_shock ?? 0));
+        if (effectiveShock > 0.25) {
+            powertrainMountStatus = 'WORN_ENGINE_OR_GEARBOX_MOUNTS';
+        } else {
+            powertrainMountStatus = 'NORMAL';
+        }
+        shiftQualityScore = Math.max(10, Math.min(100, Math.round(100 - effectiveShock * 160 - (rpmFlare * 0.05))));
+        state.lastShiftQualityScore = shiftQualityScore;
+        state.lastPowertrainMountStatus = powertrainMountStatus;
+    }
+
+    // ── [PHM 6] Indicele de Șoc Termo-Mecanic pe Chiulasă (Palmgren-Miner) ─────
+    const deltaHeadT = Math.max(0, tempCat1 - tempCoolant);
+    const coldPenalty = Math.max(1.0, (75 - tempCoolant) / 25.0);
+    const thermalShockIndex = Number((Math.pow(deltaHeadT / 400.0, 3) * coldPenalty).toFixed(2));
+    let headFatigueStatus = 'NORMAL';
+    if (tempCoolant < 70 && tempCat1 > 450 && thermalShockIndex > 1.8) {
+        headFatigueStatus = 'COLD_THERMAL_SHOCK_HEAD_RISK';
+    }
+
     // =========================================================================
     // MODULUL 1 & 2: WEIBULL SURVIVAL, ROI B2B & BINARY M2M TELEMETRY ENCODER
     // =========================================================================
@@ -629,7 +757,13 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         turboCoreTempC, turboCoolDownSec, turboCoolDownWarning,
         energySplit, saeCorrectedPowerHp, saeCorrectionFactor,
         fusedRoadGradePct, estimatedPayloadKg,
-        idleStabilityIndex, dmfImbalanceWarning, idleRpmStdDev: Number(idleRpmStdDev.toFixed(1))
+        idleStabilityIndex, dmfImbalanceWarning, idleRpmStdDev: Number(idleRpmStdDev.toFixed(1)),
+        dieselRunawayRisk, runawayAlertMessage,
+        coolingConductanceKwPerK, waterPumpOrHeadGasketStatus,
+        idleInjectionDriftMg, injectorHealthStatus,
+        suspensionDampingRatio, suspensionStatus, wheelBalanceStatus,
+        shiftQualityScore, powertrainMountStatus,
+        thermalShockIndex, headFatigueStatus
     };
 
     const weibullRes = computeWeibullReliability(packet, virtualBasics);
@@ -721,6 +855,22 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         dmfImbalanceWarning,
         idleRpmStdDev: Number(idleRpmStdDev.toFixed(1)),
 
+        // ── Suita Nivel 3 PHM: Diagnoză Mecanică Predictivă & RUL ────────────
+        dieselRunawayRisk,
+        runawayAlertMessage,
+        coolingConductanceKwPerK,
+        waterPumpOrHeadGasketStatus,
+        idleInjectionDriftMg,
+        injectorHealthStatus,
+        suspensionDampingRatio,
+        suspensionStatus,
+        wheelBalanceStatus,
+        shiftQualityScore,
+        powertrainMountStatus,
+        thermalShockIndex,
+        headFatigueStatus,
+        rulSummary: weibullRes.rulSummary,
+
         // ── Modulul 1: Fiabilitate Weibull R(t) & ROI Economic (€) ───────────
         weibullReliability: weibullRes.weibullReliability,
         economicImpactEur: weibullRes.economicImpactEur,
@@ -779,6 +929,50 @@ function computeWeibullReliability(packet = {}, v = {}) {
     const batKm = 52000;
     const batWeibull = calcWeibull(batKm, 3000, 80000, 2.2, batStress);
 
+    // ── Inversare Weibull pentru RUL (Remaining Useful Life în km) la pragul median R(t)=0.50 ──
+    const calcRulKm = (etaKm, beta, stressFactor, tKm) => {
+        const s = Math.max(0.1, Number(stressFactor) || 1.0);
+        const t50 = (etaKm / s) * Math.pow(-Math.log(0.50), 1.0 / beta);
+        return Math.max(0, Math.round(t50 - tKm));
+    };
+
+    const rulOil = calcRulKm(15000, 2.8, oilStress, oilKm);
+    const rulDpf = calcRulKm(180000, 3.2, dpfStress, dpfKm);
+    const rulTurbo = calcRulKm(220000, 2.5, turboStress, turboKm);
+    const rulBrakes = calcRulKm(45000, 1.9, brakeStress, brakeKm);
+    const rulBattery = calcRulKm(80000, 2.2, batStress, batKm);
+
+    const rulComponents = {
+        oil: rulOil,
+        dpf: rulDpf,
+        turbo: rulTurbo,
+        brakes: rulBrakes,
+        battery: rulBattery
+    };
+
+    let weakestComponent = 'oil';
+    let minRemainingKm = Infinity;
+    for (const [comp, km] of Object.entries(rulComponents)) {
+        if (km < minRemainingKm) {
+            minRemainingKm = km;
+            weakestComponent = comp;
+        }
+    }
+
+    const pSurv = (1 - oilWeibull.pFail3000kmPct / 100) *
+                  (1 - dpfWeibull.pFail3000kmPct / 100) *
+                  (1 - turboWeibull.pFail3000kmPct / 100) *
+                  (1 - brakeWeibull.pFail3000kmPct / 100) *
+                  (1 - batWeibull.pFail3000kmPct / 100);
+    const roadsideBreakdownRiskPct = Number((Math.max(0, Math.min(100, (1 - pSurv) * 100))).toFixed(1));
+
+    const rulSummary = {
+        weakestComponent,
+        minRemainingKm,
+        roadsideBreakdownRiskPct,
+        components: rulComponents
+    };
+
     // Impact Economic (ROI) B2B în Euro
     let preventedFailuresEur = 0;
     if (oilWeibull.riskLevel !== 'LOW')   preventedFailuresEur += 1450; // calare motor / cuzineți
@@ -799,8 +993,10 @@ function computeWeibullReliability(packet = {}, v = {}) {
             dpf: dpfWeibull,
             turbo: turboWeibull,
             brakes: brakeWeibull,
-            battery: batWeibull
+            battery: batWeibull,
+            rulSummary
         },
+        rulSummary,
         economicImpactEur: {
             preventedFailuresEur,
             fuelSavingsYearEur,

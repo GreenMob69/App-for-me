@@ -260,5 +260,149 @@ console.log('DMF Imbalance Warning:', resDmf.dmfImbalanceWarning);
 assert(resDmf.idleStabilityIndex < 80, 'Unstable idle should lower stability index < 80');
 assert.strictEqual(resDmf.dmfImbalanceWarning, true, 'DMF imbalance warning should trigger under high RPM variance & lateral vibration');
 
-console.log('\n ALL 14 VERIFICATION TEST SCENARIOS PASSED WITH 100% MATHEMATICAL PRECISION!');
+// 15. Test Diesel Runaway Risk (Autoturare pe Ulei din Turbină)
+console.log('\n=== TEST 15: DIESEL RUNAWAY RISK ===');
+resetSessionState();
+computeVirtualSensors({
+    timestamp: 1700000050000,
+    motor: { rpm: 2650, speed: 80, load: 10, throttle_pos: 0, pedal_d: 0 },
+    aer: { maf: 40, map: 120 },
+    combustibil: { inj_qty_mg: 0.3 },
+    temperaturi: { coolant: 90, oil: 95 }
+});
+const resRunaway = computeVirtualSensors({
+    timestamp: 1700000051000,
+    motor: { rpm: 2900, speed: 85, load: 10, throttle_pos: 0, pedal_d: 0 },
+    aer: { maf: 45, map: 130 },
+    combustibil: { inj_qty_mg: 0.2 },
+    temperaturi: { coolant: 90, oil: 95 }
+});
+console.log('Diesel Runaway Risk:', resRunaway.dieselRunawayRisk);
+console.log('Runaway Alert Message:', resRunaway.runawayAlertMessage);
+assert.strictEqual(resRunaway.dieselRunawayRisk, true, 'Runaway risk must be detected when RPM accelerates without fuel/throttle');
+assert(resRunaway.runawayAlertMessage && resRunaway.runawayAlertMessage.includes('AUTOTURARE'), 'Alert message must instruct driver to stall engine');
+
+// 16. Test Cooling Conductance & Water Pump / Head Gasket Risk
+console.log('\n=== TEST 16: COOLING CONDUCTANCE & HEAD GASKET STATUS ===');
+resetSessionState();
+computeVirtualSensors({
+    timestamp: 1700000060000,
+    motor: { rpm: 3000, speed: 110, load: 75 },
+    temperaturi: { coolant: 94.0, ambient: 25 },
+    racire: { conductance_kw_k: 0.38 }
+});
+const resCooling = computeVirtualSensors({
+    timestamp: 1700000061000,
+    motor: { rpm: 3000, speed: 110, load: 75 },
+    temperaturi: { coolant: 94.4, ambient: 25 },
+    racire: { conductance_kw_k: 0.38 }
+});
+console.log('Cooling Conductance UA (kW/K):', resCooling.coolingConductanceKwPerK);
+console.log('Water Pump / Head Gasket Status:', resCooling.waterPumpOrHeadGasketStatus);
+assert(resCooling.coolingConductanceKwPerK < 0.45, 'Conductance should be < 0.45 kW/K');
+assert.strictEqual(resCooling.waterPumpOrHeadGasketStatus, 'WATER_PUMP_IMPELLER_OR_HEAD_GASKET_RISK');
+
+// 17. Test Warm Idle Injection Drift & Injector Health Status
+console.log('\n=== TEST 17: WARM IDLE INJECTION DRIFT ===');
+resetSessionState();
+const resCokedInj = computeVirtualSensors({
+    timestamp: 1700000070000,
+    motor: { rpm: 800, speed: 0, load: 18 },
+    combustibil: { inj_qty_mg: 8.2 },
+    temperaturi: { coolant: 88 }
+});
+console.log('Coked Injector Drift (mg):', resCokedInj.idleInjectionDriftMg);
+console.log('Coked Injector Status:', resCokedInj.injectorHealthStatus);
+assert(resCokedInj.idleInjectionDriftMg > 3.0, 'Drift should be > +3.0 mg');
+assert.strictEqual(resCokedInj.injectorHealthStatus, 'NOZZLE_COKING_OR_PUMP_WEAR');
+
+const resLeakingInj = computeVirtualSensors({
+    timestamp: 1700000071000,
+    motor: { rpm: 800, speed: 0, load: 12 },
+    combustibil: { inj_qty_mg: 1.8 },
+    temperaturi: { coolant: 88 }
+});
+console.log('Leaking Injector Drift (mg):', resLeakingInj.idleInjectionDriftMg);
+console.log('Leaking Injector Status:', resLeakingInj.injectorHealthStatus);
+assert.strictEqual(resLeakingInj.injectorHealthStatus, 'LEAKING_INJECTOR_RISK');
+
+// 18. Test Suspension Damping Ratio & Highway Wheel Balance
+console.log('\n=== TEST 18: SUSPENSION DAMPING & WHEEL BALANCE ===');
+resetSessionState();
+computeVirtualSensors({
+    timestamp: 1700000080000,
+    motor: { rpm: 2000, speed: 60 },
+    accelerometru: { accel_z: 1.45 }
+});
+const resWornSusp = computeVirtualSensors({
+    timestamp: 1700000081000,
+    motor: { rpm: 2000, speed: 60 },
+    accelerometru: { accel_z: 1.35 }
+});
+console.log('Suspension Damping Ratio ζ:', resWornSusp.suspensionDampingRatio);
+console.log('Suspension Status:', resWornSusp.suspensionStatus);
+assert(resWornSusp.suspensionDampingRatio < 0.18, 'Damping ratio should be < 0.18');
+assert.strictEqual(resWornSusp.suspensionStatus, 'WORN_SHOCK_ABSORBERS');
+
+const resWheelImbalance = computeVirtualSensors({
+    timestamp: 1700000082000,
+    motor: { rpm: 2400, speed: 120, accel_g: 0.01 },
+    accelerometru: { accel_y: 0.15, accel_z: 1.14 }
+});
+console.log('Wheel Balance Status:', resWheelImbalance.wheelBalanceStatus);
+assert.strictEqual(resWheelImbalance.wheelBalanceStatus, 'WHEEL_IMBALANCE_OR_TIRE_RUNOUT');
+
+// 19. Test Dynamic Gear Shift Quality & Powertrain Mount Shock
+console.log('\n=== TEST 19: GEAR SHIFT QUALITY & MOUNT SHOCK ===');
+resetSessionState();
+computeVirtualSensors({
+    timestamp: 1700000090000,
+    motor: { rpm: 2800, speed: 45 },
+    transmisie: { gear: 2 },
+    accelerometru: { accel_x: 0.10 }
+});
+const resShiftShock = computeVirtualSensors({
+    timestamp: 1700000091000,
+    motor: { rpm: 1900, speed: 46 },
+    transmisie: { gear: 3 },
+    accelerometru: { accel_x: 0.45 }
+});
+console.log('Shift Quality Score:', resShiftShock.shiftQualityScore);
+console.log('Powertrain Mount Status:', resShiftShock.powertrainMountStatus);
+assert(resShiftShock.shiftQualityScore < 80, 'Harsh shift should drop quality score < 80');
+assert.strictEqual(resShiftShock.powertrainMountStatus, 'WORN_ENGINE_OR_GEARBOX_MOUNTS');
+
+// 20. Test Thermal Shock on Cylinder Head (Palmgren-Miner)
+console.log('\n=== TEST 20: THERMAL SHOCK ON CYLINDER HEAD ===');
+resetSessionState();
+const resThermalShock = computeVirtualSensors({
+    timestamp: 1700000100000,
+    motor: { rpm: 3600, speed: 90, load: 85 },
+    temperaturi: { coolant: 45, cat1: 580 }
+});
+console.log('Thermal Shock Index:', resThermalShock.thermalShockIndex);
+console.log('Head Fatigue Status:', resThermalShock.headFatigueStatus);
+assert(resThermalShock.thermalShockIndex > 1.8, 'Extreme cold gradient should produce shock index > 1.8');
+assert.strictEqual(resThermalShock.headFatigueStatus, 'COLD_THERMAL_SHOCK_HEAD_RISK');
+
+// 21. Test Global RUL Estimation & Roadside Breakdown Risk
+console.log('\n=== TEST 21: GLOBAL RUL ESTIMATION & BREAKDOWN RISK ===');
+resetSessionState();
+const resRul = computeVirtualSensors({
+    timestamp: 1700000110000,
+    motor: { rpm: 2000, speed: 90, load: 45 },
+    aer: { maf: 48, map: 140, map_cmd: 140 },
+    combustibil: { inj_qty_mg: 28, inst_cons: 5.2 },
+    temperaturi: { coolant: 90, oil: 92, ambient: 20, cat1: 320 },
+    baterie: { ecu_volt: 14.2 }
+});
+console.log('Weakest Component:', resRul.rulSummary.weakestComponent);
+console.log('Min Remaining Useful Life (km):', resRul.rulSummary.minRemainingKm);
+console.log('Roadside Breakdown Risk (%):', resRul.rulSummary.roadsideBreakdownRiskPct);
+console.log('Component RUL Matrix (km):', resRul.rulSummary.components);
+assert(typeof resRul.rulSummary.weakestComponent === 'string', 'Weakest component must be identified');
+assert(resRul.rulSummary.minRemainingKm >= 0, 'Min remaining km must be non-negative');
+assert(resRul.rulSummary.roadsideBreakdownRiskPct >= 0 && resRul.rulSummary.roadsideBreakdownRiskPct <= 100, 'Risk must be within 0-100%');
+
+console.log('\n ALL 21 VERIFICATION TEST SCENARIOS PASSED WITH 100% MATHEMATICAL PRECISION!');
 
