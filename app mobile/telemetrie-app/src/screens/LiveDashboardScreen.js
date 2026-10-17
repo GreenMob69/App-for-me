@@ -314,96 +314,96 @@ function buildCategoryList(catId, d) {
 
     switch (catId) {
         case 'MOTOR': return [
-            { key: 'rpm',                    label: 'Turație Motor',           val: m.rpm || 0,                 unit: 'RPM',   max: 5000, nominalMin: 750, nominalMax: 4200, color: colors.accent.default },
-            { key: 'speed',                  label: 'Viteză Deplasare',        val: m.speed || 0,               unit: 'km/h',  max: 220,  nominalMin: 0,   nominalMax: 130,  color: colors.status.good },
-            { key: 'powerHp',                label: 'Putere Estimată Dyno',    val: Math.round(v.powerHp || 0), unit: 'CP',    max: 160,  nominalMin: 5,   nominalMax: 140,  color: colors.status.good, isVirtual: true },
-            { key: 'saeCorrectedPowerHp',    label: 'Putere Corectată SAE',    val: Math.round(v.saeCorrectedPowerHp || v.powerHp || 0), unit: 'CP', max: 160, nominalMin: 5, nominalMax: 140, color: colors.status.good, isVirtual: true },
-            { key: 'torqueNm',               label: 'Cuplu Motor Real',        val: Math.round(v.torqueNm || 0),unit: 'Nm',    max: 350,  nominalMin: 40,  nominalMax: 290,  color: colors.status.good, isVirtual: true },
-            { key: 'load',                   label: 'Sarcină Motor Calculată', val: m.load || 0,            unit: '%',     max: 100,  nominalMin: 15,  nominalMax: 85 },
-            { key: 'idleStabilityIndex',     label: 'Stabilitate Ralanti',     val: Math.round(v.idleStabilityIndex ?? 100), unit: '%', max: 100, nominalMin: 75, nominalMax: 100, color: (v.idleStabilityIndex ?? 100) < 70 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'estimatedPayloadKg',     label: 'Sarcină Utilă Payload',   val: Math.round(v.estimatedPayloadKg || 0), unit: 'kg', max: 600, nominalMin: 0, nominalMax: 450, color: colors.status.monitor, isVirtual: true },
-            { key: 'bsfcGPerKwh',            label: 'Consum Specific BSFC',    val: Math.round(v.bsfcGPerKwh||210), unit: 'g/kWh', max: 450, nominalMin: 195, nominalMax: 280, color: (v.bsfcGPerKwh||0) > 300 ? colors.status.caution : colors.status.good, isVirtual: true },
-            { key: 'volumetricEfficiencyPct',label: 'Eficiență Volumetrică',   val: Math.round(v.volumetricEfficiencyPct||85), unit: '%', max: 120, nominalMin: 70, nominalMax: 105, color: colors.accent.default, isVirtual: true },
-            { key: 'dieselRunawayRisk',      label: 'Risc Autoturare Ulei',    val: v.dieselRunawayRisk ? 'CRITIC' : 'Nominal', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.dieselRunawayRisk ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'idleInjectionDriftMg',   label: 'Derivă Injecție Ralanti', val: v.idleInjectionDriftMg != null ? `${v.idleInjectionDriftMg > 0 ? '+' : ''}${v.idleInjectionDriftMg}` : '0.0', unit: 'mg', max: 5.0, min: -5.0, nominalMin: -1.5, nominalMax: 1.5, color: v.injectorHealthStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'injectorHealthStatus',   label: 'Stare Duze Injectoare',   val: v.injectorHealthStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.injectorHealthStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
-            { key: 'shiftQualityScore',      label: 'Calitate Schimbare Trepte', val: v.shiftQualityScore ?? 95, unit: '/100', max: 100, nominalMin: 70, nominalMax: 100, color: (v.shiftQualityScore ?? 95) < 70 ? colors.status.caution : colors.status.good, isVirtual: true },
-            { key: 'powertrainMountStatus',  label: 'Stare Suporturi Tampoane',val: v.powertrainMountStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.powertrainMountStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
-            { key: 'pedal_d',                label: 'Poziție Pedală Accel.',   val: m.pedal_d || 0,            unit: '%',     max: 100,  nominalMin: 0,   nominalMax: 100, color: colors.status.monitor },
-            { key: 'throttle_pos',           label: 'Deschidere Clapetă',      val: m.throttle_pos || 0,        unit: '%',     max: 100,  nominalMin: 0,   nominalMax: 100 },
-            { key: 'torque_driver',          label: 'Cuplu Cerut de Șofer',    val: m.torque_driver || 0,       unit: 'Nm',    max: 400,  nominalMin: 0,   nominalMax: 300, color: colors.status.monitor },
-            { key: 'torque_friction',        label: 'Cuplu Frecare Internă',   val: m.torque_friction || 0,    unit: 'Nm',    max: 100,  nominalMin: 10,  nominalMax: 45,  color: colors.status.critical },
-            { key: 'diagnosticConfidencePct',label: 'Încredere Diagnoză UDS',  val: v.diagnosticConfidencePct ?? 90, unit: '%', max: 100, nominalMin: 70, nominalMax: 100, color: colors.status.good, isVirtual: true },
-            { key: 'isSteadyState',          label: 'Regim Cvasistaționar',    val: v.isSteadyState ? 'Stabil' : 'Tranzient', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.isSteadyState ? colors.status.good : colors.status.monitor, isVirtual: true },
-            { key: 'mafVsTurboTriage',       label: 'Triaj MAF vs Turbină',    val: v.mafVsTurboTriage || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.mafVsTurboTriage === 'MAF_SENSOR_FOULED_TURBO_OK' ? colors.status.caution : colors.status.good, isVirtual: true },
-            { key: 'timingPhaseStatus',      label: 'Avans Injecție/Distribuție', val: v.timingPhaseStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.timingPhaseStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'exhaustHeatAnomalyC',    label: 'Anomalie Căldură Evac.',  val: v.exhaustHeatAnomalyC != null ? `${v.exhaustHeatAnomalyC > 0 ? '+' : ''}${v.exhaustHeatAnomalyC}` : '0.0', unit: '°C', max: 80, min: -40, nominalMin: -15, nominalMax: 25, color: (v.exhaustHeatAnomalyC || 0) > 40 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'roadGripStatus',         label: 'Stare Aderență / Polei',  val: v.roadGripStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.roadGripStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'wheelSlipDeltaKmh',      label: 'Patinare Roți Δv',        val: (v.wheelSlipDeltaKmh || 0).toFixed(1), unit: 'km/h', max: 20, min: 0, nominalMin: 0, nominalMax: 2.0, color: (v.wheelSlipDeltaKmh || 0) > 4.5 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'driverFatigueScore',     label: 'Scor Vigilență Șofer',    val: v.driverFatigueScore ?? 100, unit: '/100', max: 100, min: 0, nominalMin: 50, nominalMax: 100, color: (v.driverFatigueScore ?? 100) < 45 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'driverFatigueStatus',    label: 'Stare Oboseală Volan',    val: v.driverFatigueStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.driverFatigueStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'fuelQualityStatus',      label: 'Calitate Combustibil',    val: v.fuelQualityStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.fuelQualityStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
-            { key: 'stationaryIdlingSec',    label: 'Timp Staționare Ralanti', val: Math.round(v.stationaryIdlingSec || 0), unit: 's', max: 1800, nominalMin: 0, nominalMax: 600, color: (v.stationaryIdlingSec || 0) > 900 ? colors.status.caution : colors.status.good, isVirtual: true },
+            { id: 'rpm',                    label: 'Turație Motor',           val: m.rpm || 0,                 unit: 'RPM',   max: 5000, nominalMin: 750, nominalMax: 4200, color: colors.accent.default },
+            { id: 'speed',                  label: 'Viteză Deplasare',        val: m.speed || 0,               unit: 'km/h',  max: 220,  nominalMin: 0,   nominalMax: 130,  color: colors.status.good },
+            { id: 'powerHp',                label: 'Putere Estimată Dyno',    val: Math.round(v.powerHp || 0), unit: 'CP',    max: 160,  nominalMin: 5,   nominalMax: 140,  color: colors.status.good, isVirtual: true },
+            { id: 'saeCorrectedPowerHp',    label: 'Putere Corectată SAE',    val: Math.round(v.saeCorrectedPowerHp || v.powerHp || 0), unit: 'CP', max: 160, nominalMin: 5, nominalMax: 140, color: colors.status.good, isVirtual: true },
+            { id: 'torqueNm',               label: 'Cuplu Motor Real',        val: Math.round(v.torqueNm || 0),unit: 'Nm',    max: 350,  nominalMin: 40,  nominalMax: 290,  color: colors.status.good, isVirtual: true },
+            { id: 'load',                   label: 'Sarcină Motor Calculată', val: m.load || 0,            unit: '%',     max: 100,  nominalMin: 15,  nominalMax: 85 },
+            { id: 'idleStabilityIndex',     label: 'Stabilitate Ralanti',     val: Math.round(v.idleStabilityIndex ?? 100), unit: '%', max: 100, nominalMin: 75, nominalMax: 100, color: (v.idleStabilityIndex ?? 100) < 70 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'estimatedPayloadKg',     label: 'Sarcină Utilă Payload',   val: Math.round(v.estimatedPayloadKg || 0), unit: 'kg', max: 600, nominalMin: 0, nominalMax: 450, color: colors.status.monitor, isVirtual: true },
+            { id: 'bsfcGPerKwh',            label: 'Consum Specific BSFC',    val: Math.round(v.bsfcGPerKwh||210), unit: 'g/kWh', max: 450, nominalMin: 195, nominalMax: 280, color: (v.bsfcGPerKwh||0) > 300 ? colors.status.caution : colors.status.good, isVirtual: true },
+            { id: 'volumetricEfficiencyPct',label: 'Eficiență Volumetrică',   val: Math.round(v.volumetricEfficiencyPct||85), unit: '%', max: 120, nominalMin: 70, nominalMax: 105, color: colors.accent.default, isVirtual: true },
+            { id: 'dieselRunawayRisk',      label: 'Risc Autoturare Ulei',    val: v.dieselRunawayRisk ? 'CRITIC' : 'Nominal', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.dieselRunawayRisk ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'idleInjectionDriftMg',   label: 'Derivă Injecție Ralanti', val: v.idleInjectionDriftMg != null ? `${v.idleInjectionDriftMg > 0 ? '+' : ''}${v.idleInjectionDriftMg}` : '0.0', unit: 'mg', max: 5.0, min: -5.0, nominalMin: -1.5, nominalMax: 1.5, color: v.injectorHealthStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'injectorHealthStatus',   label: 'Stare Duze Injectoare',   val: v.injectorHealthStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.injectorHealthStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
+            { id: 'shiftQualityScore',      label: 'Calitate Schimbare Trepte', val: v.shiftQualityScore ?? 95, unit: '/100', max: 100, nominalMin: 70, nominalMax: 100, color: (v.shiftQualityScore ?? 95) < 70 ? colors.status.caution : colors.status.good, isVirtual: true },
+            { id: 'powertrainMountStatus',  label: 'Stare Suporturi Tampoane',val: v.powertrainMountStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.powertrainMountStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
+            { id: 'pedal_d',                label: 'Poziție Pedală Accel.',   val: m.pedal_d || 0,            unit: '%',     max: 100,  nominalMin: 0,   nominalMax: 100, color: colors.status.monitor },
+            { id: 'throttle_pos',           label: 'Deschidere Clapetă',      val: m.throttle_pos || 0,        unit: '%',     max: 100,  nominalMin: 0,   nominalMax: 100 },
+            { id: 'torque_driver',          label: 'Cuplu Cerut de Șofer',    val: m.torque_driver || 0,       unit: 'Nm',    max: 400,  nominalMin: 0,   nominalMax: 300, color: colors.status.monitor },
+            { id: 'torque_friction',        label: 'Cuplu Frecare Internă',   val: m.torque_friction || 0,    unit: 'Nm',    max: 100,  nominalMin: 10,  nominalMax: 45,  color: colors.status.critical },
+            { id: 'diagnosticConfidencePct',label: 'Încredere Diagnoză UDS',  val: v.diagnosticConfidencePct ?? 90, unit: '%', max: 100, nominalMin: 70, nominalMax: 100, color: colors.status.good, isVirtual: true },
+            { id: 'isSteadyState',          label: 'Regim Cvasistaționar',    val: v.isSteadyState ? 'Stabil' : 'Tranzient', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.isSteadyState ? colors.status.good : colors.status.monitor, isVirtual: true },
+            { id: 'mafVsTurboTriage',       label: 'Triaj MAF vs Turbină',    val: v.mafVsTurboTriage || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.mafVsTurboTriage === 'MAF_SENSOR_FOULED_TURBO_OK' ? colors.status.caution : colors.status.good, isVirtual: true },
+            { id: 'timingPhaseStatus',      label: 'Avans Injecție/Distribuție', val: v.timingPhaseStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.timingPhaseStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'exhaustHeatAnomalyC',    label: 'Anomalie Căldură Evac.',  val: v.exhaustHeatAnomalyC != null ? `${v.exhaustHeatAnomalyC > 0 ? '+' : ''}${v.exhaustHeatAnomalyC}` : '0.0', unit: '°C', max: 80, min: -40, nominalMin: -15, nominalMax: 25, color: (v.exhaustHeatAnomalyC || 0) > 40 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'roadGripStatus',         label: 'Stare Aderență / Polei',  val: v.roadGripStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.roadGripStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'wheelSlipDeltaKmh',      label: 'Patinare Roți Δv',        val: (v.wheelSlipDeltaKmh || 0).toFixed(1), unit: 'km/h', max: 20, min: 0, nominalMin: 0, nominalMax: 2.0, color: (v.wheelSlipDeltaKmh || 0) > 4.5 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'driverFatigueScore',     label: 'Scor Vigilență Șofer',    val: v.driverFatigueScore ?? 100, unit: '/100', max: 100, min: 0, nominalMin: 50, nominalMax: 100, color: (v.driverFatigueScore ?? 100) < 45 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'driverFatigueStatus',    label: 'Stare Oboseală Volan',    val: v.driverFatigueStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.driverFatigueStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'fuelQualityStatus',      label: 'Calitate Combustibil',    val: v.fuelQualityStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.fuelQualityStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
+            { id: 'stationaryIdlingSec',    label: 'Timp Staționare Ralanti', val: Math.round(v.stationaryIdlingSec || 0), unit: 's', max: 1800, nominalMin: 0, nominalMax: 600, color: (v.stationaryIdlingSec || 0) > 900 ? colors.status.caution : colors.status.good, isVirtual: true },
         ];
         case 'TURBO': return [
-            { key: 'boost_actual',           label: 'Presiune Turbo (Act)',    val: (a.boost_actual ?? a.boost ?? 0).toFixed(2), unit: 'bar', max: 2.5, nominalMin: 0.95, nominalMax: 2.15, color: colors.status.good },
-            { key: 'boost_cmd',              label: 'Presiune Turbo (Cmd)',    val: (a.boost_cmd || 0).toFixed(2),               unit: 'bar', max: 2.5, nominalMin: 0.95, nominalMax: 2.15, color: colors.status.monitor },
-            { key: 'boost_error',            label: 'Eroare Presiune Boost',   val: ((a.boost_actual ?? 0) - (a.boost_cmd ?? 0)).toFixed(2), unit: 'bar', max: 0.8, min: -0.8, nominalMin: -0.15, nominalMax: 0.15, isVirtual: true },
-            { key: 'maf',                    label: 'Debit Aer Admisie MAF',   val: Math.round(a.maf || 0),   unit: 'g/s',   max: 160, nominalMin: 12,  nominalMax: 135, color: colors.status.monitor },
-            { key: 'map',                    label: 'Presiune Galerie MAP',    val: Math.round(a.map || 101),  unit: 'kPa',   max: 300, nominalMin: 98,  nominalMax: 235, color: colors.accent.default },
-            { key: 'baro',                   label: 'Presiune Barometrică',    val: Math.round(a.baro || 101), unit: 'kPa',   max: 110, nominalMin: 95,  nominalMax: 105 },
-            { key: 'intercoolerEfficiencyPct', label: 'Eficiență Intercooler', val: Math.round(v.intercoolerEfficiencyPct || 0), unit: '%', max: 100, nominalMin: 60, nominalMax: 95, color: (v.intercoolerEfficiencyPct || 0) < 55 ? colors.status.caution : colors.status.good, isVirtual: true },
-            { key: 'turboCoreTempC',         label: 'Temp. Miez CHRA Turbo',   val: Math.round(v.turboCoreTempC || 90), unit: '°C', max: 350, nominalMin: 85, nominalMax: 230, color: (v.turboCoreTempC || 0) > 260 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'turboCoolDownSec',       label: 'Timp Răcire Cooldown',    val: Math.round(v.turboCoolDownSec || 0), unit: 's', max: 120, nominalMin: 0, nominalMax: 20, color: (v.turboCoolDownSec || 0) > 30 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'egrRatioPct',            label: 'Recirculare Gaze EGR',    val: Math.round(v.egrRatioPct || em.egr_cmd || 0), unit: '%', max: 60, nominalMin: 0, nominalMax: 45, isVirtual: true },
+            { id: 'boost_actual',           label: 'Presiune Turbo (Act)',    val: (a.boost_actual ?? a.boost ?? 0).toFixed(2), unit: 'bar', max: 2.5, nominalMin: 0.95, nominalMax: 2.15, color: colors.status.good },
+            { id: 'boost_cmd',              label: 'Presiune Turbo (Cmd)',    val: (a.boost_cmd || 0).toFixed(2),               unit: 'bar', max: 2.5, nominalMin: 0.95, nominalMax: 2.15, color: colors.status.monitor },
+            { id: 'boost_error',            label: 'Eroare Presiune Boost',   val: ((a.boost_actual ?? 0) - (a.boost_cmd ?? 0)).toFixed(2), unit: 'bar', max: 0.8, min: -0.8, nominalMin: -0.15, nominalMax: 0.15, isVirtual: true },
+            { id: 'maf',                    label: 'Debit Aer Admisie MAF',   val: Math.round(a.maf || 0),   unit: 'g/s',   max: 160, nominalMin: 12,  nominalMax: 135, color: colors.status.monitor },
+            { id: 'map',                    label: 'Presiune Galerie MAP',    val: Math.round(a.map || 101),  unit: 'kPa',   max: 300, nominalMin: 98,  nominalMax: 235, color: colors.accent.default },
+            { id: 'baro',                   label: 'Presiune Barometrică',    val: Math.round(a.baro || 101), unit: 'kPa',   max: 110, nominalMin: 95,  nominalMax: 105 },
+            { id: 'intercoolerEfficiencyPct', label: 'Eficiență Intercooler', val: Math.round(v.intercoolerEfficiencyPct || 0), unit: '%', max: 100, nominalMin: 60, nominalMax: 95, color: (v.intercoolerEfficiencyPct || 0) < 55 ? colors.status.caution : colors.status.good, isVirtual: true },
+            { id: 'turboCoreTempC',         label: 'Temp. Miez CHRA Turbo',   val: Math.round(v.turboCoreTempC || 90), unit: '°C', max: 350, nominalMin: 85, nominalMax: 230, color: (v.turboCoreTempC || 0) > 260 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'turboCoolDownSec',       label: 'Timp Răcire Cooldown',    val: Math.round(v.turboCoolDownSec || 0), unit: 's', max: 120, nominalMin: 0, nominalMax: 20, color: (v.turboCoolDownSec || 0) > 30 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'egrRatioPct',            label: 'Recirculare Gaze EGR',    val: Math.round(v.egrRatioPct || em.egr_cmd || 0), unit: '%', max: 60, nominalMin: 0, nominalMax: 45, isVirtual: true },
         ];
         case 'TERMIC': return [
-            { key: 'coolant',                label: 'Temp. Lichid Răcire',     val: Math.round(tem.coolant || 0), unit: '°C', max: 120, nominalMin: 80, nominalMax: 96, color: (tem.coolant||0) > 98 ? colors.status.critical : colors.status.good },
-            { key: 'oil',                    label: 'Temp. Ulei Motor',        val: Math.round(tem.oil || (tem.coolant ? tem.coolant + 4 : 0)), unit: '°C', max: 140, nominalMin: 85, nominalMax: 115, color: colors.status.monitor },
-            { key: 'iat',                    label: 'Temp. Aer Admisie IAT',   val: Math.round(tem.iat || 0),   unit: '°C', max: 80,  nominalMin: 15, nominalMax: 50, color: colors.accent.default },
-            { key: 'turboCompressorOutTempC',label: 'Temp. Ieșire Compresor',  val: Math.round(v.turboCompressorOutTempC || (tem.iat || 25)), unit: '°C', max: 200, nominalMin: 20, nominalMax: 140, color: colors.status.monitor, isVirtual: true },
-            { key: 'coolingConductanceKwPerK', label: 'Conductanță Răcire UA', val: v.coolingConductanceKwPerK || 0.85, unit: 'kW/K', max: 2.0, nominalMin: 0.50, nominalMax: 1.60, color: v.waterPumpOrHeadGasketStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'waterPumpOrHeadGasketStatus', label: 'Pompă Apă / Garnitură', val: v.waterPumpOrHeadGasketStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.waterPumpOrHeadGasketStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'thermalShockIndex',      label: 'Șoc Termic Chiulasă',     val: v.thermalShockIndex || 0.0, unit: 'idx', max: 5.0, nominalMin: 0.0, nominalMax: 1.5, color: (v.thermalShockIndex || 0) > 1.8 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'brakeFluidTempEstimatedC', label: 'Temp. Lichid Frână',    val: Math.round(v.brakeFluidTempEstimatedC || 25), unit: '°C', max: 260, nominalMin: 20, nominalMax: 140, color: (v.brakeFluidTempEstimatedC || 0) > 145 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'mountainBrakeFadeRisk',  label: 'Risc Brake Fade Pantă',   val: v.mountainBrakeFadeRisk ? 'RISC CRITIC' : 'Sigur', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.mountainBrakeFadeRisk ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'cabinExhaustHazardAlert',label: 'Alertă Gaze Habitaclu',   val: v.cabinExhaustHazardAlert ? 'PERICOL CO' : 'OK', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.cabinExhaustHazardAlert ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'egt1',                   label: 'Gaze Evacuare EGT S1',    val: Math.round(dpf.egt1 || tem.cat_b1s1 || 0), unit: '°C', max: 850, nominalMin: 180, nominalMax: 680, color: colors.status.critical },
-            { key: 'deltaOilWaterC',         label: 'Delta Ulei - Răcire',     val: Math.round(v.deltaOilWaterC || 4), unit: '°C', max: 35, nominalMin: 2, nominalMax: 18, isVirtual: true },
-            { key: 'sankeyMechanicalPct',    label: 'Randament Mecanic Sankey',val: Math.round(v.energySplit?.mechanicalPct || 0), unit: '%', max: 50, nominalMin: 25, nominalMax: 44, color: colors.status.good, isVirtual: true },
-            { key: 'sankeyExhaustPct',       label: 'Căldură Evacuare Sankey', val: Math.round(v.energySplit?.exhaustPct || 0), unit: '%', max: 60, nominalMin: 25, nominalMax: 42, color: colors.status.caution, isVirtual: true },
-            { key: 'oilLifeWearFactor',      label: 'Stres Ulei Arrhenius',    val: (v.oilLifeWearFactor || 1.0).toFixed(2), unit: 'x', max: 4.0, nominalMin: 0.8, nominalMax: 1.8, isVirtual: true },
-            { key: 'weibullFailRisk',        label: 'Risc Degradare Weibull',  val: Math.round(v.weibullReliability?.oil?.pFail3000kmPct || 0), unit: '%', max: 100, nominalMin: 0, nominalMax: 25, isVirtual: true },
+            { id: 'coolant',                label: 'Temp. Lichid Răcire',     val: Math.round(tem.coolant || 0), unit: '°C', max: 120, nominalMin: 80, nominalMax: 96, color: (tem.coolant||0) > 98 ? colors.status.critical : colors.status.good },
+            { id: 'oil',                    label: 'Temp. Ulei Motor',        val: Math.round(tem.oil || (tem.coolant ? tem.coolant + 4 : 0)), unit: '°C', max: 140, nominalMin: 85, nominalMax: 115, color: colors.status.monitor },
+            { id: 'iat',                    label: 'Temp. Aer Admisie IAT',   val: Math.round(tem.iat || 0),   unit: '°C', max: 80,  nominalMin: 15, nominalMax: 50, color: colors.accent.default },
+            { id: 'turboCompressorOutTempC',label: 'Temp. Ieșire Compresor',  val: Math.round(v.turboCompressorOutTempC || (tem.iat || 25)), unit: '°C', max: 200, nominalMin: 20, nominalMax: 140, color: colors.status.monitor, isVirtual: true },
+            { id: 'coolingConductanceKwPerK', label: 'Conductanță Răcire UA', val: v.coolingConductanceKwPerK || 0.85, unit: 'kW/K', max: 2.0, nominalMin: 0.50, nominalMax: 1.60, color: v.waterPumpOrHeadGasketStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'waterPumpOrHeadGasketStatus', label: 'Pompă Apă / Garnitură', val: v.waterPumpOrHeadGasketStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.waterPumpOrHeadGasketStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'thermalShockIndex',      label: 'Șoc Termic Chiulasă',     val: v.thermalShockIndex || 0.0, unit: 'idx', max: 5.0, nominalMin: 0.0, nominalMax: 1.5, color: (v.thermalShockIndex || 0) > 1.8 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'brakeFluidTempEstimatedC', label: 'Temp. Lichid Frână',    val: Math.round(v.brakeFluidTempEstimatedC || 25), unit: '°C', max: 260, nominalMin: 20, nominalMax: 140, color: (v.brakeFluidTempEstimatedC || 0) > 145 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'mountainBrakeFadeRisk',  label: 'Risc Brake Fade Pantă',   val: v.mountainBrakeFadeRisk ? 'RISC CRITIC' : 'Sigur', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.mountainBrakeFadeRisk ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'cabinExhaustHazardAlert',label: 'Alertă Gaze Habitaclu',   val: v.cabinExhaustHazardAlert ? 'PERICOL CO' : 'OK', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.cabinExhaustHazardAlert ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'egt1',                   label: 'Gaze Evacuare EGT S1',    val: Math.round(dpf.egt1 || tem.cat_b1s1 || 0), unit: '°C', max: 850, nominalMin: 180, nominalMax: 680, color: colors.status.critical },
+            { id: 'deltaOilWaterC',         label: 'Delta Ulei - Răcire',     val: Math.round(v.deltaOilWaterC || 4), unit: '°C', max: 35, nominalMin: 2, nominalMax: 18, isVirtual: true },
+            { id: 'sankeyMechanicalPct',    label: 'Randament Mecanic Sankey',val: Math.round(v.energySplit?.mechanicalPct || 0), unit: '%', max: 50, nominalMin: 25, nominalMax: 44, color: colors.status.good, isVirtual: true },
+            { id: 'sankeyExhaustPct',       label: 'Căldură Evacuare Sankey', val: Math.round(v.energySplit?.exhaustPct || 0), unit: '%', max: 60, nominalMin: 25, nominalMax: 42, color: colors.status.caution, isVirtual: true },
+            { id: 'oilLifeWearFactor',      label: 'Stres Ulei Arrhenius',    val: (v.oilLifeWearFactor || 1.0).toFixed(2), unit: 'x', max: 4.0, nominalMin: 0.8, nominalMax: 1.8, isVirtual: true },
+            { id: 'weibullFailRisk',        label: 'Risc Degradare Weibull',  val: Math.round(v.weibullReliability?.oil?.pFail3000kmPct || 0), unit: '%', max: 100, nominalMin: 0, nominalMax: 25, isVirtual: true },
         ];
         case 'EVACUARE': return [
-            { key: 'soot_load',              label: 'Încărcare Funingine DPF', val: (dpf.soot_load || 0).toFixed(1), unit: 'g', max: 60, nominalMin: 0, nominalMax: 35, color: (dpf.soot_load||0) > 40 ? colors.status.critical : colors.status.good },
-            { key: 'diff_press',             label: 'Presiune Dif. DPF',       val: (dpf.diff_press || 0).toFixed(1), unit: 'kPa', max: 12, nominalMin: 0.4, nominalMax: 6.5, color: colors.status.monitor },
-            { key: 'dpfResistanceIndex',     label: 'Rezistență Debit R_dpf',  val: Math.round(v.dpfResistanceIndex || 0), unit: 'idx', max: 200, nominalMin: 10, nominalMax: 110, isVirtual: true },
-            { key: 'lambda',                 label: 'Lambda Real Amestec',     val: v.lambda ? v.lambda.toFixed(2) : '1.35', unit: 'λ', max: 2.5, nominalMin: 1.15, nominalMax: 2.1, color: colors.status.good, isVirtual: true },
-            { key: 'afr',                    label: 'Raport Aer/Carb. AFR',    val: v.afr ? v.afr.toFixed(1) : '18.2', unit: ':1', max: 30, nominalMin: 15.5, nominalMax: 22.5, isVirtual: true },
-            { key: 'o2_b1s1',                label: 'Sondă O2 Tensiune B1S1',  val: (lam.o2_b1s1 || 0).toFixed(2), unit: 'V', max: 1.0, nominalMin: 0.1, nominalMax: 0.9 },
-            { key: 'rail_press',             label: 'Presiune Rampă Common Rail', val: Math.round((c.rail_press || 0) / 100), unit: 'bar', max: 1600, nominalMin: 250, nominalMax: 1450, color: colors.status.monitor },
+            { id: 'soot_load',              label: 'Încărcare Funingine DPF', val: (dpf.soot_load || 0).toFixed(1), unit: 'g', max: 60, nominalMin: 0, nominalMax: 35, color: (dpf.soot_load||0) > 40 ? colors.status.critical : colors.status.good },
+            { id: 'diff_press',             label: 'Presiune Dif. DPF',       val: (dpf.diff_press || 0).toFixed(1), unit: 'kPa', max: 12, nominalMin: 0.4, nominalMax: 6.5, color: colors.status.monitor },
+            { id: 'dpfResistanceIndex',     label: 'Rezistență Debit R_dpf',  val: Math.round(v.dpfResistanceIndex || 0), unit: 'idx', max: 200, nominalMin: 10, nominalMax: 110, isVirtual: true },
+            { id: 'lambda',                 label: 'Lambda Real Amestec',     val: v.lambda ? v.lambda.toFixed(2) : '1.35', unit: 'λ', max: 2.5, nominalMin: 1.15, nominalMax: 2.1, color: colors.status.good, isVirtual: true },
+            { id: 'afr',                    label: 'Raport Aer/Carb. AFR',    val: v.afr ? v.afr.toFixed(1) : '18.2', unit: ':1', max: 30, nominalMin: 15.5, nominalMax: 22.5, isVirtual: true },
+            { id: 'o2_b1s1',                label: 'Sondă O2 Tensiune B1S1',  val: (lam.o2_b1s1 || 0).toFixed(2), unit: 'V', max: 1.0, nominalMin: 0.1, nominalMax: 0.9 },
+            { id: 'rail_press',             label: 'Presiune Rampă Common Rail', val: Math.round((c.rail_press || 0) / 100), unit: 'bar', max: 1600, nominalMin: 250, nominalMax: 1450, color: colors.status.monitor },
         ];
         case 'ELECTRIC': return [
-            { key: 'ecu_volt',               label: 'Tensiune Alternator/Bat.',val: (bat.ecu_volt || bat.bat_volt || 0).toFixed(1), unit: 'V', max: 16, nominalMin: 13.6, nominalMax: 14.6, color: colors.status.good },
-            { key: 'batterySoHPct',          label: 'Sănătate Baterie SoH',    val: Math.round(v.batterySoHPct || 96), unit: '%', max: 100, nominalMin: 75, nominalMax: 100, color: colors.status.good, isVirtual: true },
-            { key: 'batteryInternalResistanceMOhms', label: 'Rezistență Internă R_int', val: (v.batteryInternalResistanceMOhms || 5.2).toFixed(1), unit: 'mΩ', max: 25, nominalMin: 2, nominalMax: 8.5, isVirtual: true },
-            { key: 'voltageDropV',           label: 'Cădere Tensiune Demaror', val: (v.voltageDropV || 0.18).toFixed(2), unit: 'V', max: 2.0, nominalMin: 0.05, nominalMax: 0.45, isVirtual: true },
-            { key: 'gear',                   label: 'Treaptă Cutie Viteze',    val: tr.gear ? `Treapta ${tr.gear}` : 'Liber (N)', unit: '', max: 6, nominalMin: 1, nominalMax: 6 },
-            { key: 'clutchSlipPct',          label: 'Alunecare Ambreiaj Slip', val: (v.clutchSlipPct || 0).toFixed(1), unit: '%', max: 100, nominalMin: 0, nominalMax: 3.5, color: (v.clutchSlipPct||0) > 8 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'estimatedBrakeDiscTempC',label: 'Temp. Discuri Frână',     val: Math.round(v.estimatedBrakeDiscTempC || 25), unit: '°C', max: 500, nominalMin: 20, nominalMax: 250, color: (v.estimatedBrakeDiscTempC||0) > 300 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'brakeEnergyTripMj',      label: 'Disipare Frânare Archard',val: (v.brakeEnergyTripMj || 0).toFixed(1), unit: 'MJ', max: 30, nominalMin: 0, nominalMax: 15, isVirtual: true },
-            { key: 'fusedRoadGradePct',      label: 'Pantă Drum Fuzionată',    val: Number((v.fusedRoadGradePct ?? v.roadGradePct ?? 0).toFixed(1)), unit: '%', max: 25, min: -25, nominalMin: -12, nominalMax: 12, color: colors.accent.default, isVirtual: true },
-            { key: 'suspensionDampingRatio', label: 'Amortizare Suspensie ζ',  val: v.suspensionDampingRatio || 0.28, unit: '', max: 0.60, nominalMin: 0.20, nominalMax: 0.45, color: v.suspensionStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
-            { key: 'wheelBalanceStatus',     label: 'Echilibru Roți Viteză',   val: v.wheelBalanceStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.wheelBalanceStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
-            { key: 'weakestComponent',       label: 'Componentă RUL Minimă',   val: (v.rulSummary?.weakestComponent || 'oil').toUpperCase(), unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: colors.status.monitor, isVirtual: true },
-            { key: 'minRemainingKm',         label: 'Kilometri RUL Rămași',    val: v.rulSummary?.minRemainingKm != null ? v.rulSummary.minRemainingKm : 3660, unit: 'km', max: 50000, nominalMin: 2000, nominalMax: 30000, color: colors.status.good, isVirtual: true },
-            { key: 'roadsideBreakdownRiskPct',label: 'Risc Pană Imobilizare',  val: v.rulSummary?.roadsideBreakdownRiskPct || 0, unit: '%', max: 100, nominalMin: 0, nominalMax: 25, color: (v.rulSummary?.roadsideBreakdownRiskPct || 0) > 30 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'crankingTriageStatus',   label: 'Triaj Demaror/Baterie',   val: v.crankingTriageStatus || 'STANDBY', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.crankingTriageStatus === 'NORMAL' || v.crankingTriageStatus === 'STANDBY' ? colors.status.good : colors.status.caution, isVirtual: true },
-            { key: 'tirePressureStatus',     label: 'Presiune Anvelope TPMS',  val: v.tirePressureStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.tirePressureStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'tireRadiusDriftPct',     label: 'Derivă Rază Roți (TPMS)', val: v.tireRadiusDriftPct != null ? `${v.tireRadiusDriftPct > 0 ? '+' : ''}${v.tireRadiusDriftPct}` : '0.0', unit: '%', max: 8.0, min: -8.0, nominalMin: -1.5, nominalMax: 1.5, color: Math.abs(v.tireRadiusDriftPct || 0) > 2.2 ? colors.status.critical : colors.status.good, isVirtual: true },
-            { key: 'accessoryBeltStatus',    label: 'Curea Accesorii / Fulie', val: v.accessoryBeltStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.accessoryBeltStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
-            { key: 'parasiticDrainMa',       label: 'Consumator Parazit',      val: v.parasiticDrainMa != null ? `${v.parasiticDrainMa} mA` : '25 mA', unit: '', max: 500, nominalMin: 15, nominalMax: 50, color: (v.parasiticDrainMa || 0) > 120 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'ecu_volt',               label: 'Tensiune Alternator/Bat.',val: (bat.ecu_volt || bat.bat_volt || 0).toFixed(1), unit: 'V', max: 16, nominalMin: 13.6, nominalMax: 14.6, color: colors.status.good },
+            { id: 'batterySoHPct',          label: 'Sănătate Baterie SoH',    val: Math.round(v.batterySoHPct || 96), unit: '%', max: 100, nominalMin: 75, nominalMax: 100, color: colors.status.good, isVirtual: true },
+            { id: 'batteryInternalResistanceMOhms', label: 'Rezistență Internă R_int', val: (v.batteryInternalResistanceMOhms || 5.2).toFixed(1), unit: 'mΩ', max: 25, nominalMin: 2, nominalMax: 8.5, isVirtual: true },
+            { id: 'voltageDropV',           label: 'Cădere Tensiune Demaror', val: (v.voltageDropV || 0.18).toFixed(2), unit: 'V', max: 2.0, nominalMin: 0.05, nominalMax: 0.45, isVirtual: true },
+            { id: 'gear',                   label: 'Treaptă Cutie Viteze',    val: tr.gear ? `Treapta ${tr.gear}` : 'Liber (N)', unit: '', max: 6, nominalMin: 1, nominalMax: 6 },
+            { id: 'clutchSlipPct',          label: 'Alunecare Ambreiaj Slip', val: (v.clutchSlipPct || 0).toFixed(1), unit: '%', max: 100, nominalMin: 0, nominalMax: 3.5, color: (v.clutchSlipPct||0) > 8 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'estimatedBrakeDiscTempC',label: 'Temp. Discuri Frână',     val: Math.round(v.estimatedBrakeDiscTempC || 25), unit: '°C', max: 500, nominalMin: 20, nominalMax: 250, color: (v.estimatedBrakeDiscTempC||0) > 300 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'brakeEnergyTripMj',      label: 'Disipare Frânare Archard',val: (v.brakeEnergyTripMj || 0).toFixed(1), unit: 'MJ', max: 30, nominalMin: 0, nominalMax: 15, isVirtual: true },
+            { id: 'fusedRoadGradePct',      label: 'Pantă Drum Fuzionată',    val: Number((v.fusedRoadGradePct ?? v.roadGradePct ?? 0).toFixed(1)), unit: '%', max: 25, min: -25, nominalMin: -12, nominalMax: 12, color: colors.accent.default, isVirtual: true },
+            { id: 'suspensionDampingRatio', label: 'Amortizare Suspensie ζ',  val: v.suspensionDampingRatio || 0.28, unit: '', max: 0.60, nominalMin: 0.20, nominalMax: 0.45, color: v.suspensionStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
+            { id: 'wheelBalanceStatus',     label: 'Echilibru Roți Viteză',   val: v.wheelBalanceStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.wheelBalanceStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
+            { id: 'weakestComponent',       label: 'Componentă RUL Minimă',   val: (v.rulSummary?.weakestComponent || 'oil').toUpperCase(), unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: colors.status.monitor, isVirtual: true },
+            { id: 'minRemainingKm',         label: 'Kilometri RUL Rămași',    val: v.rulSummary?.minRemainingKm != null ? v.rulSummary.minRemainingKm : 3660, unit: 'km', max: 50000, nominalMin: 2000, nominalMax: 30000, color: colors.status.good, isVirtual: true },
+            { id: 'roadsideBreakdownRiskPct',label: 'Risc Pană Imobilizare',  val: v.rulSummary?.roadsideBreakdownRiskPct || 0, unit: '%', max: 100, nominalMin: 0, nominalMax: 25, color: (v.rulSummary?.roadsideBreakdownRiskPct || 0) > 30 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'crankingTriageStatus',   label: 'Triaj Demaror/Baterie',   val: v.crankingTriageStatus || 'STANDBY', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.crankingTriageStatus === 'NORMAL' || v.crankingTriageStatus === 'STANDBY' ? colors.status.good : colors.status.caution, isVirtual: true },
+            { id: 'tirePressureStatus',     label: 'Presiune Anvelope TPMS',  val: v.tirePressureStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.tirePressureStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'tireRadiusDriftPct',     label: 'Derivă Rază Roți (TPMS)', val: v.tireRadiusDriftPct != null ? `${v.tireRadiusDriftPct > 0 ? '+' : ''}${v.tireRadiusDriftPct}` : '0.0', unit: '%', max: 8.0, min: -8.0, nominalMin: -1.5, nominalMax: 1.5, color: Math.abs(v.tireRadiusDriftPct || 0) > 2.2 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { id: 'accessoryBeltStatus',    label: 'Curea Accesorii / Fulie', val: v.accessoryBeltStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.accessoryBeltStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
+            { id: 'parasiticDrainMa',       label: 'Consumator Parazit',      val: v.parasiticDrainMa != null ? `${v.parasiticDrainMa} mA` : '25 mA', unit: '', max: 500, nominalMin: 15, nominalMax: 50, color: (v.parasiticDrainMa || 0) > 120 ? colors.status.critical : colors.status.good, isVirtual: true },
         ];
         default: return [];
     }
@@ -1125,7 +1125,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                         <View style={styles.observerGrid}>
                             <TouchableOpacity
                                 style={styles.observerCell}
-                                onPress={() => setInspectedParam({ key: 'bsfcGPerKwh', label: 'Consum Specific BSFC', val: v.bsfcGPerKwh || 210, unit: 'g/kWh', isVirtual: true, nominalMin: 195, nominalMax: 280 })}
+                                onPress={() => setInspectedParam({ id: 'bsfcGPerKwh', label: 'Consum Specific BSFC', val: v.bsfcGPerKwh || 210, unit: 'g/kWh', isVirtual: true, nominalMin: 195, nominalMax: 280 })}
                                 activeOpacity={0.7}
                                 accessibilityRole="button"
                                 accessibilityLabel="Inspecție Consum Specific BSFC"
@@ -1139,7 +1139,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.observerCell}
-                                onPress={() => setInspectedParam({ key: 'oilLifeWearFactor', label: 'Stres Ulei Arrhenius', val: v.oilLifeWearFactor || 1.0, unit: 'x', isVirtual: true, nominalMin: 0.8, nominalMax: 1.8 })}
+                                onPress={() => setInspectedParam({ id: 'oilLifeWearFactor', label: 'Stres Ulei Arrhenius', val: v.oilLifeWearFactor || 1.0, unit: 'x', isVirtual: true, nominalMin: 0.8, nominalMax: 1.8 })}
                                 activeOpacity={0.7}
                                 accessibilityRole="button"
                                 accessibilityLabel="Inspecție Stres Ulei Arrhenius"
@@ -1153,7 +1153,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.observerCell}
-                                onPress={() => setInspectedParam({ key: 'batterySoHPct', label: 'Sănătate Baterie SoH', val: v.batterySoHPct || 95, unit: '%', isVirtual: true, nominalMin: 75, nominalMax: 100 })}
+                                onPress={() => setInspectedParam({ id: 'batterySoHPct', label: 'Sănătate Baterie SoH', val: v.batterySoHPct || 95, unit: '%', isVirtual: true, nominalMin: 75, nominalMax: 100 })}
                                 activeOpacity={0.7}
                                 accessibilityRole="button"
                                 accessibilityLabel="Inspecție Sănătate Baterie SoH"
@@ -1169,7 +1169,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.observerCell}
-                                onPress={() => setInspectedParam({ key: 'brakeEnergyTripMj', label: 'Disipare Frânare Archard', val: v.brakeEnergyTripMj || 0.0, unit: 'MJ', isVirtual: true, nominalMin: 0, nominalMax: 15 })}
+                                onPress={() => setInspectedParam({ id: 'brakeEnergyTripMj', label: 'Disipare Frânare Archard', val: v.brakeEnergyTripMj || 0.0, unit: 'MJ', isVirtual: true, nominalMin: 0, nominalMax: 15 })}
                                 activeOpacity={0.7}
                                 accessibilityRole="button"
                                 accessibilityLabel="Inspecție Energie Frâne Trip"
@@ -1231,14 +1231,19 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                 ))}
             </ScrollView>
             <View style={styles.paramList}>
-                {params.map((p, i) => (
-                    <ParamRow
-                        key={p.key || p.label}
-                        {...p}
-                        onPress={() => setInspectedParam(p)}
-                        last={i === params.length - 1}
-                    />
-                ))}
+                {params.map((p, i) => {
+                    const { key: _k, id: _id, ...restProps } = p;
+                    const rowKey = p.id || p.key || p.label || `param-${i}`;
+                    return (
+                        <ParamRow
+                            key={rowKey}
+                            id={p.id || p.key}
+                            {...restProps}
+                            onPress={() => setInspectedParam(p)}
+                            last={i === params.length - 1}
+                        />
+                    );
+                })}
             </View>
         </View>
     );
@@ -1616,7 +1621,8 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
 
     const renderSensorInspector = () => {
         if (!inspectedParam) return null;
-        const sInfo = getSensorInfo(inspectedParam.key || inspectedParam.label);
+        const paramKey = inspectedParam.id || inspectedParam.key;
+        const sInfo = getSensorInfo(paramKey || inspectedParam.label);
         const numVal = typeof inspectedParam.val === 'number' ? inspectedParam.val : parseFloat(inspectedParam.val);
         const unit = inspectedParam.unit || sInfo?.unit || '';
         const nominalMin = inspectedParam.nominalMin ?? sInfo?.nominalMin;
@@ -1624,7 +1630,6 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
         const isVirtual = inspectedParam.isVirtual || sInfo?.isVirtual;
 
         // Filtrare istoric din sesiune pentru sparkline
-        const paramKey = inspectedParam.key;
         const historyPoints = chartHistory
             .map((item, idx) => {
                 let raw = null;
@@ -1666,7 +1671,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
         const sparkWidth = Math.max(width - 64, 260);
 
         const handleOpenInScope = () => {
-            const targetScopeId = sInfo.scopeId || (SCOPE_METRICS.find(s => s.id === inspectedParam.key)?.id) || 'rpm';
+            const targetScopeId = sInfo.scopeId || (SCOPE_METRICS.find(s => s.id === paramKey)?.id) || 'rpm';
             setSelectedMetric(targetScopeId);
             setTab('SCOPE');
             setInspectedParam(null);
