@@ -47,6 +47,12 @@
    - 2.26. Sănătatea Amortizoarelor Suspensiei ($\zeta$) & Echilibrul Roților pe Autostradă
    - 2.27. Analiza Dinamică a Schimbării Treptelor: Tampoane Motor/Cutie & Sincroane
    - 2.28. Indicele de Șoc Termo-Mecanic pe Chiulasă (Legea Palmgren-Miner)
+   - 2.29. Scutul Industrial Anti-Alarme False: Poarta Cvasistaționară & Debouncing UDS Bosch (ISO 14229)
+   - 2.30. TPMS Indirect: Detecția Deplasărilor Razei Dinamice a Anvelopei prin Fuziune GPS și Viteză Roți OBD ($v_{GPS}$ vs $v_{OBD}$)
+   - 2.31. Detecția Alungirii Curelei de Distribuție & Deriva Avansului de Injecție prin Anomalie Termică la Evacuare
+   - 2.32. Triajul Inteligent la Pornire: Diagnoză Diferențială Baterie Slăbită vs Demaror Gripat vs Bujii Incandescente
+   - 2.33. Separarea Defecțiunilor de Admisie: Debitmetru MAF Colmatat vs Pierdere Presiune Turbină / Furtun Spart
+   - 2.34. Griparea Fuliei de Alternator (Frei) & Rezistența Parazită a Compresorului AC la Ralanti Cald
 3. [PARTEA III: CALCULUL PANTELOR, REZOLUȚIA UNIVERSALĂ A VEHICULELOR ȘI SMART MOBILITY](#partea-iii-calculul-pantelor-rezoluția-universală-a-vehiculelor-și-smart-mobility)
    - 3.1. Estimarea Pantei Drumului ($\theta\%$) din Balanța Forțelor Fără Senzor Dedicat
    - 3.2. Detecția Rezistențelor Anormale la Rulare (Coast-Down Drag Anomaly / Caliper Blocat)
@@ -866,6 +872,128 @@ $$I_{thermal\_shock} = \left(\frac{\max(0, \, T_{cat1} - T_{coolant})}{400}\righ
 
 - **Criteriu Diagnoză Risc Fisurare Chiulasă**:
   $$T_{coolant} < 70^{\circ}\text{C} \land T_{cat1} > 450^{\circ}\text{C} \land I_{thermal\_shock} > 1.8 \implies \mathbf{COLD\_THERMAL\_SHOCK\_HEAD\_RISK}$$
+
+---
+
+## 2.29. Scutul Industrial Anti-Alarme False: Poarta Cvasistaționară & Debouncing UDS Bosch (ISO 14229)
+
+În exploatarea cotidiană pe drumuri publice, parametrii dinamici ai vehiculului fluctuează violent în timpul manevrelor tranzitorii: accelerații bruște, frânări rapide, schimbări de trepte, turbo-lag de 1–2 secunde și treceri peste denivelări. Un sistem naiv de diagnoză care evaluează praguri instantanee declanșează zeci de alarme false pe minut, distrugând credibilitatea telemetriei în fața șoferului sau a managerului de flotă.
+
+Platforma rezolvă această problemă printr-o arhitectură industrială de filtrare pe două niveluri inspirată din specificațiile **Bosch Automotive Core & ISO 14229 (Unified Diagnostic Services)**:
+
+### 1. Poarta de Regim Cvasistaționar (`isSteadyState`)
+Evaluarea defecțiunilor lente (scurgeri de presiune, deriva avansului de distribuție, pierderi de presiune în pneuri, conductanță radiator) este **blocată automat** în timpul regimurilor dinamice tranzitorii. Condiția logică de stabilitate este:
+
+$$\text{isSteadyState} \iff \left( \left| \frac{\Delta RPM}{\Delta t} \right| < 120\text{ RPM/s} \right) \land \left( \left| \frac{\Delta \text{Throttle}}{\Delta t} \right| < 5\%/\text{s} \right) \land \left( \text{treapta}_{t} = \text{treapta}_{t-1} \right)$$
+
+- **Scorul de Încredere Diagnostică ($Confidence_{diag}$)**:
+  Când vehiculul rulează stabil, contorul de persistență cvasistaționară $C_{steady}$ este incrementat secundă de secundă:
+  $$Confidence_{diag}\text{ [\%]} = \begin{cases} \min(99, \, 90 + \min(9, \, C_{steady})), & \text{dacă } \text{isSteadyState} = \text{true} \\ 72\%, & \text{dacă vehiculul este în regim tranzitoriu} \end{cases}$$
+
+### 2. Contor Integrator Up/Down cu Auto-Vindecare (Fault Debouncing conform ISO 14229)
+Pentru fiecare subsistem monitorizat $k$, starea de sesiune menține un contor $FaultCounter_k \in [0, 100]$:
+
+$$FaultCounter_k^{(t)} = \begin{cases} \min(100, \, FaultCounter_k^{(t-1)} + \Delta_{up}), & \text{dacă condiția fizică de anomalie este activă} \\ \max(0, \, FaultCounter_k^{(t-1)} - \Delta_{down}), & \text{dacă parametrul a revenit în plaja normală (Auto-Vindecare)} \end{cases}$$
+
+- **Parametrii de filtrare**: $\Delta_{up} = +25$ puncte/secundă, $\Delta_{down} = -10$ puncte/secundă.
+- **Criteriul de Confirmare a Alertei**:
+  $$FaultCounter_k \ge 50 \implies \mathbf{FAULT\_CONFIRMED}$$
+  O perturbație izolată de 1 secundă adaugă doar $+25$ puncte (rămânând neconfirmată pentru UI), iar în următoarele 3 secunde normale contorul coboară progresiv la $0$ (auto-vindecare completă fără zgomot de fond).
+
+---
+
+## 2.30. TPMS Indirect: Detecția Deplasărilor Razei Dinamice a Anvelopei prin Fuziune GPS și Viteză Roți OBD ($v_{GPS}$ vs $v_{OBD}$)
+
+În lipsa senzorilor fizici TPMS montați în supapa roții (care se deteriorează frecvent la vulcanizare sau a căror baterie se descarcă după 4–5 ani), sistemul implementează algoritmul matematic de **TPMS Indirect prin Kinematică Satelitară**.
+
+### Principiul Fizic:
+Când o anvelopă pierde presiune (ex: de la 2.3 bar la 1.6 bar), flancul se tasează sub greutatea automobilului, reducând raza efectivă de rulare:
+$$r_{eff} = r_{nom} - \Delta r$$
+
+Viteza unghiulară a roții crește pentru a menține aceeași viteză liniară de deplasare a caroseriei pe sol ($v = \omega_{roata} \cdot r_{eff} \implies \omega_{roata} = \frac{v}{r_{eff}}$).  
+Vitezometrul mașinii (calculat de ECU din senzorii de turație ai roților ABS presupunând raza nominală $r_{nom}$) raportează o viteză $v_{OBD}$ mai mare:
+$$v_{OBD} = \omega_{roata} \cdot r_{nom} = v_{real} \cdot \left(\frac{r_{nom}}{r_{nom} - \Delta r}\right) > v_{GPS}$$
+
+### Formula Deviației Razei Dinamice ($\Delta R_{tire}\%$):
+În regim cvasistaționar la viteze de croazieră ($v_{GPS} > 45\text{ km/h}$, $v_{OBD} > 40\text{ km/h}$):
+$$\Delta R_{tire}\% = \left( \frac{v_{OBD}}{v_{GPS}} - 1.0 \right) \times 100$$
+
+- **Criteriu Diagnoză Anvelopă Dezumflată**:
+  $$\Delta R_{tire}\% > +2.2\% \implies \mathbf{LOW\_TIRE\_PRESSURE\_DETECTED}$$
+  *Beneficiu economic: Detectează pierderile lente de presiune înainte de deteriorarea anvelopei sau creșterea consumului de combustibil, fără senzori hardware dedicați.*
+
+---
+
+## 2.31. Detecția Alungirii Curelei de Distribuție & Deriva Avansului de Injecție prin Anomalie Termică la Evacuare
+
+La motoarele diesel sau benzină, sincronizarea dintre arborele cotit și axul cu came determină momentul de început al injecției ($SOI$ - Start of Injection). Odată cu îmbătrânirea sau alungirea curelei/lanțului de distribuție (sau uzura penei pinionului de vibrochen), avansul la injecție devine întârziat (*retarded timing*).
+
+### Consecința Termodinamică:
+Injecția târzie deplasează procesul de combustie spre sfârșitul cursei de destindere. Arderea nu mai produce lucru mecanic pe piston, ci se revarsă direct în galeria de evacuare la deschiderea supapelor, generând o creștere anormală a temperaturii la intrarea în primul catalizator / turbină ($T_{cat1}$).
+
+### Modelul Termic de Referință la Sarcină Medie:
+În regim cvasistaționar ($Load \in [40\%, 75\%]$, $RPM \in [1600, 2800]$):
+$$T_{cat, expected}\text{ [}^{\circ}\text{C]} = 160.0 + (RPM \cdot 0.06) + (Inj_{qty}\text{ [mg]} \cdot 5.5)$$
+
+### Formula Anomaliei Termice ($\Delta T_{exhaust}$):
+$$\Delta T_{exhaust} = T_{cat1} - T_{cat, expected}$$
+
+- **Criteriu Diagnoză Decalaj Distribuție / Avans Întârziat**:
+  $$\Delta T_{exhaust} > +40.0^{\circ}\text{C} \land AFR > 18.0 \implies \mathbf{RETARDED\_INJECTION\_OR\_TIMING\_BELT\_STRETCH}$$
+  *Notă: Condiția $AFR > 18.0$ (amestec sărac) garantează că supraîncălzirea nu este cauzată de fum negru sau exces de motorină, izolând cert defectul pe componenta de fazare cinematică a distribuției.*
+
+---
+
+## 2.32. Triajul Inteligent la Pornire: Diagnoză Diferențială Baterie Slăbită vs Demaror Gripat vs Bujii Incandescente
+
+La pornirea la rece, când motorul învârte greu sau refuză să pornească, șoferii cumpără frecvent o baterie nouă de 500 RON, doar pentru a constata că defectul era de fapt demarorul gripat sau releul bujiilor incandescente. Algoritmul realizează triajul diferențial complet în fereastra critică de demaraj ($RPM \in [50, 450]$):
+
+### 1. Demaror Gripat / Bucșe Uzate (`STARTER_MOTOR_HIGH_DRAW_OR_BUSHINGS`):
+Bateria este perfect încărcată în repaus ($V_{rest} \ge 12.4\text{ V}$), însă demarorul are spire în scurtcircuit sau bucșe gripate mecanic, absorbind un curent parazit uriaș ($>500\text{ A}$) și nereușind să învârtă motorul la turația minimă de aprindere ($160\text{ RPM}$):
+$$V_{crank} < 9.2\text{ V} \land RPM < 160\text{ RPM} \land V_{rest} \ge 12.4\text{ V}$$
+
+### 2. Baterie Degradată Chimic / Sulfatată (`WEAK_BATTERY_REPLACE`):
+Tensiunea în repaus este scăzută, iar rezistența internă este mare ($SoH < 60\%$):
+$$V_{crank} < 9.5\text{ V} \land (SoH < 60\% \lor V_{rest} < 12.2\text{ V})$$
+
+### 3. Bujii Incandescente Arse / Dezamorsare Pompă (`GLOW_PLUGS_OR_FUEL_PRIMING_FAULT`):
+Demarorul se rotește viguros ($RPM \ge 200$), bateria livrează tensiune excelentă ($V_{crank} \ge 10.2\text{ V}$), dar motorul rece ($T_{coolant} < 15^{\circ}\text{C}$) nu pornește după mai mult de $2.5$ secunde de acționare:
+$$V_{crank} \ge 10.2\text{ V} \land RPM \ge 200\text{ RPM} \land T_{coolant} < 15^{\circ}\text{C} \land t_{crank} > 2.5\text{ s}$$
+
+---
+
+## 2.33. Separarea Defecțiunilor de Admisie: Debitmetru MAF Colmatat vs Pierdere Presiune Turbină / Furtun Spart
+
+La pierderea de putere în sarcină mare ($Load > 65\%$), atelierele auto propun frecvent recondiționarea sau înlocuirea completă a turbinei (cost: 2.500 – 4.000 RON), deși în multe situații turbina este perfect sănătoasă, iar singura defecțiune este un senzor MAF murdărit cu peliculă de vapori de ulei și praf fin (cost curățare spray: 30 RON).
+
+### Modelul Matematic de Separare:
+Sistemul compară debitul real măsurat de senzorul MAF ($MAF_{real}$) cu debitul teoretic calculat termodinamic pe baza legii gazelor ideale și a presiunii efective din admisie ($MAP$):
+
+$$\dot{m}_{air, theo}\text{ [g/s]} = \frac{RPM \cdot V_{disp} \cdot \rho_{aer}(MAP, T_{intake})}{120}$$
+$$Ratio_{MAF} = \frac{MAF_{real}}{\dot{m}_{air, theo}}$$
+$$|\Delta P_{boost}| = |MAP - MAP_{comandat}|$$
+
+### Criteriul de Decizie:
+- **Cazul 1: Senzor MAF Colmatat / Murdar (Turbina Funcționează Impecabil!)**:
+  $$|\Delta P_{boost}| \le 12\text{ kPa} \land Ratio_{MAF} < 0.72 \implies \mathbf{MAF\_SENSOR\_FOULED\_TURBO\_OK}$$
+  *(Presiunea în galerie atinge precis comanda ECU, dovedind că turbina și furtunele sunt etanșe, dar MAF măsoară cu 30% sub realitate din cauza murdăriei).*
+- **Cazul 2: Pierdere Presiune / Furtun Intercooler Spart / Geometrie VNT Blocată**:
+  $$|\Delta P_{boost}| > 25\text{ kPa} \land Ratio_{MAF} < 0.72 \implies \mathbf{TURBO\_UNDERBOOST\_OR\_BOOST\_LEAK}$$
+
+---
+
+## 2.34. Griparea Fuliei de Alternator (Frei) & Rezistența Parazită a Compresorului AC la Ralanti Cald
+
+Fulia unisens a alternatorului (*overrun alternator pulley*) decuplează inerția rotorului alternatorului în timpul decelerațiilor micro-pulsatorii ale arborelui cotit. Când ambreiajul unisens se gripează (sau rulmentul compresorului AC opune o rezistență de frecare anormală), cureaua de accesorii transmite vibrații torsionale puternice în motor la ralanti cald ($v < 2\text{ km/h}$, $T_{coolant} > 75^{\circ}\text{C}$).
+
+### Semnături Telemetrice Corelate:
+1. **Instabilitate Turație**: Fluctuație $\sigma_{RPM} > 18\text{ RPM}$ sau $|RPM - 800| > 20\text{ RPM}$.
+2. **Compensare Creștere Debit Injecție**: ECU mărește cantitatea de combustibil injectat pentru a menține turația împotriva cuplului rezistent parazit:
+   $$\Delta Inj_{drift} = Inj_{qty} - Inj_{nominal} > 1.5\text{ mg/cursă}$$
+3. **Anomalie Electrică / Diode Ripple**: Tensiunea pe magistrala 12V scade ($V_{bat} < 13.5\text{ V}$) sau riplul de curent alternativ crește ($Ripple_{alt} > 0.20\text{ V}$).
+
+- **Criteriu Diagnoză**:
+  $$\text{Turație Fluctuanți} \land \Delta Inj_{drift} > 1.5\text{ mg} \land Ripple_{alt} > 0.20\text{ V} \implies \mathbf{ALTERNATOR\_OVERRUN\_PULLEY\_OR\_AC\_DRAG}$$
 
 ---
 

@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { computeVirtualSensors, resetSessionState } = require('./backend/analyzers/PhysicsEngine');
+const { computeVirtualSensors, resetSessionState, updateFaultCounter } = require('./backend/analyzers/PhysicsEngine');
 
 console.log('Testing 8 Sensor Fusion & Virtual Observer Algorithms...\n');
 
@@ -404,5 +404,132 @@ assert(typeof resRul.rulSummary.weakestComponent === 'string', 'Weakest componen
 assert(resRul.rulSummary.minRemainingKm >= 0, 'Min remaining km must be non-negative');
 assert(resRul.rulSummary.roadsideBreakdownRiskPct >= 0 && resRul.rulSummary.roadsideBreakdownRiskPct <= 100, 'Risk must be within 0-100%');
 
-console.log('\n ALL 21 VERIFICATION TEST SCENARIOS PASSED WITH 100% MATHEMATICAL PRECISION!');
+// 22. Test Bosch Debouncing & Steady-State Gating
+console.log('\n=== TEST 22: BOSCH DEBOUNCING & STEADY-STATE GATING ===');
+resetSessionState();
+// 22A: Fază tranzitorie accelerare bruscă (+350 RPM/s)
+computeVirtualSensors({
+    timestamp: 1700000120000,
+    motor: { rpm: 2000, speed: 70, load: 30, throttle_pos: 15 },
+    transmisie: { gear: 4 }
+});
+const resTransient = computeVirtualSensors({
+    timestamp: 1700000121000,
+    motor: { rpm: 2350, speed: 78, load: 75, throttle_pos: 60 },
+    transmisie: { gear: 4 }
+});
+console.log('Transient isSteadyState:', resTransient.isSteadyState);
+console.log('Transient Confidence %:', resTransient.diagnosticConfidencePct);
+assert.strictEqual(resTransient.isSteadyState, false, 'Sudden acceleration must drop isSteadyState to false');
+assert(resTransient.diagnosticConfidencePct < 85, 'Confidence during violent transient should be lower');
+
+// 22B: Contor Bosch UDS Up/Down cu auto-vindecare
+const mockState = { faultCounters: {} };
+const trig1 = updateFaultCounter(mockState, 'test_fault', true, 25, 10);
+console.log('Fault Step 1 Confirmed:', trig1, '| Counter:', mockState.faultCounters['test_fault']);
+assert.strictEqual(trig1, false, 'Single transient spike must NOT trigger confirmed fault');
+assert.strictEqual(mockState.faultCounters['test_fault'], 25);
+
+const trig2 = updateFaultCounter(mockState, 'test_fault', true, 25, 10);
+console.log('Fault Step 2 Confirmed:', trig2, '| Counter:', mockState.faultCounters['test_fault']);
+assert.strictEqual(trig2, true, 'Persistent anomaly must reach confirmation threshold');
+assert.strictEqual(mockState.faultCounters['test_fault'], 50);
+
+const trig3 = updateFaultCounter(mockState, 'test_fault', false, 25, 10);
+console.log('Fault Step 3 Healed:', !trig3, '| Counter:', mockState.faultCounters['test_fault']);
+assert.strictEqual(trig3, false, 'Healing step must immediately de-assert active fault warning');
+assert.strictEqual(mockState.faultCounters['test_fault'], 40);
+
+// 23. Test Indirect TPMS (Deflated Tire Detection via GPS vs Wheel Speed)
+console.log('\n=== TEST 23: INDIRECT TPMS DEFLATED TIRE DETECTION ===');
+resetSessionState();
+const resTpms = computeVirtualSensors({
+    timestamp: 1700000130000,
+    motor: { rpm: 2100, speed: 83.0 },
+    gps: { speed_kmh: 80.0 },
+    is_steady_state: true,
+    instantConfirm: true
+});
+console.log('Tire Radius Drift %:', resTpms.tireRadiusDriftPct);
+console.log('Tire Pressure Status:', resTpms.tirePressureStatus);
+assert(resTpms.tireRadiusDriftPct > 2.2, 'Tire drift should exceed 2.2%');
+assert.strictEqual(resTpms.tirePressureStatus, 'LOW_TIRE_PRESSURE_DETECTED');
+
+// 24. Test Timing Belt Stretch & Retarded Injection Drift
+console.log('\n=== TEST 24: TIMING BELT STRETCH & RETARDED INJECTION ===');
+resetSessionState();
+const resTiming = computeVirtualSensors({
+    timestamp: 1700000140000,
+    motor: { rpm: 2200, speed: 95, load: 60 },
+    combustibil: { inj_qty_mg: 35.0 },
+    aer: { maf: 68.0, map: 175 },
+    temperaturi: { cat1: 538.0 },
+    is_steady_state: true,
+    instantConfirm: true
+});
+console.log('Exhaust Heat Anomaly °C:', resTiming.exhaustHeatAnomalyC);
+console.log('Timing Phase Status:', resTiming.timingPhaseStatus);
+assert(resTiming.exhaustHeatAnomalyC > 40.0, 'Heat anomaly must exceed +40°C');
+assert.strictEqual(resTiming.timingPhaseStatus, 'RETARDED_INJECTION_OR_TIMING_BELT_STRETCH');
+
+// 25. Test Smart Cranking Triage (Battery vs Starter Motor vs Glow Plugs)
+console.log('\n=== TEST 25: SMART CRANKING TRIAGE ===');
+resetSessionState();
+const resWeakBat = computeVirtualSensors({
+    timestamp: 1700000150000,
+    motor: { rpm: 180, is_cranking: true },
+    baterie: { crank_volt: 8.9, battery_volt: 11.2 },
+    instantConfirm: true
+});
+console.log('Cranking Triage (Weak Battery):', resWeakBat.crankingTriageStatus);
+assert.strictEqual(resWeakBat.crankingTriageStatus, 'WEAK_BATTERY_REPLACE');
+
+resetSessionState();
+const resBadStarter = computeVirtualSensors({
+    timestamp: 1700000151000,
+    motor: { rpm: 130, is_cranking: true },
+    baterie: { crank_volt: 8.7, battery_volt: 12.7 },
+    instantConfirm: true
+});
+console.log('Cranking Triage (Bad Starter Motor):', resBadStarter.crankingTriageStatus);
+assert.strictEqual(resBadStarter.crankingTriageStatus, 'STARTER_MOTOR_HIGH_DRAW_OR_BUSHINGS');
+
+resetSessionState();
+const resGlowPlugs = computeVirtualSensors({
+    timestamp: 1700000152000,
+    motor: { rpm: 220, is_cranking: true, crank_duration_sec: 3.8 },
+    temperaturi: { coolant: 3.0 },
+    baterie: { crank_volt: 10.4, battery_volt: 12.6 },
+    instantConfirm: true
+});
+console.log('Cranking Triage (Glow Plugs / Priming):', resGlowPlugs.crankingTriageStatus);
+assert.strictEqual(resGlowPlugs.crankingTriageStatus, 'GLOW_PLUGS_OR_FUEL_PRIMING_FAULT');
+
+// 26. Test MAF Fouled vs Turbo Fault & Accessory Belt Overrun Pulley Drag
+console.log('\n=== TEST 26: MAF VS TURBO TRIAGE & ACCESSORY BELT DRAG ===');
+resetSessionState();
+const resMafFouled = computeVirtualSensors({
+    timestamp: 1700000160000,
+    motor: { rpm: 2500, speed: 100, load: 80 },
+    aer: { maf: 45.0, map: 210, map_cmd: 212 },
+    is_steady_state: true,
+    instantConfirm: true
+});
+console.log('MAF vs Turbo Triage:', resMafFouled.mafVsTurboTriage);
+assert.strictEqual(resMafFouled.mafVsTurboTriage, 'MAF_SENSOR_FOULED_TURBO_OK');
+
+resetSessionState();
+const resAccessory = computeVirtualSensors({
+    timestamp: 1700000170000,
+    motor: { rpm: 840, speed: 0 },
+    temperaturi: { coolant: 88.0 },
+    combustibil: { inj_qty_mg: 7.2 },
+    baterie: { ecu_volt: 13.2, alternator_ripple_v: 0.28 },
+    accelerometru: { accel_y: 0.12 },
+    instantConfirm: true
+});
+console.log('Accessory Belt Status:', resAccessory.accessoryBeltStatus);
+assert.strictEqual(resAccessory.accessoryBeltStatus, 'ALTERNATOR_OVERRUN_PULLEY_OR_AC_DRAG');
+
+console.log('\n ALL 26 VERIFICATION TEST SCENARIOS PASSED WITH 100% MATHEMATICAL PRECISION!');
 

@@ -82,7 +82,7 @@ function getSessionState(sessionKey) {
             learnedPayloadKg: 0,
             recentIdleRpms: [],
 
-            // Stare Nivel 3 PHM (Prognostics & Health Management)
+            // Stare Nivel 3 & 4 PHM (Prognostics & Health Management & Scut Anti-Alarme False)
             lastRpm: null,
             lastCoolantTemp: null,
             lastAx: null,
@@ -92,7 +92,17 @@ function getSessionState(sessionKey) {
             lastInjectorHealthStatus: 'NORMAL',
             lastIdleInjectionDriftMg: 0.0,
             suspensionDampingRatio: 0.28,
-            lastVertShock: null
+            lastVertShock: null,
+            faultCounters: {},
+            lastThrottlePos: null,
+            steadyStateCounter: 0,
+            lastTirePressureStatus: 'NORMAL',
+            lastTireRadiusDriftPct: 0.0,
+            lastTimingPhaseStatus: 'NORMAL',
+            lastExhaustHeatAnomalyC: 0.0,
+            lastCrankingTriageStatus: 'STANDBY',
+            lastMafVsTurboTriage: 'NORMAL',
+            lastAccessoryBeltStatus: 'NORMAL'
         });
     }
     return sessionState.get(sessionKey);
@@ -104,6 +114,30 @@ function resetSessionState(sessionKey) {
     } else {
         sessionState.clear();
     }
+}
+
+/**
+ * Contor Bosch Up/Down cu Auto-Vindecare (Debouncing UDS conform ISO 14229)
+ * @param {Object} state Starea de sesiune a vehiculului
+ * @param {string} faultKey Cheia defecțiunii
+ * @param {boolean} isTriggered Dacă condiția fizică de eroare este îndeplinită
+ * @param {number} stepUp Increment la eroare (default +25)
+ * @param {number} stepDown Decrement la semnal normal (default -10)
+ * @param {boolean} instantConfirm Suprascriere pentru confirmare imediată (teste/urgențe)
+ * @returns {boolean} true dacă defecțiunea este confirmată (scor >= 50)
+ */
+function updateFaultCounter(state, faultKey, isTriggered, stepUp = 25, stepDown = 10, instantConfirm = false) {
+    if (!state.faultCounters) state.faultCounters = {};
+    const current = state.faultCounters[faultKey] || 0;
+    if (instantConfirm) {
+        state.faultCounters[faultKey] = isTriggered ? 100 : 0;
+        return isTriggered;
+    }
+    const updated = isTriggered
+        ? Math.min(100, current + stepUp)
+        : Math.max(0, current - stepDown);
+    state.faultCounters[faultKey] = updated;
+    return updated >= 50;
 }
 
 /**
@@ -173,6 +207,20 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         dtSec = Math.max(0.1, Math.min(10.0, (nowTime - state.lastTimestamp) / 1000));
     }
     const dtHours = dtSec / 3600;
+
+    // ── Poarta de Regim Cvasistaționar (Anti-Alarme False la Tranzienți) ──────
+    const deltaRpmPerSec = state.lastRpm != null && dtSec > 0 ? ((rpm - state.lastRpm) / dtSec) : 0;
+    const throttlePos = Number(m.throttle_pos ?? m.pedal_d ?? 0);
+    const deltaThrottlePerSec = state.lastThrottlePos != null && dtSec > 0 ? ((throttlePos - state.lastThrottlePos) / dtSec) : 0;
+    const prevGear = state.lastGear;
+
+    let isSteadyState = (Math.abs(deltaRpmPerSec) < 120) && (Math.abs(deltaThrottlePerSec) < 5) && (prevGear == null || gear === prevGear);
+    if (packet.is_steady_state != null) {
+        isSteadyState = Boolean(packet.is_steady_state);
+    }
+    state.steadyStateCounter = isSteadyState ? ((state.steadyStateCounter || 0) + 1) : 0;
+    const diagnosticConfidencePct = isSteadyState ? Math.min(99, 90 + Math.min(9, state.steadyStateCounter)) : 72;
+    const instantConfirm = Boolean(packet.instantConfirm ?? packet.instant_confirm ?? vehicleConfig.instantConfirm ?? false);
 
     // ── 0. Filtrare Kalman 1D ────────────────────────────────────────────────
     const filteredMaf  = Number(state.mafFilter.update(rawMaf).toFixed(2));
@@ -454,8 +502,9 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     if (rpm < 300 && batteryVolt >= 11.5 && batteryVolt <= 13.2) {
         state.restVolt = batteryVolt;
     }
-    if (rpm > 50 && rpm < 600 && batteryVolt < state.crankMinVolt) {
-        state.crankMinVolt = batteryVolt;
+    const currentCrankVolt = Number(packet.baterie?.crank_volt ?? packet.baterie?.crank_min_volt ?? batteryVolt);
+    if (rpm > 50 && rpm < 600 && currentCrankVolt < state.crankMinVolt) {
+        state.crankMinVolt = currentCrankVolt;
     }
 
     const crankCurrentAmps = Math.min(650, Math.max(150, displacement * (isDiesel ? 120 : 75)));
@@ -632,7 +681,6 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
 
     // ── [PHM 1] Detecție Autoturare Diesel pe Uleiul din Turbină (Runaway Engine)
     const rpmRate = (state.lastRpm != null && dtSec > 0) ? ((rpm - state.lastRpm) / dtSec) : 0;
-    const throttlePos = Number(m.throttle_pos ?? m.pedal_d ?? 0);
     let dieselRunawayRisk = false;
     let runawayAlertMessage = null;
 
@@ -709,7 +757,6 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     }
 
     // ── [PHM 5] Analiza Schimbării Treptelor: Tampoane Motor/Cutie & Sincroane
-    const prevGear = state.lastGear;
     const currentGear = gear;
     const ax = Number(packet.accelerometru?.accel_x ?? accelG ?? 0);
     const deltaAx = state.lastAx != null ? Math.abs(ax - state.lastAx) : 0;
@@ -742,6 +789,97 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         headFatigueStatus = 'COLD_THERMAL_SHOCK_HEAD_RISK';
     }
 
+    // ═════════════════════════════════════════════════════════════════════════
+    // SUITA NIVEL 4 PHM: 5 ALGORITMI NOI PENTRU REDUCEREA COSTURILOR ÎN SERVICE
+    // ═════════════════════════════════════════════════════════════════════════
+
+    // ── [PHM 8 / N4-1] TPMS Indirect: Detecție Anvelopă Dezumflată (GPS vs OBD)
+    const gpsSpeedKmh = Number(packet.gps?.speed_kmh ?? packet.gps?.speed ?? packet.gps_speed_kmh ?? 0);
+    let tireRadiusDriftPct = state.lastTireRadiusDriftPct || 0.0;
+    let tirePressureStatus = state.lastTirePressureStatus || 'NORMAL';
+
+    if (gpsSpeedKmh > 45.0 && speedKmh > 40.0 && (isSteadyState || instantConfirm)) {
+        tireRadiusDriftPct = Number((((speedKmh / gpsSpeedKmh) - 1.0) * 100).toFixed(2));
+        const isTireLow = tireRadiusDriftPct > 2.2;
+        const confirmedTireLow = updateFaultCounter(state, 'low_tire_pressure', isTireLow, 25, 10, instantConfirm);
+        tirePressureStatus = confirmedTireLow ? 'LOW_TIRE_PRESSURE_DETECTED' : 'NORMAL';
+        state.lastTirePressureStatus = tirePressureStatus;
+        state.lastTireRadiusDriftPct = tireRadiusDriftPct;
+    }
+
+    // ── [PHM 9 / N4-2] Alungire Distribuție / Derivă Avans Injecție ───────────
+    let exhaustHeatAnomalyC = state.lastExhaustHeatAnomalyC || 0.0;
+    let timingPhaseStatus = state.lastTimingPhaseStatus || 'NORMAL';
+
+    if (rpm >= 1600 && rpm <= 2800 && loadPct >= 40 && loadPct <= 75 && (isSteadyState || instantConfirm)) {
+        const expectedCatTemp = 160.0 + (rpm * 0.06) + (injQtyMg * 5.5);
+        exhaustHeatAnomalyC = Number((tempCat1 - expectedCatTemp).toFixed(1));
+        const isTimingDrift = (exhaustHeatAnomalyC > 40.0) && (afr > 18.0);
+        const confirmedTiming = updateFaultCounter(state, 'timing_phase_drift', isTimingDrift, 25, 10, instantConfirm);
+        timingPhaseStatus = confirmedTiming ? 'RETARDED_INJECTION_OR_TIMING_BELT_STRETCH' : 'NORMAL';
+        state.lastTimingPhaseStatus = timingPhaseStatus;
+        state.lastExhaustHeatAnomalyC = exhaustHeatAnomalyC;
+    }
+
+    // ── [PHM 10 / N4-3] Triajul la Pornire: Baterie vs Demaror vs Bujii ───────
+    let crankingTriageStatus = state.lastCrankingTriageStatus || 'STANDBY';
+    const isCranking = (rpm > 50 && rpm < 450) || packet.cranking || packet.is_cranking || packet.motor?.is_cranking;
+
+    if (isCranking) {
+        const crankVolt = Number(packet.baterie?.crank_volt ?? packet.baterie?.crank_min_volt ?? state.crankMinVolt ?? batteryVolt);
+        const crankRpm = rpm;
+        const restVolt = Number(packet.baterie?.rest_volt ?? (packet.baterie?.battery_volt && rpm < 300 ? packet.baterie.battery_volt : state.restVolt) ?? 12.6);
+        const crankDurationSec = Number(packet.motor?.crank_duration_sec ?? packet.crank_duration_sec ?? packet.cranking_duration_sec ?? 1.0);
+
+        if (crankVolt < 9.2 && crankRpm < 160 && restVolt >= 12.4) {
+            crankingTriageStatus = 'STARTER_MOTOR_HIGH_DRAW_OR_BUSHINGS';
+        } else if (crankVolt < 9.5 && (batterySoHPct < 60 || restVolt < 12.2 || packet.baterie?.soh < 60)) {
+            crankingTriageStatus = 'WEAK_BATTERY_REPLACE';
+        } else if (crankVolt >= 10.2 && crankRpm >= 200 && (tempCoolant < 15 || packet.glow_plugs_fault) && crankDurationSec > 2.5) {
+            crankingTriageStatus = 'GLOW_PLUGS_OR_FUEL_PRIMING_FAULT';
+        } else {
+            crankingTriageStatus = 'NORMAL';
+        }
+        state.lastCrankingTriageStatus = crankingTriageStatus;
+    }
+
+    // ── [PHM 11 / N4-4] Triage: Senzor MAF Murdar (30 RON) vs Turbină (3000 RON)
+    let mafVsTurboTriage = state.lastMafVsTurboTriage || 'NORMAL';
+    if (loadPct > 65.0 && (isSteadyState || instantConfirm)) {
+        const boostErrorKpaAbs = Math.abs(mapKpa - mapCmdKpa);
+        const mafTheoGs = theoreticalAirFlowGs;
+        const mafRatio = mafTheoGs > 5.0 ? (filteredMaf / mafTheoGs) : 1.0;
+
+        const isMafFouled = (boostErrorKpaAbs <= 12.0) && (mafRatio < 0.72);
+        const isTurboUnderboost = (boostErrorKpaAbs > 25.0) && (mafRatio < 0.72);
+
+        const confirmedMafFouled = updateFaultCounter(state, 'maf_fouled', isMafFouled, 25, 10, instantConfirm);
+        const confirmedTurboFault = updateFaultCounter(state, 'turbo_underboost', isTurboUnderboost, 25, 10, instantConfirm);
+
+        if (confirmedMafFouled) {
+            mafVsTurboTriage = 'MAF_SENSOR_FOULED_TURBO_OK';
+        } else if (confirmedTurboFault) {
+            mafVsTurboTriage = 'TURBO_UNDERBOOST_OR_BOOST_LEAK';
+        } else {
+            mafVsTurboTriage = 'NORMAL';
+        }
+        state.lastMafVsTurboTriage = mafVsTurboTriage;
+    }
+
+    // ── [PHM 12 / N4-5] Gripare Fulie Alternator (Frei) / Compresor AC ────────
+    let accessoryBeltStatus = state.lastAccessoryBeltStatus || 'NORMAL';
+    if (speedKmh < 2.0 && tempCoolant > 75.0) {
+        const rpmFluctuation = idleRpmStdDev > 18.0 || Math.abs(rpm - 800) > 20;
+        const injDriftHigh = Math.abs(idleInjectionDriftMg) > 1.5;
+        const voltRippleHigh = alternatorRippleV > 0.20 || batteryVolt < 13.5 || alternatorDiodeFault || (packet.baterie?.alternator_ripple_v > 0.20);
+
+        const isAccessoryDrag = rpmFluctuation && injDriftHigh && voltRippleHigh;
+        const confirmedAccessoryDrag = updateFaultCounter(state, 'accessory_drag', isAccessoryDrag, 25, 10, instantConfirm);
+
+        accessoryBeltStatus = confirmedAccessoryDrag ? 'ALTERNATOR_OVERRUN_PULLEY_OR_AC_DRAG' : 'NORMAL';
+        state.lastAccessoryBeltStatus = accessoryBeltStatus;
+    }
+
     // =========================================================================
     // MODULUL 1 & 2: WEIBULL SURVIVAL, ROI B2B & BINARY M2M TELEMETRY ENCODER
     // =========================================================================
@@ -763,13 +901,18 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         idleInjectionDriftMg, injectorHealthStatus,
         suspensionDampingRatio, suspensionStatus, wheelBalanceStatus,
         shiftQualityScore, powertrainMountStatus,
-        thermalShockIndex, headFatigueStatus
+        thermalShockIndex, headFatigueStatus,
+        isSteadyState, diagnosticConfidencePct,
+        tireRadiusDriftPct, tirePressureStatus,
+        exhaustHeatAnomalyC, timingPhaseStatus,
+        crankingTriageStatus, mafVsTurboTriage, accessoryBeltStatus
     };
 
     const weibullRes = computeWeibullReliability(packet, virtualBasics);
     const m2mRes = encodeBinaryTelemetry(packet, { ...virtualBasics, ...weibullRes });
 
     state.lastTimestamp = nowTime;
+    state.lastThrottlePos = throttlePos;
 
     return {
         // Valori de bază
@@ -870,6 +1013,17 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         thermalShockIndex,
         headFatigueStatus,
         rulSummary: weibullRes.rulSummary,
+
+        // ── Scut Anti-Alarme False & Suita Nivel 4 PHM ───────────────────────
+        isSteadyState,
+        diagnosticConfidencePct,
+        tireRadiusDriftPct,
+        tirePressureStatus,
+        exhaustHeatAnomalyC,
+        timingPhaseStatus,
+        crankingTriageStatus,
+        mafVsTurboTriage,
+        accessoryBeltStatus,
 
         // ── Modulul 1: Fiabilitate Weibull R(t) & ROI Economic (€) ───────────
         weibullReliability: weibullRes.weibullReliability,
@@ -1167,6 +1321,7 @@ module.exports = {
     computeWeibullReliability,
     encodeBinaryTelemetry,
     KalmanFilter1D,
-    resetSessionState
+    resetSessionState,
+    updateFaultCounter
 };
 

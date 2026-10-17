@@ -67,6 +67,12 @@ function buildAssistantMsg(liveData, isConnected, vehicleContext = {}) {
 
     if (v.dieselRunawayRisk) return { text: v.runawayAlertMessage || '🚨 PERICOL AUTOTURARE PE ULEI! Cuplează ultima treaptă, calcă frâna la podea și eliberează ambreiajul pentru a cala forțat motorul!', level: 'critical' };
     if (v.waterPumpOrHeadGasketStatus === 'WATER_PUMP_IMPELLER_OR_HEAD_GASKET_RISK') return { text: `Risc critic supraîncălzire chiulasă/pompă apă (conductanță scăzută: ${v.coolingConductanceKwPerK || 0.38} kW/K).`, level: 'critical' };
+    if (v.tirePressureStatus === 'LOW_TIRE_PRESSURE_DETECTED') return { text: 'Alertă TPMS: Roată dezumflată detectată prin deviație v_OBD vs v_GPS (>2.2%).', level: 'warning' };
+    if (v.timingPhaseStatus === 'RETARDED_INJECTION_OR_TIMING_BELT_STRETCH') return { text: `Avans întârziat / curea distribuție decalată (anomalie termică evacuare +${v.exhaustHeatAnomalyC || 0}°C).`, level: 'warning' };
+    if (v.mafVsTurboTriage === 'MAF_SENSOR_FOULED_TURBO_OK') return { text: 'Senzor debitmetru MAF colmatat/murdar. Turbina este intactă!', level: 'info' };
+    if (v.accessoryBeltStatus === 'ALTERNATOR_OVERRUN_PULLEY_OR_AC_DRAG') return { text: 'Gripare fulie alternator frei sau sarcină anormală compresor AC.', level: 'warning' };
+    if (v.crankingTriageStatus === 'WEAK_BATTERY_REPLACE') return { text: 'Baterie degradată la pornire (tensiune < 9.5V). Necesită înlocuire.', level: 'warning' };
+    if (v.crankingTriageStatus === 'STARTER_MOTOR_HIGH_DRAW_OR_BUSHINGS') return { text: 'Demaror/electromotor defect sau bucșe gripate la pornire.', level: 'warning' };
     if (v.headFatigueStatus === 'COLD_THERMAL_SHOCK_HEAD_RISK') return { text: 'Șoc termo-mecanic sever pe chiulasă (gaze fierbinți la motor rece). Menajează accelerația.', level: 'serious' };
     if (v.turboCoolDownWarning) return { text: `Protecție Turbo: Miezul CHRA este încins (${Math.round(v.turboCoreTempC)}°C). Menține ralanti încă ${Math.round(v.turboCoolDownSec)}s pentru prevenire calaminare.`, level: 'warning' };
     if (v.dmfImbalanceWarning) return { text: 'Instabilitate severă la ralanti / vibrații anormale (posibil joc excesiv volantă cu masă dublă DMF).', level: 'warning' };
@@ -107,11 +113,53 @@ function buildContextualAlert(liveData, latestAlert, vehicleContext = {}) {
             priority: 'critical'
         };
     }
+    if (v.tirePressureStatus === 'LOW_TIRE_PRESSURE_DETECTED') {
+        return {
+            title: '⚠️ Presiune Scăzută Anvelopă',
+            description: `Deviație rază dinamică ${v.tireRadiusDriftPct > 0 ? '+' : ''}${v.tireRadiusDriftPct}% (roata se rotește mai rapid decât viteza GPS). Verifică presiunea la rece!`,
+            priority: 'high'
+        };
+    }
+    if (v.timingPhaseStatus === 'RETARDED_INJECTION_OR_TIMING_BELT_STRETCH') {
+        return {
+            title: '⏱️ Avans Întârziat / Distribuție',
+            description: `Anomalie termică evacuare (+${v.exhaustHeatAnomalyC || 0}°C) la amestec sărac. Ardere tardivă în galerie sau decalaj curea distribuție!`,
+            priority: 'high'
+        };
+    }
+    if (v.crankingTriageStatus === 'WEAK_BATTERY_REPLACE') {
+        return {
+            title: '🔋 Baterie Slăbită la Pornire',
+            description: 'Tensiunea la demaraj a scăzut sub 9.5V cu stare de sănătate (SoH) redusă. Bateria necesită înlocuire.',
+            priority: 'high'
+        };
+    }
+    if (v.crankingTriageStatus === 'STARTER_MOTOR_HIGH_DRAW_OR_BUSHINGS') {
+        return {
+            title: '⚙️ Demaror / Electromotor Gripat',
+            description: 'Cădere masivă de tensiune cu turație sub 160 RPM pe baterie bună. Bucșe sau bobinaj demaror uzate.',
+            priority: 'high'
+        };
+    }
     if (v.headFatigueStatus === 'COLD_THERMAL_SHOCK_HEAD_RISK') {
         return {
             title: '❄️ Șoc Termo-Mecanic Chiulasă',
             description: `Gradient termic critic (evacuare ${Math.round(liveData.dpf?.egt1 || liveData.temperaturi?.cat1 || 500)}°C vs apă ${coolant}°C). Risc de fisurare a chiulasei!`,
             priority: 'high'
+        };
+    }
+    if (v.mafVsTurboTriage === 'MAF_SENSOR_FOULED_TURBO_OK') {
+        return {
+            title: '💡 Diagnoză: Debitmetru MAF Murdar',
+            description: 'Presiunea turbo atinge ținta, dar debitmetrul măsoară <72% din aerul teoretic. Economie service: curăță sau înlocuiește MAF (30-150 RON), turbina este intactă!',
+            priority: 'medium'
+        };
+    }
+    if (v.accessoryBeltStatus === 'ALTERNATOR_OVERRUN_PULLEY_OR_AC_DRAG') {
+        return {
+            title: '⚡ Gripare Fulie Alternator / AC',
+            description: 'Fluctuații de ralanti corelate cu ripple de tensiune și compensare injecție. Fulie alternator frei blocată sau compresor AC gripat.',
+            priority: 'medium'
         };
     }
     if (v.powertrainMountStatus === 'WORN_ENGINE_OR_GEARBOX_MOUNTS') {
@@ -225,6 +273,11 @@ function buildCategoryList(catId, d) {
             { label: 'Deschidere Clapetă',  val: m.throttle_pos || 0,        unit: '%',     max: 100,  nominalMin: 0,   nominalMax: 100 },
             { label: 'Cuplu Cerut de Șofer',val: m.torque_driver || 0,       unit: 'Nm',    max: 400,  nominalMin: 0,   nominalMax: 300, color: colors.status.monitor },
             { label: 'Cuplu Frecare Internă',val: m.torque_friction || 0,    unit: 'Nm',    max: 100,  nominalMin: 10,  nominalMax: 45,  color: colors.status.critical },
+            { label: 'Încredere Diagnoză UDS', val: v.diagnosticConfidencePct ?? 90, unit: '%', max: 100, nominalMin: 70, nominalMax: 100, color: colors.status.good, isVirtual: true },
+            { label: 'Regim Cvasistaționar', val: v.isSteadyState ? 'Stabil' : 'Tranzient', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.isSteadyState ? colors.status.good : colors.status.monitor, isVirtual: true },
+            { label: 'Triaj MAF vs Turbină', val: v.mafVsTurboTriage || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.mafVsTurboTriage === 'MAF_SENSOR_FOULED_TURBO_OK' ? colors.status.caution : colors.status.good, isVirtual: true },
+            { label: 'Avans Injecție/Distribuție', val: v.timingPhaseStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.timingPhaseStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Anomalie Căldură Evac.', val: v.exhaustHeatAnomalyC != null ? `${v.exhaustHeatAnomalyC > 0 ? '+' : ''}${v.exhaustHeatAnomalyC}` : '0.0', unit: '°C', max: 80, min: -40, nominalMin: -15, nominalMax: 25, color: (v.exhaustHeatAnomalyC || 0) > 40 ? colors.status.critical : colors.status.good, isVirtual: true },
         ];
         case 'TURBO': return [
             { label: 'Presiune Turbo (Act)', val: (a.boost_actual ?? a.boost ?? 0).toFixed(2), unit: 'bar', max: 2.5, nominalMin: 0.95, nominalMax: 2.15, color: colors.status.good },
@@ -277,6 +330,10 @@ function buildCategoryList(catId, d) {
             { label: 'Componentă RUL Minimă', val: (v.rulSummary?.weakestComponent || 'oil').toUpperCase(), unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: colors.status.monitor, isVirtual: true },
             { label: 'Kilometri RUL Rămași', val: v.rulSummary?.minRemainingKm != null ? v.rulSummary.minRemainingKm : 3660, unit: 'km', max: 50000, nominalMin: 2000, nominalMax: 30000, color: colors.status.good, isVirtual: true },
             { label: 'Risc Pană Imobilizare', val: v.rulSummary?.roadsideBreakdownRiskPct || 0, unit: '%', max: 100, nominalMin: 0, nominalMax: 25, color: (v.rulSummary?.roadsideBreakdownRiskPct || 0) > 30 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Triaj Demaror/Baterie', val: v.crankingTriageStatus || 'STANDBY', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.crankingTriageStatus === 'NORMAL' || v.crankingTriageStatus === 'STANDBY' ? colors.status.good : colors.status.caution, isVirtual: true },
+            { label: 'Presiune Anvelope TPMS', val: v.tirePressureStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.tirePressureStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Derivă Rază Roți (TPMS)', val: v.tireRadiusDriftPct != null ? `${v.tireRadiusDriftPct > 0 ? '+' : ''}${v.tireRadiusDriftPct}` : '0.0', unit: '%', max: 8.0, min: -8.0, nominalMin: -1.5, nominalMax: 1.5, color: Math.abs(v.tireRadiusDriftPct || 0) > 2.2 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Curea Accesorii / Fulie', val: v.accessoryBeltStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.accessoryBeltStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
         ];
         default: return [];
     }
