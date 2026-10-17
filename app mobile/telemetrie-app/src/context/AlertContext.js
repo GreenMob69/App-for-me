@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import socketService from '../services/socket';
+import { speakAlert } from '../services/voiceAlertService';
 
 export const AlertContext = createContext();
 
@@ -127,6 +128,11 @@ export const AlertProvider = ({ children }) => {
             if (notifsGranted && shouldNotify(alerta)) {
                 sendLocalNotification(nouaAlerta);
             }
+
+            // Sinteză vocală & impuls haptic pentru siguranță la volan
+            const spokenText = alerta.descriere || (alerta.tip ? `Alertă: ${alerta.tip.replace(/_/g, ' ')}` : 'Alertă vehicul');
+            const prio = alerta.severitate === 'CRITICAL' ? 'critical' : (alerta.severitate === 'WARNING' ? 'serious' : 'normal');
+            speakAlert(spokenText, prio, alerta.tip || alerta.cod);
         };
 
         socket.on('alerta_live', onAlerta);

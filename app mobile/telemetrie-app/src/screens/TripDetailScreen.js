@@ -102,6 +102,7 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
     const [analiza,     setAnaliza]     = useState(null);
     const [activeChart, setActiveChart] = useState('RPM');
     const [sharing,     setSharing]     = useState(false);
+    const [sharingPdf,  setSharingPdf]  = useState(false);
     const [medie,       setMedie]       = useState(null);
 
     const exportCSV = useCallback(async () => {
@@ -128,6 +129,31 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
             setSharing(false);
         }
     }, [effectiveTripId, sharing]);
+
+    const exportPDF = useCallback(async () => {
+        if (sharingPdf) return;
+        setSharingPdf(true);
+        try {
+            const url = `${getActiveServerUrl()}/api/calatorii/${effectiveTripId}/report/pdf`;
+            const localUri = `${FileSystem.documentDirectory}raport_cursa_${effectiveTripId}.pdf`;
+
+            const downloadRes = await FileSystem.downloadAsync(url, localUri);
+            if (downloadRes.status === 200 && (await Sharing.isAvailableAsync())) {
+                await Sharing.shareAsync(downloadRes.uri, {
+                    mimeType: 'application/pdf',
+                    dialogTitle: `Raport Tehnic Cursa #${effectiveTripId}`,
+                    UTI: 'com.adobe.pdf',
+                });
+            } else {
+                await Linking.openURL(url);
+            }
+        } catch (e) {
+            Alert.alert('Eroare PDF', `Deschidere prin browser: ${e.message}`);
+            Linking.openURL(`${getActiveServerUrl()}/api/calatorii/${effectiveTripId}/report/pdf`).catch(() => {});
+        } finally {
+            setSharingPdf(false);
+        }
+    }, [effectiveTripId, sharingPdf]);
 
     useEffect(() => {
         const load = async () => {
@@ -298,6 +324,17 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
                         accessibilityState={{ disabled: sharing }}
                     >
                         <Text style={styles.shareBtnText}>{sharing ? '...' : 'CSV'}</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        onPress={exportPDF}
+                        disabled={sharingPdf}
+                        style={[styles.shareBtn, styles.pdfBtn]}
+                        accessibilityRole="button"
+                        accessibilityLabel={sharingPdf ? 'Se generează...' : 'Exportă Raport Tehnic PDF'}
+                        accessibilityState={{ disabled: sharingPdf }}
+                    >
+                        <Text style={[styles.shareBtnText, styles.pdfBtnText]}>{sharingPdf ? '...' : '📄 PDF'}</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -773,6 +810,14 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: typography.sizes.label2,
         fontWeight: typography.weights.bold,
+    },
+    pdfBtn: {
+        backgroundColor: colors.bg[2],
+        borderWidth: 1,
+        borderColor: colors.accent.default,
+    },
+    pdfBtnText: {
+        color: colors.accent.default,
     },
     headerTitle: {
         fontSize: typography.sizes.body2,

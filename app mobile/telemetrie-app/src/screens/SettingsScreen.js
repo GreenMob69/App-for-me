@@ -15,6 +15,7 @@ import api from '../services/api';
 import socketService from '../services/socket';
 import { colors, typography, radii, spacing, layout, TEMPLATES } from '../theme';
 import { CockpitVisualPreview } from '../components/ui';
+import { getVoiceSettings, updateVoiceSettings, testVoiceAlert, stopSpeech } from '../services/voiceAlertService';
 
 // ─── Connection badge ─────────────────────────────────────────────────────────
 
@@ -138,6 +139,28 @@ const SettingsScreen = () => {
     const [refuelKm,        setRefuelKm]         = useState('');
     const [savingRefuel,    setSavingRefuel]      = useState(false);
 
+    // ── Sinteză vocală & Haptice
+    const [voiceSettings,   setVoiceSettings]   = useState({
+        enabled: true,
+        mode: 'CRITICAL_ONLY',
+        haptics: true,
+    });
+
+    const handleVoiceToggle = async (val) => {
+        const updated = await updateVoiceSettings({ enabled: val });
+        setVoiceSettings(updated);
+    };
+
+    const handleVoiceMode = async (mode) => {
+        const updated = await updateVoiceSettings({ mode });
+        setVoiceSettings(updated);
+    };
+
+    const handleHapticsToggle = async (val) => {
+        const updated = await updateVoiceSettings({ haptics: val });
+        setVoiceSettings(updated);
+    };
+
     // ─── Load ─────────────────────────────────────────────────────────────────
 
     const checkConnection = useCallback(async () => {
@@ -167,6 +190,9 @@ const SettingsScreen = () => {
                 if (savedIp)     setManualIp(savedIp);
                 if (savedThrs)   setThresholds({ ...DEFAULT_THRESHOLDS, ...JSON.parse(savedThrs) });
                 if (savedNotifs !== null) setNotifsEnabled(savedNotifs === 'true');
+
+                const vSettings = await getVoiceSettings();
+                setVoiceSettings(vSettings);
             } catch {}
 
             if (activeVin) {
@@ -715,6 +741,98 @@ const SettingsScreen = () => {
                         trackColor={{ false: colors.border.default, true: colors.accent.default }}
                         thumbColor={notifsEnabled ? '#FFFFFF' : colors.text.secondary}
                     />
+                </View>
+            </View>
+
+            {/* ── Sinteză Vocală & Haptice la Volan ─────────────────────── */}
+            <View style={styles.card}>
+                <SectionTitle>Sinteză Vocală & Vibrații la Volan</SectionTitle>
+                <Text style={styles.desc}>
+                    Citește pe difuzor alertele tehnice și de siguranță, eliminând nevoia de a privi ecranul în timpul condusului.
+                </Text>
+
+                <View style={styles.switchRow}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.switchLabel}>Voce Asistent Auto (Text-to-Speech)</Text>
+                        <Text style={styles.switchDesc}>
+                            Rostește în limba română alertele și mesajele de urgență.
+                        </Text>
+                    </View>
+                    <Switch
+                        value={voiceSettings.enabled}
+                        onValueChange={handleVoiceToggle}
+                        trackColor={{ false: colors.border.default, true: colors.accent.default }}
+                        thumbColor={voiceSettings.enabled ? '#FFFFFF' : colors.text.secondary}
+                    />
+                </View>
+
+                {voiceSettings.enabled && (
+                    <View style={{ marginTop: spacing[3], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
+                        <Text style={[styles.switchLabel, { marginBottom: spacing[2] }]}>Mod Filtrare Voce:</Text>
+                        <View style={styles.voiceModeRow}>
+                            {[
+                                { id: 'CRITICAL_ONLY', label: '🚨 Doar Critice (Siguranță)' },
+                                { id: 'ALL',           label: '📢 Toate Alertele' },
+                                { id: 'OFF',           label: '🔇 Fără Voce' },
+                            ].map(m => {
+                                const active = voiceSettings.mode === m.id;
+                                return (
+                                    <TouchableOpacity
+                                        key={m.id}
+                                        style={[styles.voiceModeBtn, active && styles.voiceModeBtnActive]}
+                                        onPress={() => handleVoiceMode(m.id)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text style={[styles.voiceModeText, active && styles.voiceModeTextActive]}>
+                                            {m.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    </View>
+                )}
+
+                <View style={[styles.switchRow, { marginTop: spacing[3], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.border.subtle }]}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.switchLabel}>Vibrații Haptice la Alertă</Text>
+                        <Text style={styles.switchDesc}>
+                            Impulsuri tactile proporționale cu severitatea anomaliei.
+                        </Text>
+                    </View>
+                    <Switch
+                        value={voiceSettings.haptics}
+                        onValueChange={handleHapticsToggle}
+                        trackColor={{ false: colors.border.default, true: colors.status.good }}
+                        thumbColor={voiceSettings.haptics ? '#FFFFFF' : colors.text.secondary}
+                    />
+                </View>
+
+                {/* Opțiuni Dezvoltator pentru Testare */}
+                <View style={{ marginTop: spacing[3], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
+                    <Text style={[styles.switchDesc, { marginBottom: spacing[2], color: colors.text.tertiary, fontWeight: '700' }]}>
+                        OPȚIUNI DEZVOLTATOR PENTRU TESTARE:
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap' }}>
+                        <TouchableOpacity
+                            style={styles.voiceTestBtn}
+                            onPress={() => testVoiceAlert('CRITICAL')}
+                        >
+                            <Text style={styles.voiceTestBtnText}>🔊 Test Alertă Critică</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.voiceTestBtn}
+                            onPress={() => testVoiceAlert('NORMAL')}
+                        >
+                            <Text style={styles.voiceTestBtnText}>🔊 Test Voce Normală</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.voiceTestBtn, { borderColor: colors.status.critical }]}
+                            onPress={stopSpeech}
+                        >
+                            <Text style={[styles.voiceTestBtnText, { color: colors.status.critical }]}>🛑 Stop</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
 
@@ -1391,6 +1509,47 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     dangerBtnText: { color: colors.status.critical, fontWeight: typography.weights.bold, fontSize: typography.sizes.label2 },
+
+    // ── Voice settings ────────────────────────────────────────────────────────
+    voiceModeRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing[2],
+    },
+    voiceModeBtn: {
+        backgroundColor: colors.bg[2],
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        borderRadius: radii.xs,
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[2],
+    },
+    voiceModeBtnActive: {
+        borderColor: colors.accent.default,
+        backgroundColor: 'rgba(0, 240, 255, 0.12)',
+    },
+    voiceModeText: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.secondary,
+        fontWeight: typography.weights.semibold,
+    },
+    voiceModeTextActive: {
+        color: colors.accent.default,
+        fontWeight: typography.weights.bold,
+    },
+    voiceTestBtn: {
+        backgroundColor: colors.bg[0],
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        borderRadius: radii.xs,
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[2],
+    },
+    voiceTestBtnText: {
+        fontSize: typography.sizes.caption,
+        color: colors.text.primary,
+        fontWeight: typography.weights.bold,
+    },
 });
 
 export default SettingsScreen;
