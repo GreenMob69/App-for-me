@@ -633,6 +633,18 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
     const optTempMax = activeVehicle?.operating_temp_max || (fuelType === 'PETROL' ? 103 : 93);
     const warnTemp = optTempMax + 5;
     const critTemp = optTempMax + 12;
+
+    const coolVal = numeric.coolant ?? (tem.coolant ?? 0);
+    const oilVal  = tem.oil;
+    const dynamicRedline = useMemo(() => {
+        if ((coolVal > 0 && coolVal < 60) || (oilVal != null && oilVal > 0 && oilVal < 55)) {
+            return Math.round(baseRedline * 0.55);
+        } else if (coolVal >= 60 && coolVal < optTempMin) {
+            return Math.round(baseRedline * 0.75);
+        }
+        return baseRedline;
+    }, [baseRedline, coolVal, oilVal, optTempMin]);
+
     const vehicleContext = useMemo(() => ({
         optTempMin,
         optTempMax,
@@ -680,25 +692,16 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
         const lambda      = v.lambda ?? 1.15;
         const afr         = v.afr ?? 16.8;
 
-        // Redline dinamic în funcție de profilul vehiculului și temperatura motorului
-        let dynamicRedline = baseRedline;
+        // Status temperatură și protecție motor rece din dynamicRedline
         let engineTempStatus = 'optimal'; // 'cold', 'warming', 'optimal'
         let tempBadgeText = null;
 
-        const oilTemp = tem.oil;
-        const coolTemp = cool;
-
-        if ((coolTemp > 0 && coolTemp < 60) || (oilTemp != null && oilTemp > 0 && oilTemp < 55)) {
-            dynamicRedline = Math.round(baseRedline * 0.55);
+        if (dynamicRedline < baseRedline * 0.6) {
             engineTempStatus = 'cold';
             tempBadgeText = `❄️ Motor rece (Redline dinamic: ${dynamicRedline} RPM)`;
-        } else if (coolTemp >= 60 && coolTemp < optTempMin) {
-            dynamicRedline = Math.round(baseRedline * 0.75);
+        } else if (dynamicRedline < baseRedline) {
             engineTempStatus = 'warming';
             tempBadgeText = `🌡️ În încălzire (Redline dinamic: ${dynamicRedline} RPM)`;
-        } else {
-            dynamicRedline = baseRedline;
-            engineTempStatus = 'optimal';
         }
 
         const redlinePct = (dynamicRedline / maxRpmScale) * 100;
@@ -1863,7 +1866,8 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
         const accelX    = liveData.accelerometru?.accel_x ?? 0;
         const accelY    = liveData.accelerometru?.accel_y ?? 0;
 
-        const isRedlineFlashing = rpm >= dynamicRedline;
+        const hudRedline = dynamicRedline || baseRedline || 4800;
+        const isRedlineFlashing = rpm >= hudRedline;
 
         return (
             <Modal
@@ -1925,7 +1929,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                     {/* Shift Light Strip cu 12 segmente LED */}
                     <View style={styles.hudShiftStrip}>
                         {Array.from({ length: 12 }).map((_, i) => {
-                            const isLit = i < Math.floor((rpm / dynamicRedline) * 12);
+                            const isLit = i < Math.floor((rpm / hudRedline) * 12);
                             const isRed = i >= 9;
                             const isYellow = i >= 6 && i < 9;
                             const color = isRed ? '#ff2a2a' : isYellow ? '#ffb800' : '#00f0ff';
