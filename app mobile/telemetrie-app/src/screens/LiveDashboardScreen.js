@@ -66,6 +66,13 @@ function buildAssistantMsg(liveData, isConnected, vehicleContext = {}) {
     const highRpmLimit = vehicleContext.highRpmLimit || 3800;
 
     if (v.dieselRunawayRisk) return { text: v.runawayAlertMessage || '🚨 PERICOL AUTOTURARE PE ULEI! Cuplează ultima treaptă, calcă frâna la podea și eliberează ambreiajul pentru a cala forțat motorul!', level: 'critical' };
+    if (v.roadGripStatus === 'BLACK_ICE_GRIP_LOSS_WARNING') return { text: '🚨 Alertă critică: Pierdere aderență / Polei (Black Ice) detectat! Redu viteza imediat.', level: 'critical' };
+    if (v.mountainBrakeFadeRisk) return { text: '⛰️ Risc critic: Fierbere lichid de frână (Brake Fade) în pantă montană! Retrogradează imediat.', level: 'critical' };
+    if (v.cabinExhaustHazardAlert) return { text: '🫁 Pericol intoxicare monoxid de carbon în staționare! Comută clima pe Recirculare Aer Intern.', level: 'critical' };
+    if (v.driverFatigueStatus === 'DRIVER_FATIGUE_TAKE_BREAK_ALERT') return { text: `☕ Alertă oboseală / micro-somn (Scor atenție: ${v.driverFatigueScore || 38}/100). Trage pe dreapta pentru o pauză!`, level: 'serious' };
+    if (v.roadGripStatus === 'HYDROPLANING_OR_WET_SLIP_WARNING') return { text: '⚠️ Risc acvaplanare / carosabil ud cu aderență redusă.', level: 'warning' };
+    if (v.fuelQualityStatus === 'POOR_DIESEL_CETANE_OR_CONTAMINATION') return { text: '⛽ Calitate slabă combustibil după alimentare (cifră cetanică scăzută / apă). Menajează motorul.', level: 'warning' };
+    if (v.parasiticDrainStatus === 'PARASITIC_BATTERY_DRAIN_DETECTED') return { text: `🧛 Consumator parazit în parcare detectat (${v.parasiticDrainMa || 190} mA). Verifică modulele rămase active.`, level: 'warning' };
     if (v.waterPumpOrHeadGasketStatus === 'WATER_PUMP_IMPELLER_OR_HEAD_GASKET_RISK') return { text: `Risc critic supraîncălzire chiulasă/pompă apă (conductanță scăzută: ${v.coolingConductanceKwPerK || 0.38} kW/K).`, level: 'critical' };
     if (v.tirePressureStatus === 'LOW_TIRE_PRESSURE_DETECTED') return { text: 'Alertă TPMS: Roată dezumflată detectată prin deviație v_OBD vs v_GPS (>2.2%).', level: 'warning' };
     if (v.timingPhaseStatus === 'RETARDED_INJECTION_OR_TIMING_BELT_STRETCH') return { text: `Avans întârziat / curea distribuție decalată (anomalie termică evacuare +${v.exhaustHeatAnomalyC || 0}°C).`, level: 'warning' };
@@ -104,6 +111,55 @@ function buildContextualAlert(liveData, latestAlert, vehicleContext = {}) {
             title: '🚨 PERICOL AUTOTURARE PE ULEI',
             description: v.runawayAlertMessage || 'Motorul se turează necontrolat arzând ulei din turbină! Cuplează treapta maximă, calcă frâna și ridică ambreiajul pentru calare forțată!',
             priority: 'critical'
+        };
+    }
+    if (v.roadGripStatus === 'BLACK_ICE_GRIP_LOSS_WARNING') {
+        return {
+            title: '🚨 PERICOL POLEI (BLACK ICE)',
+            description: `Patinare roți (${v.wheelSlipDeltaKmh || 4.5} km/h ecart) la temperatură critică (${liveData.temperaturi?.ambient || 1}°C)! Carosabil înghețat, redu viteza imediat!`,
+            priority: 'critical'
+        };
+    }
+    if (v.mountainBrakeFadeRisk) {
+        return {
+            title: '⛰️ Risc Fierbere Lichid Frână',
+            description: `Coborâre montană cu lichid de frână supraîncălzit (${v.brakeFluidTempEstimatedC || 160}°C) în treaptă mare (${liveData.transmisie?.gear || 5}). Retrogradează imediat pentru frână de motor!`,
+            priority: 'critical'
+        };
+    }
+    if (v.cabinExhaustHazardAlert) {
+        return {
+            title: '🫁 Risc Intoxicare Habitaclu',
+            description: `Staționare prelungită cu motorul pornit (${Math.round((v.stationaryIdlingSec || 900) / 60)} min). Comută climatizarea pe Recirculare Aer Intern!`,
+            priority: 'critical'
+        };
+    }
+    if (v.driverFatigueStatus === 'DRIVER_FATIGUE_TAKE_BREAK_ALERT') {
+        return {
+            title: '☕ Alertă Oboseală / Micro-Somn',
+            description: `Scor atenție scăzut (${v.driverFatigueScore || 38}/100) corelat cu tipar de oscilație involuntară a traiectoriei. Oprește la prima parcare pentru pauză!`,
+            priority: 'critical'
+        };
+    }
+    if (v.roadGripStatus === 'HYDROPLANING_OR_WET_SLIP_WARNING') {
+        return {
+            title: '⚠️ Risc Acvaplanare / Carosabil Ud',
+            description: `Patinare roți (${v.wheelSlipDeltaKmh || 4.5} km/h) pe carosabil umed. Evită mișcările bruște de volan și frânarea violentă.`,
+            priority: 'high'
+        };
+    }
+    if (v.fuelQualityStatus === 'POOR_DIESEL_CETANE_OR_CONTAMINATION') {
+        return {
+            title: '⛽ Combustibil Slab / Contaminat',
+            description: 'Creștere anormală a consumului specific și instabilitate la ralanti imediat după alimentare. Evită solicitarea la sarcină maximă!',
+            priority: 'high'
+        };
+    }
+    if (v.parasiticDrainStatus === 'PARASITIC_BATTERY_DRAIN_DETECTED') {
+        return {
+            title: '🧛 Consumator Parazit Baterie',
+            description: `Curent de descărcare în parcare estimat la ${v.parasiticDrainMa || 190} mA (> 120 mA admis). Modul electronic rămas activ în standby.`,
+            priority: 'high'
         };
     }
     if (v.waterPumpOrHeadGasketStatus === 'WATER_PUMP_IMPELLER_OR_HEAD_GASKET_RISK') {
@@ -278,6 +334,12 @@ function buildCategoryList(catId, d) {
             { label: 'Triaj MAF vs Turbină', val: v.mafVsTurboTriage || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.mafVsTurboTriage === 'MAF_SENSOR_FOULED_TURBO_OK' ? colors.status.caution : colors.status.good, isVirtual: true },
             { label: 'Avans Injecție/Distribuție', val: v.timingPhaseStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.timingPhaseStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
             { label: 'Anomalie Căldură Evac.', val: v.exhaustHeatAnomalyC != null ? `${v.exhaustHeatAnomalyC > 0 ? '+' : ''}${v.exhaustHeatAnomalyC}` : '0.0', unit: '°C', max: 80, min: -40, nominalMin: -15, nominalMax: 25, color: (v.exhaustHeatAnomalyC || 0) > 40 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Stare Aderență / Polei', val: v.roadGripStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.roadGripStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Patinare Roți Δv', val: (v.wheelSlipDeltaKmh || 0).toFixed(1), unit: 'km/h', max: 20, min: 0, nominalMin: 0, nominalMax: 2.0, color: (v.wheelSlipDeltaKmh || 0) > 4.5 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Scor Vigilență Șofer', val: v.driverFatigueScore ?? 100, unit: '/100', max: 100, min: 0, nominalMin: 50, nominalMax: 100, color: (v.driverFatigueScore ?? 100) < 45 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Stare Oboseală Volan', val: v.driverFatigueStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.driverFatigueStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Calitate Combustibil', val: v.fuelQualityStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.fuelQualityStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
+            { label: 'Timp Staționare Ralanti', val: Math.round(v.stationaryIdlingSec || 0), unit: 's', max: 1800, nominalMin: 0, nominalMax: 600, color: (v.stationaryIdlingSec || 0) > 900 ? colors.status.caution : colors.status.good, isVirtual: true },
         ];
         case 'TURBO': return [
             { label: 'Presiune Turbo (Act)', val: (a.boost_actual ?? a.boost ?? 0).toFixed(2), unit: 'bar', max: 2.5, nominalMin: 0.95, nominalMax: 2.15, color: colors.status.good },
@@ -299,6 +361,9 @@ function buildCategoryList(catId, d) {
             { label: 'Conductanță Răcire UA', val: v.coolingConductanceKwPerK || 0.85, unit: 'kW/K', max: 2.0, nominalMin: 0.50, nominalMax: 1.60, color: v.waterPumpOrHeadGasketStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
             { label: 'Pompă Apă / Garnitură', val: v.waterPumpOrHeadGasketStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.waterPumpOrHeadGasketStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
             { label: 'Șoc Termic Chiulasă', val: v.thermalShockIndex || 0.0, unit: 'idx', max: 5.0, nominalMin: 0.0, nominalMax: 1.5, color: (v.thermalShockIndex || 0) > 1.8 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Temp. Lichid Frână', val: Math.round(v.brakeFluidTempEstimatedC || 25), unit: '°C', max: 260, nominalMin: 20, nominalMax: 140, color: (v.brakeFluidTempEstimatedC || 0) > 145 ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Risc Brake Fade Pantă', val: v.mountainBrakeFadeRisk ? 'RISC CRITIC' : 'Sigur', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.mountainBrakeFadeRisk ? colors.status.critical : colors.status.good, isVirtual: true },
+            { label: 'Alertă Gaze Habitaclu', val: v.cabinExhaustHazardAlert ? 'PERICOL CO' : 'OK', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.cabinExhaustHazardAlert ? colors.status.critical : colors.status.good, isVirtual: true },
             { label: 'Gaze Evacuare EGT S1', val: Math.round(dpf.egt1 || tem.cat_b1s1 || 0), unit: '°C', max: 850, nominalMin: 180, nominalMax: 680, color: colors.status.critical },
             { label: 'Delta Ulei - Răcire',  val: Math.round(v.deltaOilWaterC || 4), unit: '°C', max: 35, nominalMin: 2, nominalMax: 18, isVirtual: true },
             { label: 'Randament Mecanic Sankey', val: Math.round(v.energySplit?.mechanicalPct || 0), unit: '%', max: 50, nominalMin: 25, nominalMax: 44, color: colors.status.good, isVirtual: true },
@@ -334,6 +399,7 @@ function buildCategoryList(catId, d) {
             { label: 'Presiune Anvelope TPMS', val: v.tirePressureStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.tirePressureStatus !== 'NORMAL' ? colors.status.critical : colors.status.good, isVirtual: true },
             { label: 'Derivă Rază Roți (TPMS)', val: v.tireRadiusDriftPct != null ? `${v.tireRadiusDriftPct > 0 ? '+' : ''}${v.tireRadiusDriftPct}` : '0.0', unit: '%', max: 8.0, min: -8.0, nominalMin: -1.5, nominalMax: 1.5, color: Math.abs(v.tireRadiusDriftPct || 0) > 2.2 ? colors.status.critical : colors.status.good, isVirtual: true },
             { label: 'Curea Accesorii / Fulie', val: v.accessoryBeltStatus || 'NORMAL', unit: '', max: 100, nominalMin: 0, nominalMax: 10, color: v.accessoryBeltStatus !== 'NORMAL' ? colors.status.caution : colors.status.good, isVirtual: true },
+            { label: 'Consumator Parazit', val: v.parasiticDrainMa != null ? `${v.parasiticDrainMa} mA` : '25 mA', unit: '', max: 500, nominalMin: 15, nominalMax: 50, color: (v.parasiticDrainMa || 0) > 120 ? colors.status.critical : colors.status.good, isVirtual: true },
         ];
         default: return [];
     }

@@ -53,6 +53,12 @@
    - 2.32. Triajul Inteligent la Pornire: Diagnoză Diferențială Baterie Slăbită vs Demaror Gripat vs Bujii Incandescente
    - 2.33. Separarea Defecțiunilor de Admisie: Debitmetru MAF Colmatat vs Pierdere Presiune Turbină / Furtun Spart
    - 2.34. Griparea Fuliei de Alternator (Frei) & Rezistența Parazită a Compresorului AC la Ralanti Cald
+   - 2.35. Detecția Pierderii Aderenței: Polei („Black Ice”) vs Acvaplanare prin Fuziune Cinematică Roți-GPS
+   - 2.36. Modelul Biomecanic al Oboselii Șoferului și Prevenția Micro-Somnului la Volan („Deadband + Jerk”)
+   - 2.37. Predicția Termică a Fierberii Lichidului de Frână și a Fenomenului „Brake Fade” pe Coborâri Montane
+   - 2.38. Detecția Curentului Parazit de Descărcare a Bateriei în Staționare ($V_{stop}$ vs $V_{start}$)
+   - 2.39. Detecția Combustibilului Contaminat / Cifră Cetanică Scăzută Post-Alimentare
+   - 2.40. Riscul de Intoxicare cu Monoxid de Carbon și Gaze de Eșapament în Staționare Prelungită
 3. [PARTEA III: CALCULUL PANTELOR, REZOLUȚIA UNIVERSALĂ A VEHICULELOR ȘI SMART MOBILITY](#partea-iii-calculul-pantelor-rezoluția-universală-a-vehiculelor-și-smart-mobility)
    - 3.1. Estimarea Pantei Drumului ($\theta\%$) din Balanța Forțelor Fără Senzor Dedicat
    - 3.2. Detecția Rezistențelor Anormale la Rulare (Coast-Down Drag Anomaly / Caliper Blocat)
@@ -994,6 +1000,105 @@ Fulia unisens a alternatorului (*overrun alternator pulley*) decuplează inerți
 
 - **Criteriu Diagnoză**:
   $$\text{Turație Fluctuanți} \land \Delta Inj_{drift} > 1.5\text{ mg} \land Ripple_{alt} > 0.20\text{ V} \implies \mathbf{ALTERNATOR\_OVERRUN\_PULLEY\_OR\_AC\_DRAG}$$
+
+---
+
+## 2.35. Detecția Pierderii Aderenței: Polei („Black Ice”) vs Acvaplanare prin Fuziune Cinematică Roți-GPS
+
+În mod normal, viteza periferică a roților motoare ($v_{OBD} = \omega_{roata} \cdot r_{nom}$) coincide cu viteza liniară a caroseriei măsurată de receptorul satelitar GNSS ($v_{GPS}$) și integrată prin accelerometrul longitudinal ($a_{body} = a_x \cdot 9.81$). Când aderența pneului pe asfalt scade brusc (polei, mâzgă, peliculă de apă adâncă), cuplul motor provoacă patinarea roților fără deplasare proporțională a caroseriei pe sol:
+
+$$\Delta v_{slip}\text{ [km/h]} = v_{OBD} - v_{GPS}$$
+$$\Delta a_{slip}\text{ [m/s}^2\text{]} = a_{wheel} - a_{body}$$
+
+### Diferențiere Termică între Polei și Acvaplanare:
+Dacă $\Delta v_{slip} > 4.5\text{ km/h}$ sau $\Delta a_{slip} > 1.2\text{ m/s}^2$ (cu discul de ambreiaj complet cuplat):
+- **La temperaturi de îngheț ($T_{ambient} \le 3.5^{\circ}\text{C}$)**:
+  $$\mathbf{BLACK\_ICE\_GRIP\_LOSS\_WARNING}$$
+  *Alertă critică de salvare a vieții: Șoferul este avertizat instantaneu că asfaltul este acoperit cu gheață transparentă („black ice”), chiar înainte ca mașina să intre în derapaj necontrolat!*
+- **La temperaturi pozitive ($T_{ambient} > 3.5^{\circ}\text{C}$)**:
+  $$\mathbf{HYDROPLANING\_OR\_WET\_SLIP\_WARNING}$$
+  *Avertizare de reducere a vitezei pentru a preveni plutirea pe pelicula de apă.*
+
+---
+
+## 2.36. Modelul Biomecanic al Oboselii Șoferului și Prevenția Micro-Somnului la Volan („Deadband + Jerk”)
+
+Oboseala cronică și episoadele de micro-somn la volan nu se manifestă prin devieri lente, ci printr-un tipar biomecanic distinct numit **„Deadband + Jerk”**:
+1. **Faza de Deadband (Micro-Somn)**: Șoferul are ochii închiși sau atenția complet decuplată timp de 2–4 secunde, interval în care comenzile pe volan și pedala de accelerație rămân nemișcate, iar traiectoria mașinii deviază lent spre marginea carosabilului.
+2. **Faza de Jerk (Trezire Reflexă)**: Șoferul tresare și aplică o corecție bruscă, convulsivă asupra direcției (smucitură laterală înregistrată pe axa Y de accelerometru: $|A_y| > 0.14\text{ G}$) sincronizată cu o variație violentă a pedalei ($|\Delta \text{Throttle}/\Delta t| > 12\%/\text{s}$).
+
+### Calculul Scorului de Vigilență ($Score_{fatigue}$):
+La viteze de croazieră ($v > 60\text{ km/h}$):
+$$Score_{fatigue} = \max\left(10, \, \min\left(100, \, 100 - Pen_{timp} - Pen_{jerk}\right)\right)$$
+unde $Pen_{timp} = \min(50, \, \frac{t_{condus} - 5400}{3600} \cdot 25)$ pentru $t_{condus} > 1.5\text{ ore}$ (90 minute), iar $Pen_{jerk} = N_{jerk} \cdot 12$.
+
+- **Criteriu Alertă Pauză Obligatorie**:
+  $$Score_{fatigue} < 45 \implies \mathbf{DRIVER\_FATIGUE\_TAKE\_BREAK\_ALERT}$$
+
+---
+
+## 2.37. Predicția Termică a Fierberii Lichidului de Frână și a Fenomenului „Brake Fade” pe Coborâri Montane
+
+Pe coborârile lungi de pas montan (Transfăgărășan, serpentine, pante abrupte), utilizarea excesivă a frânei de serviciu în trepte superioare (fără frână de motor suficientă) transferă căldură masivă de la discuri ($T_{disc} > 300^{\circ}\text{C}$) în pistonașele etrierului și lichidul de frână DOT4. Când lichidul depășește punctul de fierbere umedă ($T_{boil, wet} \approx 145^{\circ}\text{C} - 155^{\circ}\text{C}$), se formează bule de vapori compresibili, iar pedala de frână cade brusc la podea fără efect de decelerare (*Brake Fade*).
+
+### Modelul Termic al Lichidului de Frână:
+$$T_{fluid}\text{ [}^{\circ}\text{C]} = \text{round}\left(T_{ambient} + (T_{disc} - T_{ambient}) \cdot 0.48\right)$$
+
+- **Criteriu Diagnoză Risc Imens de Accident**:
+  $$\theta_{fused} < -4.0\% \land (T_{disc} > 250^{\circ}\text{C} \lor T_{fluid} > 145^{\circ}\text{C}) \land \text{treapta} \ge 4 \implies \mathbf{MOUNTAIN\_BRAKE\_FADE\_RISK}$$
+  Aplicația afișează alertă critică cu prioritate maximă și solicită șoferului retrogradarea imediată într-o treaptă inferioară (a 2-a sau a 3-a) pentru a utiliza frâna de motor a compresiei cilindrilor.
+
+---
+
+## 2.38. Detecția Curentului Parazit de Descărcare a Bateriei în Staționare ($V_{stop}$ vs $V_{start}$)
+
+Șoferii găsesc frecvent bateria descărcată complet după câteva zile de parcare din cauza unui modul electronic care refuză să intre în starea de repaus *deep sleep* (sistem audio/navigație aftermarket, modul confort defect, alarmă defectuoasă).
+
+### Modelul Matematic de Calcul al Curentului Parazit ($I_{drain}$ în mA):
+Sistemul memorează tensiunea și temperatura la oprirea contactului ($V_{stop}$, $T_{stop}$) și le compară cu tensiunea înainte de demaraj ($V_{start}$, $T_{start}$) după $\Delta t_{hours}$ ore de staționare:
+
+$$\Delta V_{net} = (V_{stop} - V_{start}) - 0.0015 \cdot \max(0, \, T_{stop} - T_{start})$$
+unde coeficientul $0.0015\text{ V/}^{\circ}\text{C}$ compensează scăderea reversibilă a tensiunii electrochimice Nernst la temperaturi scăzute.
+
+Pentru o baterie standard de $75\text{ Ah}$ cu un ecart util de $\Delta V \approx 1.2\text{ V}$ între $100\%$ și $0\%$ SoC:
+$$I_{drain}\text{ [mA]} = \text{round}\left( \frac{\Delta V_{net}}{\Delta t_{hours}} \cdot \frac{C_{bat}}{1.2} \cdot 1000 \right)$$
+
+- **Criteriu Confirmare Consumator Nocturn**:
+  $$I_{drain} > 120\text{ mA} \implies \mathbf{PARASITIC\_BATTERY\_DRAIN\_DETECTED}$$
+  *(Consumul normal de standby OEM este sub $35 - 50\text{ mA}$. Depășirea pragului de $120\text{ mA}$ golește complet bateria în 4–5 zile de staționare).*
+
+---
+
+## 2.39. Detecția Combustibilului Contaminat / Cifră Cetanică Scăzută Post-Alimentare
+
+Alimentarea cu motorină proastă (amestecată cu apă, reziduuri de cisternă sau benzină) provoacă detonare, griparea injectoarelor Common Rail și colmatarea rapidă a DPF-ului.
+
+### 1. Detecția Evenimentului de Alimentare:
+Sistemul detectează creșterea bruscă a nivelului din rezervor cu $\Delta Level > +10\%$ la pornire sau în timpul staționării la benzinărie.
+
+### 2. Semnătura Anormală Post-Alimentare la Motor Cald ($T_{coolant} > 80^{\circ}\text{C}$):
+- **Eficiență Energetică Scăzută**: $BSFC > 255\text{ g/kWh}$ în plaja optimă de croazieră ($RPM \in [1600, 2600]$, $Load \in [30\%, 65\%]$).
+- **Supracompensare la Ralanti**: $Inj_{qty} > 5.6\text{ mg/cursă}$ (motorul are nevoie de mai mult volum pentru a compensa puterea calorică slabă a combustibilului).
+- **Instabilitate și Vibrații de Combustie**: $\sigma_{RPM} > 16\text{ RPM}$ sau $Index_{idle} < 75\%$.
+
+- **Criteriu Diagnoză**:
+  $$\text{PostAlimentare} \land (BSFC > 255 \lor Inj_{idle} > 5.6) \land \sigma_{RPM} > 16 \implies \mathbf{POOR\_DIESEL\_CETANE\_OR\_CONTAMINATION}$$
+  Scorul calității coboară la $Index_{fuel} = 42/100$, recomandând evitarea sarcinilor mari și adăugarea de aditiv de ridicare a cifrei cetanice.
+
+---
+
+## 2.40. Riscul de Intoxicare cu Monoxid de Carbon și Gaze de Eșapament în Staționare Prelungită
+
+Staționarea pe loc cu motorul pornit timp îndelungat (ex: șofer care doarme în mașină cu încălzirea pornită iarna, ambuteiaje blocate în tuneluri sau viscol) favorizează acumularea gazelor de eșapament (monoxid de carbon $CO$, oxizi de azot $NO_x$) sub șasiu și infiltrarea lor prin fantele caroseriei în habitaclu. În timpul regenerării active a DPF-ului sau la emisii de fum, concentrația de gaze nocive devine letală în câteva minute.
+
+### Contorizarea Timpului de Staționare ($t_{idling}$):
+Pentru $v < 1.0\text{ km/h}$ și $RPM > 500$:
+$$t_{idling}^{(t)} = t_{idling}^{(t-1)} + \Delta t$$
+(Resetat la $0$ când mașina prinde viteză $v > 5\text{ km/h}$).
+
+### Criteriu Alertă Ventilare / Recirculare:
+$$(t_{idling} > 900\text{ s (15 min)}) \lor (t_{idling} > 180\text{ s (3 min)} \land (\text{dpfRegenActive} \lor \text{smokeRisk})) \implies \mathbf{CABIN\_EXHAUST\_HAZARD\_ALERT}$$
+Sistemul avertizează șoferul printr-o alertă vizuală critică să comute climatizarea pe **Recirculare Aer Intern** sau să oprească motorul pentru a preveni asfixierea cu monoxid de carbon.
 
 ---
 

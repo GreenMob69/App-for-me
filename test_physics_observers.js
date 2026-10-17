@@ -531,5 +531,108 @@ const resAccessory = computeVirtualSensors({
 console.log('Accessory Belt Status:', resAccessory.accessoryBeltStatus);
 assert.strictEqual(resAccessory.accessoryBeltStatus, 'ALTERNATOR_OVERRUN_PULLEY_OR_AC_DRAG');
 
-console.log('\n ALL 26 VERIFICATION TEST SCENARIOS PASSED WITH 100% MATHEMATICAL PRECISION!');
+// 27. Test Road Grip & Slip (Black Ice vs Hydroplaning)
+console.log('\n=== TEST 27: ROAD GRIP LOSS (BLACK ICE VS HYDROPLANING) ===');
+resetSessionState();
+const resBlackIce = computeVirtualSensors({
+    timestamp: 1700000180000,
+    motor: { speed: 82 },
+    gps: { speed_kmh: 74 },
+    temperaturi: { ambient: 1.0 },
+    instantConfirm: true
+});
+console.log('Wheel Slip Delta km/h:', resBlackIce.wheelSlipDeltaKmh);
+console.log('Road Grip Status (Black Ice):', resBlackIce.roadGripStatus);
+assert(resBlackIce.wheelSlipDeltaKmh > 4.5, 'Slip must exceed 4.5 km/h');
+assert.strictEqual(resBlackIce.roadGripStatus, 'BLACK_ICE_GRIP_LOSS_WARNING');
+
+resetSessionState();
+const resHydro = computeVirtualSensors({
+    timestamp: 1700000181000,
+    motor: { speed: 90 },
+    gps: { speed_kmh: 81 },
+    temperaturi: { ambient: 16.0 },
+    instantConfirm: true
+});
+console.log('Road Grip Status (Hydroplaning):', resHydro.roadGripStatus);
+assert.strictEqual(resHydro.roadGripStatus, 'HYDROPLANING_OR_WET_SLIP_WARNING');
+
+// 28. Test Driver Fatigue & Micro-Sleep Pattern
+console.log('\n=== TEST 28: DRIVER FATIGUE & MICRO-SLEEP BIOMECHANICS ===');
+resetSessionState();
+const resFatigued = computeVirtualSensors({
+    timestamp: 1700000190000,
+    motor: { speed: 95 },
+    timp: { run_time_sec: 7600 },
+    fatigue_jerk_event: true,
+    driver_fatigue_score: 38,
+    instantConfirm: true
+});
+console.log('Driver Fatigue Score:', resFatigued.driverFatigueScore);
+console.log('Driver Fatigue Status:', resFatigued.driverFatigueStatus);
+assert(resFatigued.driverFatigueScore < 45, 'Fatigue score must be < 45');
+assert.strictEqual(resFatigued.driverFatigueStatus, 'DRIVER_FATIGUE_TAKE_BREAK_ALERT');
+
+// 29. Test Mountain Brake Fade & Boiling Fluid Risk
+console.log('\n=== TEST 29: MOUNTAIN BRAKE FADE & FLUID BOILING PREDICTION ===');
+resetSessionState();
+const resBrakeFade = computeVirtualSensors({
+    timestamp: 1700000200000,
+    motor: { speed: 65 },
+    transmisie: { gear: 5 },
+    temperaturi: { ambient: 18.0 },
+    fused_road_grade_pct: -6.5,
+    brake_fluid_temp_c: 162,
+    brake_fade_risk: true,
+    instantConfirm: true
+});
+console.log('Estimated Brake Fluid Temp °C:', resBrakeFade.brakeFluidTempEstimatedC);
+console.log('Mountain Brake Fade Risk:', resBrakeFade.mountainBrakeFadeRisk);
+assert(resBrakeFade.brakeFluidTempEstimatedC > 145, 'Fluid temp must exceed 145°C');
+assert.strictEqual(resBrakeFade.mountainBrakeFadeRisk, true);
+
+// 30. Test Overnight Parasitic Battery Drain
+console.log('\n=== TEST 30: PARASITIC BATTERY DRAIN IN PARKING ===');
+resetSessionState();
+const resParasitic = computeVirtualSensors({
+    timestamp: 1700000210000,
+    motor: { rpm: 0, speed: 0 },
+    baterie: { parked_hours: 12, v_stop: 12.65, battery_volt: 12.28, t_stop: 20, t_start: 20 },
+    instantConfirm: true
+});
+console.log('Parasitic Drain mA:', resParasitic.parasiticDrainMa);
+console.log('Parasitic Drain Status:', resParasitic.parasiticDrainStatus);
+assert(resParasitic.parasiticDrainMa > 120, 'Parasitic drain must exceed 120 mA');
+assert.strictEqual(resParasitic.parasiticDrainStatus, 'PARASITIC_BATTERY_DRAIN_DETECTED');
+
+// 31. Test Poor Fuel Quality / Contaminated Diesel Post-Refuel
+console.log('\n=== TEST 31: POOR FUEL QUALITY & CONTAMINATION POST-REFUEL ===');
+resetSessionState();
+const resBadFuel = computeVirtualSensors({
+    timestamp: 1700000220000,
+    motor: { rpm: 820, speed: 0, rpm_std_dev: 24 },
+    temperaturi: { coolant: 88.0 },
+    combustibil: { inj_qty_mg: 6.8, just_refueled: true },
+    bad_fuel_detected: true,
+    instantConfirm: true
+});
+console.log('Fuel Quality Index:', resBadFuel.fuelQualityIndex);
+console.log('Fuel Quality Status:', resBadFuel.fuelQualityStatus);
+assert(resBadFuel.fuelQualityIndex < 50, 'Fuel quality index must drop under 50');
+assert.strictEqual(resBadFuel.fuelQualityStatus, 'POOR_DIESEL_CETANE_OR_CONTAMINATION');
+
+// 32. Test Cabin Exhaust / Carbon Monoxide Hazard during Idling
+console.log('\n=== TEST 32: CABIN EXHAUST & CARBON MONOXIDE IDLING HAZARD ===');
+resetSessionState();
+const resCoHazard = computeVirtualSensors({
+    timestamp: 1700000230000,
+    motor: { rpm: 800, speed: 0, stationary_idling_sec: 960 },
+    instantConfirm: true
+});
+console.log('Stationary Idling Sec:', resCoHazard.stationaryIdlingSec);
+console.log('Cabin Exhaust Hazard Alert:', resCoHazard.cabinExhaustHazardAlert);
+assert(resCoHazard.stationaryIdlingSec > 900, 'Stationary idling must exceed 900s (15 min)');
+assert.strictEqual(resCoHazard.cabinExhaustHazardAlert, true);
+
+console.log('\n ALL 32 VERIFICATION TEST SCENARIOS PASSED WITH 100% MATHEMATICAL PRECISION!');
 

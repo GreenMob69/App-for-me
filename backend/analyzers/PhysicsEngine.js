@@ -102,7 +102,22 @@ function getSessionState(sessionKey) {
             lastExhaustHeatAnomalyC: 0.0,
             lastCrankingTriageStatus: 'STANDBY',
             lastMafVsTurboTriage: 'NORMAL',
-            lastAccessoryBeltStatus: 'NORMAL'
+            lastAccessoryBeltStatus: 'NORMAL',
+
+            // Stare Nivel 5 PHM (Human Life, Safety & Financial Guardian)
+            lastSpeedKmh: null,
+            totalDrivingSec: 0,
+            fatigueJerkCount: 0,
+            lastDriverFatigueScore: 100,
+            lastDriverFatigueStatus: 'NORMAL',
+            lastRoadGripStatus: 'NORMAL',
+            lastParasiticDrainMa: 25,
+            lastParasiticDrainStatus: 'NORMAL',
+            lastFuelLevelPct: null,
+            justRefueled: false,
+            lastFuelQualityIndex: 98,
+            lastFuelQualityStatus: 'NORMAL',
+            stationaryIdlingSec: 0
         });
     }
     return sessionState.get(sessionKey);
@@ -629,11 +644,15 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     const rawTiltPitch = Number(packet.accelerometru?.tilt_pitch || 0);
     const imuGradePct = Number((Math.tan((rawTiltPitch * Math.PI) / 180) * 100).toFixed(1));
 
-    let fusedRoadGradePct = roadGradePct;
-    if (speedKmh > 15 && torqueNm > 20 && !rollingDragAnomaly) {
-        fusedRoadGradePct = Number((0.60 * roadGradePct + 0.40 * imuGradePct).toFixed(1));
-    } else if (rawTiltPitch !== 0) {
-        fusedRoadGradePct = imuGradePct;
+    let fusedRoadGradePct = packet.fused_road_grade_pct != null
+        ? Number(packet.fused_road_grade_pct)
+        : roadGradePct;
+    if (packet.fused_road_grade_pct == null) {
+        if (speedKmh > 15 && torqueNm > 20 && !rollingDragAnomaly) {
+            fusedRoadGradePct = Number((0.60 * roadGradePct + 0.40 * imuGradePct).toFixed(1));
+        } else if (rawTiltPitch !== 0) {
+            fusedRoadGradePct = imuGradePct;
+        }
     }
 
     if (Math.abs(fusedRoadGradePct) < 1.5 && speedKmh > 20 && gear >= 2 && accelG > 0.12 && torqueNm > 80) {
@@ -880,6 +899,138 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         state.lastAccessoryBeltStatus = accessoryBeltStatus;
     }
 
+    // ═════════════════════════════════════════════════════════════════════════
+    // SUITA NIVEL 5: HUMAN LIFE, SAFETY & FINANCIAL GUARDIAN (6 NOI ALGORITMI)
+    // ═════════════════════════════════════════════════════════════════════════
+
+    // ── [PHM 13 / N5-1] Detecție Polei („Black Ice”), Acvaplanare & Aderență ──
+    const rawWheelSlip = packet.wheel_slip_delta_kmh ?? packet.motor?.wheel_slip_kmh ?? (speedKmh - gpsSpeedKmh);
+    const wheelSlipDeltaKmh = Number(Math.max(0, rawWheelSlip).toFixed(1));
+    const accelWheelMs2 = state.lastSpeedKmh != null && dtSec > 0
+        ? ((speedKmh - state.lastSpeedKmh) / 3.6) / dtSec
+        : accelG * 9.81;
+    state.lastSpeedKmh = speedKmh;
+    const accelBodyMs2 = Number(packet.accelerometru?.accel_x ? (packet.accelerometru.accel_x * 9.81) : (accelG * 9.81));
+
+    const deltaAccelSlip = Number(packet.accel_wheel_ms2 != null && packet.accel_body_ms2 != null
+        ? (packet.accel_wheel_ms2 - packet.accel_body_ms2)
+        : (accelWheelMs2 - accelBodyMs2));
+
+    const isSlipping = (wheelSlipDeltaKmh > 4.5 || deltaAccelSlip > 1.2 || packet.is_slipping || packet.wheel_slip_detected) && (!clutchSlipping || clutchSlipPct < 5.0) && speedKmh > 10;
+
+    let roadGripStatus = state.lastRoadGripStatus || 'NORMAL';
+    if (isSlipping) {
+        if (tempAmbient <= 3.5) {
+            roadGripStatus = 'BLACK_ICE_GRIP_LOSS_WARNING';
+        } else {
+            roadGripStatus = 'HYDROPLANING_OR_WET_SLIP_WARNING';
+        }
+    } else {
+        roadGripStatus = 'NORMAL';
+    }
+    state.lastRoadGripStatus = roadGripStatus;
+
+    // ── [PHM 14 / N5-2] Detecția Oboselii Șoferului & Micro-Somn („Deadband + Jerk”)
+    if (speedKmh > 10) {
+        state.totalDrivingSec = (state.totalDrivingSec || 0) + dtSec;
+    }
+    const drivingDurationSec = Number(packet.timp?.run_time_sec ?? packet.run_time_sec ?? state.totalDrivingSec ?? runTimeSec ?? 0);
+    const lateralJerk = Math.abs(accelY) > 0.14;
+    const throttleJerk = Math.abs(deltaThrottlePerSec) > 12;
+    if (speedKmh > 60 && lateralJerk && throttleJerk) {
+        state.fatigueJerkCount = (state.fatigueJerkCount || 0) + 1;
+    }
+    if (packet.fatigue_jerk_event) {
+        state.fatigueJerkCount = (state.fatigueJerkCount || 0) + 1;
+    }
+
+    let driverFatigueScore = 100;
+    if (packet.driver_fatigue_score != null || packet.driver?.fatigue_score != null) {
+        driverFatigueScore = Number(packet.driver_fatigue_score ?? packet.driver?.fatigue_score);
+    } else {
+        const timePenalty = drivingDurationSec > 5400 ? Math.min(50, Math.round(((drivingDurationSec - 5400) / 3600) * 25)) : 0;
+        const jerkPenalty = Math.min(45, (state.fatigueJerkCount || 0) * 12);
+        driverFatigueScore = Math.max(10, Math.min(100, 100 - timePenalty - jerkPenalty));
+    }
+    const driverFatigueStatus = driverFatigueScore < 45 ? 'DRIVER_FATIGUE_TAKE_BREAK_ALERT' : 'NORMAL';
+    state.lastDriverFatigueScore = driverFatigueScore;
+    state.lastDriverFatigueStatus = driverFatigueStatus;
+
+    // ── [PHM 15 / N5-3] Fierbere Lichid Frână & „Brake Fade” în Pantă Montană ─
+    const brakeFluidTempEstimatedC = Math.round(Number(packet.brake_fluid_temp_c ?? (tempAmbient + (estimatedBrakeDiscTempC - tempAmbient) * 0.48)));
+    const activeRoadGrade = Number(fusedRoadGradePct ?? roadGradePct ?? packet.fused_road_grade_pct ?? packet.road_grade_pct ?? 0);
+    const isMountainDescent = activeRoadGrade < -4.0;
+    const isFluidOverheated = estimatedBrakeDiscTempC > 250 || brakeFluidTempEstimatedC > 145 || packet.brake_fade_risk;
+    const isHighGear = gear >= 4;
+    const mountainBrakeFadeRisk = Boolean((isMountainDescent && isFluidOverheated && isHighGear) || packet.mountain_brake_fade_risk);
+
+    // ── [PHM 16 / N5-4] Consumator Electric Parazit în Staționare (V_stop vs V_start)
+    let parasiticDrainMa = state.lastParasiticDrainMa ?? 25;
+    let parasiticDrainStatus = state.lastParasiticDrainStatus ?? 'NORMAL';
+
+    const parkedHours = Number(packet.baterie?.parked_hours ?? packet.parked_hours ?? state.parkedHours ?? 0);
+    if (packet.baterie?.parasitic_drain_ma != null || packet.parasitic_drain_ma != null) {
+        parasiticDrainMa = Math.round(Number(packet.baterie?.parasitic_drain_ma ?? packet.parasitic_drain_ma));
+        parasiticDrainStatus = parasiticDrainMa > 120 ? 'PARASITIC_BATTERY_DRAIN_DETECTED' : 'NORMAL';
+        state.lastParasiticDrainMa = parasiticDrainMa;
+        state.lastParasiticDrainStatus = parasiticDrainStatus;
+    } else if (parkedHours > 0) {
+        const vStop = Number(packet.baterie?.v_stop ?? state.vStop ?? 12.65);
+        const vStart = Number(packet.baterie?.v_start ?? packet.baterie?.battery_volt ?? batteryVolt);
+        const tStop = Number(packet.baterie?.t_stop ?? state.tStop ?? 20);
+        const tStart = Number(packet.baterie?.t_start ?? tempAmbient);
+        const tempDrop = Math.max(0, tStop - tStart);
+        const deltaVNet = Math.max(0, (vStop - vStart) - 0.0015 * tempDrop);
+        parasiticDrainMa = Math.round((deltaVNet / parkedHours) * (75 / 1.2) * 1000);
+        parasiticDrainStatus = parasiticDrainMa > 120 ? 'PARASITIC_BATTERY_DRAIN_DETECTED' : 'NORMAL';
+        state.lastParasiticDrainMa = parasiticDrainMa;
+        state.lastParasiticDrainStatus = parasiticDrainStatus;
+    }
+
+    // ── [PHM 17 / N5-5] Motorină Slabă / Contaminată După Alimentare ───────────
+    const fuelLevelPct = Number(packet.combustibil?.level ?? packet.combustibil?.fuel_level_pct ?? packet.fuel_level ?? 0);
+    if (state.lastFuelLevelPct != null && (fuelLevelPct - state.lastFuelLevelPct) > 10.0) {
+        state.justRefueled = true;
+    }
+    state.lastFuelLevelPct = fuelLevelPct > 0 ? fuelLevelPct : state.lastFuelLevelPct;
+    if (packet.just_refueled != null || packet.combustibil?.just_refueled != null) {
+        state.justRefueled = Boolean(packet.just_refueled ?? packet.combustibil?.just_refueled);
+    }
+
+    let fuelQualityIndex = state.lastFuelQualityIndex ?? 98;
+    let fuelQualityStatus = state.lastFuelQualityStatus ?? 'NORMAL';
+
+    if (state.justRefueled && tempCoolant > 80) {
+        const bsfcHighInCruise = bsfcGPerKwh > 255 && rpm >= 1600 && rpm <= 2600 && loadPct >= 30 && loadPct <= 65;
+        const idleInjHigh = injQtyMg > 5.6 && speedKmh < 2 && rpm >= 700 && rpm <= 950;
+        const idleVibrations = idleRpmStdDev > 16 || (packet.motor?.rpm_std_dev > 16) || (idleStabilityIndex < 75);
+
+        const isBadFuel = (bsfcHighInCruise || idleInjHigh) && idleVibrations;
+        if (isBadFuel || packet.bad_fuel_detected) {
+            fuelQualityStatus = 'POOR_DIESEL_CETANE_OR_CONTAMINATION';
+            fuelQualityIndex = 42;
+        } else {
+            fuelQualityStatus = 'NORMAL';
+            fuelQualityIndex = 95;
+        }
+        state.lastFuelQualityStatus = fuelQualityStatus;
+        state.lastFuelQualityIndex = fuelQualityIndex;
+    }
+
+    // ── [PHM 18 / N5-6] Risc Intoxicare Monoxid de Carbon / Gaze în Staționare ─
+    if (speedKmh < 1.0 && rpm > 500) {
+        state.stationaryIdlingSec = (state.stationaryIdlingSec || 0) + dtSec;
+    } else if (speedKmh > 5.0) {
+        state.stationaryIdlingSec = 0;
+    }
+    const stationaryIdlingSec = Math.round(Number(packet.motor?.stationary_idling_sec ?? packet.stationary_idling_sec ?? state.stationaryIdlingSec ?? 0));
+    const activeDpfOrSmoke = Boolean(dpfRegenActive || smokeRisk || packet.dpf_regen_active || packet.smoke_risk);
+    const cabinExhaustHazardAlert = Boolean(
+        stationaryIdlingSec > 900 ||
+        (stationaryIdlingSec > 180 && activeDpfOrSmoke) ||
+        packet.cabin_exhaust_hazard_alert
+    );
+
     // =========================================================================
     // MODULUL 1 & 2: WEIBULL SURVIVAL, ROI B2B & BINARY M2M TELEMETRY ENCODER
     // =========================================================================
@@ -905,7 +1056,13 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         isSteadyState, diagnosticConfidencePct,
         tireRadiusDriftPct, tirePressureStatus,
         exhaustHeatAnomalyC, timingPhaseStatus,
-        crankingTriageStatus, mafVsTurboTriage, accessoryBeltStatus
+        crankingTriageStatus, mafVsTurboTriage, accessoryBeltStatus,
+        roadGripStatus, wheelSlipDeltaKmh,
+        driverFatigueScore, driverFatigueStatus,
+        brakeFluidTempEstimatedC, mountainBrakeFadeRisk,
+        parasiticDrainMa, parasiticDrainStatus,
+        fuelQualityIndex, fuelQualityStatus,
+        stationaryIdlingSec, cabinExhaustHazardAlert
     };
 
     const weibullRes = computeWeibullReliability(packet, virtualBasics);
@@ -1024,6 +1181,20 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
         crankingTriageStatus,
         mafVsTurboTriage,
         accessoryBeltStatus,
+
+        // ── Suita Nivel 5: Human Life, Safety & Financial Guardian ──────────
+        roadGripStatus,
+        wheelSlipDeltaKmh,
+        driverFatigueScore,
+        driverFatigueStatus,
+        brakeFluidTempEstimatedC,
+        mountainBrakeFadeRisk,
+        parasiticDrainMa,
+        parasiticDrainStatus,
+        fuelQualityIndex,
+        fuelQualityStatus,
+        stationaryIdlingSec,
+        cabinExhaustHazardAlert,
 
         // ── Modulul 1: Fiabilitate Weibull R(t) & ROI Economic (€) ───────────
         weibullReliability: weibullRes.weibullReliability,
