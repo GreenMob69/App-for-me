@@ -278,8 +278,8 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
                     <Text style={styles.backBtnText}>{t('detail.back')}</Text>
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
-                    <Text style={styles.headerTitle}>{tripDateLabel}</Text>
-                    <Text style={styles.headerSub}>{getDuration(trip.timestamp_start, trip.timestamp_end)}</Text>
+                    <Text style={styles.headerTitle} numberOfLines={1}>{tripDateLabel}</Text>
+                    <Text style={styles.headerSub} numberOfLines={1}>{getDuration(trip.timestamp_start, trip.timestamp_end)}</Text>
                 </View>
                 <View style={styles.headerRight}>
                     {analiza?.health_score != null && (
@@ -323,7 +323,7 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
                             styles.tagPillText,
                             trip.trip_tag === 'BUSINESS' ? styles.tagTextBusiness :
                             trip.trip_tag === 'PERSONAL' ? styles.tagTextPersonal : styles.tagTextDefault
-                        ]}>
+                        ]} numberOfLines={1} ellipsizeMode="tail">
                             {trip.trip_tag === 'BUSINESS' ? '💼 Cursă Business (Decontabilă)' :
                              trip.trip_tag === 'PERSONAL' ? '👤 Cursă Personală' :
                              '🏷️ Setează etichetă cursă (+)'}
@@ -331,7 +331,7 @@ const TripDetailScreen = ({ tripId: propTripId, onBack, route }) => {
                     </TouchableOpacity>
                     {trip.nr_alerte > 0 && (
                         <View style={styles.alertCountBadge}>
-                            <Text style={styles.alertCountText}>⚠️ {trip.nr_alerte} alerte</Text>
+                            <Text style={styles.alertCountText} numberOfLines={1}>⚠️ {trip.nr_alerte} alerte</Text>
                         </View>
                     )}
                 </View>
@@ -761,7 +761,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: colors.border.subtle,
     },
-    headerCenter: { flex: 1, alignItems: 'center' },
+    headerCenter: { flex: 1, alignItems: 'center', marginHorizontal: spacing[2] },
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing[2] },
     shareBtn: {
         backgroundColor: colors.accent.default,
@@ -819,10 +819,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: spacing[2],
         marginTop: spacing[3],
         marginBottom: spacing[2],
     },
     tagPill: {
+        flexShrink: 1,
         paddingHorizontal: spacing[3],
         paddingVertical: spacing[1] + 2,
         borderRadius: radii.full,
@@ -856,6 +859,7 @@ const styles = StyleSheet.create({
         color: colors.text.secondary,
     },
     alertCountBadge: {
+        flexShrink: 0,
         backgroundColor: 'rgba(239, 68, 68, 0.12)',
         borderColor: colors.status.critical,
         borderWidth: 1,

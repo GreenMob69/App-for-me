@@ -104,7 +104,7 @@ const StatusBadge = React.memo(({
         >
             <View style={[styles.dot, styles[`dot_${size}`], { backgroundColor: color }]} />
             {label ? (
-                <Text style={[styles.label, styles[`label_${size}`], { color }]}>
+                <Text style={[styles.label, styles[`label_${size}`], { color }]} numberOfLines={1}>
                     {label}
                 </Text>
             ) : null}
@@ -121,6 +121,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderRadius: radii.full,
         alignSelf: 'flex-start',
+        flexShrink: 0,
     },
 
     // ── Dimensiuni container ───────────────────────────────────────────────

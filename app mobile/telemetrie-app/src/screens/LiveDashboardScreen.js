@@ -435,7 +435,53 @@ const DUAL_PRESETS = [
     { label: '⚡ Tensiune vs. RPM', m1: 'ecu_volt', m2: 'rpm' },
 ];
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Sub-components & Status Formatting ──────────────────────────────────────
+
+const STATUS_VALUE_LABELS = {
+    NORMAL: 'Normal',
+    OPTIMAL: 'Optim',
+    OPTIMUM: 'Optim',
+    STANDBY: 'Așteptare',
+    CRITIC: 'Critic',
+    Nominal: 'Nominal',
+    Stabil: 'Stabil',
+    Tranzient: 'Tranzient',
+    Sigur: 'Sigur',
+    OK: 'OK',
+    'RISC CRITIC': 'Risc Critic',
+    'PERICOL CO': 'Pericol CO',
+
+    // PHM Level 3, 4 & 5 Diagnostic Statuses
+    BLACK_ICE_GRIP_LOSS_WARNING: 'Polei / Gheață',
+    HYDROPLANING_OR_WET_SLIP_WARNING: 'Acvaplanare',
+    DROWSY_MICRO_SLEEP_CRITICAL: 'Micro-Somn',
+    DROWSY_FATIGUE_WARNING: 'Oboseală',
+    MOUNTAIN_BRAKE_FADE_BOILING_RISK: 'Fierbere Frâne',
+    PARASITIC_BATTERY_DRAIN_RISK: 'Consum Parazit',
+    POOR_FUEL_CONTAMINATION_RISK: 'Combustibil Rău',
+    CABIN_CO_EXHAUST_HAZARD_RISK: 'Pericol Gaze',
+    DIESEL_RUNAWAY_RISK: 'Autoturare',
+    WATER_PUMP_IMPELLER_OR_HEAD_GASKET_RISK: 'Pompă/Chiulasă',
+    MAF_SENSOR_FOULED_TURBO_OK: 'MAF Murdar',
+    TIMING_PHASE_DRIFT_WARNING: 'Derivă Distribuție',
+    TIRE_PRESSURE_LOSS_SUSPECTED: 'Pierdere Presiune',
+    WORN_ENGINE_OR_GEARBOX_MOUNTS: 'Tampoane Uzate',
+    WORN_SHOCK_ABSORBERS: 'Amortizoare',
+    WHEEL_IMBALANCE_OR_TIRE_RUNOUT: 'Dezechilibru Roți',
+    NOZZLE_COKING_OR_PUMP_WEAR: 'Uzură Duze',
+    INTERCOOLER_BOOST_LEAK: 'Pierdere Boost',
+    TURBO_UNDERBOOST_WEAR: 'Underboost',
+    EGR_FLOW_INSUFFICIENT: 'EGR Înfundat',
+    EGR_VALVE_STUCK_OPEN: 'EGR Blocat',
+    ALTERNATOR_OVERRUN_PULLEY_OR_AC_DRAG: 'Fulie / AC',
+    HEAD_GASKET_OR_IMPELLER_RISK: 'Risc Chiulasă',
+    COLD_THERMAL_SHOCK_HEAD_RISK: 'Șoc Termic',
+};
+
+function formatStatusVal(val) {
+    if (typeof val !== 'string') return val;
+    return STATUS_VALUE_LABELS[val] || val.replace(/_/g, ' ');
+}
 
 const MetricTile = ({ label, value, unit, color = colors.text.primary, highlight = false, tileW }) => (
     <View style={[
@@ -443,9 +489,9 @@ const MetricTile = ({ label, value, unit, color = colors.text.primary, highlight
         tileW && { width: tileW },
         highlight && { borderColor: color, borderWidth: 2 },
     ]}>
-        <Text style={styles.tileLabel}>{label}</Text>
-        <Text style={[styles.tileValue, { color }]} numberOfLines={1}>{value}</Text>
-        {unit ? <Text style={styles.tileUnit}>{unit}</Text> : null}
+        <Text style={styles.tileLabel} numberOfLines={1} ellipsizeMode="tail">{label}</Text>
+        <Text style={[styles.tileValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+        {unit ? <Text style={styles.tileUnit} numberOfLines={1}>{unit}</Text> : null}
     </View>
 );
 
@@ -465,10 +511,14 @@ const ParamRow = ({ label, val, unit, max = 100, min = 0, nominalMin, nominalMax
         }
     }
 
+    const displayVal = typeof val === 'number'
+        ? (Number.isInteger(val) ? val.toLocaleString('ro-RO') : val.toFixed(1))
+        : formatStatusVal(val);
+
     return (
         <View style={[styles.paramRow, last && { borderBottomWidth: 0 }]}>
             <View style={styles.paramLabelWrap}>
-                <Text style={styles.paramLabel} numberOfLines={1}>{label}</Text>
+                <Text style={styles.paramLabel} numberOfLines={1} ellipsizeMode="tail">{label}</Text>
                 {isVirtual && (
                     <View style={styles.virtualPill}>
                         <Text style={styles.virtualPillText}>VIRTUAL</Text>
@@ -478,10 +528,12 @@ const ParamRow = ({ label, val, unit, max = 100, min = 0, nominalMin, nominalMax
             <View style={styles.paramTrack}>
                 <View style={[styles.paramFill, { width: pct, backgroundColor: barColor }]} />
             </View>
-            <Text style={[styles.paramVal, { color: barColor }]} numberOfLines={1}>
-                {typeof val === 'number' ? (Number.isInteger(val) ? val.toLocaleString() : val.toFixed(1)) : val}
-                <Text style={styles.paramUnit}> {unit}</Text>
-            </Text>
+            <View style={styles.paramValWrap}>
+                <Text style={[styles.paramVal, { color: barColor }]} numberOfLines={1} ellipsizeMode="tail">
+                    {displayVal}
+                    {unit ? <Text style={styles.paramUnit}> {unit}</Text> : null}
+                </Text>
+            </View>
         </View>
     );
 };
@@ -1250,45 +1302,45 @@ const LiveDashboardScreen = () => {
                 {/* ── 3. BENTO HUD: STATISTICI LIVE / MAX / MIN / MEDIE ── */}
                 <View style={styles.statsHudRow}>
                     <View style={[styles.statsHudCard, { borderLeftColor: cfg1.color, borderLeftWidth: 3 }]}>
-                        <Text style={styles.statsHudLbl}>🔴 LIVE</Text>
-                        <Text style={[styles.statsHudVal, { color: cfg1.color }]}>
+                        <Text style={styles.statsHudLbl} numberOfLines={1}>🔴 LIVE</Text>
+                        <Text style={[styles.statsHudVal, { color: cfg1.color }]} numberOfLines={1}>
                             {live1.toFixed(1)} <Text style={styles.statsHudUnit}>{cfg1.unit}</Text>
                         </Text>
                         {isDualChannel && (
-                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]}>
+                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]} numberOfLines={1} ellipsizeMode="tail">
                                 CH2: {live2.toFixed(1)} {cfg2.unit}
                             </Text>
                         )}
                     </View>
                     <View style={styles.statsHudCard}>
-                        <Text style={styles.statsHudLbl}>🔺 VÂRF (MAX)</Text>
-                        <Text style={styles.statsHudVal}>
+                        <Text style={styles.statsHudLbl} numberOfLines={1}>🔺 VÂRF (MAX)</Text>
+                        <Text style={styles.statsHudVal} numberOfLines={1}>
                             {max1.toFixed(1)} <Text style={styles.statsHudUnit}>{cfg1.unit}</Text>
                         </Text>
                         {isDualChannel && (
-                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]}>
+                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]} numberOfLines={1} ellipsizeMode="tail">
                                 CH2: {max2.toFixed(1)} {cfg2.unit}
                             </Text>
                         )}
                     </View>
                     <View style={styles.statsHudCard}>
-                        <Text style={styles.statsHudLbl}>🔻 MINIM</Text>
-                        <Text style={styles.statsHudVal}>
+                        <Text style={styles.statsHudLbl} numberOfLines={1}>🔻 MINIM</Text>
+                        <Text style={styles.statsHudVal} numberOfLines={1}>
                             {min1.toFixed(1)} <Text style={styles.statsHudUnit}>{cfg1.unit}</Text>
                         </Text>
                         {isDualChannel && (
-                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]}>
+                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]} numberOfLines={1} ellipsizeMode="tail">
                                 CH2: {min2.toFixed(1)} {cfg2.unit}
                             </Text>
                         )}
                     </View>
                     <View style={styles.statsHudCard}>
-                        <Text style={styles.statsHudLbl}>📊 MEDIE</Text>
-                        <Text style={styles.statsHudVal}>
+                        <Text style={styles.statsHudLbl} numberOfLines={1}>📊 MEDIE</Text>
+                        <Text style={styles.statsHudVal} numberOfLines={1}>
                             {avg1.toFixed(1)} <Text style={styles.statsHudUnit}>{cfg1.unit}</Text>
                         </Text>
                         {isDualChannel && (
-                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]}>
+                            <Text style={[styles.statsHudSubVal, { color: cfg2.color }]} numberOfLines={1} ellipsizeMode="tail">
                                 CH2: {avg2.toFixed(1)} {cfg2.unit}
                             </Text>
                         )}
@@ -1616,6 +1668,7 @@ const styles = StyleSheet.create({
         borderRadius: radii.full,
         paddingHorizontal: spacing[2] + 2,
         paddingVertical: spacing[1],
+        flexShrink: 0,
     },
     connDot:   { width: 7, height: 7, borderRadius: 4 },
     connLabel: { fontSize: typography.sizes.micro, fontWeight: typography.weights.heavy },
@@ -1624,6 +1677,7 @@ const styles = StyleSheet.create({
         paddingVertical: spacing[1],
         borderRadius: radii.full,
         borderWidth: 1,
+        flexShrink: 0,
     },
     modeToggleDriver: {
         backgroundColor: 'rgba(56, 189, 248, 0.1)',
@@ -1651,6 +1705,7 @@ const styles = StyleSheet.create({
         borderRadius: radii.full,
         paddingHorizontal: spacing[2] + 2,
         paddingVertical: spacing[1],
+        flexShrink: 0,
     },
     hudToggleBtnActive: {
         backgroundColor: '#ff453a',
@@ -1665,11 +1720,12 @@ const styles = StyleSheet.create({
     },
     vehicleName: {
         flex: 1,
+        flexShrink: 1,
         fontSize: typography.sizes.body1,
         fontWeight: typography.weights.semibold,
         color: colors.text.primary,
     },
-    alertBtn: { padding: spacing[1], position: 'relative' },
+    alertBtn: { padding: spacing[1], position: 'relative', flexShrink: 0 },
     alertBtnIcon: { fontSize: 22 },
     badge: {
         position: 'absolute', top: 0, right: 0,
@@ -2093,10 +2149,11 @@ const styles = StyleSheet.create({
         gap: spacing[2],
     },
     paramLabelWrap: {
-        width: 140,
+        width: 135,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
+        flexShrink: 0,
     },
     paramLabel: {
         flex: 1,
@@ -2111,6 +2168,7 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 240, 255, 0.15)',
         borderWidth: 0.5,
         borderColor: '#00f0ff',
+        flexShrink: 0,
     },
     virtualPillText: {
         fontSize: 7.5,
@@ -2124,10 +2182,16 @@ const styles = StyleSheet.create({
         backgroundColor: colors.bg[2],
         borderRadius: radii.full,
         overflow: 'hidden',
+        minWidth: 35,
     },
     paramFill:  { height: '100%', borderRadius: radii.full, opacity: 0.9 },
-    paramVal: {
+    paramValWrap: {
         minWidth: 65,
+        maxWidth: 115,
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+    },
+    paramVal: {
         textAlign: 'right',
         fontSize: typography.sizes.label2,
         fontWeight: typography.weights.heavy,
@@ -2202,17 +2266,19 @@ const styles = StyleSheet.create({
     },
     statsHudRow: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         gap: spacing[2],
         marginBottom: spacing[3],
     },
     statsHudCard: {
-        flex: 1,
+        width: '48.5%',
         backgroundColor: colors.bg[1],
         borderRadius: radii.md,
-        padding: spacing[2],
+        padding: spacing[2] + 2,
         borderWidth: 1,
         borderColor: colors.border.default,
         justifyContent: 'center',
+        minHeight: 56,
     },
     statsHudLbl: {
         fontSize: 8,
@@ -2402,16 +2468,19 @@ const styles = StyleSheet.create({
         marginBottom: 3,
     },
     twinCardTitle: {
+        flex: 1,
         fontSize: typography.sizes.micro,
         fontWeight: typography.weights.heavy,
         color: colors.text.secondary,
         letterSpacing: 0.5,
+        marginRight: 4,
     },
     twinCardDelta: {
         fontSize: 10,
         fontWeight: typography.weights.bold,
         color: colors.status.good,
         fontVariant: ['tabular-nums'],
+        flexShrink: 0,
     },
     twinBigVal: {
         fontSize: typography.sizes.title3,
@@ -2575,6 +2644,7 @@ const styles = StyleSheet.create({
         marginTop: spacing[2],
     },
     rsPerfItem: {
+        flex: 1,
         alignItems: 'center',
     },
     rsPerfLabel: {

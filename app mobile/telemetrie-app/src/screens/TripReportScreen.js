@@ -24,8 +24,8 @@ const getDrivingRankReport = (ecoScore, aggressivePct) => {
 const ScoreBar = ({ label, score, color }) => (
     <View style={styles.scoreBarContainer}>
         <View style={styles.scoreBarHeader}>
-            <Text style={styles.scoreBarLabel}>{label}</Text>
-            <Text style={[styles.scoreBarValue, { color }]}>{score}%</Text>
+            <Text style={styles.scoreBarLabel} numberOfLines={1}>{label}</Text>
+            <Text style={[styles.scoreBarValue, { color }]} numberOfLines={1}>{score}%</Text>
         </View>
         <View style={styles.scoreBarBg}>
             <View style={[styles.scoreBarFill, { width: `${score}%`, backgroundColor: color }]} />
@@ -146,9 +146,9 @@ const TripReportScreen = ({ route, navigation }) => {
                           color: stats.ecoScore >= 80 ? colors.status.good : colors.status.monitor },
                     ].map((s, i) => (
                         <View key={i} style={[styles.statCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
-                            <Text style={[styles.statValue, s.color && { color: s.color }]}>{s.value ?? '—'}</Text>
-                            <Text style={styles.statUnit}>{s.unit}</Text>
-                            <Text style={styles.statLabel}>{s.label}</Text>
+                            <Text style={[styles.statValue, s.color && { color: s.color }]} numberOfLines={1} adjustsFontSizeToFit>{s.value ?? '—'}</Text>
+                            <Text style={styles.statUnit} numberOfLines={1}>{s.unit}</Text>
+                            <Text style={styles.statLabel} numberOfLines={1}>{s.label}</Text>
                         </View>
                     ))}
                 </View>
@@ -258,10 +258,10 @@ const TripReportScreen = ({ route, navigation }) => {
                         {predictions.map((pred, idx) => (
                             <View key={idx} style={styles.predCard}>
                                 <View style={styles.predHeader}>
-                                    <Text style={styles.predComponent}>{pred.component}</Text>
+                                    <Text style={styles.predComponent} numberOfLines={1} ellipsizeMode="tail">{pred.component}</Text>
                                     <Text style={[styles.predSeverity, {
                                         color: pred.severity === 'HIGH' ? colors.status.critical : colors.status.monitor,
-                                    }]}>{pred.probability}%</Text>
+                                    }]} numberOfLines={1}>{pred.probability}%</Text>
                                 </View>
                                 <Text style={styles.predRecommendation}>{pred.recommendation}</Text>
                             </View>
@@ -390,10 +390,14 @@ const styles = StyleSheet.create({
         marginBottom: spacing[1],
     },
     scoreBarLabel: {
+        flex: 1,
+        flexShrink: 1,
+        marginRight: spacing[2],
         fontSize: typography.sizes.label1,
         color: colors.text.primary,
     },
     scoreBarValue: {
+        flexShrink: 0,
         fontSize: typography.sizes.label1,
         fontWeight: typography.weights.heavy,
         fontVariant: ['tabular-nums'],
@@ -520,11 +524,15 @@ const styles = StyleSheet.create({
         marginBottom: spacing[1] + 2,
     },
     predComponent: {
+        flex: 1,
+        flexShrink: 1,
+        marginRight: spacing[2],
         fontSize: typography.sizes.body2,
         fontWeight: typography.weights.bold,
         color: colors.text.primary,
     },
     predSeverity: {
+        flexShrink: 0,
         fontSize: typography.sizes.body2,
         fontWeight: typography.weights.heavy,
         fontVariant: ['tabular-nums'],

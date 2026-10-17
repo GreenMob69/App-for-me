@@ -324,16 +324,16 @@ export default function SmartMobilityScreen({ showBack = true }) {
                     </TouchableOpacity>
                 )}
                 <View style={styles.headerInfo}>
-                    <Text style={[styles.headerTitle, { color: tpl.textSecondary || '#8b96b5' }]}>
+                    <Text style={[styles.headerTitle, { color: tpl.textSecondary || '#8b96b5' }]} numberOfLines={1}>
                         SMART MOBILITY & SECURITATE
                     </Text>
-                    <Text style={[styles.headerSub, { color: tpl.text || '#eef0f8' }]}>
+                    <Text style={[styles.headerSub, { color: tpl.text || '#eef0f8' }]} numberOfLines={1}>
                         {vehicleLabel || activeVin || 'Vehicul Conectat'}
                     </Text>
                 </View>
                 <View style={styles.livePill}>
                     <View style={styles.liveDot} />
-                    <Text style={styles.livePillText}>GPS ACTIV</Text>
+                    <Text style={styles.livePillText} numberOfLines={1}>GPS ACTIV</Text>
                 </View>
             </View>
 
@@ -508,24 +508,24 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                     <View style={styles.sentrySensorsGrid}>
                                         <View style={[styles.sentrySensorItem, { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: tpl.border }]}>
                                             <Ionicons name="flash-outline" size={20} color={parkingData.lastImpact ? colors.status.caution : colors.status.good} />
-                                            <Text style={[styles.sensorName, { color: tpl.textSecondary || '#8b96b5' }]}>Șoc / Tamponare</Text>
-                                            <Text style={[styles.sensorState, { color: tpl.text || '#eef0f8' }]}>
+                                            <Text style={[styles.sensorName, { color: tpl.textSecondary || '#8b96b5' }]} numberOfLines={1} ellipsizeMode="tail">Șoc / Tamponare</Text>
+                                            <Text style={[styles.sensorState, { color: tpl.text || '#eef0f8' }]} numberOfLines={1} adjustsFontSizeToFit>
                                                 {parkingData.lastImpact ? `${parkingData.lastImpact.forceG}G` : 'Normal (0.0G)'}
                                             </Text>
                                         </View>
 
                                         <View style={[styles.sentrySensorItem, { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: tpl.border }]}>
                                             <Ionicons name="trending-up-outline" size={20} color={parkingData.lastTilt ? colors.status.caution : colors.status.good} />
-                                            <Text style={[styles.sensorName, { color: tpl.textSecondary || '#8b96b5' }]}>Înclinare Șasiu</Text>
-                                            <Text style={[styles.sensorState, { color: tpl.text || '#eef0f8' }]}>
+                                            <Text style={[styles.sensorName, { color: tpl.textSecondary || '#8b96b5' }]} numberOfLines={1} ellipsizeMode="tail">Înclinare Șasiu</Text>
+                                            <Text style={[styles.sensorState, { color: tpl.text || '#eef0f8' }]} numberOfLines={1} adjustsFontSizeToFit>
                                                 {parkingData.lastTilt ? `${parkingData.lastTilt.deg}°` : 'Stabil (0.0°)'}
                                             </Text>
                                         </View>
 
                                         <View style={[styles.sentrySensorItem, { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: tpl.border }]}>
                                             <Ionicons name="radio-outline" size={20} color={colors.status.good} />
-                                            <Text style={[styles.sensorName, { color: tpl.textSecondary || '#8b96b5' }]}>Geofence Antifurt</Text>
-                                            <Text style={[styles.sensorState, { color: tpl.text || '#eef0f8' }]}>Rază 30m OK</Text>
+                                            <Text style={[styles.sensorName, { color: tpl.textSecondary || '#8b96b5' }]} numberOfLines={1} ellipsizeMode="tail">Geofence Antifurt</Text>
+                                            <Text style={[styles.sensorState, { color: tpl.text || '#eef0f8' }]} numberOfLines={1} adjustsFontSizeToFit>Rază 30m OK</Text>
                                         </View>
                                     </View>
 
@@ -824,18 +824,18 @@ export default function SmartMobilityScreen({ showBack = true }) {
                                             {trajectoryData.potholes.map((ph, idx) => (
                                                 <View key={idx} style={[styles.potholeItem, { borderColor: tpl.border }]}>
                                                     <View style={styles.potholeLeft}>
-                                                        <Text style={[styles.potholeForce, { color: colors.status.caution }]}>
+                                                        <Text style={[styles.potholeForce, { color: colors.status.caution }]} numberOfLines={1} adjustsFontSizeToFit>
                                                             {ph.forceG?.toFixed(2)} G
                                                         </Text>
-                                                        <Text style={[styles.potholeTime, { color: tpl.textSecondary || '#8b96b5' }]}>
+                                                        <Text style={[styles.potholeTime, { color: tpl.textSecondary || '#8b96b5' }]} numberOfLines={1}>
                                                             {new Date(ph.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                         </Text>
                                                     </View>
                                                     <View style={styles.potholeCenter}>
-                                                        <Text style={[styles.potholeDesc, { color: tpl.text || '#eef0f8' }]}>
+                                                        <Text style={[styles.potholeDesc, { color: tpl.text || '#eef0f8' }]} numberOfLines={2} ellipsizeMode="tail">
                                                             {ph.descriere || 'Groapă / denivelare violentă'}
                                                         </Text>
-                                                        <Text style={[styles.potholeCoords, { color: tpl.textSecondary || '#8b96b5' }]}>
+                                                        <Text style={[styles.potholeCoords, { color: tpl.textSecondary || '#8b96b5' }]} numberOfLines={1} ellipsizeMode="tail">
                                                             GPS: {ph.lat?.toFixed(5)}, {ph.lon?.toFixed(5)}
                                                         </Text>
                                                     </View>
@@ -1090,11 +1090,15 @@ const styles = StyleSheet.create({
         marginBottom: spacing[2],
     },
     cardTitleRow: {
+        flex: 1,
+        flexShrink: 1,
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing[2],
+        marginRight: spacing[2],
     },
     cardTitle: {
+        flexShrink: 1,
         fontSize: typography.sizes.callout,
         fontWeight: typography.weights.heavy,
         color: '#eef0f8',
@@ -1107,6 +1111,7 @@ const styles = StyleSheet.create({
         marginBottom: spacing[3],
     },
     badgePill: {
+        flexShrink: 0,
         paddingHorizontal: spacing[2],
         paddingVertical: 2,
         borderRadius: radii.full,
@@ -1148,6 +1153,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: spacing[2],
         paddingVertical: spacing[3],
+        paddingHorizontal: spacing[3],
         borderRadius: radii.md,
     },
     primaryActionBtnText: {
@@ -1155,6 +1161,8 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.heavy,
         letterSpacing: 0.5,
+        textAlign: 'center',
+        flexShrink: 1,
     },
     meterDisplay: {
         alignItems: 'center',
@@ -1201,6 +1209,8 @@ const styles = StyleSheet.create({
     sentrySensorItem: {
         flex: 1,
         alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 70,
         padding: spacing[2],
         borderRadius: radii.md,
         borderWidth: 1,
@@ -1258,11 +1268,15 @@ const styles = StyleSheet.create({
         marginBottom: spacing[2],
     },
     settingLabel: {
+        flex: 1,
+        flexShrink: 1,
+        marginRight: spacing[2],
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.bold,
         color: '#eef0f8',
     },
     settingValue: {
+        flexShrink: 0,
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.heavy,
     },
@@ -1349,6 +1363,7 @@ const styles = StyleSheet.create({
         gap: spacing[3],
     },
     potholeLeft: {
+        flexShrink: 0,
         alignItems: 'center',
         minWidth: 50,
     },
@@ -1374,6 +1389,7 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     mapBtn: {
+        flexShrink: 0,
         padding: spacing[2],
         borderRadius: radii.md,
         borderWidth: 1,

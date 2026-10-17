@@ -242,8 +242,8 @@ const SubsystemDetailScreen = ({ route, navigation }) => {
                         <View style={styles.baselineList}>
                             {explanation.baselineExplanation.map((b, idx) => (
                                 <View key={idx} style={styles.baselineRow}>
-                                    <Text style={styles.baselineParam}>{b.param}</Text>
-                                    <Text style={[styles.baselineValue, b.isDeviation && styles.baselineDeviation]}>
+                                    <Text style={styles.baselineParam} numberOfLines={1} ellipsizeMode="tail">{b.param}</Text>
+                                    <Text style={[styles.baselineValue, b.isDeviation && styles.baselineDeviation]} numberOfLines={1}>
                                         {b.value}
                                     </Text>
                                 </View>
@@ -455,8 +455,10 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: spacing[2],
+        gap: spacing[2],
     },
     chartMetricBadge: {
+        flexShrink: 0,
         backgroundColor: colors.accent.default + '18',
         borderRadius: radii.full,
         paddingHorizontal: spacing[2] + 2,
@@ -539,13 +541,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        gap: spacing[2],
     },
     baselineParam: {
+        flex: 1,
+        flexShrink: 1,
         fontSize: typography.sizes.label1,
         color: colors.text.primary,
         textTransform: 'capitalize',
     },
     baselineValue: {
+        flexShrink: 0,
         fontSize: typography.sizes.label1,
         fontWeight: typography.weights.semibold,
         color: colors.text.secondary,

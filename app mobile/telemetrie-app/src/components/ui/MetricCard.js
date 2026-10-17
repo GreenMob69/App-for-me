@@ -99,11 +99,20 @@ const MetricCard = React.memo(({
             </View>
 
             <View style={styles.valueRow}>
-                <Text style={[styles.value, styles[`value_${size}`], { color: valueColor }, styles.tabular]}>
+                <Text
+                    style={[styles.value, styles[`value_${size}`], { color: valueColor }, styles.tabular]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                >
                     {value ?? '--'}
                 </Text>
                 {unit ? (
-                    <Text style={[styles.unit, styles[`unit_${size}`], { color: valueColor }]}>{unit}</Text>
+                    <Text
+                        style={[styles.unit, styles[`unit_${size}`], { color: valueColor }]}
+                        numberOfLines={1}
+                    >
+                        {unit}
+                    </Text>
                 ) : null}
             </View>
 
@@ -151,7 +160,7 @@ const styles = StyleSheet.create({
         borderColor: colors.border.default,
     },
 
-    card_sm: { padding: spacing[3] },
+    card_sm: { padding: spacing[2] + 2 },
     card_md: { padding: layout.cardPadding },
     card_lg: { padding: layout.cardPadding + spacing[1] },
 
@@ -177,9 +186,11 @@ const styles = StyleSheet.create({
     valueRow: {
         flexDirection: 'row',
         alignItems: 'baseline',
+        flexWrap: 'nowrap',
     },
     value: {
         fontWeight: typography.weights.heavy,
+        flexShrink: 1,
     },
     value_sm: { fontSize: typography.sizes.body1, lineHeight: typography.lineHeights.body1 },
     value_md: { fontSize: typography.sizes.title2, lineHeight: typography.lineHeights.title2 },
@@ -189,6 +200,7 @@ const styles = StyleSheet.create({
         fontWeight: typography.weights.semibold,
         marginLeft: spacing[1] - 1,
         marginBottom: 1,
+        flexShrink: 0,
     },
     unit_sm: { fontSize: typography.sizes.caption },
     unit_md: { fontSize: typography.sizes.label1 },

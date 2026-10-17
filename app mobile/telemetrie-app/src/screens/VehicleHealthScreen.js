@@ -329,14 +329,14 @@ const VehicleHealthScreen = ({ navigation }) => {
             >
                 {/* ── Header ──────────────────────────────────────────────── */}
                 <View style={styles.header}>
-                    <View>
-                        <Text style={styles.vehicleName}>{vehicleLabel || activeVin.slice(-6)}</Text>
-                        <Text style={styles.lastUpdate}>{formatTimeAgo(lastUpdated)}</Text>
+                    <View style={styles.headerInfo}>
+                        <Text style={styles.vehicleName} numberOfLines={1}>{vehicleLabel || activeVin.slice(-6)}</Text>
+                        <Text style={styles.lastUpdate} numberOfLines={1}>{formatTimeAgo(lastUpdated)}</Text>
                     </View>
                     <View style={styles.headerBadges}>
                         {isOffline && (
                             <View style={styles.offlineBadge}>
-                                <Text style={styles.offlineBadgeText}>
+                                <Text style={styles.offlineBadgeText} numberOfLines={1}>
                                     {cacheAge && (Date.now() - cacheAge) > 3_600_000
                                         ? `DATE DIN ${formatTimeAgo(cacheAge)}`
                                         : 'OFFLINE'}
@@ -345,7 +345,7 @@ const VehicleHealthScreen = ({ navigation }) => {
                         )}
                         {dataQuality && dataQuality !== 'HIGH' && !isOffline && (
                             <View style={[styles.qualityBadge, dataQuality === 'LOW' && styles.qualityBadgeLow]}>
-                                <Text style={[styles.qualityBadgeText, dataQuality === 'LOW' && styles.qualityBadgeTextLow]}>
+                                <Text style={[styles.qualityBadgeText, dataQuality === 'LOW' && styles.qualityBadgeTextLow]} numberOfLines={1}>
                                     DATE {dataQuality}
                                 </Text>
                             </View>
@@ -830,6 +830,12 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingVertical: spacing[3],
+        gap: spacing[2],
+    },
+    headerInfo: {
+        flex: 1,
+        flexShrink: 1,
+        marginRight: spacing[2],
     },
     vehicleName: {
         fontSize: typography.sizes.body1,
@@ -841,7 +847,11 @@ const styles = StyleSheet.create({
         color: colors.text.secondary,
         marginTop: spacing[1] - 2,
     },
-    headerBadges: { flexDirection: 'row', gap: spacing[2] },
+    headerBadges: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        flexShrink: 0,
+    },
     offlineBadge: {
         backgroundColor: colors.tint.critical,
         paddingHorizontal: spacing[2] + 2,

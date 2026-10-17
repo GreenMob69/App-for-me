@@ -455,8 +455,8 @@ const StatusScreen = ({ navigation }) => {
                         showBadge={false}
                     />
                     <View style={styles.identityInfo}>
-                        <Text style={styles.identityModel}>{vehicleLabel || activeVin.slice(-6)}</Text>
-                        <Text style={styles.identityVin}>{activeVin.slice(-6)}</Text>
+                        <Text style={styles.identityModel} numberOfLines={1} ellipsizeMode="tail">{vehicleLabel || activeVin.slice(-6)}</Text>
+                        <Text style={styles.identityVin} numberOfLines={1}>{activeVin.slice(-6)}</Text>
                     </View>
                     <TouchableOpacity
                         style={styles.headerIconBtn}
@@ -505,31 +505,31 @@ const StatusScreen = ({ navigation }) => {
                 {/* ── 0b. DASHBOARD SUMMARY ─────────────────────────────── */}
                 <View style={styles.summaryStrip}>
                     <View style={styles.summaryItem}>
-                        <Text style={[styles.summaryNum, { color: drive.status === 'optimal' || drive.status === 'good' ? colors.status.good : colors.status.caution }]}>
+                        <Text style={[styles.summaryNum, { color: drive.status === 'optimal' || drive.status === 'good' ? colors.status.good : colors.status.caution }]} numberOfLines={1} adjustsFontSizeToFit>
                             {drive.status === 'optimal' || drive.status === 'good' ? 'OK' : '⚠'}
                         </Text>
-                        <Text style={styles.summaryLabel}>VEHICUL</Text>
+                        <Text style={styles.summaryLabel} numberOfLines={1}>VEHICUL</Text>
                     </View>
                     <View style={styles.summaryDivider} />
                     <View style={styles.summaryItem}>
-                        <Text style={[styles.summaryNum, { color: (observations?.length || 0) > 0 ? colors.status.caution : colors.status.good }]}>
+                        <Text style={[styles.summaryNum, { color: (observations?.length || 0) > 0 ? colors.status.caution : colors.status.good }]} numberOfLines={1} adjustsFontSizeToFit>
                             {observations?.length || 0}
                         </Text>
-                        <Text style={styles.summaryLabel}>PROBLEME</Text>
+                        <Text style={styles.summaryLabel} numberOfLines={1}>PROBLEME</Text>
                     </View>
                     <View style={styles.summaryDivider} />
                     <View style={styles.summaryItem}>
-                        <Text style={[styles.summaryNum, { color: (upcoming?.length || 0) > 0 ? colors.status.monitor : colors.status.good }]}>
+                        <Text style={[styles.summaryNum, { color: (upcoming?.length || 0) > 0 ? colors.status.monitor : colors.status.good }]} numberOfLines={1} adjustsFontSizeToFit>
                             {upcoming?.length || 0}
                         </Text>
-                        <Text style={styles.summaryLabel}>MENTENANȚĂ</Text>
+                        <Text style={styles.summaryLabel} numberOfLines={1}>MENTENANȚĂ</Text>
                     </View>
                     <View style={styles.summaryDivider} />
                     <TouchableOpacity style={styles.summaryItem} onPress={openNotifications}>
-                        <Text style={[styles.summaryNum, { color: unreadCount > 0 ? colors.accent.default : colors.text.secondary }]}>
+                        <Text style={[styles.summaryNum, { color: unreadCount > 0 ? colors.accent.default : colors.text.secondary }]} numberOfLines={1} adjustsFontSizeToFit>
                             {unreadCount}
                         </Text>
-                        <Text style={styles.summaryLabel}>NOTIFICĂRI</Text>
+                        <Text style={styles.summaryLabel} numberOfLines={1}>NOTIFICĂRI</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -866,7 +866,7 @@ const styles = StyleSheet.create({
         marginBottom: spacing[2],
         paddingHorizontal: spacing[1],
     },
-    identityInfo: { flex: 1 },
+    identityInfo: { flex: 1, minWidth: 0, marginRight: spacing[1] },
     identityModel: {
         fontSize: typography.sizes.body2,
         fontWeight: typography.weights.semibold,
@@ -1192,13 +1192,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: spacing[2],
         marginBottom: 2,
+        flexWrap: 'wrap',
     },
     smartMobilityTitle: {
+        flexShrink: 1,
         fontSize: typography.sizes.caption,
         fontWeight: typography.weights.heavy,
         letterSpacing: 0.5,
     },
     smartMobilityBadge: {
+        flexShrink: 0,
         paddingHorizontal: 6,
         paddingVertical: 1,
         borderRadius: radii.full,
