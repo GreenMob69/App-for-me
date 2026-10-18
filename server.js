@@ -189,6 +189,7 @@ app.use('/api',  require('./routes/smartMobility')(db, io));
 app.use('/api',  require('./routes/reports')(db));
 app.use('/api',  require('./routes/ai')(db));
 app.use('/api',  require('./routes/sync')(db));
+app.use('/api',  require('./routes/simulatorControl')(db, io));
 app.use('/admin', require('./routes/admin')(db));
 
 const PORT = process.env.PORT || 3000;

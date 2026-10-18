@@ -13,6 +13,7 @@ import Svg, { Path, Rect, Circle, Line, Defs, LinearGradient, Stop } from 'react
 import { LiveContext } from '../../context/LiveContext';
 import { useVehicle } from '../../context/VehicleContext';
 import { useUiParadigm } from '../../context/AppContext';
+import { hapticTap } from '../../services/hapticFeedback';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MONO_FONT = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
@@ -48,7 +49,7 @@ function generatePulsePath(width, height, loadPct = 20, rpm = 800) {
 export default function MinimalNothingParadigm() {
     const { liveData, isConnected } = useContext(LiveContext);
     const { activeVehicle } = useVehicle();
-    const { setUiParadigm, openExperiencePicker } = useUiParadigm();
+    const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
 
     const [activeTab, setActiveTab] = useState('01'); // '01'|'02'|'03'|'04'|'05'
 
@@ -128,8 +129,23 @@ export default function MinimalNothingParadigm() {
                 {/* Butoane de acțiune și revenire rapidă */}
                 <View style={styles.headerActions}>
                     <TouchableOpacity
+                        style={[styles.v2Button, { borderColor: '#00F0FF', backgroundColor: '#00F0FF12' }]}
+                        onPress={() => {
+                            hapticTap();
+                            openSimulatorModal();
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                    >
+                        <Text style={[styles.v2ButtonText, { color: '#00F0FF' }]}>🎮 DEMO</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                         style={styles.v2Button}
-                        onPress={() => setUiParadigm('CLASSIC_V2')}
+                        onPress={() => {
+                            hapticTap();
+                            setUiParadigm('CLASSIC_V2');
+                        }}
                         activeOpacity={0.7}
                         accessibilityRole="button"
                     >
@@ -138,7 +154,10 @@ export default function MinimalNothingParadigm() {
 
                     <TouchableOpacity
                         style={styles.stylePickerButton}
-                        onPress={openExperiencePicker}
+                        onPress={() => {
+                            hapticTap();
+                            openExperiencePicker();
+                        }}
                         activeOpacity={0.7}
                         accessibilityRole="button"
                     >

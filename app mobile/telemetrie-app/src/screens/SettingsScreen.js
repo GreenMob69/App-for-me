@@ -16,6 +16,7 @@ import socketService from '../services/socket';
 import { colors, typography, radii, spacing, layout, TEMPLATES, useThemeTemplate } from '../theme';
 import { CockpitVisualPreview } from '../components/ui';
 import { getVoiceSettings, updateVoiceSettings, testVoiceAlert, stopSpeech } from '../services/voiceAlertService';
+import { hapticTap } from '../services/hapticFeedback';
 
 // ─── Connection badge ─────────────────────────────────────────────────────────
 
@@ -96,7 +97,7 @@ const SettingsScreen = () => {
     const navigation = useNavigation();
     const { securityEnabled, lockTimeout, saveSettings } = useContext(SecurityContext);
     const { activeVin, activeVehicle, vehicles, switchVehicle, refreshVehicles } = useVehicle();
-    const { activeTemplate, setActiveTemplate, oledBlackMode, setOledBlackMode, uiParadigm, setUiParadigm, openExperiencePicker } = useContext(AppContext);
+    const { activeTemplate, setActiveTemplate, oledBlackMode, setOledBlackMode, uiParadigm, setUiParadigm, openExperiencePicker, openSimulatorModal } = useContext(AppContext);
     const cardStyle = useMemo(() => [styles.card, { backgroundColor: tpl.cardBg, borderColor: tpl.border }], [tpl.cardBg, tpl.border]);
 
     // ── Connection
@@ -417,22 +418,26 @@ const SettingsScreen = () => {
                     Alege cum este afișată telemetria în timp real. Poți comuta oricând între bordul clasic complet, minimalismul Nothing OS sau clusterul retro Audi Digifiz.
                 </Text>
 
-                <View style={styles.paradigmGrid}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing[2], paddingVertical: 4 }}>
                     {/* Clasic V2 */}
                     <TouchableOpacity
                         style={[
                             styles.paradigmCard,
+                            { minWidth: 120 },
                             uiParadigm === 'CLASSIC_V2' && styles.paradigmCardSelected,
                             { borderColor: uiParadigm === 'CLASSIC_V2' ? '#00E5FF' : colors.border.default }
                         ]}
-                        onPress={() => setUiParadigm('CLASSIC_V2')}
+                        onPress={() => {
+                            hapticTap();
+                            setUiParadigm('CLASSIC_V2');
+                        }}
                         activeOpacity={0.75}
                     >
                         <View style={styles.paradigmTopRow}>
                             <View style={[styles.paradigmDot, { backgroundColor: '#00E5FF' }]} />
                             <Text style={[styles.paradigmCardName, uiParadigm === 'CLASSIC_V2' && { color: '#00E5FF' }]}>CLASIC V2</Text>
                         </View>
-                        <Text style={styles.paradigmCardSub}>Bord Multi-Tab & HMI complet</Text>
+                        <Text style={styles.paradigmCardSub}>Bord Multi-Tab & HMI</Text>
                         {uiParadigm === 'CLASSIC_V2' && (
                             <View style={[styles.paradigmActiveTag, { backgroundColor: '#00E5FF' }]}>
                                 <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
@@ -444,17 +449,21 @@ const SettingsScreen = () => {
                     <TouchableOpacity
                         style={[
                             styles.paradigmCard,
+                            { minWidth: 120 },
                             uiParadigm === 'NOTHING_MINIMAL' && styles.paradigmCardSelected,
                             { borderColor: uiParadigm === 'NOTHING_MINIMAL' ? '#FF3B00' : colors.border.default }
                         ]}
-                        onPress={() => setUiParadigm('NOTHING_MINIMAL')}
+                        onPress={() => {
+                            hapticTap();
+                            setUiParadigm('NOTHING_MINIMAL');
+                        }}
                         activeOpacity={0.75}
                     >
                         <View style={styles.paradigmTopRow}>
                             <View style={[styles.paradigmDot, { backgroundColor: '#FF3B00' }]} />
                             <Text style={[styles.paradigmCardName, uiParadigm === 'NOTHING_MINIMAL' && { color: '#FF3B00' }]}>NOTHING OS</Text>
                         </View>
-                        <Text style={styles.paradigmCardSub}>Calm Tech & 128px Speed</Text>
+                        <Text style={styles.paradigmCardSub}>Calm Tech & 128px</Text>
                         {uiParadigm === 'NOTHING_MINIMAL' && (
                             <View style={[styles.paradigmActiveTag, { backgroundColor: '#FF3B00' }]}>
                                 <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
@@ -466,33 +475,106 @@ const SettingsScreen = () => {
                     <TouchableOpacity
                         style={[
                             styles.paradigmCard,
+                            { minWidth: 120 },
                             uiParadigm === 'RETRO_AUDI_96' && styles.paradigmCardSelected,
                             { borderColor: uiParadigm === 'RETRO_AUDI_96' ? '#FF8800' : colors.border.default }
                         ]}
-                        onPress={() => setUiParadigm('RETRO_AUDI_96')}
+                        onPress={() => {
+                            hapticTap();
+                            setUiParadigm('RETRO_AUDI_96');
+                        }}
                         activeOpacity={0.75}
                     >
                         <View style={styles.paradigmTopRow}>
                             <View style={[styles.paradigmDot, { backgroundColor: '#FF8800' }]} />
                             <Text style={[styles.paradigmCardName, uiParadigm === 'RETRO_AUDI_96' && { color: '#FF8800' }]}>AUDI 1996</Text>
                         </View>
-                        <Text style={styles.paradigmCardSub}>Digifiz VFD & 25 LED-uri</Text>
+                        <Text style={styles.paradigmCardSub}>Digifiz VFD 25 LED</Text>
                         {uiParadigm === 'RETRO_AUDI_96' && (
                             <View style={[styles.paradigmActiveTag, { backgroundColor: '#FF8800' }]}>
                                 <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
                             </View>
                         )}
                     </TouchableOpacity>
-                </View>
+
+                    {/* F1 Cyberdeck */}
+                    <TouchableOpacity
+                        style={[
+                            styles.paradigmCard,
+                            { minWidth: 120 },
+                            uiParadigm === 'F1_CYBERDECK' && styles.paradigmCardSelected,
+                            { borderColor: uiParadigm === 'F1_CYBERDECK' ? '#00FF66' : colors.border.default }
+                        ]}
+                        onPress={() => {
+                            hapticTap();
+                            setUiParadigm('F1_CYBERDECK');
+                        }}
+                        activeOpacity={0.75}
+                    >
+                        <View style={styles.paradigmTopRow}>
+                            <View style={[styles.paradigmDot, { backgroundColor: '#00FF66' }]} />
+                            <Text style={[styles.paradigmCardName, uiParadigm === 'F1_CYBERDECK' && { color: '#00FF66' }]}>F1 CYBER</Text>
+                        </View>
+                        <Text style={styles.paradigmCardSub}>F1/WEC 6-Deck</Text>
+                        {uiParadigm === 'F1_CYBERDECK' && (
+                            <View style={[styles.paradigmActiveTag, { backgroundColor: '#00FF66' }]}>
+                                <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+
+                    {/* Spatial Canvas */}
+                    <TouchableOpacity
+                        style={[
+                            styles.paradigmCard,
+                            { minWidth: 120 },
+                            uiParadigm === 'SPATIAL_CANVAS' && styles.paradigmCardSelected,
+                            { borderColor: uiParadigm === 'SPATIAL_CANVAS' ? '#B026FF' : colors.border.default }
+                        ]}
+                        onPress={() => {
+                            hapticTap();
+                            setUiParadigm('SPATIAL_CANVAS');
+                        }}
+                        activeOpacity={0.75}
+                    >
+                        <View style={styles.paradigmTopRow}>
+                            <View style={[styles.paradigmDot, { backgroundColor: '#B026FF' }]} />
+                            <Text style={[styles.paradigmCardName, uiParadigm === 'SPATIAL_CANVAS' && { color: '#B026FF' }]}>SPATIAL 3D</Text>
+                        </View>
+                        <Text style={styles.paradigmCardSub}>4 Camere & Orbită</Text>
+                        {uiParadigm === 'SPATIAL_CANVAS' && (
+                            <View style={[styles.paradigmActiveTag, { backgroundColor: '#B026FF' }]}>
+                                <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </ScrollView>
 
                 {/* Buton Deschide Selectorul Complet */}
                 <TouchableOpacity
                     style={[styles.outlineBtn, { marginTop: spacing[3], borderColor: colors.accent.default }]}
-                    onPress={openExperiencePicker}
+                    onPress={() => {
+                        hapticTap();
+                        openExperiencePicker();
+                    }}
                     activeOpacity={0.75}
                 >
                     <Text style={[styles.outlineBtnText, { color: colors.accent.default }]}>
                         🎨 Deschide Selectorul Vizual de Experiențe ➜
+                    </Text>
+                </TouchableOpacity>
+
+                {/* Buton Deschide Telecomanda de Simulare */}
+                <TouchableOpacity
+                    style={[styles.outlineBtn, { marginTop: spacing[2], borderColor: '#00F0FF', backgroundColor: '#00F0FF12' }]}
+                    onPress={() => {
+                        hapticTap();
+                        openSimulatorModal();
+                    }}
+                    activeOpacity={0.75}
+                >
+                    <Text style={[styles.outlineBtnText, { color: '#00F0FF' }]}>
+                        🎮 Deschide Telecomanda de Simulare Live (Server Cloud) ➜
                     </Text>
                 </TouchableOpacity>
             </View>

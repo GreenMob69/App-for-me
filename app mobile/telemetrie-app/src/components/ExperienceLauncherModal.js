@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import Svg, { Rect, Path, Circle, Line, Text as SvgText } from 'react-native-svg';
 import { useUiParadigm } from '../context/AppContext';
+import { hapticTap } from '../services/hapticFeedback';
 import { colors, typography, spacing, radii } from '../theme';
 
 const PARADIGMS = [
@@ -47,8 +48,8 @@ const PARADIGMS = [
         title: 'F1 TELEMETRY CYBERDECK',
         subtitle: 'Display dens inspirat din motorsport de vârf, canale multiple split-screen, G-Force radial și telemetrie pe ferestre modulare.',
         accent: '#00FF66',
-        badge: 'ÎN CURÂND (ETAPA 2)',
-        isAvailable: false,
+        badge: 'TELEMETRIE F1/WEC',
+        isAvailable: true,
         previewType: 'f1',
     },
     {
@@ -56,8 +57,8 @@ const PARADIGMS = [
         title: 'SPATIAL 3D CANVAS',
         subtitle: 'Mașină exploded 3D cu noduri fizice plutitoare conectate de senzori, particule de flux și interacțiune spațială liberă.',
         accent: '#B026FF',
-        badge: 'ÎN CURÂND (ETAPA 3)',
-        isAvailable: false,
+        badge: 'CANVAS SPAȚIAL 3D',
+        isAvailable: true,
         previewType: 'spatial',
     },
 ];
@@ -150,13 +151,7 @@ export default function ExperienceLauncherModal() {
     if (!showExperiencePicker) return null;
 
     const handleSelectParadigm = (p) => {
-        if (!p.isAvailable) {
-            Alert.alert(
-                'În Dezvoltare',
-                `Paradigma "${p.title}" va fi disponibilă în următoarea etapă arhitecturală. Alege Stilul 1 (Nothing Minimal) sau Stilul 2 (Retro Audi 96)!`
-            );
-            return;
-        }
+        hapticTap();
         setUiParadigm(p.id);
         closeExperiencePicker();
     };

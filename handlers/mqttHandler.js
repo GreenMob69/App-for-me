@@ -77,28 +77,32 @@ function createMqttClient(db, io) {
     client.on('offline',   ()    => console.warn('[MQTT] Broker inaccesibil — mod offline.'));
 
     client.on('message', async (topic, message) => {
-        let pachet;
         try {
-            pachet = JSON.parse(message.toString());
+            const pachet = JSON.parse(message.toString());
+            await handleIncomingTelemetry(db, io, pachet);
         } catch (e) {
             console.error('[MQTT] Pachet invalid (nu este JSON valid):', e.message);
-            return;
         }
+    });
 
-        if (!pachet || typeof pachet !== 'object') {
-            console.warn('[MQTT] Pachet ignorat — structura invalida.');
-            return;
-        }
+    return client;
+}
 
-        // Timestamp auto-corecție: dacă ESP32 trimite secunde în loc de ms
-        if (pachet.timestamp && pachet.timestamp < 1e10) pachet.timestamp *= 1000;
-        if (!pachet.timestamp) {
-            console.warn('[MQTT] Pachet ignorat — lipseste timestamp.');
-            return;
-        }
+async function handleIncomingTelemetry(db, io, pachet) {
+    if (!pachet || typeof pachet !== 'object') {
+        console.warn('[TELEMETRIE] Pachet ignorat — structura invalida.');
+        return;
+    }
 
-        const vin            = pachet.ecu?.vin || 'WAUZZZ4A1RN000000';
-        const eveniment_motor = pachet.stare_motor;
+    // Timestamp auto-corecție: dacă ESP32 trimite secunde în loc de ms
+    if (pachet.timestamp && pachet.timestamp < 1e10) pachet.timestamp *= 1000;
+    if (!pachet.timestamp) {
+        console.warn('[TELEMETRIE] Pachet ignorat — lipseste timestamp.');
+        return;
+    }
+
+    const vin            = pachet.ecu?.vin || 'WAUZZZ4A1RN000000';
+    const eveniment_motor = pachet.stare_motor;
 
         // DTC-uri live
         if (Array.isArray(pachet.dtc) && pachet.dtc.length > 0) {
@@ -609,9 +613,6 @@ function createMqttClient(db, io) {
                 }
             });
         }
-    });
-
-    return client;
 }
 
 async function flushAllActiveTrips(db) {
@@ -629,4 +630,4 @@ async function flushAllActiveTrips(db) {
     }
 }
 
-module.exports = { createMqttClient, flushPendingFlux, flushAllActiveTrips };
+module.exports = { createMqttClient, flushPendingFlux, flushAllActiveTrips, handleIncomingTelemetry };

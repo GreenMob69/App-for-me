@@ -13,6 +13,7 @@ import Svg, { Rect, Path, Circle, Line, Defs, LinearGradient, Stop, G, Text as S
 import { LiveContext } from '../../context/LiveContext';
 import { useVehicle } from '../../context/VehicleContext';
 import { useUiParadigm } from '../../context/AppContext';
+import { hapticTap } from '../../services/hapticFeedback';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RETRO_FONT = Platform.OS === 'ios' ? 'Courier' : 'monospace';
@@ -127,7 +128,7 @@ function VerticalLedColumn({ label, value, unit, min, max, warnThreshold, critTh
 export default function RetroAudi96Paradigm() {
     const { liveData, isConnected } = useContext(LiveContext);
     const { activeVehicle } = useVehicle();
-    const { setUiParadigm, openExperiencePicker } = useUiParadigm();
+    const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
 
     // Stare bordcomputer cycler (Bordcomputer Modus)
     const [bcModeIndex, setBcModeIndex] = useState(0);
@@ -194,8 +195,22 @@ export default function RetroAudi96Paradigm() {
                 {/* Acțiuni de salvare / schimbare stil */}
                 <View style={styles.headerBtnGroup}>
                     <TouchableOpacity
+                        style={[styles.bezelBtnV2, { borderColor: '#00F0FF', backgroundColor: '#00F0FF15' }]}
+                        onPress={() => {
+                            hapticTap();
+                            openSimulatorModal();
+                        }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.bezelBtnV2Text, { color: '#00F0FF' }]}>🎮 DEMO</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                         style={styles.bezelBtnV2}
-                        onPress={() => setUiParadigm('CLASSIC_V2')}
+                        onPress={() => {
+                            hapticTap();
+                            setUiParadigm('CLASSIC_V2');
+                        }}
                         activeOpacity={0.7}
                     >
                         <Text style={styles.bezelBtnV2Text}>⮌ CLASIC V2</Text>
@@ -203,7 +218,10 @@ export default function RetroAudi96Paradigm() {
 
                     <TouchableOpacity
                         style={styles.bezelBtnStyle}
-                        onPress={openExperiencePicker}
+                        onPress={() => {
+                            hapticTap();
+                            openExperiencePicker();
+                        }}
                         activeOpacity={0.7}
                     >
                         <Text style={styles.bezelBtnStyleText}>[ 🎨 STIL ]</Text>

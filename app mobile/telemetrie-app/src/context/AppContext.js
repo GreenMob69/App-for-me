@@ -13,6 +13,7 @@ export const AppProvider = ({ children }) => {
     const [uiParadigm, setUiParadigmState] = useState('CLASSIC_V2');
     const [showExperiencePicker, setShowExperiencePicker] = useState(false);
     const [skipLauncherPrompt, setSkipLauncherPromptState] = useState(false);
+    const [showSimulatorModal, setShowSimulatorModal] = useState(false);
     const navigationRef = useRef(null);
 
     // Încarcă șablonul, modul OLED și paradigma vizuală din AsyncStorage la pornire
@@ -78,6 +79,14 @@ export const AppProvider = ({ children }) => {
         setShowExperiencePicker(false);
     }, []);
 
+    const openSimulatorModal = useCallback(() => {
+        setShowSimulatorModal(true);
+    }, []);
+
+    const closeSimulatorModal = useCallback(() => {
+        setShowSimulatorModal(false);
+    }, []);
+
     const baseTemplate = TEMPLATES[activeTemplate] || TEMPLATES.MOTORSPORT;
     const currentTemplate = useMemo(() => (oledBlackMode ? {
         ...baseTemplate,
@@ -104,6 +113,8 @@ export const AppProvider = ({ children }) => {
         showExperiencePicker, setShowExperiencePicker,
         openExperiencePicker, closeExperiencePicker,
         skipLauncherPrompt, setSkipLauncherPrompt,
+        showSimulatorModal, setShowSimulatorModal,
+        openSimulatorModal, closeSimulatorModal,
         tripReport, setTripReport, dismissTripReport,
         navigationRef, setNavigationRef,
     }), [
@@ -112,6 +123,7 @@ export const AppProvider = ({ children }) => {
         uiParadigm, setUiParadigm,
         showExperiencePicker, openExperiencePicker, closeExperiencePicker,
         skipLauncherPrompt, setSkipLauncherPrompt,
+        showSimulatorModal, openSimulatorModal, closeSimulatorModal,
         tripReport, dismissTripReport, setNavigationRef
     ]);
 
@@ -137,6 +149,9 @@ export const useUiParadigm = () => {
         closeExperiencePicker: context?.closeExperiencePicker || (() => {}),
         skipLauncherPrompt: Boolean(context?.skipLauncherPrompt),
         setSkipLauncherPrompt: context?.setSkipLauncherPrompt || (() => {}),
+        showSimulatorModal: Boolean(context?.showSimulatorModal),
+        openSimulatorModal: context?.openSimulatorModal || (() => {}),
+        closeSimulatorModal: context?.closeSimulatorModal || (() => {}),
     };
 };
 

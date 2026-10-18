@@ -46,6 +46,9 @@ import ErrorBoundary        from './src/components/ErrorBoundary';
 import ExperienceLauncherModal from './src/components/ExperienceLauncherModal';
 import MinimalNothingParadigm from './src/screens/paradigms/MinimalNothingParadigm';
 import RetroAudi96Paradigm  from './src/screens/paradigms/RetroAudi96Paradigm';
+import F1CyberdeckParadigm  from './src/screens/paradigms/F1CyberdeckParadigm';
+import SpatialCanvasParadigm from './src/screens/paradigms/SpatialCanvasParadigm';
+import CloudSimulatorModal  from './src/components/CloudSimulatorModal';
 
 const Tab       = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
@@ -239,7 +242,35 @@ function MainContent() {
         );
     }
 
+    if (uiParadigm === 'F1_CYBERDECK') {
+        return (
+            <ErrorBoundary>
+                <F1CyberdeckParadigm />
+            </ErrorBoundary>
+        );
+    }
+
+    if (uiParadigm === 'SPATIAL_CANVAS') {
+        return (
+            <ErrorBoundary>
+                <SpatialCanvasParadigm />
+            </ErrorBoundary>
+        );
+    }
+
     return <AppNavigator />;
+}
+
+function AppSecurityAndModals() {
+    const { showSimulatorModal, closeSimulatorModal } = useContext(AppContext);
+    return (
+        <SecurityGate>
+            <MainContent />
+            <ExperienceLauncherModal />
+            <CloudSimulatorModal visible={showSimulatorModal} onClose={closeSimulatorModal} />
+            <CrashAlertModal />
+        </SecurityGate>
+    );
 }
 
 function AppRoot() {
@@ -288,11 +319,7 @@ function AppRoot() {
                         <LiveProvider>
                             <View style={styles.container}>
                                 <StatusBar style="light" backgroundColor={colors.bg[0]} />
-                                <SecurityGate>
-                                    <MainContent />
-                                    <ExperienceLauncherModal />
-                                    <CrashAlertModal />
-                                </SecurityGate>
+                                <AppSecurityAndModals />
                             </View>
                         </LiveProvider>
                     </AlertProvider>
