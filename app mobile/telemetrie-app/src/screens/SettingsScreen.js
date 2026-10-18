@@ -96,7 +96,7 @@ const SettingsScreen = () => {
     const navigation = useNavigation();
     const { securityEnabled, lockTimeout, saveSettings } = useContext(SecurityContext);
     const { activeVin, activeVehicle, vehicles, switchVehicle, refreshVehicles } = useVehicle();
-    const { activeTemplate, setActiveTemplate, oledBlackMode, setOledBlackMode } = useContext(AppContext);
+    const { activeTemplate, setActiveTemplate, oledBlackMode, setOledBlackMode, uiParadigm, setUiParadigm, openExperiencePicker } = useContext(AppContext);
     const cardStyle = useMemo(() => [styles.card, { backgroundColor: tpl.cardBg, borderColor: tpl.border }], [tpl.cardBg, tpl.border]);
 
     // ── Connection
@@ -396,6 +396,105 @@ const SettingsScreen = () => {
                         <Text style={styles.subtitle}>Configurare · Vehicul · Preferințe</Text>
                     </View>
                 </View>
+            </View>
+
+            {/* ── Paradigmă Vizuală (Stilul Aplicației) ──────────── */}
+            <View style={cardStyle}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[1] }}>
+                    <SectionTitle>🎨 Paradigmă Vizuală (Stilul Aplicației)</SectionTitle>
+                    <View style={[styles.paradigmBadge, {
+                        borderColor: uiParadigm === 'NOTHING_MINIMAL' ? '#FF3B00' : uiParadigm === 'RETRO_AUDI_96' ? '#FF8800' : colors.accent.default,
+                        backgroundColor: (uiParadigm === 'NOTHING_MINIMAL' ? '#FF3B00' : uiParadigm === 'RETRO_AUDI_96' ? '#FF8800' : colors.accent.default) + '22'
+                    }]}>
+                        <Text style={[styles.paradigmBadgeText, {
+                            color: uiParadigm === 'NOTHING_MINIMAL' ? '#FF3B00' : uiParadigm === 'RETRO_AUDI_96' ? '#FF8800' : colors.accent.default
+                        }]}>
+                            {uiParadigm === 'NOTHING_MINIMAL' ? 'NOTHING OS' : uiParadigm === 'RETRO_AUDI_96' ? 'AUDI 1996' : 'CLASIC V2'}
+                        </Text>
+                    </View>
+                </View>
+                <Text style={styles.desc}>
+                    Alege cum este afișată telemetria în timp real. Poți comuta oricând între bordul clasic complet, minimalismul Nothing OS sau clusterul retro Audi Digifiz.
+                </Text>
+
+                <View style={styles.paradigmGrid}>
+                    {/* Clasic V2 */}
+                    <TouchableOpacity
+                        style={[
+                            styles.paradigmCard,
+                            uiParadigm === 'CLASSIC_V2' && styles.paradigmCardSelected,
+                            { borderColor: uiParadigm === 'CLASSIC_V2' ? '#00E5FF' : colors.border.default }
+                        ]}
+                        onPress={() => setUiParadigm('CLASSIC_V2')}
+                        activeOpacity={0.75}
+                    >
+                        <View style={styles.paradigmTopRow}>
+                            <View style={[styles.paradigmDot, { backgroundColor: '#00E5FF' }]} />
+                            <Text style={[styles.paradigmCardName, uiParadigm === 'CLASSIC_V2' && { color: '#00E5FF' }]}>CLASIC V2</Text>
+                        </View>
+                        <Text style={styles.paradigmCardSub}>Bord Multi-Tab & HMI complet</Text>
+                        {uiParadigm === 'CLASSIC_V2' && (
+                            <View style={[styles.paradigmActiveTag, { backgroundColor: '#00E5FF' }]}>
+                                <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+
+                    {/* Nothing Minimal */}
+                    <TouchableOpacity
+                        style={[
+                            styles.paradigmCard,
+                            uiParadigm === 'NOTHING_MINIMAL' && styles.paradigmCardSelected,
+                            { borderColor: uiParadigm === 'NOTHING_MINIMAL' ? '#FF3B00' : colors.border.default }
+                        ]}
+                        onPress={() => setUiParadigm('NOTHING_MINIMAL')}
+                        activeOpacity={0.75}
+                    >
+                        <View style={styles.paradigmTopRow}>
+                            <View style={[styles.paradigmDot, { backgroundColor: '#FF3B00' }]} />
+                            <Text style={[styles.paradigmCardName, uiParadigm === 'NOTHING_MINIMAL' && { color: '#FF3B00' }]}>NOTHING OS</Text>
+                        </View>
+                        <Text style={styles.paradigmCardSub}>Calm Tech & 128px Speed</Text>
+                        {uiParadigm === 'NOTHING_MINIMAL' && (
+                            <View style={[styles.paradigmActiveTag, { backgroundColor: '#FF3B00' }]}>
+                                <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+
+                    {/* Retro Audi 96 */}
+                    <TouchableOpacity
+                        style={[
+                            styles.paradigmCard,
+                            uiParadigm === 'RETRO_AUDI_96' && styles.paradigmCardSelected,
+                            { borderColor: uiParadigm === 'RETRO_AUDI_96' ? '#FF8800' : colors.border.default }
+                        ]}
+                        onPress={() => setUiParadigm('RETRO_AUDI_96')}
+                        activeOpacity={0.75}
+                    >
+                        <View style={styles.paradigmTopRow}>
+                            <View style={[styles.paradigmDot, { backgroundColor: '#FF8800' }]} />
+                            <Text style={[styles.paradigmCardName, uiParadigm === 'RETRO_AUDI_96' && { color: '#FF8800' }]}>AUDI 1996</Text>
+                        </View>
+                        <Text style={styles.paradigmCardSub}>Digifiz VFD & 25 LED-uri</Text>
+                        {uiParadigm === 'RETRO_AUDI_96' && (
+                            <View style={[styles.paradigmActiveTag, { backgroundColor: '#FF8800' }]}>
+                                <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </View>
+
+                {/* Buton Deschide Selectorul Complet */}
+                <TouchableOpacity
+                    style={[styles.outlineBtn, { marginTop: spacing[3], borderColor: colors.accent.default }]}
+                    onPress={openExperiencePicker}
+                    activeOpacity={0.75}
+                >
+                    <Text style={[styles.outlineBtnText, { color: colors.accent.default }]}>
+                        🎨 Deschide Selectorul Vizual de Experiențe ➜
+                    </Text>
+                </TouchableOpacity>
             </View>
 
             {/* ── Profil Vehicul ─────────────────────────────────────────── */}
@@ -1567,6 +1666,69 @@ const styles = StyleSheet.create({
         fontSize: typography.sizes.caption,
         color: colors.text.primary,
         fontWeight: typography.weights.bold,
+    },
+
+    // ── Paradigmă Vizuală ─────────────────────────────────────────────────────
+    paradigmBadge: {
+        paddingHorizontal: spacing[2],
+        paddingVertical: 2,
+        borderRadius: radii.xs,
+        borderWidth: 1,
+    },
+    paradigmBadgeText: {
+        fontSize: 9,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.5,
+    },
+    paradigmGrid: {
+        flexDirection: 'row',
+        gap: spacing[2],
+        marginTop: spacing[3],
+    },
+    paradigmCard: {
+        flex: 1,
+        backgroundColor: colors.bg[0],
+        borderWidth: 1.5,
+        borderRadius: radii.md,
+        padding: spacing[2],
+        minHeight: 88,
+        justifyContent: 'space-between',
+    },
+    paradigmCardSelected: {
+        backgroundColor: colors.bg[2],
+    },
+    paradigmTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    paradigmDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    paradigmCardName: {
+        color: colors.text.primary,
+        fontSize: typography.sizes.caption,
+        fontWeight: typography.weights.bold,
+    },
+    paradigmCardSub: {
+        color: colors.text.secondary,
+        fontSize: 9,
+        lineHeight: 12,
+        marginTop: 4,
+    },
+    paradigmActiveTag: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 6,
+        paddingVertical: 1,
+        borderRadius: radii.xs,
+        marginTop: 6,
+    },
+    paradigmActiveTagText: {
+        color: '#000000',
+        fontSize: 8,
+        fontWeight: typography.weights.heavy,
     },
 });
 

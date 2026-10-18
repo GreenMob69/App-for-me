@@ -595,7 +595,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
     const { width } = useWindowDimensions();
     const { isConnected, isReconnecting, liveData, chartVersion, getChartHistory } = useContext(LiveContext);
     const { latestAlert, alertsList, unreadCount, markAlertsAsRead } = useContext(AlertContext);
-    const { selectedMetric, setSelectedMetric, activeTemplate, currentTemplate } = useContext(AppContext);
+    const { selectedMetric, setSelectedMetric, activeTemplate, currentTemplate, openExperiencePicker } = useContext(AppContext);
 
     // ── 60 FPS Smoothed Telemetry (Pauză automată când ecranul e în fundal sau pe tab static) ──
     const { animated, numeric } = useSmoothedTelemetry(liveData, isSmoothingActive);
@@ -1925,6 +1925,16 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                     <Text style={[styles.modeToggleText, proMode ? styles.modeToggleTextPro : styles.modeToggleTextDriver]}>
                         {proMode ? '⚡ PRO' : '🚗 RAPID'}
                     </Text>
+                </TouchableOpacity>
+
+                {/* Buton Selector Stil / Paradigmă UI */}
+                <TouchableOpacity
+                    style={[styles.hudLaunchBtn, { borderColor: colors.accent.default, backgroundColor: `${colors.accent.default}18`, marginRight: spacing[1] }]}
+                    onPress={openExperiencePicker}
+                    accessibilityRole="button"
+                    accessibilityLabel="Schimbă stilul de afișare"
+                >
+                    <Text style={[styles.hudLaunchBtnText, { color: colors.accent.default }]}>🎨 STIL</Text>
                 </TouchableOpacity>
 
                 {/* Buton HUD Orizontal Bord */}

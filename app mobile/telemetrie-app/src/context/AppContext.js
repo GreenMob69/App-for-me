@@ -10,19 +10,33 @@ export const AppProvider = ({ children }) => {
     const [activeTemplate, setActiveTemplateState] = useState('MOTORSPORT');
     const [oledBlackMode, setOledBlackModeState] = useState(false);
     const [tripReport, setTripReport] = useState(null);
+    const [uiParadigm, setUiParadigmState] = useState('CLASSIC_V2');
+    const [showExperiencePicker, setShowExperiencePicker] = useState(false);
+    const [skipLauncherPrompt, setSkipLauncherPromptState] = useState(false);
     const navigationRef = useRef(null);
 
-    // Încarcă șablonul și starea modului OLED din AsyncStorage la pornire
+    // Încarcă șablonul, modul OLED și paradigma vizuală din AsyncStorage la pornire
     useEffect(() => {
         Promise.all([
             AsyncStorage.getItem('@cockpit_template'),
             AsyncStorage.getItem('@oled_black_mode'),
-        ]).then(([savedTpl, savedOled]) => {
+            AsyncStorage.getItem('@ui_paradigm_mode'),
+            AsyncStorage.getItem('@ui_paradigm_skip_prompt'),
+        ]).then(([savedTpl, savedOled, savedParadigm, savedSkipPrompt]) => {
             if (savedTpl && TEMPLATES[savedTpl]) {
                 setActiveTemplateState(savedTpl);
             }
             if (savedOled !== null) {
                 setOledBlackModeState(savedOled === 'true');
+            }
+            if (savedParadigm) {
+                setUiParadigmState(savedParadigm);
+            }
+            const skip = savedSkipPrompt === 'true';
+            setSkipLauncherPromptState(skip);
+            // Dacă utilizatorul nu a bifat "Nu mai afișa la pornire", afișăm selectorul la primul boot
+            if (!skip && !savedParadigm) {
+                setShowExperiencePicker(true);
             }
         }).catch(() => {});
     }, []);
@@ -40,6 +54,28 @@ export const AppProvider = ({ children }) => {
         try {
             await AsyncStorage.setItem('@oled_black_mode', String(val));
         } catch {}
+    }, []);
+
+    const setUiParadigm = useCallback(async (paradigm) => {
+        setUiParadigmState(paradigm);
+        try {
+            await AsyncStorage.setItem('@ui_paradigm_mode', paradigm);
+        } catch {}
+    }, []);
+
+    const setSkipLauncherPrompt = useCallback(async (val) => {
+        setSkipLauncherPromptState(val);
+        try {
+            await AsyncStorage.setItem('@ui_paradigm_skip_prompt', String(val));
+        } catch {}
+    }, []);
+
+    const openExperiencePicker = useCallback(() => {
+        setShowExperiencePicker(true);
+    }, []);
+
+    const closeExperiencePicker = useCallback(() => {
+        setShowExperiencePicker(false);
     }, []);
 
     const baseTemplate = TEMPLATES[activeTemplate] || TEMPLATES.MOTORSPORT;
@@ -64,11 +100,19 @@ export const AppProvider = ({ children }) => {
         selectedMetric, setSelectedMetric,
         activeTemplate, setActiveTemplate, currentTemplate,
         oledBlackMode, setOledBlackMode, isOledBlack: oledBlackMode,
+        uiParadigm, setUiParadigm,
+        showExperiencePicker, setShowExperiencePicker,
+        openExperiencePicker, closeExperiencePicker,
+        skipLauncherPrompt, setSkipLauncherPrompt,
         tripReport, setTripReport, dismissTripReport,
         navigationRef, setNavigationRef,
     }), [
         viewMode, selectedMetric, activeTemplate, setActiveTemplate, currentTemplate,
-        oledBlackMode, setOledBlackMode, tripReport, dismissTripReport, setNavigationRef
+        oledBlackMode, setOledBlackMode,
+        uiParadigm, setUiParadigm,
+        showExperiencePicker, openExperiencePicker, closeExperiencePicker,
+        skipLauncherPrompt, setSkipLauncherPrompt,
+        tripReport, dismissTripReport, setNavigationRef
     ]);
 
     return (
@@ -81,5 +125,18 @@ export const AppProvider = ({ children }) => {
 export const useThemeTemplate = () => {
     const context = React.useContext(AppContext);
     return context?.currentTemplate || TEMPLATES.MOTORSPORT;
+};
+
+export const useUiParadigm = () => {
+    const context = React.useContext(AppContext);
+    return {
+        uiParadigm: context?.uiParadigm || 'CLASSIC_V2',
+        setUiParadigm: context?.setUiParadigm || (() => {}),
+        showExperiencePicker: Boolean(context?.showExperiencePicker),
+        openExperiencePicker: context?.openExperiencePicker || (() => {}),
+        closeExperiencePicker: context?.closeExperiencePicker || (() => {}),
+        skipLauncherPrompt: Boolean(context?.skipLauncherPrompt),
+        setSkipLauncherPrompt: context?.setSkipLauncherPrompt || (() => {}),
+    };
 };
 

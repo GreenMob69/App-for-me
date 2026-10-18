@@ -43,6 +43,9 @@ import UIPlaygroundScreen  from './src/screens/UIPlaygroundScreen';
 import SmartMobilityScreen  from './src/screens/SmartMobilityScreen';
 import CrashAlertModal      from './src/components/CrashAlertModal';
 import ErrorBoundary        from './src/components/ErrorBoundary';
+import ExperienceLauncherModal from './src/components/ExperienceLauncherModal';
+import MinimalNothingParadigm from './src/screens/paradigms/MinimalNothingParadigm';
+import RetroAudi96Paradigm  from './src/screens/paradigms/RetroAudi96Paradigm';
 
 const Tab       = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
@@ -217,6 +220,28 @@ function AppNavigator() {
     );
 }
 
+function MainContent() {
+    const { uiParadigm } = useContext(AppContext);
+
+    if (uiParadigm === 'NOTHING_MINIMAL') {
+        return (
+            <ErrorBoundary>
+                <MinimalNothingParadigm />
+            </ErrorBoundary>
+        );
+    }
+
+    if (uiParadigm === 'RETRO_AUDI_96') {
+        return (
+            <ErrorBoundary>
+                <RetroAudi96Paradigm />
+            </ErrorBoundary>
+        );
+    }
+
+    return <AppNavigator />;
+}
+
 function AppRoot() {
     const [serverReady, setServerReady] = useState(false);
     const { ready: vehicleReady, activeVin, switchVehicle } = useVehicle();
@@ -264,7 +289,8 @@ function AppRoot() {
                             <View style={styles.container}>
                                 <StatusBar style="light" backgroundColor={colors.bg[0]} />
                                 <SecurityGate>
-                                    <AppNavigator />
+                                    <MainContent />
+                                    <ExperienceLauncherModal />
                                     <CrashAlertModal />
                                 </SecurityGate>
                             </View>
