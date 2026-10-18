@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     View, Text, StyleSheet, TextInput, TouchableOpacity,
     ScrollView, Alert, Switch, Platform, StatusBar,
@@ -13,7 +13,7 @@ import { useVehicle } from '../context/VehicleContext';
 import { Linking } from 'react-native';
 import api from '../services/api';
 import socketService from '../services/socket';
-import { colors, typography, radii, spacing, layout, TEMPLATES } from '../theme';
+import { colors, typography, radii, spacing, layout, TEMPLATES, useThemeTemplate } from '../theme';
 import { CockpitVisualPreview } from '../components/ui';
 import { getVoiceSettings, updateVoiceSettings, testVoiceAlert, stopSpeech } from '../services/voiceAlertService';
 
@@ -92,10 +92,12 @@ const TIMEOUT_OPTIONS = [
 ];
 
 const SettingsScreen = () => {
+    const tpl = useThemeTemplate();
     const navigation = useNavigation();
     const { securityEnabled, lockTimeout, saveSettings } = useContext(SecurityContext);
     const { activeVin, activeVehicle, vehicles, switchVehicle, refreshVehicles } = useVehicle();
     const { activeTemplate, setActiveTemplate, oledBlackMode, setOledBlackMode } = useContext(AppContext);
+    const cardStyle = useMemo(() => [styles.card, { backgroundColor: tpl.cardBg, borderColor: tpl.border }], [tpl.cardBg, tpl.border]);
 
     // ── Connection
     const [connStatus, setConnStatus]   = useState('checking');
@@ -372,12 +374,12 @@ const SettingsScreen = () => {
 
     return (
         <ScrollView
-            style={styles.container}
+            style={[styles.container, { backgroundColor: tpl.bg }]}
             contentContainerStyle={{ paddingBottom: spacing[12] }}
             showsVerticalScrollIndicator={false}
         >
             {/* ── Header ─────────────────────────────────────────────────── */}
-            <View style={styles.header}>
+            <View style={[styles.header, { borderBottomColor: tpl.border }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[3] }}>
                     {navigation?.canGoBack() && (
                         <TouchableOpacity
@@ -397,7 +399,7 @@ const SettingsScreen = () => {
             </View>
 
             {/* ── Profil Vehicul ─────────────────────────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <SectionTitle>Profil Vehicul</SectionTitle>
                 <Row label="Model" value={activeVehicle?.model || '—'} />
 
@@ -541,7 +543,7 @@ const SettingsScreen = () => {
             </View>
 
             {/* ── Statistici ─────────────────────────────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <SectionTitle>Statistici cumulate</SectionTitle>
                 <View style={styles.statsGrid}>
                     <View style={styles.statCell}>
@@ -570,7 +572,7 @@ const SettingsScreen = () => {
 
             {/* ── Vehicule înregistrate ──────────────────────────────────── */}
             {vehicles.length > 1 && (
-                <View style={styles.card}>
+                <View style={cardStyle}>
                     <SectionTitle>Vehicule înregistrate</SectionTitle>
                     <Text style={styles.desc}>Apasă „Activează" pentru a schimba vehiculul monitorizat.</Text>
                     {vehicles.map((v, i) => {
@@ -595,7 +597,7 @@ const SettingsScreen = () => {
             )}
 
             {/* ── Șabloane Cockpit & Design HMI ─────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <SectionTitle>Șabloane Cockpit (Design Templates)</SectionTitle>
                 <Text style={styles.desc}>
                     Alege stilul vizual și structura preferată pentru bord, inspirate de cele mai bune interfețe din motorsport și mașini electrice:
@@ -659,7 +661,7 @@ const SettingsScreen = () => {
             </View>
 
             {/* ── Economie ───────────────────────────────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <SectionTitle>Economie</SectionTitle>
                 <Text style={styles.desc}>Prețul per litru pentru calculul costurilor per cursă.</Text>
                 <View style={styles.inputRow}>
@@ -684,7 +686,7 @@ const SettingsScreen = () => {
             </View>
 
             {/* ── Praguri de alertă ──────────────────────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <View style={styles.cardHeaderRow}>
                     <SectionTitle>Praguri de alertă</SectionTitle>
                     <TouchableOpacity
@@ -739,7 +741,7 @@ const SettingsScreen = () => {
             </View>
 
             {/* ── Notificări ─────────────────────────────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <SectionTitle>Notificări</SectionTitle>
                 <View style={styles.switchRow}>
                     <View style={{ flex: 1 }}>
@@ -761,7 +763,7 @@ const SettingsScreen = () => {
             </View>
 
             {/* ── Sinteză Vocală & Haptice la Volan ─────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <SectionTitle>Sinteză Vocală & Vibrații la Volan</SectionTitle>
                 <Text style={styles.desc}>
                     Citește pe difuzor alertele tehnice și de siguranță, eliminând nevoia de a privi ecranul în timpul condusului.
@@ -853,7 +855,7 @@ const SettingsScreen = () => {
             </View>
 
             {/* ── Securitate ─────────────────────────────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <SectionTitle>Securitate</SectionTitle>
                 <Text style={styles.desc}>
                     Protejează accesul la datele vehiculului cu amprentă, Face ID sau PIN-ul telefonului.
@@ -901,7 +903,7 @@ const SettingsScreen = () => {
             </View>
 
             {/* ── Conexiune Server ───────────────────────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <View style={styles.cardHeaderRow}>
                     <SectionTitle>Conexiune Server</SectionTitle>
                     <TouchableOpacity style={styles.outlineSmBtn} onPress={checkConnection}>
@@ -936,7 +938,7 @@ const SettingsScreen = () => {
             </View>
 
             {/* ── Realimentare ───────────────────────────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <View style={styles.cardHeaderRow}>
                     <SectionTitle>Realimentare</SectionTitle>
                     <TouchableOpacity
@@ -1013,7 +1015,7 @@ const SettingsScreen = () => {
             </View>
 
             {/* ── Export date ────────────────────────────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <SectionTitle>Export Date</SectionTitle>
                 <Text style={styles.desc}>
                     Descarcă toate cursele și analizele ca fișier JSON.
@@ -1025,7 +1027,7 @@ const SettingsScreen = () => {
             </View>
 
             {/* ── Opțiuni Dezvoltator / Proiect ─────────────────────────── */}
-            <View style={styles.card}>
+            <View style={cardStyle}>
                 <SectionTitle>Opțiuni Dezvoltator</SectionTitle>
                 <Text style={styles.desc}>
                     Acces la biblioteca completă de componente UI și playground pentru testarea elementelor grafice ale aplicației.

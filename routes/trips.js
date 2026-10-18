@@ -82,10 +82,10 @@ function formatTelemetryPoint(row, tripStartTs) {
  * Păstrează garantat vârfurile extreme (Vmax, Peak Boost, RPM max, Temp max)
  * precum și primul și ultimul punct al cursei.
  */
-function downsampleTripTelemetry(rows, tripStartTs, maxPoints = 150) {
+function getDownsampleIndices(rows, maxPoints = 150) {
     if (!rows || rows.length === 0) return [];
     if (rows.length <= maxPoints) {
-        return rows.map(r => formatTelemetryPoint(r, tripStartTs));
+        return rows.map((_, i) => i);
     }
 
     // 1. Identifică indecșii vârfurilor globale ale cursei
@@ -142,8 +142,13 @@ function downsampleTripTelemetry(rows, tripStartTs, maxPoints = 150) {
         selectedIndicesSet.add(bestIdx);
     }
 
-    const sortedIndices = Array.from(selectedIndicesSet).sort((a, b) => a - b);
-    return sortedIndices.map(idx => formatTelemetryPoint(rows[idx], tripStartTs));
+    return Array.from(selectedIndicesSet).sort((a, b) => a - b);
+}
+
+function downsampleTripTelemetry(rows, tripStartTs, maxPoints = 150) {
+    if (!rows || rows.length === 0) return [];
+    const indices = getDownsampleIndices(rows, maxPoints);
+    return indices.map(idx => formatTelemetryPoint(rows[idx], tripStartTs));
 }
 
 module.exports = function(db, io) {
@@ -234,15 +239,42 @@ module.exports = function(db, io) {
         db.get(`SELECT * FROM calatorii WHERE id_calatorie = ?`, [id], (err, trip) => {
             if (!trip) return res.status(404).json({ eroare: 'Călătoria nu a fost găsită' });
             db.all(`SELECT * FROM evenimente_alerte WHERE id_calatorie = ? ORDER BY timestamp ASC`, [id], (err, alerte) => {
+                // Faza 1: Interogare de mare viteză doar pe coloane scalare (fără matrice_completa_json)
                 db.all(
                     `SELECT id_flux, timestamp, rpm, viteza_kmh, sarcina_pct, maf_gs, map_kpa, voltaj_v,
-                            temp_apa_c, temp_ulei_c, accel_g, consum_lh, boost_bar, dpf_soot, gear,
-                            torque_nm, matrice_completa_json
+                            temp_apa_c, temp_ulei_c, accel_g, consum_lh, boost_bar, dpf_soot, gear, torque_nm
                      FROM telemetrie_flux WHERE id_calatorie = ? ORDER BY timestamp ASC`,
                     [id],
                     (err, rows) => {
-                        const downsampled = downsampleTripTelemetry(rows || [], trip.timestamp_start, 150);
-                        res.json({ rezumat: trip, alerte: alerte || [], date_grafic: downsampled });
+                        if (err || !rows || rows.length === 0) {
+                            return res.json({ rezumat: trip, alerte: alerte || [], date_grafic: [] });
+                        }
+
+                        const selectedIndices = getDownsampleIndices(rows, 150);
+                        const selectedRows = selectedIndices.map(idx => rows[idx]);
+                        const targetIds = selectedRows.map(r => r.id_flux).filter(fid => fid != null);
+
+                        if (targetIds.length === 0) {
+                            const dateGrafic = selectedRows.map(r => formatTelemetryPoint(r, trip.timestamp_start));
+                            return res.json({ rezumat: trip, alerte: alerte || [], date_grafic: dateGrafic });
+                        }
+
+                        // Faza 2: Încărcare matrice_completa_json strict pentru cele ~150 puncte selectate
+                        const placeholders = targetIds.map(() => '?').join(',');
+                        db.all(
+                            `SELECT id_flux, matrice_completa_json FROM telemetrie_flux WHERE id_flux IN (${placeholders})`,
+                            targetIds,
+                            (jErr, jsonRows) => {
+                                const jsonMap = new Map((jsonRows || []).map(jr => [jr.id_flux, jr.matrice_completa_json]));
+                                selectedRows.forEach(r => {
+                                    if (r.id_flux && jsonMap.has(r.id_flux)) {
+                                        r.matrice_completa_json = jsonMap.get(r.id_flux);
+                                    }
+                                });
+                                const dateGrafic = selectedRows.map(r => formatTelemetryPoint(r, trip.timestamp_start));
+                                res.json({ rezumat: trip, alerte: alerte || [], date_grafic: dateGrafic });
+                            }
+                        );
                     }
                 );
             });

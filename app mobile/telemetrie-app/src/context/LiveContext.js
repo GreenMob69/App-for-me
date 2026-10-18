@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useRef, useContext } from 'react';
+import React, { createContext, useState, useEffect, useRef, useContext, useMemo, useCallback } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import socketService from '../services/socket';
@@ -47,7 +47,7 @@ export const LiveProvider = ({ children }) => {
         return () => subscription?.remove?.();
     }, []);
 
-    const getChartHistory = () => {
+    const getChartHistory = useCallback(() => {
         const buf = bufferRef.current;
         const count = countRef.current;
         if (count === 0) return [];
@@ -56,14 +56,14 @@ export const LiveProvider = ({ children }) => {
         }
         const start = writeIndexRef.current;
         return [...buf.slice(start), ...buf.slice(0, start)];
-    };
+    }, []);
 
-    const clearChartHistory = () => {
+    const clearChartHistory = useCallback(() => {
         bufferRef.current = new Array(RING_BUFFER_SIZE).fill(null);
         writeIndexRef.current = 0;
         countRef.current = 0;
         setChartVersion(v => v + 1);
-    };
+    }, []);
 
     useEffect(() => {
         const socket = socketService.connect();
@@ -162,14 +162,17 @@ export const LiveProvider = ({ children }) => {
         };
     }, []);
 
+    const value = useMemo(() => ({
+        isConnected,
+        isReconnecting,
+        liveData,
+        chartVersion,
+        getChartHistory,
+        clearChartHistory,
+    }), [isConnected, isReconnecting, liveData, chartVersion, getChartHistory, clearChartHistory]);
+
     return (
-        <LiveContext.Provider value={{
-            isConnected,
-            isReconnecting,
-            liveData,
-            chartVersion,
-            getChartHistory,
-        }}>
+        <LiveContext.Provider value={value}>
             {children}
         </LiveContext.Provider>
     );

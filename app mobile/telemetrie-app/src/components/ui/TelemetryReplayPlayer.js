@@ -627,4 +627,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export default TelemetryReplayPlayer;
+export default React.memo(TelemetryReplayPlayer);

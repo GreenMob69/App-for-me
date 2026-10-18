@@ -1,4 +1,4 @@
-import React, { createContext, useState, useCallback, useEffect, useRef, useContext } from 'react';
+import React, { createContext, useState, useCallback, useEffect, useRef, useContext, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateNotifications, extractLastSeenState } from '../engine/NotificationEngine';
 
@@ -108,16 +108,18 @@ export const NotificationProvider = ({ children }) => {
         return notifications.filter(n => n.category === category);
     }, [notifications]);
 
+    const value = useMemo(() => ({
+        notifications,
+        unreadCount,
+        syncFromSummary,
+        markRead,
+        markAllRead,
+        clearAll,
+        getByCategory,
+    }), [notifications, unreadCount, syncFromSummary, markRead, markAllRead, clearAll, getByCategory]);
+
     return (
-        <NotificationContext.Provider value={{
-            notifications,
-            unreadCount,
-            syncFromSummary,
-            markRead,
-            markAllRead,
-            clearAll,
-            getByCategory,
-        }}>
+        <NotificationContext.Provider value={value}>
             {children}
         </NotificationContext.Provider>
     );

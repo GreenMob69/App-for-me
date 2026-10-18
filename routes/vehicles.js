@@ -24,33 +24,45 @@ module.exports = function(db, io) {
 
     router.get('/vehicul/:vin/diagnoza', (req, res) => {
         const vin = req.params.vin;
-        db.get(
-            `SELECT v.model, tf.voltaj_v
-             FROM telemetrie_flux tf
-             JOIN calatorii c ON c.id_calatorie = tf.id_calatorie
-             LEFT JOIN vehicule v ON v.vin = c.vin
-             WHERE c.vin = ?
-             ORDER BY tf.id_flux DESC LIMIT 1`,
-            [vin],
-            (err, row) => {
-                const v = row?.voltaj_v ?? 14.1;
+        db.get(`SELECT id_calatorie FROM calatorii WHERE vin = ? ORDER BY id_calatorie DESC LIMIT 1`, [vin], (tripErr, tripRow) => {
+            const tripId = tripRow?.id_calatorie;
+            db.get(`SELECT model FROM vehicule WHERE vin = ?`, [vin], (vErr, vRow) => {
+                const model = vRow?.model || 'Vehicul';
                 const coduriCuDescrierii = dtcService.eroriActiveDTC.map(e => ({
                     ...e,
                     descriere: e.descriere || dtcService.DTC_DESCRIPTIONS[e.cod] || 'Cod OBD-II detectat',
                 }));
-                res.json({
-                    vin,
-                    model: row?.model || 'Vehicul',
-                    sistem_electric: {
-                        voltaj_curent:    v,
-                        stare_alternator: v < 13.6 ? 'UZAT_DEGRADAT' : 'OPTIM',
-                        baterie_soh_pct:  v >= 13.8 ? 98 : 80,
-                    },
-                    coduri_dtc:  coduriCuDescrierii,
-                    total_erori: coduriCuDescrierii.length,
+
+                if (!tripId) {
+                    return res.json({
+                        vin,
+                        model,
+                        sistem_electric: {
+                            voltaj_curent:    14.1,
+                            stare_alternator: 'OPTIM',
+                            baterie_soh_pct:  98,
+                        },
+                        coduri_dtc:  coduriCuDescrierii,
+                        total_erori: coduriCuDescrierii.length,
+                    });
+                }
+
+                db.get(`SELECT voltaj_v FROM telemetrie_flux WHERE id_calatorie = ? ORDER BY id_flux DESC LIMIT 1`, [tripId], (tfErr, tfRow) => {
+                    const v = tfRow?.voltaj_v ?? 14.1;
+                    res.json({
+                        vin,
+                        model,
+                        sistem_electric: {
+                            voltaj_curent:    v,
+                            stare_alternator: v < 13.6 ? 'UZAT_DEGRADAT' : 'OPTIM',
+                            baterie_soh_pct:  v >= 13.8 ? 98 : 80,
+                        },
+                        coduri_dtc:  coduriCuDescrierii,
+                        total_erori: coduriCuDescrierii.length,
+                    });
                 });
-            }
-        );
+            });
+        });
     });
 
     router.post('/vehicul/:vin/stergere-erori', (req, res) => {

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -100,7 +100,7 @@ export const AlertProvider = ({ children }) => {
         })();
     }, []);
 
-    const markAlertsAsRead = () => setUnreadCount(0);
+    const markAlertsAsRead = useCallback(() => setUnreadCount(0), []);
 
     useEffect(() => {
         const socket = socketService.connect();
@@ -143,14 +143,16 @@ export const AlertProvider = ({ children }) => {
         };
     }, [notifsGranted]);
 
+    const value = useMemo(() => ({
+        latestAlert,
+        alertsList,
+        unreadCount,
+        markAlertsAsRead,
+        notifsGranted,
+    }), [latestAlert, alertsList, unreadCount, markAlertsAsRead, notifsGranted]);
+
     return (
-        <AlertContext.Provider value={{
-            latestAlert,
-            alertsList,
-            unreadCount,
-            markAlertsAsRead,
-            notifsGranted,
-        }}>
+        <AlertContext.Provider value={value}>
             {children}
         </AlertContext.Provider>
     );

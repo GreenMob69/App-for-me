@@ -3,7 +3,7 @@
 const mqtt = require('mqtt');
 const { createAnalysis, updateAnalyzer, finalizeTripAnalysis } = require('../backend/analyzers');
 const { THRESHOLDS } = require('../backend/analyzers/config');
-const { computeVirtualSensors } = require('../backend/analyzers/PhysicsEngine');
+const { computeVirtualSensors, resetSessionState } = require('../backend/analyzers/PhysicsEngine');
 const { vehicleEventBus }  = require('../backend/vehicle-profile');
 const { resolveVehiclePhysics } = require('../backend/vehicle-profile/VehiclePhysicsResolver');
 const { buildTripInsights } = require('../services/tripInsights');
@@ -524,6 +524,15 @@ function createMqttClient(db, io) {
                                 navigationUrl: `https://www.google.com/maps/dir/?api=1&destination=${parkLat},${parkLon}&travelmode=walking`
                             });
                         }
+                    });
+
+                    // Curățare memorie și resetare acumulatori cursă cu conservarea stării inter-cursă (baterie, învățare)
+                    const lastVolt = pachet.baterie?.battery_volt ?? pachet.baterie?.bat_volt;
+                    const lastTemp = pachet.temperaturi?.ambient ?? pachet.temperaturi?.coolant;
+                    resetSessionState(vin, {
+                        vStop: lastVolt != null ? Number(lastVolt) : undefined,
+                        tStop: lastTemp != null ? Number(lastTemp) : undefined,
+                        stopTimestamp: pachet.timestamp || Date.now(),
                     });
 
                     delete calatoriiActive[vin];

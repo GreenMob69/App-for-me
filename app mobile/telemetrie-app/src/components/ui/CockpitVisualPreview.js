@@ -201,4 +201,4 @@ const styles = StyleSheet.create({
     },
 });
 
-export default CockpitVisualPreview;
+export default React.memo(CockpitVisualPreview);

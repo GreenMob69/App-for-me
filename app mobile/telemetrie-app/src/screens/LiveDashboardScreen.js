@@ -680,6 +680,47 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
         return baseRedline;
     }, [baseRedline, coolVal, oilVal, optTempMin]);
 
+    const staticTachoArcs = useMemo(() => {
+        const gaugeSize = 260;
+        const cx = gaugeSize / 2;
+        const cy = gaugeSize / 2;
+        const r = 100;
+        const redlineAngle = 150 + (dynamicRedline / maxRpmScale) * 240;
+        const bgArcPath = describeClockwiseArc(cx, cy, r, 150, 390);
+        const redlineArcPath = describeClockwiseArc(cx, cy, r, redlineAngle, 390);
+
+        const maxRpmThousands = Math.round(maxRpmScale / 1000);
+        const ticks = [];
+        for (let i = 0; i <= maxRpmThousands; i++) {
+            const angle = 150 + (i / maxRpmThousands) * 240;
+            const p1 = polarToCartesian(cx, cy, r + 14, angle);
+            const p2 = polarToCartesian(cx, cy, r + 2, angle);
+            const lp = polarToCartesian(cx, cy, r - 18, angle);
+            ticks.push({
+                key: `major-${i}`,
+                x1: p1.x, y1: p1.y,
+                x2: p2.x, y2: p2.y,
+                isMajor: true,
+                val: i,
+                lx: lp.x, ly: lp.y,
+            });
+            if (i < maxRpmThousands) {
+                const midAngle = angle + (1 / (maxRpmThousands * 2)) * 240;
+                const mp1 = polarToCartesian(cx, cy, r + 8, midAngle);
+                const mp2 = polarToCartesian(cx, cy, r + 2, midAngle);
+                ticks.push({
+                    key: `minor-${i}`,
+                    x1: mp1.x, y1: mp1.y,
+                    x2: mp2.x, y2: mp2.y,
+                    isMajor: false,
+                    val: i + 0.5,
+                    lx: 0, ly: 0,
+                });
+            }
+        }
+        return { bgArcPath, redlineArcPath, ticks, cx, cy, r, gaugeSize, strokeW: 12 };
+    }, [dynamicRedline, maxRpmScale]);
+
     const vehicleContext = useMemo(() => ({
         optTempMin,
         optTempMax,
@@ -769,49 +810,10 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
             const activeLedCount = Math.min(10, Math.max(0, Math.floor((rpm - ledStartRpm) / ledStep)));
             const isFlashingRedline = rpm >= dynamicRedline * 0.92;
 
-            const gaugeSize = 260;
-            const cx = gaugeSize / 2;
-            const cy = gaugeSize / 2;
-            const r = 100;
-            const strokeW = 12;
-
+            const { bgArcPath, redlineArcPath, ticks, cx, cy, r, gaugeSize, strokeW } = staticTachoArcs;
             const tachoRatio = Math.min(Math.max(rpm, 0), maxRpmScale) / maxRpmScale;
             const curTachoAngle = 150 + tachoRatio * 240;
-            const redlineAngle = 150 + (dynamicRedline / maxRpmScale) * 240;
-
-            const bgArcPath = describeClockwiseArc(cx, cy, r, 150, 390);
-            const redlineArcPath = describeClockwiseArc(cx, cy, r, redlineAngle, 390);
             const progressArcPath = curTachoAngle > 150 ? describeClockwiseArc(cx, cy, r, 150, curTachoAngle) : '';
-
-            const maxRpmThousands = Math.round(maxRpmScale / 1000);
-            const ticks = [];
-            for (let i = 0; i <= maxRpmThousands; i++) {
-                const angle = 150 + (i / maxRpmThousands) * 240;
-                const p1 = polarToCartesian(cx, cy, r + 14, angle);
-                const p2 = polarToCartesian(cx, cy, r + 2, angle);
-                const lp = polarToCartesian(cx, cy, r - 18, angle);
-                ticks.push({
-                    key: `major-${i}`,
-                    x1: p1.x, y1: p1.y,
-                    x2: p2.x, y2: p2.y,
-                    isMajor: true,
-                    val: i,
-                    lx: lp.x, ly: lp.y,
-                });
-                if (i < maxRpmThousands) {
-                    const midAngle = angle + (1 / (maxRpmThousands * 2)) * 240;
-                    const mp1 = polarToCartesian(cx, cy, r + 8, midAngle);
-                    const mp2 = polarToCartesian(cx, cy, r + 2, midAngle);
-                    ticks.push({
-                        key: `minor-${i}`,
-                        x1: mp1.x, y1: mp1.y,
-                        x2: mp2.x, y2: mp2.y,
-                        isMajor: false,
-                        val: i + 0.5,
-                        lx: 0, ly: 0,
-                    });
-                }
-            }
 
             return (
                 <View style={styles.motorsportRoot}>

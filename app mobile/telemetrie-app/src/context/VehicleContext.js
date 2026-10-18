@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import { setVin, setVehicleLabel, setFuelType } from '../utils/config';
@@ -67,17 +67,19 @@ export const VehicleProvider = ({ children }) => {
         if (activeVin) await loadVehicles(activeVin);
     }, [activeVin, loadVehicles]);
 
+    const value = useMemo(() => ({
+        activeVin,
+        activeVehicle,
+        vehicles,
+        vehicleLabel,
+        fuelType,
+        ready,
+        switchVehicle,
+        refreshVehicles,
+    }), [activeVin, activeVehicle, vehicles, vehicleLabel, fuelType, ready, switchVehicle, refreshVehicles]);
+
     return (
-        <VehicleContext.Provider value={{
-            activeVin,
-            activeVehicle,
-            vehicles,
-            vehicleLabel,
-            fuelType,
-            ready,
-            switchVehicle,
-            refreshVehicles,
-        }}>
+        <VehicleContext.Provider value={value}>
             {children}
         </VehicleContext.Provider>
     );

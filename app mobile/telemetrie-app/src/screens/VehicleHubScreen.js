@@ -27,8 +27,19 @@ const VehicleHubScreen = () => {
     const tpl = useThemeTemplate();
     const navigation = useNavigation();
     const [activeTab, setActiveTab] = useState('MENTENANTA');
+    const [visitedTabs, setVisitedTabs] = useState(() => new Set(['MENTENANTA']));
     const { activeVin, vehicleLabel } = useVehicle();
     const { unreadCount } = useContext(NotificationContext);
+
+    const handleTabChange = (tabId) => {
+        setActiveTab(tabId);
+        setVisitedTabs(prev => {
+            if (prev.has(tabId)) return prev;
+            const next = new Set(prev);
+            next.add(tabId);
+            return next;
+        });
+    };
 
     return (
         <View style={[styles.root, { backgroundColor: tpl.bg }]}>
@@ -82,7 +93,7 @@ const VehicleHubScreen = () => {
                         <TouchableOpacity
                             key={tab.id}
                             style={[styles.tab, activeTab === tab.id && { backgroundColor: tpl.accent }]}
-                            onPress={() => setActiveTab(tab.id)}
+                            onPress={() => handleTabChange(tab.id)}
                             accessibilityRole="tab"
                             accessibilityLabel={tab.label}
                             accessibilityState={{ selected: activeTab === tab.id }}
@@ -102,20 +113,22 @@ const VehicleHubScreen = () => {
                 </View>
             </View>
 
-            {/* ── Sub-screens — all mounted, only one visible ─────────── */}
-            {/* marginTop: -PT offsets the sub-screen's own statusbar padding
-                so content lands exactly below our tab bar.               */}
-            {TABS.map(tab => (
-                <View
-                    key={tab.id}
-                    style={[styles.screenSlot, { display: activeTab === tab.id ? 'flex' : 'none' }]}
-                >
-                    {tab.id === 'MENTENANTA' && <MaintenanceScreen />}
-                    {tab.id === 'SMART'      && <SmartMobilityScreen showBack={false} />}
-                    {tab.id === 'PROFIL'     && <VehicleProfileScreen showBack={false} />}
-                    {tab.id === 'EXPERT'     && <AIExpertScreen />}
-                </View>
-            ))}
+            {/* ── Sub-screens — lazily mounted on first visit, cached afterwards ─────────── */}
+            {TABS.map(tab => {
+                const hasBeenVisited = visitedTabs.has(tab.id);
+                if (!hasBeenVisited) return null;
+                return (
+                    <View
+                        key={tab.id}
+                        style={[styles.screenSlot, { display: activeTab === tab.id ? 'flex' : 'none' }]}
+                    >
+                        {tab.id === 'MENTENANTA' && <MaintenanceScreen />}
+                        {tab.id === 'SMART'      && <SmartMobilityScreen showBack={false} />}
+                        {tab.id === 'PROFIL'     && <VehicleProfileScreen showBack={false} />}
+                        {tab.id === 'EXPERT'     && <AIExpertScreen />}
+                    </View>
+                );
+            })}
         </View>
     );
 };

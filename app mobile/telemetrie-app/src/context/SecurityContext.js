@@ -1,5 +1,5 @@
 'use strict';
-import React, { createContext, useState, useEffect, useRef, useCallback, useContext } from 'react';
+import React, { createContext, useState, useEffect, useRef, useCallback, useContext, useMemo } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -71,11 +71,13 @@ export const SecurityProvider = ({ children }) => {
         ]);
     }, []);
 
+    const value = useMemo(() => ({
+        isLocked, securityEnabled, lockTimeout,
+        unlockApp, lockApp, saveSettings, ready,
+    }), [isLocked, securityEnabled, lockTimeout, unlockApp, lockApp, saveSettings, ready]);
+
     return (
-        <SecurityContext.Provider value={{
-            isLocked, securityEnabled, lockTimeout,
-            unlockApp, lockApp, saveSettings, ready,
-        }}>
+        <SecurityContext.Provider value={value}>
             {children}
         </SecurityContext.Provider>
     );

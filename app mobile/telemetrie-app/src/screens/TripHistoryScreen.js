@@ -18,7 +18,7 @@ import {
     SectionHeader, Button, BottomSheet,
 } from '../components/ui';
 import TripDetailScreen from './TripDetailScreen';
-import { colors, typography, radii, spacing, layout } from '../theme';
+import { colors, typography, radii, spacing, layout, useThemeTemplate } from '../theme';
 import { useRefreshOnOnline } from '../hooks/useRefreshOnOnline';
 import { useVehicle } from '../context/VehicleContext';
 
@@ -330,6 +330,7 @@ const TripSparkline = ({ trip, color = colors.accent.default, width = 100, heigh
 // ─── TripRow component ───────────────────────────────────────────────────────
 
 const TripRow = ({ trip, onPress, onToggleTag }) => {
+    const tpl    = useThemeTemplate();
     const eco    = trip.scor_eco ?? 100;
     const km     = parseFloat(trip.km_parcursi ?? 0);
     const hasDTC = (trip.nr_dtc ?? 0) > 0;
@@ -349,7 +350,7 @@ const TripRow = ({ trip, onPress, onToggleTag }) => {
         : eco >= 65 ? colors.status.monitor : colors.status.caution;
 
     return (
-        <TouchableOpacity onPress={onPress} activeOpacity={0.72} style={styles.tripRow}>
+        <TouchableOpacity onPress={onPress} activeOpacity={0.72} style={[styles.tripRow, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
             {/* Left colored strip */}
             <View style={[styles.tripStrip, { backgroundColor: lineColor }]} />
 
@@ -436,6 +437,7 @@ const TripRow = ({ trip, onPress, onToggleTag }) => {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const TripHistoryScreen = () => {
+    const tpl = useThemeTemplate();
     const { width: screenWidth } = useWindowDimensions();
     const { activeVin, vehicleLabel } = useVehicle();
     const metricCardStyle = useMemo(() => ({
@@ -743,8 +745,8 @@ const TripHistoryScreen = () => {
 
     if (screenState === 'loading') {
         return (
-            <View style={styles.main}>
-                <View style={styles.header}>
+            <View style={[styles.main, { backgroundColor: tpl.bg }]}>
+                <View style={[styles.header, { borderBottomColor: tpl.border }]}>
                     <Text style={styles.title}>Jurnal</Text>
                     <Text style={styles.subtitle}>{vehicleLabel || 'Logbook'}</Text>
                 </View>
@@ -764,7 +766,7 @@ const TripHistoryScreen = () => {
 
     if (screenState === 'error') {
         return (
-            <View style={[styles.main, styles.center]}>
+            <View style={[styles.main, styles.center, { backgroundColor: tpl.bg }]}>
                 <EmptyState
                     title="Nu mă pot conecta la server."
                     subtitle="Verifică conexiunea și încearcă din nou."
@@ -909,9 +911,9 @@ const TripHistoryScreen = () => {
 
     // ─── Render ───────────────────────────────────────────────────────────────
     return (
-        <View style={styles.main}>
+        <View style={[styles.main, { backgroundColor: tpl.bg }]}>
             {/* ── Header ───────────────────────────────────────────────────── */}
-            <View style={styles.header}>
+            <View style={[styles.header, { borderBottomColor: tpl.border }]}>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>Jurnal</Text>
                     <Text style={styles.subtitle}>{vehicleLabel || 'Logbook'}</Text>
@@ -1149,8 +1151,8 @@ const TripHistoryScreen = () => {
                 onRequestClose={() => setShowReport(false)}
                 statusBarTranslucent
             >
-                <View style={styles.reportModal}>
-                    <View style={styles.reportModalHeader}>
+                <View style={[styles.reportModal, { backgroundColor: tpl.bg }]}>
+                    <View style={[styles.reportModalHeader, { backgroundColor: tpl.bg, borderBottomColor: tpl.border }]}>
                         <Text style={styles.reportModalTitle}>Raport Lunar</Text>
                         <TouchableOpacity
                             onPress={() => setShowReport(false)}

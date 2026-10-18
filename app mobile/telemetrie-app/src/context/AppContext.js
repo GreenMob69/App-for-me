@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TEMPLATES } from '../theme/templates';
 
@@ -43,13 +43,13 @@ export const AppProvider = ({ children }) => {
     }, []);
 
     const baseTemplate = TEMPLATES[activeTemplate] || TEMPLATES.MOTORSPORT;
-    const currentTemplate = oledBlackMode ? {
+    const currentTemplate = useMemo(() => (oledBlackMode ? {
         ...baseTemplate,
         bg: '#000000',
         cardBg: '#05070c',
         border: '#181b26',
         isOledBlack: true,
-    } : baseTemplate;
+    } : baseTemplate), [baseTemplate, oledBlackMode]);
 
     const setNavigationRef = useCallback((ref) => {
         navigationRef.current = ref;
@@ -59,15 +59,20 @@ export const AppProvider = ({ children }) => {
         setTripReport(null);
     }, []);
 
+    const value = useMemo(() => ({
+        viewMode, setViewMode,
+        selectedMetric, setSelectedMetric,
+        activeTemplate, setActiveTemplate, currentTemplate,
+        oledBlackMode, setOledBlackMode, isOledBlack: oledBlackMode,
+        tripReport, setTripReport, dismissTripReport,
+        navigationRef, setNavigationRef,
+    }), [
+        viewMode, selectedMetric, activeTemplate, setActiveTemplate, currentTemplate,
+        oledBlackMode, setOledBlackMode, tripReport, dismissTripReport, setNavigationRef
+    ]);
+
     return (
-        <AppContext.Provider value={{
-            viewMode, setViewMode,
-            selectedMetric, setSelectedMetric,
-            activeTemplate, setActiveTemplate, currentTemplate,
-            oledBlackMode, setOledBlackMode, isOledBlack: oledBlackMode,
-            tripReport, setTripReport, dismissTripReport,
-            navigationRef, setNavigationRef,
-        }}>
+        <AppContext.Provider value={value}>
             {children}
         </AppContext.Provider>
     );

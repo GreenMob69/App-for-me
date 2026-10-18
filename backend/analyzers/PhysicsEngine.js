@@ -66,7 +66,6 @@ function getSessionState(sessionKey) {
             },
             fuelBurnedLiters: 0,
             lastTimestamp: null,
-            boostLagHistory: [],
 
             // Stare observatori avansați
             oilWearKmEquivalent: 0,
@@ -123,12 +122,87 @@ function getSessionState(sessionKey) {
     return sessionState.get(sessionKey);
 }
 
-function resetSessionState(sessionKey) {
-    if (sessionKey) {
-        sessionState.delete(sessionKey);
-    } else {
+function resetSessionState(sessionKey, stopContext = {}) {
+    if (!sessionKey) {
         sessionState.clear();
+        return;
     }
+    const state = sessionState.get(sessionKey);
+    if (!state) return;
+
+    // Păstrăm valorile învățate și datele bateriei între curse
+    const preservedLearnedVeRef = state.learnedVeRef;
+    const preservedGearRatios = state.learnedGearRatios;
+    const preservedPayloadKg = state.learnedPayloadKg;
+    const preservedVStop = stopContext.vStop ?? state.lastBatteryVolt ?? state.vStop ?? 12.65;
+    const preservedTStop = stopContext.tStop ?? state.lastAmbientTemp ?? state.tStop ?? 20;
+    const preservedStopTimestamp = stopContext.stopTimestamp ?? state.lastTimestamp ?? Date.now();
+
+    sessionState.set(sessionKey, {
+        mafFilter: new KalmanFilter1D(0.05, 1.2, 2.0, 10.0),
+        voltFilter: new KalmanFilter1D(0.01, 0.2, 0.5, 14.0),
+        learnedGearRatios: preservedGearRatios || {
+            1: 85.0, 2: 47.5, 3: 31.0, 4: 22.8, 5: 18.2, 6: 15.1
+        },
+        fuelBurnedLiters: 0,
+        lastTimestamp: null,
+
+        // Reset acumulatori cursă curentă
+        oilWearKmEquivalent: 0,
+        tripRealKm: 0,
+        restVolt: preservedVStop,
+        crankMinVolt: 11.0,
+        voltDeltas: [],
+        recentRailPressures: [],
+        brakeEnergyJoulesTrip: 0,
+        discTempC: 20,
+        learnedVeRef: preservedLearnedVeRef || 0.88,
+        turboCoreTempC: 90,
+        learnedPayloadKg: preservedPayloadKg || 0,
+        recentIdleRpms: [],
+
+        // Stare Nivel 3 & 4 PHM
+        lastRpm: null,
+        lastCoolantTemp: null,
+        lastAx: null,
+        lastGear: null,
+        lastShiftQualityScore: 95,
+        lastPowertrainMountStatus: 'NORMAL',
+        lastInjectorHealthStatus: 'NORMAL',
+        lastIdleInjectionDriftMg: 0.0,
+        suspensionDampingRatio: 0.28,
+        lastVertShock: null,
+        faultCounters: {},
+        lastThrottlePos: null,
+        steadyStateCounter: 0,
+        lastTirePressureStatus: 'NORMAL',
+        lastTireRadiusDriftPct: 0.0,
+        lastTimingPhaseStatus: 'NORMAL',
+        lastExhaustHeatAnomalyC: 0.0,
+        lastCrankingTriageStatus: 'STANDBY',
+        lastMafVsTurboTriage: 'NORMAL',
+        lastAccessoryBeltStatus: 'NORMAL',
+
+        // Stare Nivel 5 PHM
+        lastSpeedKmh: null,
+        totalDrivingSec: 0,
+        fatigueJerkCount: 0,
+        lastDriverFatigueScore: 100,
+        lastDriverFatigueStatus: 'NORMAL',
+        lastRoadGripStatus: 'NORMAL',
+        lastParasiticDrainMa: 25,
+        lastParasiticDrainStatus: 'NORMAL',
+        lastFuelLevelPct: null,
+        justRefueled: false,
+        lastFuelQualityIndex: 98,
+        lastFuelQualityStatus: 'NORMAL',
+        stationaryIdlingSec: 0,
+
+        // Date păstrate pentru detecție descărcare parazită în parcare (Test 30)
+        vStop: preservedVStop,
+        tStop: preservedTStop,
+        stopTimestamp: preservedStopTimestamp,
+    });
 }
 
 /**
@@ -904,7 +978,13 @@ function computeVirtualSensors(packet, vehicleConfig = {}) {
     // ═════════════════════════════════════════════════════════════════════════
 
     // ── [PHM 13 / N5-1] Detecție Polei („Black Ice”), Acvaplanare & Aderență ──
-    const rawWheelSlip = packet.wheel_slip_delta_kmh ?? packet.motor?.wheel_slip_kmh ?? (speedKmh - gpsSpeedKmh);
+    state.lastBatteryVolt = batteryVolt;
+    state.lastAmbientTemp = tempAmbient;
+    const hasExplicitSlip = packet.wheel_slip_delta_kmh != null || packet.motor?.wheel_slip_kmh != null;
+    const isGpsValidForSlip = packet.gps?.valid !== false && (packet.gps?.speed_kmh != null || packet.gps?.speed != null || packet.gps_speed_kmh != null) && gpsSpeedKmh > 3;
+    const rawWheelSlip = hasExplicitSlip
+        ? (packet.wheel_slip_delta_kmh ?? packet.motor?.wheel_slip_kmh)
+        : (isGpsValidForSlip ? (speedKmh - gpsSpeedKmh) : 0);
     const wheelSlipDeltaKmh = Number(Math.max(0, rawWheelSlip).toFixed(1));
     const accelWheelMs2 = state.lastSpeedKmh != null && dtSec > 0
         ? ((speedKmh - state.lastSpeedKmh) / 3.6) / dtSec

@@ -1,19 +1,10 @@
 import React from 'react';
-import { AppProvider } from './AppContext';
-import { LiveProvider } from './LiveContext';
-import { AlertProvider } from './AlertContext';
-import { NotificationProvider } from './NotificationContext';
 
-export const TelemetryProvider = ({ children }) => {
-    return (
-        <AppProvider>
-            <NotificationProvider>
-                <AlertProvider>
-                    <LiveProvider>
-                        {children}
-                    </LiveProvider>
-                </AlertProvider>
-            </NotificationProvider>
-        </AppProvider>
-    );
-};
+/**
+ * TelemetryProvider — Păstrat pentru compatibilitate cu importurile legacy.
+ * Toți Providerii reali (App, Notification, Alert, Live) sunt montați
+ * o singură dată în mod liniar în App.js pentru a preveni dublarea listenerilor.
+ */
+export const TelemetryProvider = ({ children }) => <>{children}</>;
+
+export default TelemetryProvider;

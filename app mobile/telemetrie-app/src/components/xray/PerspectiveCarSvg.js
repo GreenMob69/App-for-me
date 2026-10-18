@@ -29,7 +29,6 @@ import { PERSPECTIVE_PINS } from './xrayConstants';
 
 const PerspectiveCarSvg = ({
     visualMode = 'hologram', // 'studio' | 'hologram'
-    liveData = {},
     selectedPinId = null,
     onSelectPin,
 }) => {

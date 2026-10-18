@@ -26,7 +26,7 @@ import { LiveContext } from '../../context/LiveContext';
 import { useVehicle } from '../../context/VehicleContext';
 import { useSmoothedTelemetry } from '../../hooks/useSmoothedTelemetry';
 import { getRootNavigation } from '../../utils/navigation';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import PropTypes from 'prop-types';
 
 import {
@@ -48,7 +48,16 @@ const InteractiveCarXRay = ({
     const tpl = useThemeTemplate();
     const { activeVehicle, vehicleLabel } = useVehicle();
     const { liveData: rawLiveData } = useContext(LiveContext) || {};
-    const liveData = useSmoothedTelemetry(rawLiveData || {});
+
+    let isFocused = true;
+    try {
+        isFocused = useIsFocused();
+    } catch (_) {}
+
+    // Stare Modal Scanner
+    const [isScannerOpen, setIsScannerOpen] = useState(mode === 'full');
+    const isAnimationActive = isFocused && (isScannerOpen || mode === 'preview');
+    const liveData = useSmoothedTelemetry(rawLiveData || {}, isAnimationActive);
 
     // Telemetrie combinată: structură completă din rawLiveData + interpolare netedă din numeric
     const combinedTelemetry = useMemo(() => ({
@@ -83,9 +92,6 @@ const InteractiveCarXRay = ({
 
     // Mod vizual activ: 'studio' (3D Studio Fotorealist - Opțiunea B) | 'hologram' (Hologramă CAD - Opțiunea C)
     const [visualMode, setVisualMode] = useState('studio');
-
-    // Stare Modal Scanner
-    const [isScannerOpen, setIsScannerOpen] = useState(mode === 'full');
 
     const scrollRef = useRef(null);
 
@@ -124,6 +130,11 @@ const InteractiveCarXRay = ({
             onSelectSubsystem(pin.subsystem, { key: pin.subsystem, name: pin.name });
         }
     }, [onSelectSubsystem]);
+
+    const handlePreviewPinSelect = useCallback((pin) => {
+        handleSelectComponent(pin);
+        setIsScannerOpen(true);
+    }, [handleSelectComponent]);
 
     // ── GRILĂ TEHNICĂ 2x4 SUB MAȘINĂ (CELE 8 SUBSISTEME) ──
     const renderSubsystemGrid = (isModal = false) => (
@@ -236,12 +247,8 @@ const InteractiveCarXRay = ({
                 <View style={styles.previewCanvasWrap}>
                     <PerspectiveCarSvg
                         visualMode={visualMode}
-                        liveData={combinedTelemetry}
                         selectedPinId={selectedPin?.id}
-                        onSelectPin={(pin) => {
-                            handleSelectComponent(pin);
-                            setIsScannerOpen(true);
-                        }}
+                        onSelectPin={handlePreviewPinSelect}
                     />
                 </View>
 
@@ -342,7 +349,6 @@ const InteractiveCarXRay = ({
                     <View style={[styles.canvasCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
                         <PerspectiveCarSvg
                             visualMode={visualMode}
-                            liveData={combinedTelemetry}
                             selectedPinId={selectedPin?.id}
                             onSelectPin={handleSelectComponent}
                         />

@@ -168,8 +168,11 @@ const GlobalSearchScreen = () => {
             }
         };
         load();
-        setTimeout(() => inputRef.current?.focus(), 300);
-        return () => { cancelled = true; };
+        const focusTimer = setTimeout(() => inputRef.current?.focus(), 300);
+        return () => {
+            cancelled = true;
+            clearTimeout(focusTimer);
+        };
     }, [retryCount]);
 
     // ── Debounced query ──────────────────────────────────────────────────────

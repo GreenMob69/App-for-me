@@ -14,9 +14,10 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { TelemetryProvider } from './src/context/TelemetryContext';
 import { AppProvider, AppContext } from './src/context/AppContext';
-import { NotificationContext } from './src/context/NotificationContext';
+import { NotificationProvider, NotificationContext } from './src/context/NotificationContext';
+import { AlertProvider } from './src/context/AlertContext';
+import { LiveProvider } from './src/context/LiveContext';
 import { setCustomServerUrl } from './src/utils/config';
 import { VehicleProvider, useVehicle } from './src/context/VehicleContext';
 import api from './src/services/api';
@@ -256,17 +257,21 @@ function AppRoot() {
 
     return (
         <AppProvider>
-            <TelemetryProvider>
-                <SecurityProvider>
-                    <View style={styles.container}>
-                        <StatusBar style="light" backgroundColor={colors.bg[0]} />
-                        <SecurityGate>
-                            <AppNavigator />
-                            <CrashAlertModal />
-                        </SecurityGate>
-                    </View>
-                </SecurityProvider>
-            </TelemetryProvider>
+            <SecurityProvider>
+                <NotificationProvider>
+                    <AlertProvider>
+                        <LiveProvider>
+                            <View style={styles.container}>
+                                <StatusBar style="light" backgroundColor={colors.bg[0]} />
+                                <SecurityGate>
+                                    <AppNavigator />
+                                    <CrashAlertModal />
+                                </SecurityGate>
+                            </View>
+                        </LiveProvider>
+                    </AlertProvider>
+                </NotificationProvider>
+            </SecurityProvider>
         </AppProvider>
     );
 }
