@@ -1,4 +1,4 @@
-import React, { useState, useContext, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -8,21 +8,23 @@ import {
     Platform,
     StatusBar,
     Dimensions,
+    Animated,
 } from 'react-native';
-import Svg, { Path, Rect, Circle, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { LiveContext } from '../../context/LiveContext';
+import Svg, { Path, Line, Defs, LinearGradient, Stop, Circle, Rect } from 'react-native-svg';
+import { useNormalizedTelemetry } from '../../hooks/useNormalizedTelemetry';
 import { useVehicle } from '../../context/VehicleContext';
 import { useUiParadigm } from '../../context/AppContext';
-import { hapticTap } from '../../services/hapticFeedback';
+import { hapticTap, hapticCriticalWarning } from '../../services/hapticFeedback';
+import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MONO_FONT = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
+const theme = PARADIGM_THEMES[PARADIGM_KEYS.NOTHING_MINIMAL];
 
 // Generare cale ECG bio-mecanică reactivă la RPM și sarcină motor
 function generatePulsePath(width, height, loadPct = 20, rpm = 800) {
     const baselineY = height / 2;
     const intensity = Math.min(Math.max(loadPct / 100, 0.15), 1.0);
-    const rpmFactor = Math.min(Math.max((rpm - 800) / 4500, 0), 1.0);
     const peakHeight = (height * 0.42) * (0.4 + intensity * 0.6);
 
     const step = width / 12;
@@ -47,86 +49,109 @@ function generatePulsePath(width, height, loadPct = 20, rpm = 800) {
 }
 
 export default function MinimalNothingParadigm() {
-    const { liveData, isConnected } = useContext(LiveContext);
+    const telemetry = useNormalizedTelemetry();
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
 
+    // Stări locale pentru modurile Nothing
     const [activeTab, setActiveTab] = useState('01'); // '01'|'02'|'03'|'04'|'05'
+    const [ghostMode, setGhostMode] = useState(false);
+    const [mirrorHud, setMirrorHud] = useState(false);
+    const [expandedAlerts, setExpandedAlerts] = useState(false);
 
-    // Extragere valori telemetrice sigure
-    const speed = Math.round(Number(liveData?.viteza_kmh ?? liveData?.viteza ?? 0));
-    const rpm = Math.round(Number(liveData?.turatie_rpm ?? liveData?.turatie ?? 0));
-    const load = Math.round(Number(liveData?.sarcina_motor_pct ?? liveData?.sarcina ?? 0));
-    const boost = Number(liveData?.presiune_turbo_bar ?? liveData?.turbo_boost_bar ?? 0).toFixed(2);
-    const coolant = Math.round(Number(liveData?.temperatura_antigel ?? liveData?.temp_antigel ?? 0));
-    const oilTemp = Math.round(Number(liveData?.temperatura_ulei ?? liveData?.temp_ulei ?? 0));
-    const voltage = Number(liveData?.tensiune_baterie ?? liveData?.tensiune ?? 0).toFixed(1);
-    const torque = Math.round(Number(liveData?.cuplu_motor_nm ?? liveData?.fizica?.cuplu_nm ?? 0));
-    const powerKw = Math.round(Number(liveData?.putere_motor_kw ?? liveData?.fizica?.putere_kw ?? 0));
-    const consumption = Number(liveData?.consum_instant ?? liveData?.consum_l_100km ?? 0).toFixed(1);
-
-    // Fizică avansată (cele 32 de modele)
-    const fizica = liveData?.fizica || {};
-    const oilWear = Math.round(Number(fizica?.uzura_ulei_pct ?? 18));
-    const brakeWear = Math.round(Number(fizica?.uzura_frane_pct ?? 12));
-    const brakeTemp = Math.round(Number(fizica?.temp_frane_c ?? 110));
-    const batterySoh = Math.round(Number(fizica?.baterie_soh_pct ?? 94));
-    const tireWear = Math.round(Number(fizica?.uzura_anvelope_pct ?? 8));
-    const thermalEff = Math.round(Number(fizica?.eficienta_pct ?? 36));
-    const gLat = Number(fizica?.forta_g_lat ?? 0).toFixed(2);
-    const gLong = Number(fizica?.forta_g_long ?? 0).toFixed(2);
-
-    // Determinare treaptă de viteză
-    const currentGear = useMemo(() => {
-        if (speed === 0) return 'N';
-        if (liveData?.motor?.treapta_viteza) return `G${liveData.motor.treapta_viteza}`;
-        if (liveData?.treapta_recomandata) return `G${liveData.treapta_recomandata}`;
-        if (rpm > 0) {
-            const ratio = speed / (rpm / 1000);
-            if (ratio < 10) return 'G1';
-            if (ratio < 18) return 'G2';
-            if (ratio < 27) return 'G3';
-            if (ratio < 37) return 'G4';
-            if (ratio < 48) return 'G5';
-            return 'G6';
+    // Animație pentru Red Pill Alert
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+    useEffect(() => {
+        if (telemetry.criticalAlerts.length > 0) {
+            hapticCriticalWarning();
+            const loop = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(pulseAnim, { toValue: 1.25, duration: 400, useNativeDriver: true }),
+                    Animated.timing(pulseAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+                ])
+            );
+            loop.start();
+            return () => loop.stop();
+        } else {
+            pulseAnim.setValue(1);
         }
-        return 'G-';
-    }, [speed, rpm, liveData]);
+    }, [telemetry.criticalAlerts.length]);
 
-    // Detecție anomalii active (Design by Absence)
-    const activeAlerts = useMemo(() => {
-        const list = [];
-        if (Array.isArray(liveData?.alerte) && liveData.alerte.length > 0) {
-            list.push(...liveData.alerte.map(a => typeof a === 'string' ? a : a.mesaj || a.titlu));
-        }
-        if (fizica?.turbo_surge_risc) list.push('RISC TURBO SURGE DETECTAT');
-        if (fizica?.black_ice_risc) list.push('POLEI / PIERDERE ADERENȚĂ');
-        if (coolant > 105) list.push(`TEMPERATURĂ ANTIGEL CRITICĂ: ${coolant}°C`);
-        if (oilTemp > 130) list.push(`TEMPERATURĂ ULEI RIDICATĂ: ${oilTemp}°C`);
-        if (voltage < 12.0 && voltage > 0) list.push(`TENSIUNE SCĂZUTĂ ALTERNATOR: ${voltage}V`);
-        return list;
-    }, [liveData, fizica, coolant, oilTemp, voltage]);
+    const {
+        speed,
+        rpm,
+        gear,
+        throttle,
+        boost,
+        coolantTemp,
+        oilTemp,
+        exhaustTemp,
+        batteryVoltage,
+        batterySoH,
+        fuelLevel,
+        fuelRate,
+        fuelBurnedLiters,
+        brakeFluidTemp,
+        brakeEnergyTrip,
+        gForceLat,
+        gForceLong,
+        weibullRul,
+        minRulKm,
+        breakdownRisk,
+        criticalAlerts,
+        isConnected,
+    } = telemetry;
 
     const pulseSvgPath = useMemo(() => {
-        return generatePulsePath(SCREEN_WIDTH - 40, 50, load, rpm);
-    }, [load, rpm]);
+        return generatePulsePath(SCREEN_WIDTH - 40, 50, throttle, rpm);
+    }, [throttle, rpm]);
+
+    // Glyph Matrix: 7 segmente luminoase LED albe care se aprind progresiv cu RPM
+    const glyphLeds = useMemo(() => {
+        const count = 7;
+        const activeCount = Math.min(count, Math.floor((rpm / 4500) * count));
+        return Array.from({ length: count }, (_, i) => i < activeCount);
+    }, [rpm]);
+
+    // Benzile perforate de combustibil (10 găurele punctate)
+    const fuelDots = useMemo(() => {
+        const total = 10;
+        const filled = Math.round((fuelLevel / 100) * total);
+        return Array.from({ length: total }, (_, i) => i < filled);
+    }, [fuelLevel]);
+
+    const isGhostDimmed = ghostMode && speed < 5 && criticalAlerts.length === 0;
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, mirrorHud && styles.mirrorHudTransform]}>
             <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
-            {/* ── Top Bar Minimalist ── */}
+            {/* ── 1. GLYPH INTERFACE MATRIX (Bara de lumina Nothing pe margine sus) ── */}
+            <View style={styles.glyphMatrixContainer}>
+                {glyphLeds.map((active, idx) => (
+                    <View
+                        key={`glyph-${idx}`}
+                        style={[
+                            styles.glyphBar,
+                            active && styles.glyphBarActive,
+                            idx === 6 && active && { backgroundColor: theme.accent },
+                        ]}
+                    />
+                ))}
+            </View>
+
+            {/* ── 2. Top Bar Minimalist & Controluri ── */}
             <View style={styles.topBar}>
                 <View style={styles.brandRow}>
                     <View style={[styles.statusDot, { backgroundColor: isConnected ? '#00FF66' : '#FF3B00' }]} />
-                    <Text style={styles.brandText}>
+                    <Text style={styles.brandText} numberOfLines={1}>
                         {activeVehicle?.model ? activeVehicle.model.toUpperCase() : 'TELEMETRIE // CALM TECH'}
                     </Text>
                     <Text style={styles.dotSeparator}>·</Text>
                     <Text style={styles.rpmLiveBadge}>{rpm} RPM</Text>
                 </View>
 
-                {/* Butoane de acțiune și revenire rapidă */}
+                {/* Butoane de acțiune */}
                 <View style={styles.headerActions}>
                     <TouchableOpacity
                         style={[styles.v2Button, { borderColor: '#00F0FF', backgroundColor: '#00F0FF12' }]}
@@ -134,10 +159,38 @@ export default function MinimalNothingParadigm() {
                             hapticTap();
                             openSimulatorModal();
                         }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         activeOpacity={0.7}
-                        accessibilityRole="button"
                     >
                         <Text style={[styles.v2ButtonText, { color: '#00F0FF' }]}>🎮 DEMO</Text>
+                    </TouchableOpacity>
+
+                    {/* Ghost Drive Toggle */}
+                    <TouchableOpacity
+                        style={[styles.v2Button, ghostMode && styles.v2ButtonActive]}
+                        onPress={() => {
+                            hapticTap();
+                            setGhostMode(!ghostMode);
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.v2ButtonText, ghostMode && { color: '#FFFFFF' }]}>
+                            {ghostMode ? 'GHOST ON' : 'GHOST'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {/* Mirror HUD Toggle */}
+                    <TouchableOpacity
+                        style={[styles.v2Button, mirrorHud && styles.v2ButtonActive]}
+                        onPress={() => {
+                            hapticTap();
+                            setMirrorHud(!mirrorHud);
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.v2ButtonText, mirrorHud && { color: '#FFFFFF' }]}>🪞 HUD</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -147,9 +200,8 @@ export default function MinimalNothingParadigm() {
                             setUiParadigm('CLASSIC_V2');
                         }}
                         activeOpacity={0.7}
-                        accessibilityRole="button"
                     >
-                        <Text style={styles.v2ButtonText}>⮌ CLASIC V2</Text>
+                        <Text style={styles.v2ButtonText}>⮌ V2</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -159,29 +211,28 @@ export default function MinimalNothingParadigm() {
                             openExperiencePicker();
                         }}
                         activeOpacity={0.7}
-                        accessibilityRole="button"
                     >
                         <Text style={styles.stylePickerText}>[ 🎨 STIL ]</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* ── Corpul Central (Schimbat de Jog-Wheel) ── */}
+            {/* ── Corpul Central (cu Ghost Mode Dimming) ── */}
             <ScrollView
-                style={styles.mainScroll}
+                style={[styles.mainScroll, isGhostDimmed && styles.ghostDimmed]}
                 contentContainerStyle={styles.mainScrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* 1. AFISAJ MONUMENTAL VITEZĂ & BIO-PULSE (PULSE CORE) */}
+                {/* 1. AFISAJ MONUMENTAL VITEZĂ & BIO-PULSE */}
                 <View style={styles.heroSection}>
                     <View style={styles.speedRow}>
                         <Text style={styles.speedMonumental}>{speed}</Text>
                         <View style={styles.speedMeta}>
                             <View style={styles.gearPill}>
-                                <Text style={styles.gearText}>{currentGear}</Text>
+                                <Text style={styles.gearText}>{gear}</Text>
                             </View>
                             <Text style={styles.unitText}>KM/H</Text>
-                            <Text style={styles.loadSub}>{load}% SARCINĂ</Text>
+                            <Text style={styles.loadSub}>{throttle}% ACCEL</Text>
                         </View>
                     </View>
 
@@ -191,7 +242,7 @@ export default function MinimalNothingParadigm() {
                             <Defs>
                                 <LinearGradient id="pulseGrad" x1="0" y1="0" x2="1" y2="0">
                                     <Stop offset="0" stopColor="#333333" stopOpacity="0.4" />
-                                    <Stop offset="0.5" stopColor="#FF3B00" stopOpacity="1" />
+                                    <Stop offset="0.5" stopColor={theme.accent} stopOpacity="1" />
                                     <Stop offset="1" stopColor="#333333" stopOpacity="0.4" />
                                 </LinearGradient>
                             </Defs>
@@ -205,33 +256,61 @@ export default function MinimalNothingParadigm() {
                     </View>
                 </View>
 
-                {/* 2. EXCEPTION-BASED ANOMALY BANNER (Design by Absence) */}
+                {/* 2. CRITICAL RED PILL / NOMINAL BANNER (Design by Absence) */}
                 <View style={styles.anomalyWrapper}>
-                    {activeAlerts.length === 0 ? (
+                    {criticalAlerts.length === 0 ? (
                         <View style={styles.nominalBanner}>
                             <View style={styles.nominalDot} />
-                            <Text style={styles.nominalText}>
+                            <Text style={styles.nominalText} numberOfLines={1}>
                                 TOATE CELE 32 SISTEME NOMINALE // FĂRĂ ANOMALII
                             </Text>
                         </View>
                     ) : (
-                        <View style={styles.alertBanner}>
+                        <TouchableOpacity
+                            style={styles.alertBanner}
+                            onPress={() => {
+                                hapticTap();
+                                setExpandedAlerts(!expandedAlerts);
+                            }}
+                            activeOpacity={0.8}
+                        >
                             <View style={styles.alertHeader}>
-                                <Text style={styles.alertBadge}>[ ! ATENȚIE CRITICĂ ]</Text>
-                                <Text style={styles.alertCount}>{activeAlerts.length} ANOMALII</Text>
+                                <Animated.View style={[styles.redPillDot, { transform: [{ scale: pulseAnim }] }]} />
+                                <Text style={styles.alertBadge}>[ ! PERICOL CRITIC DETECTAT ]</Text>
+                                <Text style={styles.alertCount}>{criticalAlerts.length} ALERTE</Text>
                             </View>
-                            {activeAlerts.map((msg, idx) => (
-                                <Text key={idx} style={styles.alertMsg}>
-                                    ▶ {msg}
-                                </Text>
+                            {criticalAlerts.map((alt, idx) => (
+                                <View key={alt.id || idx} style={styles.alertItemRow}>
+                                    <Text style={styles.alertMsg}>▶ {alt.title}</Text>
+                                    {expandedAlerts && <Text style={styles.alertDesc}>{alt.desc}</Text>}
+                                </View>
                             ))}
-                        </View>
+                        </TouchableOpacity>
                     )}
                 </View>
 
-                {/* 3. CONȚINUT DINAMIC BAZAT PE TAB-UL SELECTAT */}
+                {/* 3. BANDA PERFORATĂ DE CARBURANT (Perforated Dots) */}
+                <View style={styles.fuelStripContainer}>
+                    <View style={styles.fuelStripHeader}>
+                        <Text style={styles.fuelStripLabel}>REZERVOR COMBUSTIBIL</Text>
+                        <Text style={styles.fuelStripValue}>{fuelLevel}% · {fuelRate} L/100KM</Text>
+                    </View>
+                    <View style={styles.fuelDotsRow}>
+                        {fuelDots.map((isFilled, idx) => (
+                            <View
+                                key={`fdot-${idx}`}
+                                style={[
+                                    styles.fuelDot,
+                                    isFilled ? styles.fuelDotFilled : styles.fuelDotEmpty,
+                                    idx < 2 && isFilled && { backgroundColor: theme.accent },
+                                ]}
+                            />
+                        ))}
+                    </View>
+                </View>
+
+                {/* 4. CONȚINUT DINAMIC BAZAT PE TAB-UL SELECTAT */}
                 {activeTab === '01' && (
-                    /* TAB 01: PULSE & VITALS */
                     <View style={styles.tabContent}>
                         <Text style={styles.sectionHeader}>// 01 · PARAMETRI VITALI DE RULARE</Text>
                         <View style={styles.grid2x2}>
@@ -241,169 +320,125 @@ export default function MinimalNothingParadigm() {
                             </View>
                             <View style={styles.metricCell}>
                                 <Text style={styles.metricLabel}>TEMPERATURĂ ANTIGEL</Text>
-                                <Text style={[styles.metricValue, coolant > 98 && { color: '#FF3B00' }]}>
-                                    {coolant} <Text style={styles.metricUnit}>°C</Text>
+                                <Text style={[styles.metricValue, coolantTemp > 98 && { color: theme.accent }]}>
+                                    {coolantTemp} <Text style={styles.metricUnit}>°C</Text>
                                 </Text>
                             </View>
                             <View style={styles.metricCell}>
                                 <Text style={styles.metricLabel}>TENSIUNE ALTERNATOR</Text>
-                                <Text style={styles.metricValue}>{voltage} <Text style={styles.metricUnit}>V</Text></Text>
+                                <Text style={styles.metricValue}>{batteryVoltage} <Text style={styles.metricUnit}>V</Text></Text>
                             </View>
                             <View style={styles.metricCell}>
                                 <Text style={styles.metricLabel}>TEMPERATURĂ ULEI</Text>
-                                <Text style={styles.metricValue}>{oilTemp > 0 ? oilTemp : '—'} <Text style={styles.metricUnit}>°C</Text></Text>
+                                <Text style={styles.metricValue}>{oilTemp} <Text style={styles.metricUnit}>°C</Text></Text>
                             </View>
                         </View>
                     </View>
                 )}
 
                 {activeTab === '02' && (
-                    /* TAB 02: ADVANCED PHYSICS */
                     <View style={styles.tabContent}>
-                        <Text style={styles.sectionHeader}>// 02 · MODELE FIZICE & DINAMICĂ (32 OBS.)</Text>
+                        <Text style={styles.sectionHeader}>// 02 · TERMICĂ & EVACUARE EGT</Text>
                         <View style={styles.grid2x2}>
                             <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>CUPLU ESTIMAT</Text>
-                                <Text style={styles.metricValue}>{torque} <Text style={styles.metricUnit}>NM</Text></Text>
+                                <Text style={styles.metricLabel}>EGT EVACUARE</Text>
+                                <Text style={styles.metricValue}>{exhaustTemp} <Text style={styles.metricUnit}>°C</Text></Text>
                             </View>
                             <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>PUTERE ARBORE</Text>
-                                <Text style={styles.metricValue}>{powerKw} <Text style={styles.metricUnit}>KW</Text></Text>
+                                <Text style={styles.metricLabel}>LICHID FRÂNĂ</Text>
+                                <Text style={[styles.metricValue, brakeFluidTemp > 140 && { color: theme.accent }]}>
+                                    {brakeFluidTemp} <Text style={styles.metricUnit}>°C</Text>
+                                </Text>
                             </View>
                             <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>EFICIENȚĂ TERMICĂ</Text>
-                                <Text style={styles.metricValue}>{thermalEff} <Text style={styles.metricUnit}>%</Text></Text>
+                                <Text style={styles.metricLabel}>ENERGIE FRÂNARE</Text>
+                                <Text style={styles.metricValue}>{brakeEnergyTrip} <Text style={styles.metricUnit}>kJ</Text></Text>
                             </View>
                             <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>FORȚĂ G (LAT / LONG)</Text>
-                                <Text style={styles.metricValue}>{gLat} / {gLong} <Text style={styles.metricUnit}>G</Text></Text>
+                                <Text style={styles.metricLabel}>CONSUM TOTAL</Text>
+                                <Text style={styles.metricValue}>{fuelBurnedLiters} <Text style={styles.metricUnit}>L</Text></Text>
                             </View>
                         </View>
                     </View>
                 )}
 
                 {activeTab === '03' && (
-                    /* TAB 03: WEAR & HEALTH */
                     <View style={styles.tabContent}>
-                        <Text style={styles.sectionHeader}>// 03 · UZURĂ SUBANSAMBLE & TERMICĂ</Text>
+                        <Text style={styles.sectionHeader}>// 03 · VECTORI G-FORCE & DINAMICĂ</Text>
                         <View style={styles.grid2x2}>
                             <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>UZURĂ ULEI ESTIMATĂ</Text>
-                                <Text style={styles.metricValue}>{oilWear} <Text style={styles.metricUnit}>%</Text></Text>
+                                <Text style={styles.metricLabel}>ACCELERAȚIE LATERALĂ</Text>
+                                <Text style={styles.metricValue}>{gForceLat} <Text style={styles.metricUnit}>G</Text></Text>
                             </View>
                             <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>TEMP. ESTIMATĂ FRÂNE</Text>
-                                <Text style={styles.metricValue}>{brakeTemp} <Text style={styles.metricUnit}>°C</Text></Text>
-                            </View>
-                            <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>SĂNĂTATE BATERIE (SOH)</Text>
-                                <Text style={styles.metricValue}>{batterySoh} <Text style={styles.metricUnit}>%</Text></Text>
-                            </View>
-                            <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>UZURĂ ANVELOPE</Text>
-                                <Text style={styles.metricValue}>{tireWear} <Text style={styles.metricUnit}>%</Text></Text>
+                                <Text style={styles.metricLabel}>ACCELERAȚIE LONGITUDINALĂ</Text>
+                                <Text style={styles.metricValue}>{gForceLong} <Text style={styles.metricUnit}>G</Text></Text>
                             </View>
                         </View>
                     </View>
                 )}
 
                 {activeTab === '04' && (
-                    /* TAB 04: TRIP & EFFICIENCY */
                     <View style={styles.tabContent}>
-                        <Text style={styles.sectionHeader}>// 04 · CURSĂ & EFICIENȚĂ ENERGETICĂ</Text>
+                        <Text style={styles.sectionHeader}>// 04 · FIABILITATE WEIBULL & RUL</Text>
                         <View style={styles.grid2x2}>
                             <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>CONSUM INSTANTANEU</Text>
-                                <Text style={styles.metricValue}>{consumption} <Text style={styles.metricUnit}>L/100</Text></Text>
+                                <Text style={styles.metricLabel}>RUL MINIM PANĂ</Text>
+                                <Text style={[styles.metricValue, { color: '#00FF66' }]}>{minRulKm} <Text style={styles.metricUnit}>KM</Text></Text>
                             </View>
                             <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>SCOR ECO CALCULAT</Text>
-                                <Text style={[styles.metricValue, { color: '#00FF66' }]}>
-                                    {Math.round(Number(liveData?.eco_score ?? 88))} <Text style={styles.metricUnit}>/100</Text>
-                                </Text>
+                                <Text style={styles.metricLabel}>RISC DEFECTARE</Text>
+                                <Text style={styles.metricValue}>{breakdownRisk} <Text style={styles.metricUnit}>%</Text></Text>
                             </View>
                             <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>DISTANȚĂ SESIUNE</Text>
-                                <Text style={styles.metricValue}>
-                                    {Number(liveData?.distanta_km ?? 0).toFixed(1)} <Text style={styles.metricUnit}>KM</Text>
-                                </Text>
+                                <Text style={styles.metricLabel}>SOH BATERIE</Text>
+                                <Text style={styles.metricValue}>{batterySoH} <Text style={styles.metricUnit}>%</Text></Text>
                             </View>
                             <View style={styles.metricCell}>
-                                <Text style={styles.metricLabel}>COMBUSTIBIL CONSUMAT</Text>
-                                <Text style={styles.metricValue}>
-                                    {Number(liveData?.combustibil_litri ?? 0).toFixed(2)} <Text style={styles.metricUnit}>L</Text>
-                                </Text>
+                                <Text style={styles.metricLabel}>RUL ULEI</Text>
+                                <Text style={styles.metricValue}>{weibullRul.oil} <Text style={styles.metricUnit}>KM</Text></Text>
                             </View>
                         </View>
                     </View>
                 )}
 
                 {activeTab === '05' && (
-                    /* TAB 05: SETTINGS & QUICK PARADIGM SWITCH */
                     <View style={styles.tabContent}>
-                        <Text style={styles.sectionHeader}>// 05 · SETĂRI RAPIDE & PARADIGME</Text>
-                        <View style={styles.settingsBox}>
-                            <Text style={styles.settingsTitle}>COMUTATOR DE PARADIGMĂ VIZUALĂ</Text>
-                            <Text style={styles.settingsDesc}>
-                                Ești în modul Nothing OS Calm Tech. Alege oricare alt stil fără să pierzi conexiunea sau analiza fizică.
-                            </Text>
-
-                            <TouchableOpacity
-                                style={styles.actionRowBtn}
-                                onPress={() => setUiParadigm('CLASSIC_V2')}
-                            >
-                                <Text style={styles.actionRowBtnText}>➜ Comută la Bordul Clasic V2 (Multi-Tab)</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.actionRowBtn, { borderColor: '#FF8800' }]}
-                                onPress={() => setUiParadigm('RETRO_AUDI_96')}
-                            >
-                                <Text style={[styles.actionRowBtnText, { color: '#FF8800' }]}>➜ Comută la Audi 1996 Digifiz VFD</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.actionRowBtn, { borderColor: '#00E5FF', backgroundColor: '#00E5FF10' }]}
-                                onPress={openExperiencePicker}
-                            >
-                                <Text style={[styles.actionRowBtnText, { color: '#00E5FF' }]}>🎨 Deschide Selectorul Complet de Experiențe</Text>
-                            </TouchableOpacity>
+                        <Text style={styles.sectionHeader}>// 05 · ECO & EFICIENȚĂ CALORICĂ</Text>
+                        <View style={styles.grid2x2}>
+                            <View style={styles.metricCell}>
+                                <Text style={styles.metricLabel}>CONSUM INSTANT</Text>
+                                <Text style={styles.metricValue}>{fuelRate} <Text style={styles.metricUnit}>L/100</Text></Text>
+                            </View>
+                            <View style={styles.metricCell}>
+                                <Text style={styles.metricLabel}>COMBUSTIBIL ARS</Text>
+                                <Text style={styles.metricValue}>{fuelBurnedLiters} <Text style={styles.metricUnit}>L</Text></Text>
+                            </View>
                         </View>
                     </View>
                 )}
+
+                <View style={{ height: 40 }} />
             </ScrollView>
 
-            {/* ── 5-Position Tactile Jog-Wheel / Switcher (Bottom) ── */}
+            {/* ── Jog-Wheel Selector Inferior (01 .. 05) ── */}
             <View style={styles.jogWheelContainer}>
-                {[
-                    { id: '01', label: '01·PULS' },
-                    { id: '02', label: '02·FIZICĂ' },
-                    { id: '03', label: '03·UZURĂ' },
-                    { id: '04', label: '04·CURSĂ' },
-                    { id: '05', label: '05·SETĂRI' },
-                ].map((item) => {
-                    const isSelected = activeTab === item.id;
-                    return (
-                        <TouchableOpacity
-                            key={item.id}
-                            style={[
-                                styles.jogItem,
-                                isSelected && styles.jogItemSelected,
-                            ]}
-                            onPress={() => setActiveTab(item.id)}
-                            activeOpacity={0.7}
-                            accessibilityRole="button"
-                        >
-                            <Text style={[
-                                styles.jogItemText,
-                                isSelected && styles.jogItemTextSelected,
-                            ]}>
-                                {item.label}
-                            </Text>
-                            {isSelected && <View style={styles.jogActiveIndicator} />}
-                        </TouchableOpacity>
-                    );
-                })}
+                {['01', '02', '03', '04', '05'].map((tab) => (
+                    <TouchableOpacity
+                        key={tab}
+                        style={[styles.jogTab, activeTab === tab && styles.jogTabActive]}
+                        onPress={() => {
+                            hapticTap();
+                            setActiveTab(tab);
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.jogTabText, activeTab === tab && styles.jogTabTextActive]}>
+                            {tab}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
             </View>
         </View>
     );
@@ -413,7 +448,30 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#000000',
-        paddingTop: Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 20,
+    },
+    mirrorHudTransform: {
+        transform: [{ scaleX: -1 }],
+    },
+    glyphMatrixContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 4,
+        gap: 6,
+        backgroundColor: '#000000',
+    },
+    glyphBar: {
+        flex: 1,
+        height: 3,
+        backgroundColor: '#1E1E1E',
+        borderRadius: 2,
+    },
+    glyphBarActive: {
+        backgroundColor: '#FFFFFF',
+        shadowColor: '#FFFFFF',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 4,
     },
     topBar: {
         flexDirection: 'row',
@@ -422,161 +480,166 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: '#1A1A1A',
+        borderBottomColor: '#161616',
     },
     brandRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexShrink: 1,
     },
     statusDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
         marginRight: 8,
     },
     brandText: {
-        color: '#888888',
-        fontSize: 11,
         fontFamily: MONO_FONT,
+        fontSize: 10,
+        color: '#FFFFFF',
         letterSpacing: 1,
+        fontWeight: '700',
+        flexShrink: 1,
     },
     dotSeparator: {
         color: '#444444',
         marginHorizontal: 6,
-        fontFamily: MONO_FONT,
+        fontSize: 10,
     },
     rpmLiveBadge: {
-        color: '#F5F5F7',
-        fontSize: 11,
         fontFamily: MONO_FONT,
-        fontWeight: 'bold',
+        fontSize: 10,
+        color: '#8E8E93',
+        fontVariant: ['tabular-nums'],
     },
     headerActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
     },
     v2Button: {
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderWidth: 1,
-        borderColor: '#333333',
         borderRadius: 4,
-        backgroundColor: '#0A0A0A',
+        borderWidth: 1,
+        borderColor: '#262626',
+        backgroundColor: '#0C0C0C',
+    },
+    v2ButtonActive: {
+        borderColor: '#FFFFFF',
+        backgroundColor: '#222222',
     },
     v2ButtonText: {
-        color: '#A0AEC0',
-        fontSize: 10,
         fontFamily: MONO_FONT,
-        fontWeight: 'bold',
+        fontSize: 9,
+        color: '#8E8E93',
+        fontWeight: '700',
     },
     stylePickerButton: {
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderWidth: 1,
-        borderColor: '#FF3B00',
         borderRadius: 4,
-        backgroundColor: '#FF3B0015',
+        backgroundColor: '#FFFFFF',
     },
     stylePickerText: {
-        color: '#FF3B00',
-        fontSize: 10,
         fontFamily: MONO_FONT,
-        fontWeight: 'bold',
+        fontSize: 9,
+        color: '#000000',
+        fontWeight: '900',
     },
     mainScroll: {
         flex: 1,
     },
     mainScrollContent: {
-        paddingHorizontal: 20,
-        paddingBottom: 24,
+        paddingHorizontal: 16,
+        paddingTop: 16,
+    },
+    ghostDimmed: {
+        opacity: 0.08,
     },
     heroSection: {
-        paddingVertical: 20,
-        alignItems: 'center',
+        marginBottom: 16,
     },
     speedRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        justifyContent: 'center',
+        justifyContent: 'space-between',
     },
     speedMonumental: {
-        color: '#FFFFFF',
-        fontSize: 116,
         fontFamily: MONO_FONT,
-        fontWeight: 'bold',
-        letterSpacing: -4,
-        lineHeight: 124,
+        fontSize: 88,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        lineHeight: 90,
+        letterSpacing: -2,
+        fontVariant: ['tabular-nums'],
     },
     speedMeta: {
-        marginLeft: 12,
-        paddingTop: 16,
-        alignItems: 'flex-start',
+        alignItems: 'flex-end',
+        paddingTop: 8,
     },
     gearPill: {
-        borderWidth: 1.5,
-        borderColor: '#FF3B00',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
+        borderWidth: 1,
+        borderColor: '#333333',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
         borderRadius: 4,
-        backgroundColor: '#FF3B0015',
         marginBottom: 6,
     },
     gearText: {
-        color: '#FF3B00',
-        fontSize: 14,
         fontFamily: MONO_FONT,
-        fontWeight: 'bold',
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#FFFFFF',
     },
     unitText: {
-        color: '#666666',
-        fontSize: 12,
         fontFamily: MONO_FONT,
-        fontWeight: 'bold',
-        letterSpacing: 1,
+        fontSize: 12,
+        color: '#8E8E93',
+        fontWeight: '700',
     },
     loadSub: {
-        color: '#444444',
-        fontSize: 9,
         fontFamily: MONO_FONT,
+        fontSize: 10,
+        color: '#555555',
         marginTop: 4,
+        fontVariant: ['tabular-nums'],
     },
     pulseContainer: {
-        marginTop: 10,
-        width: '100%',
-        alignItems: 'center',
+        marginTop: 12,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#161616',
     },
     pulseMetaRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        width: '100%',
         marginTop: 4,
-        paddingHorizontal: 4,
     },
     pulseMetaLeft: {
-        color: '#555555',
-        fontSize: 9,
         fontFamily: MONO_FONT,
-        letterSpacing: 0.5,
+        fontSize: 9,
+        color: '#555555',
+        letterSpacing: 1,
     },
     pulseMetaRight: {
-        color: '#FF3B00',
-        fontSize: 9,
         fontFamily: MONO_FONT,
-        fontWeight: 'bold',
+        fontSize: 9,
+        color: '#8E8E93',
+        fontWeight: '700',
+        fontVariant: ['tabular-nums'],
     },
     anomalyWrapper: {
-        marginBottom: 20,
+        marginBottom: 16,
     },
     nominalBanner: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
+        padding: 10,
+        backgroundColor: '#0A0A0A',
+        borderRadius: 4,
         borderWidth: 1,
-        borderColor: '#181818',
-        borderRadius: 6,
-        backgroundColor: '#050505',
+        borderColor: '#1A1A1A',
     },
     nominalDot: {
         width: 6,
@@ -586,150 +649,165 @@ const styles = StyleSheet.create({
         marginRight: 8,
     },
     nominalText: {
-        color: '#777777',
-        fontSize: 10,
         fontFamily: MONO_FONT,
-        letterSpacing: 0.5,
+        fontSize: 10,
+        color: '#8E8E93',
+        fontWeight: '600',
+        flexShrink: 1,
     },
     alertBanner: {
-        borderWidth: 1.5,
-        borderColor: '#FF3B00',
-        borderRadius: 6,
         padding: 12,
-        backgroundColor: '#FF3B0010',
+        backgroundColor: '#160505',
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#D71920',
     },
     alertHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 6,
     },
+    redPillDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#D71920',
+        marginRight: 8,
+    },
     alertBadge: {
-        color: '#FF3B00',
-        fontSize: 11,
         fontFamily: MONO_FONT,
-        fontWeight: 'bold',
+        fontSize: 10,
+        color: '#D71920',
+        fontWeight: '800',
+        flex: 1,
     },
     alertCount: {
-        color: '#FFFFFF',
-        fontSize: 10,
         fontFamily: MONO_FONT,
+        fontSize: 9,
+        color: '#FFFFFF',
+    },
+    alertItemRow: {
+        marginTop: 4,
     },
     alertMsg: {
-        color: '#FFFFFF',
-        fontSize: 11,
         fontFamily: MONO_FONT,
-        marginTop: 3,
+        fontSize: 11,
+        color: '#FFFFFF',
+        fontWeight: '700',
+    },
+    alertDesc: {
+        fontFamily: MONO_FONT,
+        fontSize: 10,
+        color: '#A0A0A0',
+        marginTop: 2,
+    },
+    fuelStripContainer: {
+        marginBottom: 16,
+        padding: 12,
+        backgroundColor: '#0A0A0A',
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#161616',
+    },
+    fuelStripHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    fuelStripLabel: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        color: '#666666',
+        letterSpacing: 1,
+    },
+    fuelStripValue: {
+        fontFamily: MONO_FONT,
+        fontSize: 10,
+        color: '#FFFFFF',
+        fontWeight: '700',
+        fontVariant: ['tabular-nums'],
+    },
+    fuelDotsRow: {
+        flexDirection: 'row',
+        gap: 6,
+    },
+    fuelDot: {
+        flex: 1,
+        height: 6,
+        borderRadius: 3,
+    },
+    fuelDotFilled: {
+        backgroundColor: '#FFFFFF',
+    },
+    fuelDotEmpty: {
+        backgroundColor: '#202020',
     },
     tabContent: {
         marginBottom: 16,
     },
     sectionHeader: {
-        color: '#555555',
-        fontSize: 10,
         fontFamily: MONO_FONT,
+        fontSize: 10,
+        color: '#666666',
         letterSpacing: 1,
-        marginBottom: 12,
+        marginBottom: 10,
     },
     grid2x2: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 12,
+        gap: 8,
     },
     metricCell: {
-        width: (SCREEN_WIDTH - 52) / 2,
+        width: (SCREEN_WIDTH - 40) / 2,
+        backgroundColor: '#0A0A0A',
+        padding: 12,
+        borderRadius: 4,
         borderWidth: 1,
-        borderColor: '#1E1E1E',
-        borderRadius: 6,
-        padding: 14,
-        backgroundColor: '#080808',
+        borderColor: '#161616',
     },
     metricLabel: {
-        color: '#666666',
-        fontSize: 9,
         fontFamily: MONO_FONT,
-        marginBottom: 6,
+        fontSize: 9,
+        color: '#666666',
         letterSpacing: 0.5,
+        marginBottom: 4,
     },
     metricValue: {
-        color: '#F5F5F7',
-        fontSize: 22,
         fontFamily: MONO_FONT,
-        fontWeight: 'bold',
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#FFFFFF',
+        fontVariant: ['tabular-nums'],
     },
     metricUnit: {
-        color: '#777777',
-        fontSize: 11,
-        fontWeight: 'normal',
-    },
-    settingsBox: {
-        borderWidth: 1,
-        borderColor: '#222222',
-        borderRadius: 8,
-        padding: 16,
-        backgroundColor: '#080808',
-    },
-    settingsTitle: {
-        color: '#FFFFFF',
-        fontSize: 12,
-        fontFamily: MONO_FONT,
-        fontWeight: 'bold',
-        marginBottom: 6,
-    },
-    settingsDesc: {
-        color: '#777777',
-        fontSize: 11,
-        fontFamily: MONO_FONT,
-        lineHeight: 16,
-        marginBottom: 16,
-    },
-    actionRowBtn: {
-        borderWidth: 1,
-        borderColor: '#333333',
-        borderRadius: 6,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        marginBottom: 10,
-        backgroundColor: '#0F0F0F',
-    },
-    actionRowBtnText: {
-        color: '#CCCCCC',
-        fontSize: 11,
-        fontFamily: MONO_FONT,
-        fontWeight: 'bold',
+        fontSize: 10,
+        color: '#8E8E93',
+        fontWeight: '500',
     },
     jogWheelContainer: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        paddingVertical: 14,
         borderTopWidth: 1,
-        borderTopColor: '#1A1A1A',
-        backgroundColor: '#030303',
-        paddingVertical: 8,
-        paddingHorizontal: 4,
+        borderTopColor: '#161616',
+        backgroundColor: '#000000',
     },
-    jogItem: {
-        flex: 1,
-        alignItems: 'center',
+    jogTab: {
+        paddingHorizontal: 12,
         paddingVertical: 6,
-    },
-    jogItemSelected: {
-        backgroundColor: '#111111',
         borderRadius: 4,
     },
-    jogItemText: {
-        color: '#555555',
-        fontSize: 10,
+    jogTabActive: {
+        backgroundColor: '#FFFFFF',
+    },
+    jogTabText: {
         fontFamily: MONO_FONT,
-        fontWeight: '600',
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#666666',
     },
-    jogItemTextSelected: {
-        color: '#FFFFFF',
-        fontWeight: 'bold',
-    },
-    jogActiveIndicator: {
-        width: 14,
-        height: 2,
-        backgroundColor: '#FF3B00',
-        marginTop: 4,
-        borderRadius: 1,
+    jogTabTextActive: {
+        color: '#000000',
     },
 });

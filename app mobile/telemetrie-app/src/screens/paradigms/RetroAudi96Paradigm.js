@@ -1,4 +1,4 @@
-import React, { useState, useContext, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -8,18 +8,21 @@ import {
     Platform,
     StatusBar,
     Dimensions,
+    Animated,
 } from 'react-native';
 import Svg, { Rect, Path, Circle, Line, Defs, LinearGradient, Stop, G, Text as SvgText } from 'react-native-svg';
-import { LiveContext } from '../../context/LiveContext';
+import { useNormalizedTelemetry } from '../../hooks/useNormalizedTelemetry';
 import { useVehicle } from '../../context/VehicleContext';
 import { useUiParadigm } from '../../context/AppContext';
-import { hapticTap } from '../../services/hapticFeedback';
+import { hapticTap, hapticShiftAlert } from '../../services/hapticFeedback';
+import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RETRO_FONT = Platform.OS === 'ios' ? 'Courier' : 'monospace';
+const theme = PARADIGM_THEMES[PARADIGM_KEYS.RETRO_AUDI_96];
 
-// 25-block stepped diagonal LED tachometer
-function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH - 40 }) {
+// 25-block stepped diagonal LED tachometer with phosphor persistence
+function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH - 40, brightness = 1.0 }) {
     const totalBlocks = 25;
     const clampedRpm = Math.min(Math.max(rpm, 0), maxRpm);
     const activeBlocksCount = Math.round((clampedRpm / maxRpm) * totalBlocks);
@@ -30,22 +33,23 @@ function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH
     return (
         <View style={styles.tachoWrapper}>
             <View style={styles.tachoHeader}>
-                <Text style={styles.tachoLabel}>DREHZAHL // x1000 min⁻¹</Text>
-                <Text style={styles.tachoValue}>{(rpm / 1000).toFixed(1)} <Text style={styles.tachoUnit}>RPM</Text></Text>
+                <Text style={[styles.tachoLabel, { opacity: brightness }]}>DREHZAHL // x1000 min⁻¹</Text>
+                <Text style={[styles.tachoValue, { opacity: brightness }]}>
+                    {(rpm / 1000).toFixed(1)} <Text style={styles.tachoUnit}>RPM</Text>
+                </Text>
             </View>
 
             <Svg width={width} height={38} viewBox={`0 0 ${width} 38`}>
                 <Defs>
                     <LinearGradient id="amberGlow" x1="0" y1="0" x2="0" y2="1">
-                        <Stop offset="0" stopColor="#FFB300" stopOpacity="1" />
-                        <Stop offset="1" stopColor="#FF6600" stopOpacity="1" />
+                        <Stop offset="0" stopColor="#FFB300" stopOpacity={brightness} />
+                        <Stop offset="1" stopColor="#FF6600" stopOpacity={brightness} />
                     </LinearGradient>
                 </Defs>
 
                 {Array.from({ length: totalBlocks }).map((_, i) => {
                     const isActive = i < activeBlocksCount;
                     const x = i * (blockWidth + blockGap) + 10;
-                    // Stepped diagonal height (taller as RPM increases)
                     const blockHeight = 12 + Math.floor((i / totalBlocks) * 16);
                     const y = 34 - blockHeight;
 
@@ -69,13 +73,13 @@ function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH
                             height={blockHeight}
                             rx={1.5}
                             fill={isActive ? activeColor : inactiveColor}
+                            opacity={isActive ? brightness : 0.4}
                             stroke={isActive ? (i >= 21 ? '#FF6644' : '#FFAA33') : '#120502'}
                             strokeWidth={isActive ? 0.8 : 0.5}
                         />
                     );
                 })}
 
-                {/* Scale markers */}
                 <Line x1="10" y1="36" x2={width - 20} y2="36" stroke="#4A180C" strokeWidth="1" />
                 <SvgText x="12" y="32" fill="#884422" fontSize="7" fontFamily={RETRO_FONT}>0</SvgText>
                 <SvgText x={width * 0.3} y="32" fill="#884422" fontSize="7" fontFamily={RETRO_FONT}>2</SvgText>
@@ -86,8 +90,8 @@ function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH
     );
 }
 
-// Vertical LED Segment Column (Coolant, Oil, Boost)
-function VerticalLedColumn({ label, value, unit, min, max, warnThreshold, critThreshold, color = '#FF8800' }) {
+// Vertical LED Segment Column with Ghost Segments
+function VerticalLedColumn({ label, value, unit, min, max, warnThreshold, critThreshold, color = '#FF8800', brightness = 1.0 }) {
     const totalSegments = 10;
     const val = Number(value) || 0;
     const ratio = Math.min(Math.max((val - min) / (max - min), 0), 1);
@@ -99,10 +103,10 @@ function VerticalLedColumn({ label, value, unit, min, max, warnThreshold, critTh
 
     return (
         <View style={styles.verticalCol}>
-            <Text style={styles.verticalColLabel}>{label}</Text>
+            <Text style={[styles.verticalColLabel, { opacity: brightness }]} numberOfLines={1}>{label}</Text>
             <View style={styles.verticalBarFrame}>
                 {Array.from({ length: totalSegments }).map((_, i) => {
-                    const segIndex = totalSegments - 1 - i; // top is max
+                    const segIndex = totalSegments - 1 - i;
                     const isLit = segIndex < litCount;
                     return (
                         <View
@@ -110,15 +114,16 @@ function VerticalLedColumn({ label, value, unit, min, max, warnThreshold, critTh
                             style={[
                                 styles.verticalSegment,
                                 {
-                                    backgroundColor: isLit ? activeColor : '#170603',
+                                    backgroundColor: isLit ? activeColor : 'rgba(255, 136, 0, 0.07)',
                                     borderColor: isLit ? activeColor : '#2A0E08',
+                                    opacity: isLit ? brightness : 0.6,
                                 },
                             ]}
                         />
                     );
                 })}
             </View>
-            <Text style={[styles.verticalColValue, isCrit && { color: '#FF3300' }]}>
+            <Text style={[styles.verticalColValue, { opacity: brightness }, isCrit && { color: '#FF3300' }]}>
                 {val} <Text style={styles.verticalColUnit}>{unit}</Text>
             </Text>
         </View>
@@ -126,300 +131,308 @@ function VerticalLedColumn({ label, value, unit, min, max, warnThreshold, critTh
 }
 
 export default function RetroAudi96Paradigm() {
-    const { liveData, isConnected } = useContext(LiveContext);
+    const telemetry = useNormalizedTelemetry();
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
 
-    // Stare bordcomputer cycler (Bordcomputer Modus)
+    // Stări locale
     const [bcModeIndex, setBcModeIndex] = useState(0);
     const [showDiagPanel, setShowDiagPanel] = useState(false);
+    const [dimmerLevel, setDimmerLevel] = useState(1.0); // 1.0 = zi / 0.6 = noapte
+    const [tripKmOffset, setTripKmOffset] = useState(247.4);
+    const [autocheckState, setAutocheckState] = useState('OK'); // 'BREMSE' -> 'OELDRUCK' -> 'OK'
 
-    // Date telemetrie extrase
-    const speed = Math.round(Number(liveData?.viteza_kmh ?? liveData?.viteza ?? 0));
-    const rpm = Math.round(Number(liveData?.turatie_rpm ?? liveData?.turatie ?? 0));
-    const boost = Number(liveData?.presiune_turbo_bar ?? liveData?.turbo_boost_bar ?? 0).toFixed(2);
-    const coolant = Math.round(Number(liveData?.temperatura_antigel ?? liveData?.temp_antigel ?? 0));
-    const oilTemp = Math.round(Number(liveData?.temperatura_ulei ?? liveData?.temp_ulei ?? 0));
-    const voltage = Number(liveData?.tensiune_baterie ?? liveData?.tensiune ?? 0).toFixed(1);
-    const consumption = Number(liveData?.consum_instant ?? liveData?.consum_l_100km ?? 0).toFixed(1);
-    const tripKm = Number(liveData?.distanta_km ?? 14.8).toFixed(1);
-    const totalOdo = activeVehicle?.odometru_calibrat_km
-        ? Math.round(activeVehicle.odometru_calibrat_km + Number(liveData?.distanta_km || 0))
-        : 248312;
+    // Simulare Autocheck la montare
+    useEffect(() => {
+        const timer1 = setTimeout(() => setAutocheckState('BREMSE'), 1200);
+        const timer2 = setTimeout(() => setAutocheckState('OELDRUCK'), 2400);
+        const timer3 = setTimeout(() => setAutocheckState('OK'), 3600);
+        return () => {
+            clearTimeout(timer1);
+            clearTimeout(timer2);
+            clearTimeout(timer3);
+        };
+    }, []);
 
-    // Modele fizice
-    const fizica = liveData?.fizica || {};
-    const oilWear = Math.round(Number(fizica?.uzura_ulei_pct ?? 18));
-    const brakeTemp = Math.round(Number(fizica?.temp_frane_c ?? 110));
-    const batterySoh = Math.round(Number(fizica?.baterie_soh_pct ?? 94));
+    // Haptic Shift Alert
+    const prevRpm = useRef(telemetry.rpm);
+    useEffect(() => {
+        if (telemetry.rpm >= 4200 && prevRpm.current < 4200) {
+            hapticShiftAlert();
+        }
+        prevRpm.current = telemetry.rpm;
+    }, [telemetry.rpm]);
 
-    // Moduri Bordcomputer 1996
+    const {
+        speed,
+        rpm,
+        gear,
+        throttle,
+        boost,
+        coolantTemp,
+        oilTemp,
+        exhaustTemp,
+        batteryVoltage,
+        batterySoH,
+        fuelLevel,
+        fuelRate,
+        fuelBurnedLiters,
+        brakeFluidTemp,
+        brakeEnergyTrip,
+        criticalAlerts,
+        minRulKm,
+        isConnected,
+    } = telemetry;
+
+    // Ceas quartz anii '90
+    const [currentTime, setCurrentTime] = useState('14:38');
+    useEffect(() => {
+        const updateClock = () => {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            setCurrentTime(`${h}:${m}`);
+        };
+        updateClock();
+        const interval = setInterval(updateClock, 10000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Odometru mecanic total & trip
+    const totalKm = 348912;
+    const currentTripKm = Number((tripKmOffset + (speed > 0 ? 0.1 : 0)).toFixed(1));
+
+    // Bordcomputer modes (Audi Autocheck)
     const bcModes = [
-        { label: 'MOMENTANVERBRAUCH', val: `${consumption} L/100`, hint: 'Consum Instantaneu' },
-        { label: 'REICHWEITE', val: `${Math.round(480 - Number(tripKm) * 0.8)} KM`, hint: 'Autonomie Estimat' },
-        { label: 'FAHRZEIT', val: '00:24 H', hint: 'Timp Sesiune' },
-        { label: 'D-GESCHWINDIGKEIT', val: `${Math.max(speed - 6, 42)} KM/H`, hint: 'Viteză Medie' },
-        { label: 'BATTERIESPANNUNG', val: `${voltage} V`, hint: 'Tensiune Rețea' },
+        { label: 'MOMENTANVERBRAUCH', value: `${fuelRate}`, unit: 'L/100KM' },
+        { label: 'DURCHSCHNITTSVERBR.', value: '6.4', unit: 'L/100KM' },
+        { label: 'REICHWEITE', value: `${Math.round((fuelLevel / 100) * 850)}`, unit: 'KM' },
+        { label: 'FAHRZEIT // REISEZEIT', value: '01:42', unit: 'H:M' },
+        { label: 'AUSSENTEMPERATUR', value: '+14.5', unit: '°C' },
     ];
-
     const currentBc = bcModes[bcModeIndex % bcModes.length];
 
-    // Detecție atenționare Auto-Check System
-    const autoCheckStatus = useMemo(() => {
-        if (!isConnected) return { ok: false, sym: '⚡', text: 'KEIN SIGNAL', de: 'Conexiune întreruptă' };
-        if (fizica?.turbo_surge_risc) return { ok: false, sym: '▲', text: 'LADEDRUCK', de: 'Risc Turbo Surge' };
-        if (fizica?.black_ice_risc) return { ok: false, sym: '❄', text: 'GLATTEIS', de: 'Atenție Polei 0°C' };
-        if (coolant > 105) return { ok: false, sym: '♨', text: 'KÜHLMITTEL', de: 'Temperatură Antigel Ridicată' };
-        if (oilTemp > 130) return { ok: false, sym: '🛢', text: 'ÖLDRUCK', de: 'Temperatură Ulei Critică' };
-        if (voltage < 12.0 && voltage > 0) return { ok: false, sym: '⚡', text: 'GENERATOR', de: 'Alternator / Baterie Slabă' };
-        return { ok: true, sym: 'OK', text: 'SYSTEM OK', de: 'Toate sistemele nominale' };
-    }, [isConnected, fizica, coolant, oilTemp, voltage]);
+    // Detecție polei sub 3°C
+    const isIceRisk = telemetry.criticalAlerts.some(a => a.id === 'BLACK_ICE');
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#080302" />
+            <StatusBar barStyle="light-content" backgroundColor="#050200" />
 
-            {/* ── Bezel Header Superior ── */}
-            <View style={styles.bezelHeader}>
-                <View style={styles.audiLogoRow}>
-                    {/* Emblemă 4 Inele Audi stilizate */}
-                    <Svg width={48} height={16} viewBox="0 0 48 16">
-                        <Circle cx="8" cy="8" r="6" fill="none" stroke="#FF8800" strokeWidth="1.2" />
-                        <Circle cx="18" cy="8" r="6" fill="none" stroke="#FF8800" strokeWidth="1.2" />
-                        <Circle cx="28" cy="8" r="6" fill="none" stroke="#FF8800" strokeWidth="1.2" />
-                        <Circle cx="38" cy="8" r="6" fill="none" stroke="#FF8800" strokeWidth="1.2" />
-                    </Svg>
-                    <Text style={styles.audiHeaderText}>DIGIFIZ VFD // C4 1996</Text>
+            {/* ── 1. Top Bar Audi VDO & Rheostat ── */}
+            <View style={styles.topBar}>
+                <View style={styles.audiBadgeRow}>
+                    <Text style={[styles.audiRingsText, { opacity: dimmerLevel }]}>OOOO</Text>
+                    <Text style={[styles.clusterTitle, { opacity: dimmerLevel }]}>
+                        AUDI A6 C4 // DIGIFIZ VDO
+                    </Text>
                 </View>
 
-                {/* Acțiuni de salvare / schimbare stil */}
-                <View style={styles.headerBtnGroup}>
+                {/* Acțiuni & Rheostat */}
+                <View style={styles.headerActions}>
                     <TouchableOpacity
-                        style={[styles.bezelBtnV2, { borderColor: '#00F0FF', backgroundColor: '#00F0FF15' }]}
+                        style={[styles.v2Button, { borderColor: '#FF8800', backgroundColor: '#FF880018' }]}
                         onPress={() => {
                             hapticTap();
                             openSimulatorModal();
                         }}
                         activeOpacity={0.7}
                     >
-                        <Text style={[styles.bezelBtnV2Text, { color: '#00F0FF' }]}>🎮 DEMO</Text>
+                        <Text style={[styles.v2ButtonText, { color: '#FF8800' }]}>🎮 DEMO</Text>
+                    </TouchableOpacity>
+
+                    {/* Dimmer Tag/Nacht */}
+                    <TouchableOpacity
+                        style={styles.v2Button}
+                        onPress={() => {
+                            hapticTap();
+                            setDimmerLevel(dimmerLevel === 1.0 ? 0.6 : 1.0);
+                        }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.v2ButtonText}>
+                            {dimmerLevel === 1.0 ? '☀️ TAG' : '🌙 NACHT'}
+                        </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={styles.bezelBtnV2}
+                        style={styles.v2Button}
                         onPress={() => {
                             hapticTap();
                             setUiParadigm('CLASSIC_V2');
                         }}
                         activeOpacity={0.7}
                     >
-                        <Text style={styles.bezelBtnV2Text}>⮌ CLASIC V2</Text>
+                        <Text style={styles.v2ButtonText}>⮌ V2</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={styles.bezelBtnStyle}
+                        style={styles.stylePickerButton}
                         onPress={() => {
                             hapticTap();
                             openExperiencePicker();
                         }}
                         activeOpacity={0.7}
                     >
-                        <Text style={styles.bezelBtnStyleText}>[ 🎨 STIL ]</Text>
+                        <Text style={styles.stylePickerText}>[ 🎨 STIL ]</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
+            {/* ── 2. Panoul Central VFD Cluster ── */}
             <ScrollView
                 style={styles.mainScroll}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={styles.mainScrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* ── Instrument Cluster Principal (Bord Digifiz) ── */}
-                <View style={styles.clusterFrame}>
-                    {/* 1. Turometru LED în 25 blocuri în trepte */}
-                    <AudiTachometerBargraph rpm={rpm} maxRpm={6500} width={SCREEN_WIDTH - 48} />
+                {/* 2.1 Turometru VFD Stepped */}
+                <AudiTachometerBargraph rpm={rpm} maxRpm={6000} brightness={dimmerLevel} />
 
-                    {/* 2. Zona centrală VFD: Vitezometru + Auto-Check Matrix */}
-                    <View style={styles.centerVfdRow}>
-                        {/* Coloana Stânga: Vitezometru 7-Segment + Odometre */}
-                        <View style={styles.speedModule}>
-                            <Text style={styles.moduleSub}>GESCHWINDIGKEIT</Text>
-                            <View style={styles.speedDigitalRow}>
-                                <Text style={styles.speedDigital}>{speed}</Text>
-                                <Text style={styles.speedUnitText}>km/h</Text>
-                            </View>
-
-                            <View style={styles.odometerBox}>
-                                <Text style={styles.odoText}>
-                                    ODO: {totalOdo.toLocaleString('de-DE')} km
-                                </Text>
-                                <Text style={styles.tripText}>
-                                    TRIP: {tripKm} km
-                                </Text>
-                            </View>
-                        </View>
-
-                        {/* Coloana Dreapta: Audi Auto-Check System Matrix */}
-                        <View style={styles.autoCheckModule}>
-                            <Text style={styles.moduleSub}>AUTO-CHECK SYSTEM</Text>
-                            <View style={[
-                                styles.autoCheckScreen,
-                                !autoCheckStatus.ok && styles.autoCheckScreenAlert,
-                            ]}>
-                                <View style={[
-                                    styles.autoCheckCircle,
-                                    !autoCheckStatus.ok && { borderColor: '#FF3300' },
-                                ]}>
-                                    <Text style={[
-                                        styles.autoCheckSym,
-                                        !autoCheckStatus.ok && { color: '#FF3300' },
-                                    ]}>
-                                        {autoCheckStatus.sym}
-                                    </Text>
-                                </View>
-                                <Text style={[
-                                    styles.autoCheckText,
-                                    !autoCheckStatus.ok && { color: '#FF3300' },
-                                ]}>
-                                    {autoCheckStatus.text}
-                                </Text>
-                                <Text style={styles.autoCheckSub}>{autoCheckStatus.de}</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* 3. Coloane Segmentate Verticale (Kühlmittel, Öltemp, Ladedruck) */}
-                    <View style={styles.verticalIndicatorsRow}>
-                        <VerticalLedColumn
-                            label="KÜHLMITTEL"
-                            value={coolant}
-                            unit="°C"
-                            min={40}
-                            max={120}
-                            warnThreshold={95}
-                            critThreshold={105}
-                            color="#00FF66"
-                        />
-                        <VerticalLedColumn
-                            label="ÖLTEMPERATUR"
-                            value={oilTemp > 0 ? oilTemp : 90}
-                            unit="°C"
-                            min={60}
-                            max={150}
-                            warnThreshold={120}
-                            critThreshold={135}
-                            color="#FF8800"
-                        />
-                        <VerticalLedColumn
-                            label="LADEDRUCK"
-                            value={boost}
-                            unit="BAR"
-                            min={0.0}
-                            max={2.5}
-                            warnThreshold={1.8}
-                            critThreshold={2.2}
-                            color="#FF8800"
-                        />
-                    </View>
-                </View>
-
-                {/* ── Bordcomputer 1996 Display Central ── */}
-                <View style={styles.bordcomputerFrame}>
-                    <View style={styles.bcHeader}>
-                        <Text style={styles.bcTitle}>BORDCOMPUTER // C4</Text>
-                        <Text style={styles.bcSubHint}>{currentBc.hint}</Text>
-                    </View>
-                    <View style={styles.bcScreen}>
-                        <Text style={styles.bcLabel}>{currentBc.label}</Text>
-                        <Text style={styles.bcValue}>{currentBc.val}</Text>
-                    </View>
+                {/* 2.2 Vitezometru Monumental VFD & Autocheck */}
+                <View style={styles.speedClusterFrame}>
+                    {/* Buton fizic stânga: Reset Trip */}
                     <TouchableOpacity
-                        style={styles.bcCycleBtn}
-                        onPress={() => setBcModeIndex(prev => prev + 1)}
-                        activeOpacity={0.7}
+                        style={styles.pushPinLeft}
+                        onPress={() => {
+                            hapticTap();
+                            setTripKmOffset(0.0);
+                        }}
+                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                     >
-                        <Text style={styles.bcCycleBtnText}>SCHALTE PARAMETER (COMUTĂ DATE) ➜</Text>
+                        <View style={styles.pushPinHead} />
+                        <Text style={styles.pushPinText}>RESET</Text>
+                    </TouchableOpacity>
+
+                    {/* Vitezometru Central */}
+                    <View style={styles.speedDisplayCenter}>
+                        <Text style={[styles.speedGhost, { opacity: 0.07 }]}>888</Text>
+                        <Text style={[styles.speedVfdText, { opacity: dimmerLevel }]}>
+                            {speed}
+                        </Text>
+                        <Text style={[styles.speedUnitVfd, { opacity: dimmerLevel }]}>km/h</Text>
+                    </View>
+
+                    {/* Buton fizic dreapta: Switch Mode */}
+                    <TouchableOpacity
+                        style={styles.pushPinRight}
+                        onPress={() => {
+                            hapticTap();
+                            setBcModeIndex(prev => prev + 1);
+                        }}
+                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                    >
+                        <View style={styles.pushPinHead} />
+                        <Text style={styles.pushPinText}>MODE</Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* ── Panou Diagnostic Avansat (Opțional la comutator) ── */}
-                {showDiagPanel && (
-                    <View style={styles.diagPanel}>
-                        <Text style={styles.diagTitle}>// DIAGNOSE & PHYSIK-SPEICHER (32 OBS.)</Text>
-                        <View style={styles.diagRow}>
-                            <Text style={styles.diagKey}>ÖLVERSCHLEISS (UZURĂ ULEI):</Text>
-                            <Text style={styles.diagVal}>{oilWear}%</Text>
+                {/* 2.3 Odometru Mecanic cu Tamburi & Ceas Quartz */}
+                <View style={styles.odometerFrame}>
+                    <View style={styles.odometerRow}>
+                        <Text style={styles.odoLabel}>GESAMT-KM:</Text>
+                        <View style={styles.drumRollBox}>
+                            <Text style={styles.drumRollText}>{totalKm}</Text>
                         </View>
-                        <View style={styles.diagRow}>
-                            <Text style={styles.diagKey}>BREMSE-TEMPERATUR (FRÂNE):</Text>
-                            <Text style={styles.diagVal}>{brakeTemp}°C</Text>
-                        </View>
-                        <View style={styles.diagRow}>
-                            <Text style={styles.diagKey}>BATTERIE-ZUSTAND (SOH):</Text>
-                            <Text style={styles.diagVal}>{batterySoh}%</Text>
-                        </View>
-                        <View style={styles.diagRow}>
-                            <Text style={styles.diagKey}>TURBO-SICHERHEIT (SURGE):</Text>
-                            <Text style={[styles.diagVal, { color: fizica?.turbo_surge_risc ? '#FF3300' : '#00FF66' }]}>
-                                {fizica?.turbo_surge_risc ? 'RISC' : 'SICHER'}
-                            </Text>
+                        <Text style={styles.odoLabel}>TRIP:</Text>
+                        <View style={styles.drumRollBox}>
+                            <Text style={[styles.drumRollText, { color: '#FFAA00' }]}>{currentTripKm}</Text>
                         </View>
                     </View>
-                )}
+
+                    {/* Ceas Quartz & Termometru */}
+                    <View style={styles.clockRow}>
+                        <Text style={styles.quartzClockText}>ZEIT: {currentTime}</Text>
+                        <View style={styles.tempIceRow}>
+                            {isIceRisk && <Text style={styles.iceFlakeIcon}>❄️</Text>}
+                            <Text style={styles.tempIceText}>AUSSEN: +14°C</Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* 2.4 Audi Autocheck System Screen */}
+                <View style={styles.autocheckScreen}>
+                    <View style={styles.autocheckHeader}>
+                        <Text style={styles.autocheckTitle}>AUTOCHECK SYSTEM // GERÄTEPRÜFUNG</Text>
+                        <Text style={[
+                            styles.autocheckBadge,
+                            autocheckState === 'OK' ? { color: '#00FF66' } : { color: '#FF3300' }
+                        ]}>
+                            [ {autocheckState} ]
+                        </Text>
+                    </View>
+                    <Text style={styles.autocheckSub}>
+                        {autocheckState === 'OK'
+                            ? 'BREMSLICHT / KÜHLMITTEL / ÖLDRUCK: IN ORDNUNG'
+                            : `SYSTEMTEST LAUFEND: ${autocheckState} WIRD GEPRÜFT...`}
+                    </Text>
+                </View>
+
+                {/* 2.5 Coloane Verticale LED VFD (Antigel, Ulei, Boost, Rezervor) */}
+                <View style={styles.columnsRow}>
+                    <VerticalLedColumn
+                        label="KÜHLMITTEL"
+                        value={coolantTemp}
+                        unit="°C"
+                        min={50}
+                        max={120}
+                        warnThreshold={100}
+                        critThreshold={108}
+                        brightness={dimmerLevel}
+                    />
+                    <VerticalLedColumn
+                        label="ÖL-TEMP"
+                        value={oilTemp}
+                        unit="°C"
+                        min={50}
+                        max={150}
+                        warnThreshold={125}
+                        critThreshold={138}
+                        brightness={dimmerLevel}
+                    />
+                    <VerticalLedColumn
+                        label="LADEDRUCK"
+                        value={boost}
+                        unit="bar"
+                        min={0}
+                        max={2.5}
+                        warnThreshold={1.8}
+                        critThreshold={2.2}
+                        brightness={dimmerLevel}
+                    />
+                    <VerticalLedColumn
+                        label="KRAFTSTOFF"
+                        value={fuelLevel}
+                        unit="%"
+                        min={0}
+                        max={100}
+                        warnThreshold={15}
+                        critThreshold={8}
+                        color="#00FF66"
+                        brightness={dimmerLevel}
+                    />
+                </View>
+
+                {/* 2.6 Bordcomputer Segment Box */}
+                <TouchableOpacity
+                    style={styles.bordcomputerBox}
+                    onPress={() => {
+                        hapticTap();
+                        setBcModeIndex(prev => prev + 1);
+                    }}
+                    activeOpacity={0.8}
+                >
+                    <View style={styles.bcHeader}>
+                        <Text style={styles.bcLabel}>BORDCOMPUTER // {currentBc.label}</Text>
+                        <Text style={styles.bcHint}>[ TAP FÜR WEITER ]</Text>
+                    </View>
+                    <View style={styles.bcValueRow}>
+                        <Text style={styles.bcValue}>{currentBc.value}</Text>
+                        <Text style={styles.bcUnit}>{currentBc.unit}</Text>
+                    </View>
+                </TouchableOpacity>
+
+                <View style={{ height: 40 }} />
             </ScrollView>
-
-            {/* ── 5 Tactile 3D Rocker Switches (Bottom Console 1996) ── */}
-            <View style={styles.bottomConsole}>
-                <TouchableOpacity
-                    style={styles.rockerSwitch}
-                    onPress={() => setBcModeIndex(prev => prev + 1)}
-                    activeOpacity={0.75}
-                >
-                    <View style={styles.rockerIllumination} />
-                    <Text style={styles.rockerText}>AUTO-CHECK</Text>
-                    <Text style={styles.rockerSub}>MODE</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.rockerSwitch}
-                    onPress={() => setBcModeIndex(prev => prev + 1)}
-                    activeOpacity={0.75}
-                >
-                    <View style={styles.rockerIllumination} />
-                    <Text style={styles.rockerText}>BORDCOMP.</Text>
-                    <Text style={styles.rockerSub}>WECHSEL</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.rockerSwitch}
-                    onPress={() => setShowDiagPanel(prev => !prev)}
-                    activeOpacity={0.75}
-                >
-                    <View style={[styles.rockerIllumination, showDiagPanel && { backgroundColor: '#00FF66' }]} />
-                    <Text style={styles.rockerText}>DIAGNOSE</Text>
-                    <Text style={styles.rockerSub}>{showDiagPanel ? 'OFF' : 'ON'}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.rockerSwitch}
-                    onPress={openExperiencePicker}
-                    activeOpacity={0.75}
-                >
-                    <View style={[styles.rockerIllumination, { backgroundColor: '#FF8800' }]} />
-                    <Text style={styles.rockerText}>🎨 STIL</Text>
-                    <Text style={styles.rockerSub}>PARADIGMĂ</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.rockerSwitch, styles.rockerSwitchExit]}
-                    onPress={() => setUiParadigm('CLASSIC_V2')}
-                    activeOpacity={0.75}
-                >
-                    <View style={[styles.rockerIllumination, { backgroundColor: '#00E5FF' }]} />
-                    <Text style={[styles.rockerText, { color: '#00E5FF' }]}>V2 CLASIC</Text>
-                    <Text style={styles.rockerSub}>RESTORE</Text>
-                </TouchableOpacity>
-            </View>
         </View>
     );
 }
@@ -427,411 +440,349 @@ export default function RetroAudi96Paradigm() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#080302',
-        paddingTop: Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 20,
+        backgroundColor: '#050200',
     },
-    bezelHeader: {
+    topBar: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 10,
-        backgroundColor: '#140603',
-        borderBottomWidth: 2,
-        borderBottomColor: '#2A0E08',
+        borderBottomWidth: 1,
+        borderBottomColor: '#2A0E04',
     },
-    audiLogoRow: {
+    audiBadgeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        flexShrink: 1,
     },
-    audiHeaderText: {
-        color: '#FF8800',
-        fontSize: 11,
+    audiRingsText: {
         fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
+        fontSize: 12,
+        fontWeight: '900',
+        color: '#FF8800',
+        letterSpacing: -1,
+        marginRight: 8,
+    },
+    clusterTitle: {
+        fontFamily: RETRO_FONT,
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#FF941A',
         letterSpacing: 1,
+        flexShrink: 1,
     },
-    headerBtnGroup: {
+    headerActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
     },
-    bezelBtnV2: {
-        backgroundColor: '#1E0A05',
-        borderWidth: 1,
-        borderColor: '#4A180C',
+    v2Button: {
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 3,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#4A1C08',
+        backgroundColor: '#150A02',
     },
-    bezelBtnV2Text: {
-        color: '#A08070',
-        fontSize: 10,
+    v2ButtonText: {
         fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
-    },
-    bezelBtnStyle: {
-        backgroundColor: '#FF880020',
-        borderWidth: 1,
-        borderColor: '#FF8800',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 3,
-    },
-    bezelBtnStyleText: {
+        fontSize: 9,
         color: '#FF8800',
-        fontSize: 10,
+        fontWeight: '700',
+    },
+    stylePickerButton: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
+        backgroundColor: '#FF8800',
+    },
+    stylePickerText: {
         fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
+        fontSize: 9,
+        color: '#050200',
+        fontWeight: '900',
     },
     mainScroll: {
         flex: 1,
     },
-    scrollContent: {
+    mainScrollContent: {
         paddingHorizontal: 16,
-        paddingVertical: 14,
-    },
-    clusterFrame: {
-        backgroundColor: '#100402',
-        borderWidth: 2,
-        borderColor: '#38130B',
-        borderRadius: 8,
-        padding: 12,
-        marginBottom: 14,
-        shadowColor: '#FF6600',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.15,
-        shadowRadius: 10,
+        paddingTop: 12,
     },
     tachoWrapper: {
-        marginBottom: 14,
+        backgroundColor: '#100602',
+        borderRadius: 6,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#2A0E04',
+        marginBottom: 12,
     },
     tachoHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
         marginBottom: 4,
-        paddingHorizontal: 4,
     },
     tachoLabel: {
-        color: '#AA4422',
-        fontSize: 9,
         fontFamily: RETRO_FONT,
+        fontSize: 10,
+        color: '#CC6600',
         letterSpacing: 1,
     },
     tachoValue: {
-        color: '#FF8800',
-        fontSize: 12,
         fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
+        fontSize: 12,
+        color: '#FF941A',
+        fontWeight: '800',
+        fontVariant: ['tabular-nums'],
     },
     tachoUnit: {
-        color: '#884422',
         fontSize: 9,
+        color: '#884400',
     },
-    centerVfdRow: {
+    speedClusterFrame: {
         flexDirection: 'row',
-        gap: 12,
-        marginBottom: 14,
-    },
-    speedModule: {
-        flex: 1.1,
-        backgroundColor: '#180704',
-        borderWidth: 1,
-        borderColor: '#38130B',
-        borderRadius: 6,
-        padding: 10,
         alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#0E0502',
+        borderRadius: 8,
+        padding: 16,
+        borderWidth: 2,
+        borderColor: '#381604',
+        marginBottom: 12,
     },
-    moduleSub: {
-        color: '#AA4422',
-        fontSize: 8,
-        fontFamily: RETRO_FONT,
-        letterSpacing: 1,
+    pushPinLeft: {
+        alignItems: 'center',
+        padding: 6,
+    },
+    pushPinRight: {
+        alignItems: 'center',
+        padding: 6,
+    },
+    pushPinHead: {
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        backgroundColor: '#1F0B04',
+        borderWidth: 2,
+        borderColor: '#542008',
         marginBottom: 4,
     },
-    speedDigitalRow: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        marginVertical: 4,
-    },
-    speedDigital: {
-        color: '#FF8800',
-        fontSize: 54,
+    pushPinText: {
         fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
-        letterSpacing: -1,
+        fontSize: 8,
+        color: '#884400',
+        fontWeight: '700',
     },
-    speedUnitText: {
-        color: '#AA4422',
-        fontSize: 12,
-        fontFamily: RETRO_FONT,
-        marginLeft: 4,
-    },
-    odometerBox: {
-        borderTopWidth: 1,
-        borderTopColor: '#2A0E08',
-        paddingTop: 6,
-        marginTop: 4,
-        width: '100%',
+    speedDisplayCenter: {
         alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
     },
-    odoText: {
+    speedGhost: {
+        position: 'absolute',
+        fontFamily: RETRO_FONT,
+        fontSize: 76,
+        fontWeight: '900',
         color: '#FF8800',
-        fontSize: 9,
+        letterSpacing: 2,
+    },
+    speedVfdText: {
         fontFamily: RETRO_FONT,
+        fontSize: 76,
+        fontWeight: '900',
+        color: '#FF8800',
+        letterSpacing: 2,
+        textShadowColor: '#FFAA33',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 10,
+        fontVariant: ['tabular-nums'],
     },
-    tripText: {
-        color: '#AA5533',
-        fontSize: 9,
+    speedUnitVfd: {
         fontFamily: RETRO_FONT,
-        marginTop: 2,
+        fontSize: 14,
+        color: '#CC6600',
+        fontWeight: '700',
+        marginTop: -6,
     },
-    autoCheckModule: {
-        flex: 1,
-        backgroundColor: '#180704',
-        borderWidth: 1,
-        borderColor: '#38130B',
-        borderRadius: 6,
-        padding: 10,
-        alignItems: 'center',
-    },
-    autoCheckScreen: {
-        flex: 1,
-        width: '100%',
+    odometerFrame: {
         backgroundColor: '#0A0301',
+        borderRadius: 6,
+        padding: 10,
         borderWidth: 1,
-        borderColor: '#FF8800',
-        borderRadius: 4,
+        borderColor: '#240C04',
+        marginBottom: 12,
+    },
+    odometerRow: {
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 6,
-        marginTop: 4,
+        gap: 8,
     },
-    autoCheckScreenAlert: {
-        borderColor: '#FF3300',
-        backgroundColor: '#200502',
+    odoLabel: {
+        fontFamily: RETRO_FONT,
+        fontSize: 9,
+        color: '#884400',
+        fontWeight: '700',
     },
-    autoCheckCircle: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        borderWidth: 1.5,
-        borderColor: '#FF8800',
+    drumRollBox: {
+        backgroundColor: '#000000',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 3,
+        borderWidth: 1,
+        borderColor: '#381604',
+    },
+    drumRollText: {
+        fontFamily: RETRO_FONT,
+        fontSize: 12,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        letterSpacing: 1,
+        fontVariant: ['tabular-nums'],
+    },
+    clockRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 8,
+        paddingTop: 6,
+        borderTopWidth: 1,
+        borderTopColor: '#1A0802',
+    },
+    quartzClockText: {
+        fontFamily: RETRO_FONT,
+        fontSize: 10,
+        color: '#FF8800',
+        fontVariant: ['tabular-nums'],
+    },
+    tempIceRow: {
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: 4,
+    },
+    iceFlakeIcon: {
+        fontSize: 10,
+    },
+    tempIceText: {
+        fontFamily: RETRO_FONT,
+        fontSize: 10,
+        color: '#FFAA00',
+        fontVariant: ['tabular-nums'],
+    },
+    autocheckScreen: {
+        backgroundColor: '#120502',
+        borderRadius: 6,
+        padding: 10,
+        borderWidth: 1,
+        borderColor: '#3A1406',
+        marginBottom: 12,
+    },
+    autocheckHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: 4,
     },
-    autoCheckSym: {
-        color: '#FF8800',
-        fontSize: 12,
+    autocheckTitle: {
         fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
+        fontSize: 9,
+        color: '#CC6600',
+        fontWeight: '700',
     },
-    autoCheckText: {
-        color: '#FF8800',
+    autocheckBadge: {
+        fontFamily: RETRO_FONT,
         fontSize: 10,
-        fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
-        letterSpacing: 0.5,
+        fontWeight: '900',
     },
-    autoCheckSub: {
-        color: '#884422',
-        fontSize: 8,
+    autocheckSub: {
         fontFamily: RETRO_FONT,
-        textAlign: 'center',
-        marginTop: 2,
-        paddingHorizontal: 4,
+        fontSize: 9,
+        color: '#884400',
     },
-    verticalIndicatorsRow: {
+    columnsRow: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
-        backgroundColor: '#150503',
-        borderWidth: 1,
-        borderColor: '#2D0F08',
-        borderRadius: 6,
-        paddingVertical: 10,
-        paddingHorizontal: 6,
+        justifyContent: 'space-between',
+        marginBottom: 12,
+        gap: 6,
     },
     verticalCol: {
+        flex: 1,
+        backgroundColor: '#0D0401',
+        borderRadius: 4,
+        padding: 6,
         alignItems: 'center',
-        width: 72,
+        borderWidth: 1,
+        borderColor: '#240C04',
     },
     verticalColLabel: {
-        color: '#884422',
-        fontSize: 7.5,
         fontFamily: RETRO_FONT,
-        letterSpacing: 0.5,
+        fontSize: 7,
+        color: '#884400',
+        fontWeight: '700',
         marginBottom: 6,
     },
     verticalBarFrame: {
-        width: 22,
-        height: 72,
-        backgroundColor: '#0A0301',
-        borderWidth: 1,
-        borderColor: '#260B05',
-        borderRadius: 3,
-        padding: 2,
+        width: 14,
+        height: 60,
         justifyContent: 'space-between',
+        marginBottom: 6,
     },
     verticalSegment: {
-        width: '100%',
-        height: 5,
+        width: 14,
+        height: 4,
         borderRadius: 1,
         borderWidth: 0.5,
     },
     verticalColValue: {
-        color: '#FF8800',
-        fontSize: 10,
         fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
-        marginTop: 6,
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#FF8800',
+        fontVariant: ['tabular-nums'],
     },
     verticalColUnit: {
-        color: '#884422',
-        fontSize: 8,
+        fontSize: 7,
+        color: '#884400',
     },
-    bordcomputerFrame: {
-        backgroundColor: '#120503',
-        borderWidth: 1.5,
-        borderColor: '#38130B',
-        borderRadius: 8,
+    bordcomputerBox: {
+        backgroundColor: '#140602',
+        borderRadius: 6,
         padding: 12,
-        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: '#381604',
     },
     bcHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    bcTitle: {
-        color: '#FF8800',
-        fontSize: 10,
-        fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
-        letterSpacing: 1,
-    },
-    bcSubHint: {
-        color: '#884422',
-        fontSize: 9,
-        fontFamily: RETRO_FONT,
-    },
-    bcScreen: {
-        backgroundColor: '#0A0301',
-        borderWidth: 1,
-        borderColor: '#FF8800',
-        borderRadius: 4,
-        padding: 12,
-        alignItems: 'center',
+        marginBottom: 6,
     },
     bcLabel: {
-        color: '#884422',
-        fontSize: 9,
         fontFamily: RETRO_FONT,
-        letterSpacing: 1,
-        marginBottom: 4,
+        fontSize: 9,
+        color: '#CC6600',
+        fontWeight: '700',
+    },
+    bcHint: {
+        fontFamily: RETRO_FONT,
+        fontSize: 8,
+        color: '#884400',
+    },
+    bcValueRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 8,
     },
     bcValue: {
+        fontFamily: RETRO_FONT,
+        fontSize: 28,
+        fontWeight: '900',
         color: '#FF8800',
-        fontSize: 24,
+        fontVariant: ['tabular-nums'],
+    },
+    bcUnit: {
         fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
-        letterSpacing: 1,
-    },
-    bcCycleBtn: {
-        marginTop: 8,
-        paddingVertical: 6,
-        alignItems: 'center',
-        backgroundColor: '#1C0804',
-        borderRadius: 4,
-        borderWidth: 1,
-        borderColor: '#3A1208',
-    },
-    bcCycleBtnText: {
-        color: '#FF8800',
-        fontSize: 9,
-        fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
-    },
-    diagPanel: {
-        backgroundColor: '#150603',
-        borderWidth: 1,
-        borderColor: '#4A180C',
-        borderRadius: 6,
-        padding: 12,
-        marginBottom: 14,
-    },
-    diagTitle: {
-        color: '#FF8800',
-        fontSize: 9,
-        fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
-        letterSpacing: 0.5,
-        marginBottom: 8,
-    },
-    diagRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        paddingVertical: 4,
-        borderBottomWidth: 1,
-        borderBottomColor: '#260B05',
-    },
-    diagKey: {
-        color: '#884422',
-        fontSize: 9,
-        fontFamily: RETRO_FONT,
-    },
-    diagVal: {
-        color: '#FF8800',
-        fontSize: 10,
-        fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
-    },
-    bottomConsole: {
-        flexDirection: 'row',
-        backgroundColor: '#0D0402',
-        borderTopWidth: 2,
-        borderTopColor: '#2A0E08',
-        paddingVertical: 8,
-        paddingHorizontal: 4,
-        gap: 4,
-    },
-    rockerSwitch: {
-        flex: 1,
-        backgroundColor: '#1A0805',
-        borderWidth: 1.5,
-        borderColor: '#3D150B',
-        borderRadius: 4,
-        paddingVertical: 6,
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.5,
-        shadowRadius: 2,
-        elevation: 3,
-    },
-    rockerSwitchExit: {
-        borderColor: '#00E5FF44',
-    },
-    rockerIllumination: {
-        width: 10,
-        height: 3,
-        backgroundColor: '#FF3300',
-        borderRadius: 1,
-        marginBottom: 4,
-    },
-    rockerText: {
-        color: '#E0A080',
-        fontSize: 8.5,
-        fontFamily: RETRO_FONT,
-        fontWeight: 'bold',
-    },
-    rockerSub: {
-        color: '#6E3220',
-        fontSize: 6.5,
-        fontFamily: RETRO_FONT,
-        marginTop: 2,
+        fontSize: 12,
+        color: '#FFAA33',
+        fontWeight: '700',
     },
 });

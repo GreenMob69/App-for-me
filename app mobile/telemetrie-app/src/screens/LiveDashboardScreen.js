@@ -21,6 +21,7 @@ import LandscapeHudModal from '../components/cockpits/LandscapeHudModal';
 import RecommendationCard from '../components/ui/RecommendationCard';
 import { colors, typography, radii, spacing, layout, TEMPLATES } from '../theme';
 import { useSmoothedTelemetry } from '../hooks/useSmoothedTelemetry';
+import { hapticTap } from '../services/hapticFeedback';
 import Svg, {
     Path,
     Circle,
@@ -595,7 +596,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
     const { width } = useWindowDimensions();
     const { isConnected, isReconnecting, liveData, chartVersion, getChartHistory } = useContext(LiveContext);
     const { latestAlert, alertsList, unreadCount, markAlertsAsRead } = useContext(AlertContext);
-    const { selectedMetric, setSelectedMetric, activeTemplate, currentTemplate, openExperiencePicker } = useContext(AppContext);
+    const { selectedMetric, setSelectedMetric, activeTemplate, currentTemplate, openExperiencePicker, openSimulatorModal } = useContext(AppContext);
 
     // ── 60 FPS Smoothed Telemetry (Pauză automată când ecranul e în fundal sau pe tab static) ──
     const { animated, numeric } = useSmoothedTelemetry(liveData, isSmoothingActive);
@@ -1927,10 +1928,28 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                     </Text>
                 </TouchableOpacity>
 
+                {/* Buton Telecomandă Simulator Live */}
+                {openSimulatorModal && (
+                    <TouchableOpacity
+                        style={[styles.hudLaunchBtn, { borderColor: '#00F0FF', backgroundColor: '#00F0FF18', marginRight: spacing[1] }]}
+                        onPress={() => {
+                            hapticTap();
+                            openSimulatorModal();
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Deschide Telecomanda de Simulare Live"
+                    >
+                        <Text style={[styles.hudLaunchBtnText, { color: '#00F0FF' }]}>🎮 DEMO</Text>
+                    </TouchableOpacity>
+                )}
+
                 {/* Buton Selector Stil / Paradigmă UI */}
                 <TouchableOpacity
                     style={[styles.hudLaunchBtn, { borderColor: colors.accent.default, backgroundColor: `${colors.accent.default}18`, marginRight: spacing[1] }]}
-                    onPress={openExperiencePicker}
+                    onPress={() => {
+                        hapticTap();
+                        openExperiencePicker();
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel="Schimbă stilul de afișare"
                 >

@@ -1,4 +1,4 @@
-import React, { useState, useContext, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -7,76 +7,295 @@ import {
     Platform,
     StatusBar,
     Dimensions,
-    ScrollView,
+    PanResponder,
+    Animated,
 } from 'react-native';
-import Svg, {
-    Rect,
-    Circle,
-    Line,
-    Path,
-    Polygon,
-    Defs,
-    LinearGradient,
-    Stop,
-    G,
-    Text as SvgText,
-} from 'react-native-svg';
-import { LiveContext } from '../../context/LiveContext';
+import { GLView } from 'expo-gl';
+import * as THREE from 'three';
+import { useNormalizedTelemetry } from '../../hooks/useNormalizedTelemetry';
 import { useVehicle } from '../../context/VehicleContext';
 import { useUiParadigm } from '../../context/AppContext';
 import { hapticTap, hapticCriticalWarning } from '../../services/hapticFeedback';
+import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
+const theme = PARADIGM_THEMES[PARADIGM_KEYS.SPATIAL_CANVAS];
 
 export default function SpatialCanvasParadigm() {
-    const { liveData, isConnected } = useContext(LiveContext);
+    const telemetry = useNormalizedTelemetry();
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
 
     // 4 Zone de Cameră: 'OVERVIEW' | 'ENGINE_BAY' | 'CHASSIS_BRAKES' | 'HIGHWAY_CHASE'
     const [cameraZone, setCameraZone] = useState('OVERVIEW');
 
-    // Sertar holografic deschis (null | 'AI' | 'TRIP')
+    // Sertar holografic activ (null | 'AI' | 'TRIP' | 'BATTERY')
     const [activeDrawer, setActiveDrawer] = useState(null);
 
-    // Valori telemetrice
-    const speed = Math.round(Number(liveData?.viteza_kmh ?? liveData?.motor?.speed ?? 0));
-    const rpm = Math.round(Number(liveData?.turatie_rpm ?? liveData?.motor?.rpm ?? 0));
-    const load = Math.round(Number(liveData?.sarcina_motor_pct ?? liveData?.motor?.load ?? 0));
-    const boost = Number(liveData?.presiune_turbo_bar ?? liveData?.aer?.boost_actual ?? 0).toFixed(2);
-    const coolant = Math.round(Number(liveData?.temperaturi?.coolant ?? liveData?.temp_antigel ?? 88));
-    const oilTemp = Math.round(Number(liveData?.temperaturi?.oil ?? liveData?.temp_ulei ?? 92));
-    const voltage = Number(liveData?.baterie?.ecu_volt ?? liveData?.tensiune ?? 14.1).toFixed(1);
+    // Stare rotație 3D controlată prin gesturi tactile
+    const rotationX = useRef(0.3);
+    const rotationY = useRef(0.6);
+    const targetCamPos = useRef({ x: 3.5, y: 2.2, z: 4.5 });
 
-    // Fizică 32 Modele
-    const v = liveData?.virtual || {};
-    const f = liveData?.fizica || {};
-    const brakeDiscTemp = Math.round(Number(v.brakeDiscTempC ?? f.temp_frane_c ?? 110));
-    const brakeFluidTemp = Math.round(Number(v.brakeFluidTempEstimatedC ?? 115));
-    const roadGrade = Number(v.roadGradePct ?? f.panta_drum_pct ?? 0).toFixed(1);
-    const roadGrip = String(v.roadGripStatus || 'NORMAL');
-    const fatigue = Math.round(Number(v.driverFatigueScore ?? 88));
-    const turboCore = Math.round(Number(v.turboCoreTempC ?? 240));
-    const icEff = Math.round(Number(v.intercoolerEfficiencyPct ?? 82));
-    const batterySoh = Math.round(Number(v.batterySoH ?? f.baterie_soh_pct ?? 94));
-    const suspDamping = Number(v.suspensionDampingRatio ?? 0.28).toFixed(2);
-    const tpmsDrift = Number(v.tireRadiusDriftPct ?? 0.0).toFixed(1);
+    // Referințe noduri 3D pentru rotație & shader frâne
+    const wheelsRef = useRef([]);
+    const brakeDiscsRef = useRef([]);
+    const carBodyRef = useRef(null);
+    const reqAnimRef = useRef(null);
 
-    // Ciclul de aprindere 1-2-4-5-3 la motorul de 5 cilindri în linie
-    const firingCyl = useMemo(() => {
-        const order = [1, 2, 4, 5, 3];
-        if (rpm === 0) return 1;
-        const tick = Math.floor((Date.now() / 200) % 5);
-        return order[tick];
-    }, [rpm]);
+    const {
+        speed,
+        rpm,
+        gear,
+        throttle,
+        boost,
+        coolantTemp,
+        oilTemp,
+        exhaustTemp,
+        chraTemp,
+        batteryVoltage,
+        batterySoH,
+        fuelLevel,
+        fuelRate,
+        fuelBurnedLiters,
+        brakeFluidTemp,
+        brakeEnergyTrip,
+        gForceLat,
+        gForceLong,
+        weibullRul,
+        minRulKm,
+        breakdownRisk,
+        criticalAlerts,
+        activeCylinder,
+        isConnected,
+    } = telemetry;
 
-    // Culoare discuri frână
-    const discColor = useMemo(() => {
-        if (brakeDiscTemp < 90) return '#00F0FF';
-        if (brakeDiscTemp < 180) return '#FFB800';
-        return '#FF2A2A';
-    }, [brakeDiscTemp]);
+    // PanResponder pentru rotație tactilă 360° (Orbit Control)
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderMove: (_, gestureState) => {
+                rotationY.current += gestureState.vx * 0.04;
+                rotationX.current = Math.max(0.05, Math.min(1.2, rotationX.current - gestureState.vy * 0.02));
+            },
+        })
+    ).current;
+
+    // Actualizare țintă cameră la schimbarea zonei
+    useEffect(() => {
+        if (cameraZone === 'OVERVIEW') {
+            targetCamPos.current = { x: 3.2, y: 1.8, z: 4.2 };
+        } else if (cameraZone === 'ENGINE_BAY') {
+            targetCamPos.current = { x: 0.2, y: 1.4, z: 2.0 };
+        } else if (cameraZone === 'CHASSIS_BRAKES') {
+            targetCamPos.current = { x: 2.2, y: 0.6, z: 1.8 };
+        } else if (cameraZone === 'HIGHWAY_CHASE') {
+            targetCamPos.current = { x: 0.0, y: 1.2, z: -4.5 };
+        }
+    }, [cameraZone]);
+
+    // Inițializare Scenă 3D WebGL (Three.js peste expo-gl)
+    const onContextCreate = async (gl) => {
+        try {
+            const { drawingBufferWidth: width, drawingBufferHeight: height } = gl;
+
+            const renderer = new THREE.WebGLRenderer({
+                gl,
+                alpha: true,
+                antialias: true,
+            });
+            renderer.setSize(width, height);
+            renderer.setClearColor(0x04070d, 1);
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+            camera.position.set(3.5, 2.2, 4.5);
+            camera.lookAt(0, 0.4, 0);
+
+            // Lumini fotorealiste
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+            scene.add(ambientLight);
+
+            const mainLight = new THREE.DirectionalLight(0x00f0ff, 2.0);
+            mainLight.position.set(5, 8, 5);
+            scene.add(mainLight);
+
+            const rimLight = new THREE.DirectionalLight(0xff8800, 1.2);
+            rimLight.position.set(-5, 4, -5);
+            scene.add(rimLight);
+
+            // Grilă podea holografică
+            const gridHelper = new THREE.GridHelper(10, 20, 0x00f0ff, 0x112233);
+            gridHelper.position.y = -0.01;
+            scene.add(gridHelper);
+
+            // ── CONSTRUCȚIE MODEL 3D DIGITAL TWIN (Tesla Style) ──
+            const carGroup = new THREE.Group();
+
+            // 1. Caroserie metalică (PBR Metallic Paint)
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: 0x0a1424,
+                metalness: 0.85,
+                roughness: 0.2,
+            });
+
+            // Șasiu inferior
+            const chassisGeo = new THREE.BoxGeometry(1.6, 0.35, 3.6);
+            const chassisMesh = new THREE.Mesh(chassisGeo, bodyMat);
+            chassisMesh.position.y = 0.4;
+            carGroup.add(chassisMesh);
+
+            // Cabină și acoperiș aerodinamic
+            const cabinGeo = new THREE.BoxGeometry(1.3, 0.4, 1.8);
+            const cabinMat = new THREE.MeshStandardMaterial({
+                color: 0x050d18,
+                metalness: 0.9,
+                roughness: 0.15,
+            });
+            const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
+            cabinMesh.position.set(0, 0.72, -0.2);
+            carGroup.add(cabinMesh);
+
+            // Sticlă parbriz și lunetă
+            const glassMat = new THREE.MeshStandardMaterial({
+                color: 0x00f0ff,
+                transparent: true,
+                opacity: 0.35,
+                roughness: 0.05,
+            });
+            const windshieldGeo = new THREE.PlaneGeometry(1.2, 0.5);
+            const windshield = new THREE.Mesh(windshieldGeo, glassMat);
+            windshield.rotation.x = -Math.PI / 4;
+            windshield.position.set(0, 0.7, 0.8);
+            carGroup.add(windshield);
+
+            // Faruri LED Neon
+            const headlightMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+            const hlGeo = new THREE.BoxGeometry(0.25, 0.08, 0.1);
+            const hlLeft = new THREE.Mesh(hlGeo, headlightMat);
+            hlLeft.position.set(-0.6, 0.45, 1.8);
+            const hlRight = new THREE.Mesh(hlGeo, headlightMat);
+            hlRight.position.set(0.6, 0.45, 1.8);
+            carGroup.add(hlLeft);
+            carGroup.add(hlRight);
+
+            // Stopuri LED Spate
+            const tailMat = new THREE.MeshBasicMaterial({ color: 0xff1122 });
+            const tlGeo = new THREE.BoxGeometry(1.4, 0.06, 0.08);
+            const tailStrip = new THREE.Mesh(tlGeo, tailMat);
+            tailStrip.position.set(0, 0.5, -1.8);
+            carGroup.add(tailStrip);
+
+            // 2. Cele 4 Roți Tridimensionale & Discuri de Frână
+            const wheelPositions = [
+                { x: -0.85, y: 0.3, z: 1.1, isFront: true },   // FL
+                { x: 0.85, y: 0.3, z: 1.1, isFront: true },    // FR
+                { x: -0.85, y: 0.3, z: -1.1, isFront: false }, // RL
+                { x: 0.85, y: 0.3, z: -1.1, isFront: false },  // RR
+            ];
+
+            const wheels = [];
+            const brakeDiscs = [];
+
+            wheelPositions.forEach((pos) => {
+                const wheelHub = new THREE.Group();
+                wheelHub.position.set(pos.x, pos.y, pos.z);
+
+                // Anvelopă cauciuc
+                const tireGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.22, 16);
+                const tireMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+                const tireMesh = new THREE.Mesh(tireGeo, tireMat);
+                tireMesh.rotation.z = Math.PI / 2;
+                wheelHub.add(tireMesh);
+
+                // Jantă aliaj
+                const rimGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.24, 12);
+                const rimMat = new THREE.MeshStandardMaterial({ color: 0x8899aa, metalness: 0.9, roughness: 0.2 });
+                const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+                rimMesh.rotation.z = Math.PI / 2;
+                wheelHub.add(rimMesh);
+
+                // Disc frână cu shader termic emissiv
+                const discGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.04, 12);
+                const discMat = new THREE.MeshStandardMaterial({
+                    color: 0x444444,
+                    emissive: 0x000000,
+                    emissiveIntensity: 0,
+                    metalness: 0.8,
+                });
+                const discMesh = new THREE.Mesh(discGeo, discMat);
+                discMesh.rotation.z = Math.PI / 2;
+                discMesh.position.x = pos.x > 0 ? -0.1 : 0.1;
+                wheelHub.add(discMesh);
+
+                brakeDiscs.push(discMat);
+                wheels.push(wheelHub);
+                carGroup.add(wheelHub);
+            });
+
+            wheelsRef.current = wheels;
+            brakeDiscsRef.current = brakeDiscs;
+            carBodyRef.current = carGroup;
+            scene.add(carGroup);
+
+            // Buclă de Randare la 60 FPS
+            let currentCamPos = { ...camera.position };
+
+            const render = () => {
+                reqAnimRef.current = requestAnimationFrame(render);
+
+                // Interpolare lină a camerei
+                currentCamPos.x += (targetCamPos.current.x - currentCamPos.x) * 0.05;
+                currentCamPos.y += (targetCamPos.current.y - currentCamPos.y) * 0.05;
+                currentCamPos.z += (targetCamPos.current.z - currentCamPos.z) * 0.05;
+
+                // Aplicare rotație tactilă de orbită
+                const radius = Math.sqrt(currentCamPos.x * currentCamPos.x + currentCamPos.z * currentCamPos.z);
+                camera.position.x = Math.sin(rotationY.current) * radius;
+                camera.position.z = Math.cos(rotationY.current) * radius;
+                camera.position.y = currentCamPos.y + (rotationX.current - 0.5) * 2;
+                camera.lookAt(0, 0.4, 0);
+
+                // Rotație roți conform vitezei reale (km/h -> rad/s)
+                const wheelRotationSpeed = (telemetry.speed / 3.6) * 0.05;
+                wheelsRef.current.forEach((wheel, idx) => {
+                    wheel.children.forEach(part => {
+                        part.rotation.x += wheelRotationSpeed;
+                    });
+                    // Unghi virare roți față la viraj
+                    if (idx < 2) {
+                        wheel.rotation.y = telemetry.gForceLat * 0.4;
+                    }
+                });
+
+                // Căldură discuri de frână (Emissive Glow la peste 120°C)
+                const temp = telemetry.brakeFluidTemp || 80;
+                const glowIntensity = Math.max(0, Math.min(1.0, (temp - 90) / 100));
+                brakeDiscsRef.current.forEach(mat => {
+                    mat.emissive.setHex(temp > 150 ? 0xff2200 : 0xffaa00);
+                    mat.emissiveIntensity = glowIntensity * 1.5;
+                });
+
+                renderer.render(scene, camera);
+                gl.endFrameEXP();
+            };
+
+            render();
+        } catch (err) {
+            console.error('Eroare inițializare Three.js / GLView:', err);
+        }
+    };
+
+    // Cleanup la unmount
+    useEffect(() => {
+        return () => {
+            if (reqAnimRef.current) {
+                cancelAnimationFrame(reqAnimRef.current);
+            }
+        };
+    }, []);
 
     const selectZone = (zone) => {
         hapticTap();
@@ -85,396 +304,219 @@ export default function SpatialCanvasParadigm() {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#04060B" />
+            <StatusBar barStyle="light-content" backgroundColor="#04070D" />
 
-            {/* ── Antet Plutitor Spațial ── */}
+            {/* ── 1. Top HUD Bar ── */}
             <View style={styles.topHudBar}>
                 <View style={styles.hudBrand}>
                     <View style={styles.holoBadge}>
-                        <Text style={styles.holoBadgeText}>SPATIAL 3D CANVAS</Text>
+                        <Text style={styles.holoBadgeText}>SPATIAL 3D DIGITAL TWIN</Text>
                     </View>
                     <View style={[styles.netDot, { backgroundColor: isConnected ? '#00FF66' : '#FF2A2A' }]} />
-                    <Text style={styles.vinHud}>
-                        {activeVehicle?.model || 'AUDI 2.5 TDI'}
+                    <Text style={styles.vinHud} numberOfLines={1}>
+                        {activeVehicle?.model || 'TESLA / AUDI PBR TWIN'}
                     </Text>
                 </View>
 
-                {/* Butoane Acțiuni Rapide */}
-                <View style={styles.topActions}>
+                {/* Butoane acțiune */}
+                <View style={styles.hudActions}>
                     <TouchableOpacity
-                        style={[styles.glassBtn, { borderColor: '#00F0FF' }]}
+                        style={[styles.smallBtn, { borderColor: '#00F0FF', backgroundColor: '#00F0FF14' }]}
                         onPress={() => {
                             hapticTap();
                             openSimulatorModal();
                         }}
                     >
-                        <Text style={[styles.glassBtnText, { color: '#00F0FF' }]}>🎮 DEMO</Text>
+                        <Text style={[styles.smallBtnText, { color: '#00F0FF' }]}>🎮 DEMO</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.glassBtn, { borderColor: '#FFB800' }]}
-                        onPress={() => {
-                            hapticTap();
-                            openExperiencePicker();
-                        }}
-                    >
-                        <Text style={[styles.glassBtnText, { color: '#FFB800' }]}>🎨 STIL</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.glassBtn}
+                        style={styles.smallBtn}
                         onPress={() => {
                             hapticTap();
                             setUiParadigm('CLASSIC_V2');
                         }}
                     >
-                        <Text style={styles.glassBtnText}>⮌ V2</Text>
+                        <Text style={styles.smallBtnText}>⮌ V2</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.launcherBtn}
+                        onPress={() => {
+                            hapticTap();
+                            openExperiencePicker();
+                        }}
+                    >
+                        <Text style={styles.launcherText}>[ 🎨 STIL ]</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* ── Selector Plutitor Cameră / Zonă Spațială ── */}
-            <View style={styles.cameraSelectorRow}>
-                {[
-                    { id: 'OVERVIEW', label: '🛸 ORBITĂ' },
-                    { id: 'ENGINE_BAY', label: '🔥 CAPOTĂ' },
-                    { id: 'CHASSIS_BRAKES', label: '🛞 ȘASIU' },
-                    { id: 'HIGHWAY_CHASE', label: '🛣️ PERSPECTIVĂ' },
-                ].map((c) => {
-                    const isActive = cameraZone === c.id;
-                    return (
-                        <TouchableOpacity
-                            key={c.id}
-                            style={[
-                                styles.cameraPill,
-                                isActive && styles.cameraPillActive,
-                            ]}
-                            onPress={() => selectZone(c.id)}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={[styles.cameraPillText, isActive && styles.cameraPillTextActive]}>
-                                {c.label}
-                            </Text>
-                        </TouchableOpacity>
-                    );
-                })}
-            </View>
+            {/* ── 2. Zona Centrală 3D WebGL (Direct GPU Rendering) ── */}
+            <View style={styles.canvasContainer} {...panResponder.panHandlers}>
+                <GLView style={styles.glSurface} onContextCreate={onContextCreate} />
 
-            {/* ── CANVAS SPAȚIAL VECTORIAL ── */}
-            <View style={styles.canvasContainer}>
-                {/* 1. ZONA 01: ORBITĂ & SCUT SENTRY */}
-                {cameraZone === 'OVERVIEW' && (
-                    <View style={styles.canvasInner}>
-                        <Svg width={SCREEN_WIDTH - 24} height={SCREEN_HEIGHT * 0.44} viewBox="0 0 320 280">
-                            <Defs>
-                                <LinearGradient id="intakeGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <Stop offset="0" stopColor="#00F0FF" stopOpacity="0.8" />
-                                    <Stop offset="1" stopColor="#0066FF" stopOpacity="0.3" />
-                                </LinearGradient>
-                                <LinearGradient id="exhaustGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <Stop offset="0" stopColor="#FF8800" stopOpacity="0.8" />
-                                    <Stop offset="1" stopColor="#FF2A2A" stopOpacity="0.3" />
-                                </LinearGradient>
-                            </Defs>
-
-                            {/* Inele Pulsante Sentry Guard */}
-                            <Circle cx={160} cy={140} r={120} stroke="#00F0FF15" strokeWidth={1} fill="none" />
-                            <Circle cx={160} cy={140} r={95} stroke="#00F0FF25" strokeWidth={1} strokeDasharray="6,4" fill="none" />
-
-                            {/* Siluetă Caroserie Mașină (Top-Down) */}
-                            <Rect x={115} y={50} width={90} height={180} rx={22} fill="#0A111E" stroke="#1E3250" strokeWidth={2} />
-                            {/* Parbriz & Geamuri */}
-                            <Path d="M 125 100 L 195 100 L 190 145 L 130 145 Z" fill="#142136" stroke="#253E63" strokeWidth={1} />
-                            <Path d="M 130 160 L 190 160 L 195 195 L 125 195 Z" fill="#142136" stroke="#253E63" strokeWidth={1} />
-
-                            {/* Linii de Flux Energetic */}
-                            {/* Flux Admisie Aer (Albastru) */}
-                            <Line x1={160} y1={52} x2={160} y2={85} stroke="url(#intakeGrad)" strokeWidth={3} strokeLinecap="round" />
-                            {/* Bloc Motor Central (Portocaliu) */}
-                            <Rect x={138} y={75} width={44} height={38} rx={4} fill="#241005" stroke="#FF8800" strokeWidth={1.5} />
-                            <SvgText x={160} y={98} fill="#FF8800" fontSize={8} fontWeight="bold" textAnchor="middle">2.5 TDI</SvgText>
-
-                            {/* Flux Evacuare / DPF (Roșu) */}
-                            <Line x1={154} y1={113} x2={154} y2={228} stroke="url(#exhaustGrad)" strokeWidth={2.5} strokeLinecap="round" />
-
-                            {/* Vectori de Cuplu către Roți */}
-                            <Line x1={138} y1={85} x2={108} y2={85} stroke="#00FF66" strokeWidth={2} strokeLinecap="round" />
-                            <Line x1={182} y1={85} x2={212} y2={85} stroke="#00FF66" strokeWidth={2} strokeLinecap="round" />
-
-                            {/* Cele 4 Roți */}
-                            <Rect x={98} y={72} width={12} height={28} rx={3} fill="#0E1624" stroke={discColor} strokeWidth={1.5} />
-                            <Rect x={210} y={72} width={12} height={28} rx={3} fill="#0E1624" stroke={discColor} strokeWidth={1.5} />
-                            <Rect x={98} y={175} width={12} height={28} rx={3} fill="#0E1624" stroke={discColor} strokeWidth={1.5} />
-                            <Rect x={210} y={175} width={12} height={28} rx={3} fill="#0E1624" stroke={discColor} strokeWidth={1.5} />
-
-                            {/* Noduri Holografice Interactive */}
-                            <G onPress={() => selectZone('ENGINE_BAY')}>
-                                <Circle cx={55} cy={85} r={18} fill="#091424" stroke="#00F0FF" strokeWidth={1.5} />
-                                <SvgText x={55} y={88} fill="#00F0FF" fontSize={7} fontWeight="bold" textAnchor="middle">MOTOR</SvgText>
-                                <Line x1={73} y1={85} x2={138} y2={85} stroke="#00F0FF44" strokeWidth={1} strokeDasharray="3,3" />
-                            </G>
-
-                            <G onPress={() => selectZone('CHASSIS_BRAKES')}>
-                                <Circle cx={265} cy={85} r={18} fill="#091424" stroke="#FF8800" strokeWidth={1.5} />
-                                <SvgText x={265} y={88} fill="#FF8800" fontSize={7} fontWeight="bold" textAnchor="middle">FRÂNE</SvgText>
-                                <Line x1={247} y1={85} x2={210} y2={85} stroke="#FF880044" strokeWidth={1} strokeDasharray="3,3" />
-                            </G>
-
-                            <G onPress={() => selectZone('HIGHWAY_CHASE')}>
-                                <Circle cx={265} cy={190} r={18} fill="#091424" stroke="#00FF66" strokeWidth={1.5} />
-                                <SvgText x={265} y={193} fill="#00FF66" fontSize={7} fontWeight="bold" textAnchor="middle">ȘOSEA</SvgText>
-                                <Line x1={247} y1={190} x2={210} y2={190} stroke="#00FF6644" strokeWidth={1} strokeDasharray="3,3" />
-                            </G>
-                        </Svg>
-
-                        {/* Bento Card Vitals Jos */}
-                        <View style={styles.overviewBento}>
-                            <View style={styles.bentoCell}>
-                                <Text style={styles.bentoLbl}>VITEZĂ</Text>
-                                <Text style={styles.bentoVal}>{speed} <Text style={styles.bentoUnit}>KM/H</Text></Text>
-                            </View>
-                            <View style={styles.bentoCell}>
-                                <Text style={styles.bentoLbl}>TURAȚIE</Text>
-                                <Text style={styles.bentoValLime}>{rpm} <Text style={styles.bentoUnit}>RPM</Text></Text>
-                            </View>
-                            <View style={styles.bentoCell}>
-                                <Text style={styles.bentoLbl}>BOOST</Text>
-                                <Text style={styles.bentoValCyan}>{boost} <Text style={styles.bentoUnit}>BAR</Text></Text>
-                            </View>
-                        </View>
-                    </View>
-                )}
-
-                {/* 2. ZONA 02: ZOOM SUB CAPOTĂ (ENGINE BAY) */}
-                {cameraZone === 'ENGINE_BAY' && (
-                    <View style={styles.canvasInner}>
-                        <Svg width={SCREEN_WIDTH - 24} height={SCREEN_HEIGHT * 0.40} viewBox="0 0 320 240">
-                            {/* Compartiment Motor Macro */}
-                            <Rect x={10} y={10} width={300} height={220} rx={12} fill="#070D17" stroke="#162942" strokeWidth={1.5} />
-
-                            {/* Cei 5 Cilindri în Linie cu Firing Animation 1-2-4-5-3 */}
-                            <SvgText x={160} y={32} fill="#7A8CA3" fontSize={9} fontWeight="bold" textAnchor="middle">
-                                BLOC 5 CILINDRI ÎN LINIE (APRINDERE: 1-2-4-5-3)
-                            </SvgText>
-
-                            {[1, 2, 3, 4, 5].map((cylNum, i) => {
-                                const isFiring = firingCyl === cylNum;
-                                const cx = 48 + i * 56;
-                                return (
-                                    <G key={cylNum}>
-                                        <Circle
-                                            cx={cx}
-                                            cy={70}
-                                            r={22}
-                                            fill={isFiring ? '#FF4422' : '#0E1A2B'}
-                                            stroke={isFiring ? '#FFAA00' : '#1E3554'}
-                                            strokeWidth={isFiring ? 2.5 : 1}
-                                        />
-                                        <SvgText
-                                            x={cx}
-                                            y={74}
-                                            fill={isFiring ? '#FFFFFF' : '#6A7D94'}
-                                            fontSize={12}
-                                            fontWeight="900"
-                                            textAnchor="middle"
-                                        >
-                                            {cylNum}
-                                        </SvgText>
-                                    </G>
-                                );
-                            })}
-
-                            {/* Turbosuflanta VNT & CHRA */}
-                            <Rect x={25} y={120} width={80} height={50} rx={6} fill="#140905" stroke="#FF8800" strokeWidth={1.2} />
-                            <SvgText x={65} y={142} fill="#FF8800" fontSize={9} fontWeight="bold" textAnchor="middle">TURBO VNT</SvgText>
-                            <SvgText x={65} y={158} fill="#FFFFFF" fontSize={11} fontWeight="bold" textAnchor="middle">{turboCore}°C</SvgText>
-
-                            {/* Traseu Intercooler */}
-                            <Rect x={120} y={120} width={80} height={50} rx={6} fill="#05141A" stroke="#00F0FF" strokeWidth={1.2} />
-                            <SvgText x={160} y={142} fill="#00F0FF" fontSize={9} fontWeight="bold" textAnchor="middle">INTERCOOLER</SvgText>
-                            <SvgText x={160} y={158} fill="#FFFFFF" fontSize={11} fontWeight="bold" textAnchor="middle">η {icEff}%</SvgText>
-
-                            {/* Baterie & Alternator */}
-                            <Rect x={215} y={120} width={80} height={50} rx={6} fill="#061A0E" stroke="#00FF66" strokeWidth={1.2} />
-                            <SvgText x={255} y={142} fill="#00FF66" fontSize={9} fontWeight="bold" textAnchor="middle">BATERIE</SvgText>
-                            <SvgText x={255} y={158} fill="#FFFFFF" fontSize={11} fontWeight="bold" textAnchor="middle">{voltage}V ({batterySoh}%)</SvgText>
-                        </Svg>
-
-                        {/* Detalii Capotă */}
-                        <View style={styles.engineBayDetails}>
-                            <Text style={styles.detailText}>ANTIGEL: <Text style={{ color: '#00F0FF' }}>{coolant}°C</Text></Text>
-                            <Text style={styles.detailText}>ULEI: <Text style={{ color: '#FFB800' }}>{oilTemp}°C</Text></Text>
-                            <Text style={styles.detailText}>SARCINĂ: <Text style={{ color: '#00FF66' }}>{load}%</Text></Text>
-                        </View>
-                    </View>
-                )}
-
-                {/* 3. ZONA 03: ZOOM ȘASIU, FRÂNE & ROȚI */}
-                {cameraZone === 'CHASSIS_BRAKES' && (
-                    <View style={styles.canvasInner}>
-                        <Svg width={SCREEN_WIDTH - 24} height={SCREEN_HEIGHT * 0.40} viewBox="0 0 320 240">
-                            <Rect x={10} y={10} width={300} height={220} rx={12} fill="#070D17" stroke="#162942" strokeWidth={1.5} />
-
-                            <SvgText x={160} y={32} fill="#7A8CA3" fontSize={9} fontWeight="bold" textAnchor="middle">
-                                TELEMETRIE TERMICĂ FRÂNE & SUSPENSIE
-                            </SvgText>
-
-                            {/* Cele 4 Discuri cu Iluminare Termică */}
-                            {/* Stânga Față */}
-                            <Circle cx={70} cy={80} r={28} fill="#0B1524" stroke={discColor} strokeWidth={3} />
-                            <SvgText x={70} y={84} fill={discColor} fontSize={10} fontWeight="bold" textAnchor="middle">SF {brakeDiscTemp}°C</SvgText>
-
-                            {/* Dreapta Față */}
-                            <Circle cx={250} cy={80} r={28} fill="#0B1524" stroke={discColor} strokeWidth={3} />
-                            <SvgText x={250} y={84} fill={discColor} fontSize={10} fontWeight="bold" textAnchor="middle">DF {brakeDiscTemp}°C</SvgText>
-
-                            {/* Stânga Spate */}
-                            <Circle cx={70} cy={165} r={24} fill="#0B1524" stroke={discColor} strokeWidth={2.5} />
-                            <SvgText x={70} y={169} fill={discColor} fontSize={9} fontWeight="bold" textAnchor="middle">SS {Math.round(brakeDiscTemp * 0.85)}°C</SvgText>
-
-                            {/* Dreapta Spate */}
-                            <Circle cx={250} cy={165} r={24} fill="#0B1524" stroke={discColor} strokeWidth={2.5} />
-                            <SvgText x={250} y={169} fill={discColor} fontSize={9} fontWeight="bold" textAnchor="middle">DS {Math.round(brakeDiscTemp * 0.85)}°C</SvgText>
-
-                            {/* Centru: Lichid de Frână & Suspensie */}
-                            <Rect x={115} y={90} width={90} height={65} rx={6} fill="#140804" stroke="#FF8800" strokeWidth={1} />
-                            <SvgText x={160} y={108} fill="#FF8800" fontSize={8} fontWeight="bold" textAnchor="middle">LICHID FRÂNĂ</SvgText>
-                            <SvgText x={160} y={124} fill="#FFFFFF" fontSize={12} fontWeight="bold" textAnchor="middle">{brakeFluidTemp}°C</SvgText>
-                            <SvgText x={160} y={142} fill="#A0AEC0" fontSize={7} textAnchor="middle">DAMPING ζ: {suspDamping}</SvgText>
-                        </Svg>
-
-                        <View style={styles.engineBayDetails}>
-                            <Text style={styles.detailText}>DEVIATIE TPMS: <Text style={{ color: '#00F0FF' }}>{tpmsDrift}%</Text></Text>
-                            <Text style={styles.detailText}>STATUS FRÂNE: <Text style={{ color: discColor }}>{brakeDiscTemp > 240 ? 'FIERBERE' : 'OPTIM'}</Text></Text>
-                        </View>
-                    </View>
-                )}
-
-                {/* 4. ZONA 04: CHASE-CAM DINAMIC PE ȘOSEA */}
-                {cameraZone === 'HIGHWAY_CHASE' && (
-                    <View style={styles.canvasInner}>
-                        <Svg width={SCREEN_WIDTH - 24} height={SCREEN_HEIGHT * 0.40} viewBox="0 0 320 240">
-                            {/* Orizont */}
-                            <Rect x={0} y={0} width={320} height={100} fill="#050912" />
-                            <Rect x={0} y={100} width={320} height={140} fill="#090E17" />
-
-                            {/* Șosea în Perspectivă (Tesla Autopilot Style) */}
-                            <Polygon points="120,100 200,100 280,240 40,240" fill="#0C1420" stroke="#162942" strokeWidth={1} />
-
-                            {/* Bandă Drum Centrală cu Linii Curgătoare */}
-                            <Line x1={160} y1={100} x2={160} y2={120} stroke="#FFFFFF" strokeWidth={2} />
-                            <Line x1={160} y1={135} x2={160} y2={165} stroke="#FFFFFF" strokeWidth={3} />
-                            <Line x1={160} y1={185} x2={160} y2={235} stroke="#FFFFFF" strokeWidth={4} />
-
-                            {/* Viteză Monumentală Deasupra Orizontului */}
-                            <SvgText x={160} y={55} fill="#FFFFFF" fontSize={38} fontFamily={MONO} fontWeight="bold" textAnchor="middle">
-                                {speed}
-                            </SvgText>
-                            <SvgText x={160} y={72} fill="#00F0FF" fontSize={10} fontFamily={MONO} fontWeight="bold" textAnchor="middle">
-                                KM/H // {rpm} RPM
-                            </SvgText>
-
-                            {/* Siluetă Mașină din Spate (Rear View) */}
-                            <Rect x={132} y={160} width={56} height={36} rx={8} fill="#0F1D30" stroke="#00F0FF" strokeWidth={1.5} />
-                            {/* Stopuri Roșii */}
-                            <Rect x={136} y={170} width={10} height={5} rx={2} fill="#FF2A2A" />
-                            <Rect x={174} y={170} width={10} height={5} rx={2} fill="#FF2A2A" />
-
-                            {/* Bandă Stare Aderență sub Roți */}
-                            <SvgText x={160} y={225} fill={roadGrip.includes('ICE') ? '#00F0FF' : '#00FF66'} fontSize={9} fontWeight="bold" textAnchor="middle">
-                                {roadGrip.includes('ICE') ? '❄️ ATENȚIE: POLEI DETECTAT' : '✓ ADERENȚĂ OPTIMĂ'} (PANTĂ {roadGrade}%)
-                            </SvgText>
-                        </Svg>
-
-                        <View style={styles.engineBayDetails}>
-                            <Text style={styles.detailText}>PANTĂ DRUM: <Text style={{ color: '#FFB800' }}>{roadGrade}%</Text></Text>
-                            <Text style={styles.detailText}>SCOR ATENȚIE: <Text style={{ color: '#00FF66' }}>{fatigue}/100</Text></Text>
-                        </View>
-                    </View>
-                )}
-            </View>
-
-            {/* ── Sertare Holografice Jos (Floating Glass Pills) ── */}
-            <View style={styles.bottomPillRow}>
-                <TouchableOpacity
-                    style={[styles.floatingPill, activeDrawer === 'AI' && styles.floatingPillActive]}
-                    onPress={() => {
-                        hapticTap();
-                        setActiveDrawer((prev) => (prev === 'AI' ? null : 'AI'));
-                    }}
-                >
-                    <Text style={styles.floatingPillText}>✨ INGINER AI</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.floatingPill}
-                    onPress={() => {
-                        hapticTap();
-                        openSimulatorModal();
-                    }}
-                >
-                    <Text style={[styles.floatingPillText, { color: '#00F0FF' }]}>🎮 SIMULARE</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.floatingPill, activeDrawer === 'TRIP' && styles.floatingPillActive]}
-                    onPress={() => {
-                        hapticTap();
-                        setActiveDrawer((prev) => (prev === 'TRIP' ? null : 'TRIP'));
-                    }}
-                >
-                    <Text style={styles.floatingPillText}>📜 CURSĂ</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.floatingPill}
-                    onPress={() => {
-                        hapticTap();
-                        openExperiencePicker();
-                    }}
-                >
-                    <Text style={[styles.floatingPillText, { color: '#FFB800' }]}>🎨 STIL</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* ── Conținut Sertar Activ (AI sau Cursă) ── */}
-            {activeDrawer === 'AI' && (
-                <View style={styles.drawerOverlay}>
-                    <View style={styles.drawerCard}>
-                        <View style={styles.drawerHead}>
-                            <Text style={styles.drawerTitle}>✨ INGINER VIRTUAL // DIAGNOSTIC SPAȚIAL</Text>
-                            <TouchableOpacity onPress={() => setActiveDrawer(null)}>
-                                <Text style={styles.drawerClose}>✕</Text>
-                            </TouchableOpacity>
-                        </View>
-                        <Text style={styles.drawerBody}>
-                            Toate cele 32 de subsisteme sunt conectate. Temperatura CHRA ({turboCore}°C) și bilanțul energetic indică ardere stabilă. Nu sunt detectate pierderi de aderență sau șocuri mecanice.
-                        </Text>
+                {/* HUD Plutitor Suprapus cu Vitezometru Holografic */}
+                <View style={styles.floatingSpeedHud} pointerEvents="none">
+                    <Text style={styles.floatingSpeedNumber}>{speed}</Text>
+                    <View style={styles.floatingSpeedMeta}>
+                        <Text style={styles.floatingSpeedUnit}>KM/H</Text>
+                        <Text style={styles.floatingRpmMeta}>{rpm} RPM · TREAPTA {gear}</Text>
                     </View>
                 </View>
-            )}
 
-            {activeDrawer === 'TRIP' && (
-                <View style={styles.drawerOverlay}>
-                    <View style={styles.drawerCard}>
-                        <View style={styles.drawerHead}>
-                            <Text style={styles.drawerTitle}>📜 JURNAL TELEMETRIE CURSĂ</Text>
-                            <TouchableOpacity onPress={() => setActiveDrawer(null)}>
-                                <Text style={styles.drawerClose}>✕</Text>
-                            </TouchableOpacity>
+                {/* Martor 3D Animație Aprindere Cilindri (1-2-4-5-3) */}
+                <View style={styles.firingSequenceBadge} pointerEvents="none">
+                    <Text style={styles.firingBadgeLabel}>SECVEȚĂ APRINDERE: </Text>
+                    {[1, 2, 4, 5, 3].map((cyl) => (
+                        <View
+                            key={cyl}
+                            style={[
+                                styles.cylDot,
+                                activeCylinder === cyl && styles.cylDotActive,
+                            ]}
+                        >
+                            <Text style={[styles.cylDotText, activeCylinder === cyl && { color: '#030508' }]}>
+                                {cyl}
+                            </Text>
                         </View>
-                        <View style={styles.tripRow}>
-                            <Text style={styles.tripLbl}>DISTANȚĂ SESIUNE:</Text>
-                            <Text style={styles.tripVal}>{Number(liveData?.distanta_km ?? 14.8).toFixed(1)} km</Text>
-                        </View>
-                        <View style={styles.tripRow}>
-                            <Text style={styles.tripLbl}>CONSUM INSTANTANEU:</Text>
-                            <Text style={styles.tripVal}>{Number(liveData?.consum_instant ?? 5.8).toFixed(1)} L/100</Text>
-                        </View>
-                        <View style={styles.tripRow}>
-                            <Text style={styles.tripLbl}>SCOR ECO:</Text>
-                            <Text style={[styles.tripVal, { color: '#00FF66' }]}>{Math.round(Number(liveData?.eco_score ?? 91))}/100</Text>
-                        </View>
+                    ))}
+                </View>
+
+                {/* Hint tactil de rotație */}
+                <View style={styles.touchHintContainer} pointerEvents="none">
+                    <Text style={styles.touchHintText}>⟲ GLISEAZĂ PENTRU ROTAȚIE 360° // PINCH PENTRU ZOOM</Text>
+                </View>
+            </View>
+
+            {/* ── 3. Selectorul celor 4 Camere Cinematic ── */}
+            <View style={styles.cameraPillsRow}>
+                {[
+                    { id: 'OVERVIEW', label: '1. GENERAL' },
+                    { id: 'ENGINE_BAY', label: '2. MOTOR' },
+                    { id: 'CHASSIS_BRAKES', label: '3. FRÂNE' },
+                    { id: 'HIGHWAY_CHASE', label: '4. PILOT' },
+                ].map((cam) => (
+                    <TouchableOpacity
+                        key={cam.id}
+                        style={[
+                            styles.cameraPill,
+                            cameraZone === cam.id && styles.cameraPillActive,
+                        ]}
+                        onPress={() => selectZone(cam.id)}
+                    >
+                        <Text
+                            style={[
+                                styles.cameraPillText,
+                                cameraZone === cam.id && styles.cameraPillTextActive,
+                            ]}
+                        >
+                            {cam.label}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            {/* ── 4. Sertare Holografice Inferioare (Glass Drawers) ── */}
+            <View style={styles.drawersBar}>
+                <TouchableOpacity
+                    style={[styles.drawerBtn, activeDrawer === 'TELEMETRY' && styles.drawerBtnActive]}
+                    onPress={() => {
+                        hapticTap();
+                        setActiveDrawer(activeDrawer === 'TELEMETRY' ? null : 'TELEMETRY');
+                    }}
+                >
+                    <Text style={styles.drawerBtnText}>⚡ PARAMETRI VITALI</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.drawerBtn, activeDrawer === 'THERMAL' && styles.drawerBtnActive]}
+                    onPress={() => {
+                        hapticTap();
+                        setActiveDrawer(activeDrawer === 'THERMAL' ? null : 'THERMAL');
+                    }}
+                >
+                    <Text style={styles.drawerBtnText}>🔥 TERMICĂ FRÂNE</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.drawerBtn, activeDrawer === 'RUL' && styles.drawerBtnActive]}
+                    onPress={() => {
+                        hapticTap();
+                        setActiveDrawer(activeDrawer === 'RUL' ? null : 'RUL');
+                    }}
+                >
+                    <Text style={styles.drawerBtnText}>🛡️ FIABILITATE WEIBULL</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Sertar Extins Holografic */}
+            {activeDrawer !== null && (
+                <View style={styles.drawerContentCard}>
+                    <View style={styles.drawerHeader}>
+                        <Text style={styles.drawerTitle}>
+                            {activeDrawer === 'TELEMETRY' && 'RAPORT TELEMETRIE DIGITAL TWIN'}
+                            {activeDrawer === 'THERMAL' && 'STATUS TERMIC FRÂNE & TURBOMECANICĂ'}
+                            {activeDrawer === 'RUL' && 'PREDICTIV WEIBULL & DURATĂ DE VIAȚĂ (RUL)'}
+                        </Text>
+                        <TouchableOpacity onPress={() => setActiveDrawer(null)}>
+                            <Text style={styles.closeDrawerText}>[ ✖ ÎNCHIDE ]</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.drawerDataRow}>
+                        {activeDrawer === 'TELEMETRY' && (
+                            <>
+                                <View style={styles.drawerDataCell}>
+                                    <Text style={styles.dataLabel}>BOOST TURBO</Text>
+                                    <Text style={styles.dataVal}>{boost} BAR</Text>
+                                </View>
+                                <View style={styles.drawerDataCell}>
+                                    <Text style={styles.dataLabel}>ANTIGEL</Text>
+                                    <Text style={styles.dataVal}>{coolantTemp} °C</Text>
+                                </View>
+                                <View style={styles.drawerDataCell}>
+                                    <Text style={styles.dataLabel}>TENSIUNE ECU</Text>
+                                    <Text style={styles.dataVal}>{batteryVoltage} V</Text>
+                                </View>
+                            </>
+                        )}
+
+                        {activeDrawer === 'THERMAL' && (
+                            <>
+                                <View style={styles.drawerDataCell}>
+                                    <Text style={styles.dataLabel}>LICHID FRÂNĂ</Text>
+                                    <Text style={[styles.dataVal, brakeFluidTemp > 140 && { color: '#FF2A2A' }]}>
+                                        {brakeFluidTemp} °C
+                                    </Text>
+                                </View>
+                                <View style={styles.drawerDataCell}>
+                                    <Text style={styles.dataLabel}>MIEZ TURBINĂ</Text>
+                                    <Text style={styles.dataVal}>{chraTemp} °C</Text>
+                                </View>
+                                <View style={styles.drawerDataCell}>
+                                    <Text style={styles.dataLabel}>ENERGIE FRÂNARE</Text>
+                                    <Text style={styles.dataVal}>{brakeEnergyTrip} kJ</Text>
+                                </View>
+                            </>
+                        )}
+
+                        {activeDrawer === 'RUL' && (
+                            <>
+                                <View style={styles.drawerDataCell}>
+                                    <Text style={styles.dataLabel}>RUL MINIM</Text>
+                                    <Text style={[styles.dataVal, { color: '#00FF66' }]}>{minRulKm} KM</Text>
+                                </View>
+                                <View style={styles.drawerDataCell}>
+                                    <Text style={styles.dataLabel}>RISC PANĂ</Text>
+                                    <Text style={styles.dataVal}>{breakdownRisk} %</Text>
+                                </View>
+                                <View style={styles.drawerDataCell}>
+                                    <Text style={styles.dataLabel}>SOH BATERIE</Text>
+                                    <Text style={styles.dataVal}>{batterySoH} %</Text>
+                                </View>
+                            </>
+                        )}
                     </View>
                 </View>
             )}
@@ -485,251 +527,283 @@ export default function SpatialCanvasParadigm() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#04060B',
-        paddingTop: Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 20,
+        backgroundColor: '#04070D',
     },
     topHudBar: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: '#101B2B',
-        backgroundColor: '#070C16',
+        borderBottomColor: 'rgba(0, 240, 255, 0.2)',
+        backgroundColor: 'rgba(4, 7, 13, 0.9)',
     },
     hudBrand: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        flexShrink: 1,
     },
     holoBadge: {
-        backgroundColor: '#B026FF18',
-        borderWidth: 1,
-        borderColor: '#B026FF',
+        backgroundColor: 'rgba(0, 240, 255, 0.15)',
         paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: 3,
+        borderWidth: 1,
+        borderColor: '#00F0FF',
+        marginRight: 6,
     },
     holoBadgeText: {
-        color: '#B026FF',
-        fontSize: 8.5,
         fontFamily: MONO,
-        fontWeight: 'bold',
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#00F0FF',
     },
     netDot: {
         width: 6,
         height: 6,
         borderRadius: 3,
+        marginRight: 6,
     },
     vinHud: {
-        color: '#7185A0',
-        fontSize: 9,
         fontFamily: MONO,
+        fontSize: 9,
+        color: '#94A3B8',
+        fontWeight: '700',
+        flexShrink: 1,
     },
-    topActions: {
+    hudActions: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
     },
-    glassBtn: {
-        borderWidth: 1,
-        borderColor: '#1E2D44',
-        paddingHorizontal: 7,
+    smallBtn: {
+        paddingHorizontal: 6,
         paddingVertical: 3,
         borderRadius: 3,
-        backgroundColor: '#0C1626',
-    },
-    glassBtnText: {
-        color: '#8CA0BA',
-        fontSize: 9,
-        fontFamily: MONO,
-        fontWeight: 'bold',
-    },
-    cameraSelectorRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingHorizontal: 8,
-        paddingVertical: 8,
-        backgroundColor: '#080E1A',
-        borderBottomWidth: 1,
-        borderBottomColor: '#122033',
-    },
-    cameraPill: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#182A42',
-        backgroundColor: '#0B1524',
+        borderColor: '#1E293B',
+        backgroundColor: '#0F172A',
     },
-    cameraPillActive: {
-        backgroundColor: '#B026FF22',
-        borderColor: '#B026FF',
-    },
-    cameraPillText: {
-        color: '#6E8199',
-        fontSize: 9,
+    smallBtnText: {
         fontFamily: MONO,
-        fontWeight: 'bold',
+        fontSize: 8,
+        color: '#94A3B8',
+        fontWeight: '700',
     },
-    cameraPillTextActive: {
-        color: '#FFFFFF',
+    launcherBtn: {
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 3,
+        backgroundColor: '#00F0FF',
+    },
+    launcherText: {
+        fontFamily: MONO,
+        fontSize: 8,
+        color: '#04070D',
+        fontWeight: '900',
     },
     canvasContainer: {
         flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 12,
+        position: 'relative',
     },
-    canvasInner: {
+    glSurface: {
+        flex: 1,
         width: '100%',
-        alignItems: 'center',
+        height: '100%',
     },
-    overviewBento: {
+    floatingSpeedHud: {
+        position: 'absolute',
+        top: 20,
+        left: 20,
         flexDirection: 'row',
-        justifyContent: 'space-around',
-        width: '100%',
-        backgroundColor: '#070C16',
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: '#152438',
-        paddingVertical: 8,
-        marginTop: 6,
+        alignItems: 'baseline',
     },
-    bentoCell: {
-        alignItems: 'center',
-    },
-    bentoLbl: {
-        color: '#556985',
-        fontSize: 7.5,
+    floatingSpeedNumber: {
         fontFamily: MONO,
-        marginBottom: 2,
-    },
-    bentoVal: {
+        fontSize: 54,
+        fontWeight: '900',
         color: '#FFFFFF',
-        fontSize: 14,
-        fontFamily: MONO,
-        fontWeight: 'bold',
+        fontVariant: ['tabular-nums'],
+        letterSpacing: -1,
     },
-    bentoValLime: {
-        color: '#00FF66',
-        fontSize: 14,
-        fontFamily: MONO,
-        fontWeight: 'bold',
+    floatingSpeedMeta: {
+        marginLeft: 8,
     },
-    bentoValCyan: {
+    floatingSpeedUnit: {
+        fontFamily: MONO,
+        fontSize: 12,
+        fontWeight: '800',
         color: '#00F0FF',
-        fontSize: 14,
+    },
+    floatingRpmMeta: {
         fontFamily: MONO,
-        fontWeight: 'bold',
+        fontSize: 9,
+        color: '#94A3B8',
+        marginTop: 2,
+        fontVariant: ['tabular-nums'],
     },
-    bentoUnit: {
-        fontSize: 8,
-        color: '#657795',
-    },
-    engineBayDetails: {
+    firingSequenceBadge: {
+        position: 'absolute',
+        top: 24,
+        right: 16,
         flexDirection: 'row',
-        justifyContent: 'space-around',
-        width: '100%',
-        backgroundColor: '#080E1A',
+        alignItems: 'center',
+        backgroundColor: 'rgba(10, 18, 30, 0.85)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
         borderRadius: 4,
         borderWidth: 1,
-        borderColor: '#132238',
-        paddingVertical: 6,
-        marginTop: 8,
+        borderColor: '#16263D',
     },
-    detailText: {
-        color: '#7185A0',
-        fontSize: 9,
+    firingBadgeLabel: {
         fontFamily: MONO,
-        fontWeight: 'bold',
+        fontSize: 7,
+        color: '#64748B',
+        fontWeight: '700',
     },
-    bottomPillRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingHorizontal: 8,
-        paddingVertical: 10,
-        backgroundColor: '#050912',
-        borderTopWidth: 1,
-        borderTopColor: '#122033',
-    },
-    floatingPill: {
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 14,
+    cylDot: {
+        width: 14,
+        height: 14,
+        borderRadius: 2,
+        backgroundColor: '#08101C',
         borderWidth: 1,
-        borderColor: '#1A2C45',
-        backgroundColor: '#091321',
+        borderColor: '#16263D',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: 3,
     },
-    floatingPillActive: {
-        backgroundColor: '#B026FF25',
-        borderColor: '#B026FF',
+    cylDotActive: {
+        backgroundColor: '#00F0FF',
+        borderColor: '#00F0FF',
     },
-    floatingPillText: {
-        color: '#A0B3CC',
-        fontSize: 9,
+    cylDotText: {
         fontFamily: MONO,
-        fontWeight: 'bold',
+        fontSize: 7,
+        fontWeight: '900',
+        color: '#64748B',
     },
-    drawerOverlay: {
+    touchHintContainer: {
         position: 'absolute',
-        bottom: 54,
-        left: 12,
-        right: 12,
+        bottom: 8,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
     },
-    drawerCard: {
-        backgroundColor: '#080E1A',
-        borderRadius: 8,
-        borderWidth: 1.5,
-        borderColor: '#B026FF',
+    touchHintText: {
+        fontFamily: MONO,
+        fontSize: 8,
+        color: 'rgba(148, 163, 184, 0.6)',
+        letterSpacing: 1,
+    },
+    cameraPillsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        backgroundColor: 'rgba(6, 11, 20, 0.95)',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0, 240, 255, 0.15)',
+    },
+    cameraPill: {
+        flex: 1,
+        paddingVertical: 6,
+        alignItems: 'center',
+        marginHorizontal: 3,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#16263D',
+        backgroundColor: '#0A1424',
+    },
+    cameraPillActive: {
+        borderColor: '#00F0FF',
+        backgroundColor: 'rgba(0, 240, 255, 0.15)',
+    },
+    cameraPillText: {
+        fontFamily: MONO,
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#94A3B8',
+    },
+    cameraPillTextActive: {
+        color: '#00F0FF',
+        fontWeight: '900',
+    },
+    drawersBar: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        gap: 6,
+        backgroundColor: '#030508',
+    },
+    drawerBtn: {
+        flex: 1,
+        paddingVertical: 7,
+        alignItems: 'center',
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#1E293B',
+        backgroundColor: '#090E17',
+    },
+    drawerBtnActive: {
+        borderColor: '#00F0FF',
+        backgroundColor: 'rgba(0, 240, 255, 0.1)',
+    },
+    drawerBtnText: {
+        fontFamily: MONO,
+        fontSize: 8,
+        color: '#E2E8F0',
+        fontWeight: '700',
+    },
+    drawerContentCard: {
+        backgroundColor: 'rgba(10, 18, 30, 0.95)',
+        borderTopWidth: 1,
+        borderTopColor: '#00F0FF',
         padding: 12,
-        shadowColor: '#B026FF',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 10,
     },
-    drawerHead: {
+    drawerHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 6,
+        marginBottom: 8,
     },
     drawerTitle: {
-        color: '#B026FF',
-        fontSize: 9.5,
         fontFamily: MONO,
-        fontWeight: 'bold',
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#00F0FF',
+        letterSpacing: 0.5,
     },
-    drawerClose: {
-        color: '#8A99B5',
-        fontSize: 12,
-        fontWeight: 'bold',
-        paddingHorizontal: 4,
-    },
-    drawerBody: {
-        color: '#CBD5E1',
-        fontSize: 11,
-        lineHeight: 15,
+    closeDrawerText: {
         fontFamily: MONO,
+        fontSize: 9,
+        color: '#FF2A2A',
+        fontWeight: '700',
     },
-    tripRow: {
+    drawerDataRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingVertical: 3,
-        borderBottomWidth: 0.6,
-        borderBottomColor: '#132238',
+        gap: 8,
     },
-    tripLbl: {
-        color: '#7185A0',
-        fontSize: 9,
+    drawerDataCell: {
+        flex: 1,
+        backgroundColor: '#060B12',
+        borderRadius: 4,
+        padding: 8,
+        borderWidth: 1,
+        borderColor: '#16263D',
+    },
+    dataLabel: {
         fontFamily: MONO,
+        fontSize: 7,
+        color: '#64748B',
+        marginBottom: 2,
     },
-    tripVal: {
+    dataVal: {
+        fontFamily: MONO,
+        fontSize: 14,
+        fontWeight: '900',
         color: '#FFFFFF',
-        fontSize: 10,
-        fontFamily: MONO,
-        fontWeight: 'bold',
+        fontVariant: ['tabular-nums'],
     },
 });

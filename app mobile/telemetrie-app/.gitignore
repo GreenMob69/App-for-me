@@ -39,3 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# 3D models (kept locally in assets/models to avoid 100MB git push timeouts)
+*.glb
+*.gltf
+
