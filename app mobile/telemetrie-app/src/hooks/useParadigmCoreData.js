@@ -67,10 +67,54 @@ const DEMO_TRIPS = [
     },
 ];
 
-export function useParadigmCoreData() {
-    const telemetry = useNormalizedTelemetry();
+const DEFAULT_MAINTENANCE_ITEMS = [
+    { id: 'oil', title: 'Schimb Ulei & Filtru (Model Arrhenius)', currentKm: 11600, maxKm: 15000, wearPct: 77, status: 'WARN', costEstimat: 450, riskFactor: 'Mediu' },
+    { id: 'brakes', title: 'Plăcuțe & Discuri Frână (Model Archard)', currentKm: 21600, maxKm: 40000, wearPct: 54, status: 'OK', costEstimat: 680, riskFactor: 'Scăzut' },
+    { id: 'turbo', title: 'Miez Turbină CHRA (Degradare Termică)', currentKm: 18500, maxKm: 25000, wearPct: 74, status: 'WARN', costEstimat: 1200, riskFactor: 'Mediu' },
+    { id: 'dpf', title: 'Filtru Particule DPF (Soot & Ash Load)', currentKm: 46500, maxKm: 60000, wearPct: 78, status: 'WARN', costEstimat: 850, riskFactor: 'Mediu' },
+    { id: 'battery', title: 'Baterie Plumb-Acid (Sulfatare CBM)', currentKm: 48000, maxKm: 60000, wearPct: 80, status: 'WARN', costEstimat: 520, riskFactor: 'Scăzut' },
+];
+
+const DEFAULT_AI_MESSAGES = [
+    { id: 'm1', sender: 'ai', text: 'Salut! Sunt Inginerul tău Mecanic AI. Toți cei 32 de observatori fizici raportează funcționare nominală. Cum te pot ajuta azi?' },
+];
+
+const DEFAULT_SENTRY_EVENTS = [
+    { id: 's1', time: '10:14', type: 'PROXIMITATE', desc: 'Mișcare detectată la 0.8m de portieră', severity: 'low' },
+    { id: 's2', time: '08:02', type: 'ARMED', desc: 'Sentinelă armată automat la oprire', severity: 'info' },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SINGLETON IN-MEMORY CACHE (Persistență 0 ms la schimbarea paradigmei)
+// ─────────────────────────────────────────────────────────────────────────────
+const SHARED_PARADIGM_CACHE = {
+    vin: null,
+    tripsList: null,
+    tripsTimestamp: 0,
+    selectedTripId: 'trip_108',
+    maintenanceItems: null,
+    aiMessages: null,
+    sentryArmed: true,
+    sentryEvents: null,
+    valetActive: false,
+    parkingTicketEndTimestamp: null,
+    ttlMs: 45000, // 45 secunde TTL
+};
+
+/**
+ * useParadigmCoreData
+ * Conectează orice paradigmă UI la datele unificate de business logic.
+ * Include Singleton In-Memory Cache (0ms comutare), deduplicare request-uri,
+ * timer parcare centralizat și protecție anti-leak.
+ * 
+ * @param {boolean} [isLiveViewActive=true] - Cand este false, ingheata interpolarea 60FPS
+ * si randarile ciclice ale observatorilor cand utilizatorul e pe taburi statice.
+ */
+export function useParadigmCoreData(isLiveViewActive = true) {
+    const telemetry = useNormalizedTelemetry(isLiveViewActive);
     const { activeVehicle, activeVin, vehicleLabel } = useVehicle();
     const { liveData, isConnected } = useLive();
+    const currentVin = activeVin || activeVehicle?.vin || 'WVWZZZ1234567890';
 
     // ─────────────────────────────────────────────────────────────────────────
     // 1. TELEMETRIE & CEI 32 DE OBSERVATORI FIZICI STRUCTURAȚI PE CATEGORII
@@ -129,18 +173,45 @@ export function useParadigmCoreData() {
     }, [liveData, telemetry]);
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 2. ISTORIC CURSE, REPLAY ENGINE & EXPORT PDF
+    // 2. ISTORIC CURSE, REPLAY ENGINE & DEDUPLICARE HTTP
     // ─────────────────────────────────────────────────────────────────────────
-    const [tripsList, setTripsList] = useState(DEMO_TRIPS);
-    const [selectedTripId, setSelectedTripId] = useState(DEMO_TRIPS[0].id);
-    const [isLoadingTrips, setIsLoadingTrips] = useState(false);
+    const [tripsList, setTripsList] = useState(() => {
+        if (SHARED_PARADIGM_CACHE.tripsList && SHARED_PARADIGM_CACHE.vin === currentVin) {
+            return SHARED_PARADIGM_CACHE.tripsList;
+        }
+        return DEMO_TRIPS;
+    });
 
-    // Încărcare curse de la API
+    const [selectedTripId, setSelectedTripId] = useState(() => {
+        return SHARED_PARADIGM_CACHE.selectedTripId || (tripsList[0] && tripsList[0].id) || 'trip_108';
+    });
+
+    const [isLoadingTrips, setIsLoadingTrips] = useState(false);
+    const abortControllerRef = useRef(/** @type {AbortController|null} */ (null));
+
+    // Încărcare curse de la API cu cache deduplicat și AbortController
     const loadTrips = useCallback(async () => {
+        const now = Date.now();
+        // Verificăm dacă avem deja date proaspete în Singleton Cache (TTL 45s)
+        if (
+            SHARED_PARADIGM_CACHE.tripsList &&
+            SHARED_PARADIGM_CACHE.vin === currentVin &&
+            now - SHARED_PARADIGM_CACHE.tripsTimestamp < SHARED_PARADIGM_CACHE.ttlMs
+        ) {
+            setTripsList(SHARED_PARADIGM_CACHE.tripsList);
+            return;
+        }
+
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+
         setIsLoadingTrips(true);
         try {
-            const vinParam = activeVin || activeVehicle?.vin || 'WVWZZZ1234567890';
-            const res = await api.get(`/calatorii?vin=${vinParam}`);
+            const res = await api.get(`/calatorii?vin=${currentVin}`, {
+                signal: abortControllerRef.current.signal,
+            });
             if (res.data && Array.isArray(res.data) && res.data.length > 0) {
                 const formatted = res.data.map((t, idx) => ({
                     id: String(t.id_calatorie || `trip_${idx}`),
@@ -157,18 +228,31 @@ export function useParadigmCoreData() {
                     healthScore: t.health_score || 95,
                     samplesCount: 50,
                 }));
+
+                SHARED_PARADIGM_CACHE.tripsList = formatted;
+                SHARED_PARADIGM_CACHE.tripsTimestamp = Date.now();
+                SHARED_PARADIGM_CACHE.vin = currentVin;
+
                 setTripsList(formatted);
-                setSelectedTripId(formatted[0].id);
+                if (!SHARED_PARADIGM_CACHE.selectedTripId) {
+                    setSelectedTripId(formatted[0].id);
+                    SHARED_PARADIGM_CACHE.selectedTripId = formatted[0].id;
+                }
             }
         } catch (e) {
-            // Rămâne pe DEMO_TRIPS în caz de offline/eroare
+            // Rămâne pe DEMO_TRIPS în caz de eroare/abort
         } finally {
             setIsLoadingTrips(false);
         }
-    }, [activeVin, activeVehicle]);
+    }, [currentVin]);
 
     useEffect(() => {
         loadTrips();
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
     }, [loadTrips]);
 
     // Stare Replay Player Pas-cu-Pas
@@ -194,10 +278,11 @@ export function useParadigmCoreData() {
             progressPct: Math.round(progress * 100),
             coolant: Math.round(85 + progress * 5),
             gForceLat: Number((Math.sin(progress * Math.PI * 4) * 0.4).toFixed(2)),
+            gForceLong: Number((Math.cos(progress * Math.PI * 2) * 0.3).toFixed(2)),
         };
     }, [replayIndex, selectedTripId, tripsList]);
 
-    // Buclă de avansare a redării
+    // Buclă de avansare a redării cu cleanup garantat
     useEffect(() => {
         if (!isReplaying) return;
         const intervalMs = Math.max(80, 400 / replaySpeed);
@@ -222,6 +307,14 @@ export function useParadigmCoreData() {
         setReplaySpeed((prev) => (prev === 1 ? 2 : prev === 2 ? 4 : 1));
     };
 
+    const selectTripForReplay = (tripId) => {
+        hapticTap();
+        setSelectedTripId(tripId);
+        SHARED_PARADIGM_CACHE.selectedTripId = tripId;
+        setReplayIndex(0);
+        setIsReplaying(false);
+    };
+
     const exportTripPdf = async (tripId) => {
         hapticTap();
         try {
@@ -241,75 +334,105 @@ export function useParadigmCoreData() {
     // ─────────────────────────────────────────────────────────────────────────
     // 3. MENTENANȚĂ (CBM), UZURĂ ARRHENIUS / ARCHARD & PORTOFEL ACTE
     // ─────────────────────────────────────────────────────────────────────────
-    const [maintenanceItems, setMaintenanceItems] = useState([
-        { id: 'oil', name: 'Schimb Ulei & Filtru (Model Arrhenius)', remainingKm: 3400, totalKm: 15000, wearPct: 77, status: 'URGENT', icon: 'water' },
-        { id: 'brakes', name: 'Plăcuțe & Discuri Frână (Model Archard)', remainingKm: 18200, totalKm: 40000, wearPct: 54, status: 'OK', icon: 'disc' },
-        { id: 'air_filter', name: 'Filtru Aer & Admisie Motor', remainingKm: 8500, totalKm: 20000, wearPct: 57, status: 'OK', icon: 'leaf' },
-        { id: 'timing_belt', name: 'Kit Distribuție & Pompă Apă', remainingKm: 42000, totalKm: 90000, wearPct: 53, status: 'OK', icon: 'cog' },
-        { id: 'brake_fluid', name: 'Lichid Frână DOT4 (Higroscopic)', remainingKm: 11000, totalKm: 30000, wearPct: 63, status: 'OK', icon: 'speedometer' },
-    ]);
+    const [maintenanceItems, setMaintenanceItems] = useState(() => {
+        return SHARED_PARADIGM_CACHE.maintenanceItems || DEFAULT_MAINTENANCE_ITEMS;
+    });
 
     const markServiceItemCompleted = async (itemId) => {
         hapticTap();
-        setMaintenanceItems((prev) =>
-            prev.map((item) =>
+        setMaintenanceItems((prev) => {
+            const updated = prev.map((item) =>
                 item.id === itemId
-                    ? { ...item, remainingKm: item.totalKm, wearPct: 0, status: 'OK' }
+                    ? { ...item, currentKm: 0, wearPct: 0, status: 'OK' }
                     : item
-            )
-        );
-        Alert.alert('Revizie Înregistrată', `Contorul pentru "${itemId}" a fost resetat la 100% via CBM.`);
+            );
+            SHARED_PARADIGM_CACHE.maintenanceItems = updated;
+            return updated;
+        });
+        Alert.alert('Revizie Înregistrată', `Contorul CBM pentru componenta selectată a fost resetat la 0 km uzură.`);
     };
 
     // Portofel Acte Legale
     const legalDocuments = useMemo(() => [
-        { id: 'rca', name: 'Asigurare Obligatorie RCA', daysLeft: 142, expiryDate: '10.03.2027', status: 'VALABIL', issuer: 'Groupama Asigurări' },
-        { id: 'itp', name: 'Inspecție Tehnică Periodică (ITP)', daysLeft: 38, expiryDate: '26.11.2026', status: 'EXPIRĂ CURÂND', issuer: 'Stație ITP RAR #442' },
-        { id: 'rovinieta', name: 'Rovinietă Națională CNAIR', daysLeft: 284, expiryDate: '30.07.2027', status: 'VALABIL', issuer: 'CNAIR Rom' },
-        { id: 'casco', name: 'Poliță CASCO All-Risk', daysLeft: 210, expiryDate: '17.05.2027', status: 'VALABIL', issuer: 'Omniasig VIG' },
+        { id: 'rca', type: 'RCA', issuer: 'Groupama Asigurări', daysRemaining: 142, expiryDate: '10.03.2027', status: 'VALABIL' },
+        { id: 'itp', type: 'ITP', issuer: 'Stație ITP RAR #442', daysRemaining: 24, expiryDate: '12.11.2026', status: 'EXPIRĂ' },
+        { id: 'rovinieta', type: 'ROVINIETĂ', issuer: 'CNAIR Rom', daysRemaining: 284, expiryDate: '30.07.2027', status: 'VALABIL' },
+        { id: 'casco', type: 'CASCO', issuer: 'Omniasig VIG', daysRemaining: 210, expiryDate: '17.05.2027', status: 'VALABIL' },
     ], []);
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 4. SMART MOBILITY, SENTRY GUARD, VALET & CRONOMETRU PARCARE
+    // 4. SMART MOBILITY, SENTRY GUARD, VALET & CRONOMETRU PARCARE CENTRALIZAT
     // ─────────────────────────────────────────────────────────────────────────
-    const [sentryArmed, setSentryArmed] = useState(true);
-    const [sentryEvents, setSentryEvents] = useState([
-        { id: 's1', time: '10:14', type: 'PROXIMITATE', desc: 'Mișcare detectată la 0.8m de portieră', severity: 'low' },
-        { id: 's2', time: '08:02', type: 'ARMED', desc: 'Sentinelă armată automat la oprire', severity: 'info' },
-    ]);
+    const [sentryArmed, setSentryArmedState] = useState(() => SHARED_PARADIGM_CACHE.sentryArmed ?? true);
+    const [sentryEvents, setSentryEvents] = useState(() => SHARED_PARADIGM_CACHE.sentryEvents || DEFAULT_SENTRY_EVENTS);
+
+    const setSentryArmed = (armed) => {
+        setSentryArmedState(armed);
+        SHARED_PARADIGM_CACHE.sentryArmed = armed;
+    };
 
     const triggerShockSimulation = () => {
         hapticCriticalWarning();
         audioGong.playGong('critical');
-        setSentryEvents(prev => [
-            { id: String(Date.now()), time: 'ACUM', type: 'ȘOC SENZOR', desc: 'Impact fizic simulat (0.45G). Foto salvată.', severity: 'crit' },
-            ...prev,
-        ]);
+        const newEv = { id: String(Date.now()), time: 'ACUM', type: 'ȘOC SENZOR', desc: 'Impact fizic simulat (0.45G). Foto salvată.', severity: 'crit' };
+        setSentryEvents(prev => {
+            const updated = [newEv, ...prev];
+            SHARED_PARADIGM_CACHE.sentryEvents = updated;
+            return updated;
+        });
         Alert.alert('🚨 ALARMĂ SENTINELĂ', 'Impact simulat detectat de accelerometrul vehiculului!');
     };
 
     // Parcare & Găsește-mi Mașina
-    const carGpsCoords = { lat: 44.4323, lon: 26.1063 };
-    const [parkingMinutesRemaining, setParkingMinutesRemaining] = useState(45);
+    const carGpsCoords = { lat: 44.4323, lng: 26.1063 };
+
+    // Calculăm minutele rămase pe baza timestamp-ului absolut din Singleton
+    const computeRemainingParkingMinutes = () => {
+        if (!SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp) {
+            SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp = Date.now() + 45 * 60000;
+        }
+        return Math.max(0, Math.ceil((SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp - Date.now()) / 60000));
+    };
+
+    const [parkingMinutesRemaining, setParkingMinutesRemaining] = useState(computeRemainingParkingMinutes);
+
+    // Timer periodic blând (la fiecare 5s) pentru sincronizarea cronometrului de parcare
+    useEffect(() => {
+        const updateTick = () => {
+            if (SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp) {
+                const left = Math.max(0, Math.ceil((SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp - Date.now()) / 60000));
+                setParkingMinutesRemaining(left);
+            }
+        };
+        const interval = setInterval(updateTick, 5000);
+        return () => clearInterval(interval);
+    }, []);
 
     const addParkingTime = (minutes) => {
         hapticTap();
-        setParkingMinutesRemaining(prev => prev + minutes);
+        const base = Math.max(Date.now(), SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp || Date.now());
+        const newEnd = base + minutes * 60000;
+        SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp = newEnd;
+        setParkingMinutesRemaining(Math.max(0, Math.ceil((newEnd - Date.now()) / 60000)));
     };
 
     const openWalkingDirections = () => {
         hapticTap();
-        const url = `https://www.google.com/maps/dir/?api=1&destination=${carGpsCoords.lat},${carGpsCoords.lon}&travelmode=walking`;
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${carGpsCoords.lat},${carGpsCoords.lng}&travelmode=walking`;
         Linking.openURL(url).catch(() => Alert.alert('Eroare Hărți', 'Nu s-a putut deschide Google Maps.'));
     };
 
     // Mod Valet
-    const [valetActive, setValetActive] = useState(false);
-    const [valetViolationsCount, setValetViolationsCount] = useState(0);
+    const [valetActive, setValetActiveState] = useState(() => SHARED_PARADIGM_CACHE.valetActive ?? false);
+    const valetSpeedLimit = 80;
+    const valetRpmLimit = 3000;
+    const valetViolationsCount = 0;
 
     const toggleValetMode = () => {
         hapticTap();
-        setValetActive(!valetActive);
+        const next = !valetActive;
+        setValetActiveState(next);
+        SHARED_PARADIGM_CACHE.valetActive = next;
     };
 
     // eCall SOS Test
@@ -318,30 +441,36 @@ export function useParadigmCoreData() {
         audioGong.playGong('critical');
         Alert.alert(
             '📡 TEST SIMULARE eCALL SOS',
-            `Pachet SOS transmis:\nVIN: ${activeVin || 'WVWZZZ1234567890'}\nLocație: 44.4323 N, 26.1063 E\nStare pasageri: Test manual declanșat cu succes.`
+            `Pachet SOS transmis:\nVIN: ${currentVin}\nLocație: 44.4323 N, 26.1063 E\nStare pasageri: Test manual declanșat cu succes.`
         );
     };
 
     // ─────────────────────────────────────────────────────────────────────────
     // 5. INGINERUL MECANIC AI CONTEXTUAL (CHAT & DIAGNOSTIC RAPID)
     // ─────────────────────────────────────────────────────────────────────────
-    const [aiMessages, setAiMessages] = useState([
-        { id: 'm1', sender: 'ai', text: 'Salut! Sunt Inginerul tău Mecanic AI. Toți cei 32 de observatori fizici raportează funcționare nominală. Cum te pot ajuta azi?' },
-    ]);
+    const [aiMessages, setAiMessagesState] = useState(() => {
+        return SHARED_PARADIGM_CACHE.aiMessages || DEFAULT_AI_MESSAGES;
+    });
     const [isAiLoading, setIsAiLoading] = useState(false);
+
+    const setAiMessages = (msgs) => {
+        setAiMessagesState(msgs);
+        SHARED_PARADIGM_CACHE.aiMessages = msgs;
+    };
 
     const sendAiPrompt = async (promptText) => {
         if (!promptText || !promptText.trim()) return;
         hapticTap();
         const userMsg = { id: String(Date.now()), sender: 'user', text: promptText.trim() };
-        setAiMessages(prev => [...prev, userMsg]);
+        const updatedWithUser = [...aiMessages, userMsg];
+        setAiMessages(updatedWithUser);
         setIsAiLoading(true);
 
         try {
-            const vin = activeVin || 'WVWZZZ1234567890';
-            const res = await api.post('/ai/chat', { prompt: promptText, vin, context: telemetry });
+            const res = await api.post('/ai/chat', { prompt: promptText, vin: currentVin, context: telemetry });
             if (res.data && res.data.reply) {
-                setAiMessages(prev => [...prev, { id: String(Date.now() + 1), sender: 'ai', text: res.data.reply }]);
+                const finalMsgs = [...updatedWithUser, { id: String(Date.now() + 1), sender: 'ai', text: res.data.reply }];
+                setAiMessages(finalMsgs);
             } else {
                 throw new Error('Fallback AI');
             }
@@ -349,15 +478,16 @@ export function useParadigmCoreData() {
             // Răspuns inteligent contextual bazat pe telemetria fizică curentă
             let smartReply = `Am analizat parametrii motorului. Turație: ${telemetry.rpm} RPM, Antigel: ${telemetry.coolantTemp}°C, Boost: ${telemetry.boost} bar. `;
             if (promptText.includes('DPF') || promptText.includes('filtru')) {
-                smartReply += `Filtrul DPF are o încărcare de 34% (sub pragul de 80%). Nivelul de contrapresiune este nominal.`;
+                smartReply += `Filtrul DPF are o încărcare de 34% (sub pragul critic de 80%). Nivelul de contrapresiune este optim.`;
             } else if (promptText.includes('ulei') || promptText.includes('uzur')) {
                 smartReply += `Conform modelului Arrhenius de degradare termică, uleiul are un RUL estimat de ${telemetry.weibullRul?.oil || 14200} km. Vâscozitatea este stabilă.`;
             } else if (promptText.includes('turbo') || promptText.includes('boost')) {
                 smartReply += `Presiunea turbo este calibrată. Miezul CHRA este la ${telemetry.chraTemp}°C, iar răcirea necesară este de ${telemetry.chraCooldownSec}s.`;
             } else {
-                smartReply += `Toți senzorii funcționează în parametri OEM. Nu există anomalii active raportate de observatorii Kalman.`;
+                smartReply += `Toți observatorii fizici funcționează în parametri OEM. Nu există coduri DTC sau deviații raportate de filtrele Kalman.`;
             }
-            setAiMessages(prev => [...prev, { id: String(Date.now() + 1), sender: 'ai', text: smartReply }]);
+            const finalMsgs = [...updatedWithUser, { id: String(Date.now() + 1), sender: 'ai', text: smartReply }];
+            setAiMessages(finalMsgs);
         } finally {
             setIsAiLoading(false);
         }
@@ -375,6 +505,7 @@ export function useParadigmCoreData() {
         tripsList,
         selectedTripId,
         setSelectedTripId,
+        selectTripForReplay,
         isLoadingTrips,
         loadTrips,
         isReplaying,
@@ -406,6 +537,8 @@ export function useParadigmCoreData() {
         openWalkingDirections,
         valetActive,
         toggleValetMode,
+        valetSpeedLimit,
+        valetRpmLimit,
         valetViolationsCount,
         triggerEcallTest,
 

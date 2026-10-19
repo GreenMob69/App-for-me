@@ -14,7 +14,7 @@ import {
     TextInput,
 } from 'react-native';
 import { useSafeInsets } from '../../hooks/useSafeInsets';
-import Svg, { Path, Line, Defs, LinearGradient, Stop, Circle, Rect, G } from 'react-native-svg';
+import Svg, { Path, Line, Defs, LinearGradient, Stop, Circle, Rect, G, Pattern } from 'react-native-svg';
 import { useNormalizedTelemetry } from '../../hooks/useNormalizedTelemetry';
 import { useParadigmCoreData } from '../../hooks/useParadigmCoreData';
 import { useVehicle } from '../../context/VehicleContext';
@@ -43,26 +43,21 @@ const FONT_5X7 = {
     '-': [[0,0,0],[0,0,0],[1,1,1],[0,0,0],[0,0,0]],
 };
 
-function SvgDotMatrixChar({ char = '0', x = 0, y = 0, dotSize = 4, gap = 2, color = '#FFFFFF' }) {
+const SvgDotMatrixChar = React.memo(function SvgDotMatrixChar({ char = '0', x = 0, y = 0, dotSize = 4, gap = 2, color = '#FFFFFF' }) {
     const matrix = FONT_5X7[char] || FONT_5X7['0'];
-    const elements = [];
-    for (let r = 0; r < 5; r++) {
-        for (let c = 0; c < 3; c++) {
-            if (matrix[r][c] === 1) {
-                elements.push(
-                    <Circle
-                        key={`dot-${r}-${c}`}
-                        cx={x + c * (dotSize + gap) + dotSize / 2}
-                        cy={y + r * (dotSize + gap) + dotSize / 2}
-                        r={dotSize / 2}
-                        fill={color}
-                    />
-                );
+    const r = dotSize / 2;
+    let path = '';
+    for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 3; col++) {
+            if (matrix[row][col] === 1) {
+                const cx = x + col * (dotSize + gap) + r;
+                const cy = y + row * (dotSize + gap) + r;
+                path += `M ${cx - r},${cy} a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 -${r * 2},0 `;
             }
         }
     }
-    return <G>{elements}</G>;
-}
+    return <Path d={path} fill={color} />;
+});
 
 // ─── 10. Bionic Thermal Ribbon (Color-Free Contrast Shading) ─────────────────
 function generateBionicPulsePath(width, height, loadPct = 20, coolantTemp = 90) {
@@ -107,13 +102,15 @@ function generateBionicPulsePath(width, height, loadPct = 20, coolantTemp = 90) 
 
 export default function MinimalNothingParadigm() {
     const insets = useSafeInsets();
-    const core = useParadigmCoreData();
+
+    // Stări locale pentru modurile Nothing (01: PULS, 02: ANAT sunt live)
+    const [activeTab, setActiveTab] = useState('01'); // '01'|'02'|'03'|'04'|'05'|'06'
+    const isLiveViewActive = activeTab === '01' || activeTab === '02';
+    const core = useParadigmCoreData(isLiveViewActive);
     const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
 
-    // Stări locale pentru modurile Nothing
-    const [activeTab, setActiveTab] = useState('01'); // '01'|'02'|'03'|'04'|'05'|'06'
     const [ghostMode, setGhostMode] = useState(false);
     const [mirrorHud, setMirrorHud] = useState(false);
     const [expandedAlerts, setExpandedAlerts] = useState(false);
@@ -356,6 +353,16 @@ export default function MinimalNothingParadigm() {
                 backgroundColor={currentTheme.bg}
                 translucent
             />
+
+            {/* Ambient Nothing OS Dot-Matrix Pattern Background */}
+            <Svg style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                <Defs>
+                    <Pattern id="nothingDotGrid" width="16" height="16" patternUnits="userSpaceOnUse">
+                        <Circle cx="8" cy="8" r="1" fill={invertedEPaper ? '#E0E0E0' : '#141414'} />
+                    </Pattern>
+                </Defs>
+                <Rect width="100%" height="100%" fill="url(#nothingDotGrid)" />
+            </Svg>
 
             {/* ── 1. GLYPH INTERFACE MATRIX (7 Segmente Telegraphic) ── */}
             <View style={[styles.glyphMatrixContainer, { backgroundColor: currentTheme.bg }]}>

@@ -25,8 +25,9 @@ class AudioGongService {
     playGong(type = 'info') {
         if (this.isMuted) return;
         const now = Date.now();
-        // Debounce gongs by at least 1.5s to prevent audio cacophony
-        if (now - this.lastGongTimestamp < 1500 && type !== 'critical') {
+        const MIN_GONG_INTERVAL_MS = 2500;
+        // Debounce gongs by at least 2.5s to prevent audio cacophony
+        if (now - this.lastGongTimestamp < MIN_GONG_INTERVAL_MS && type !== 'critical') {
             return;
         }
         this.lastGongTimestamp = now;

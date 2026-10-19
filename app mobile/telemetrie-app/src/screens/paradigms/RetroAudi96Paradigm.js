@@ -28,7 +28,23 @@ const RETRO_FONT = Platform.OS === 'ios' ? 'Courier' : 'monospace';
 const theme = PARADIGM_THEMES[PARADIGM_KEYS.RETRO_AUDI_96];
 
 // ─── 8. Stepped Tachometer Bitmask Vector Optimization (Single Path SVG) ────
-function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH - 40, brightness = 1.0, phosphorTrailRpm = 800 }) {
+const GHOST_BARGRAPH_CACHE = {};
+function getGhostBargraphPath(width, totalBlocks = 25) {
+    if (GHOST_BARGRAPH_CACHE[width]) return GHOST_BARGRAPH_CACHE[width];
+    let d = '';
+    const blockWidth = Math.max((width - 60) / totalBlocks, 6);
+    const blockGap = 2.5;
+    for (let i = 0; i < totalBlocks; i++) {
+        const x = i * (blockWidth + blockGap) + 10;
+        const blockHeight = 12 + Math.floor((i / totalBlocks) * 16);
+        const y = 34 - blockHeight;
+        d += `M ${x} ${y} h ${blockWidth} v ${blockHeight} h -${blockWidth} Z `;
+    }
+    GHOST_BARGRAPH_CACHE[width] = d;
+    return d;
+}
+
+const AudiTachometerBargraph = React.memo(function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH - 40, brightness = 1.0, phosphorTrailRpm = 800 }) {
     const totalBlocks = 25;
     const clampedRpm = Math.min(Math.max(rpm, 0), maxRpm);
     const activeBlocksCount = Math.round((clampedRpm / maxRpm) * totalBlocks);
@@ -40,9 +56,10 @@ function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH
     // Build unified path strings using bitwise index iteration (Zero DOM reconciliation overhead)
     let activePathD = '';
     let trailPathD = '';
-    let inactivePathD = '';
+    const inactivePathD = getGhostBargraphPath(width, totalBlocks);
 
-    for (let i = 0; i < totalBlocks; i++) {
+    const maxLit = Math.max(activeBlocksCount, trailBlocksCount);
+    for (let i = 0; i < maxLit; i++) {
         const x = i * (blockWidth + blockGap) + 10;
         const blockHeight = 12 + Math.floor((i / totalBlocks) * 16);
         const y = 34 - blockHeight;
@@ -52,8 +69,6 @@ function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH
             activePathD += rectD;
         } else if (i < trailBlocksCount) {
             trailPathD += rectD; // 1. Phosphor Decay Trail
-        } else {
-            inactivePathD += rectD;
         }
     }
 
@@ -98,7 +113,7 @@ function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH
             </Svg>
         </View>
     );
-}
+});
 
 // ─── Vertical LED Segment Column with Peak Hold Indicator ────────────────────
 function VerticalLedColumn({
@@ -161,13 +176,15 @@ function VerticalLedColumn({
 
 export default function RetroAudi96Paradigm() {
     const insets = useSafeInsets();
-    const core = useParadigmCoreData();
+
+    // 6 Taste Basculante: '1' DIGIFIZ | '2' VAG 1551 | '3' FAHRTENBUCH | '4' SERVICEHEFT | '5' SAFE-LOCK | '6' MEISTER AI
+    const [activeSwitch, setActiveSwitch] = useState('1');
+    const isLiveViewActive = activeSwitch === '1' || activeSwitch === '2';
+    const core = useParadigmCoreData(isLiveViewActive);
     const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
 
-    // 6 Taste Basculante: '1' DIGIFIZ | '2' VAG 1551 | '3' FAHRTENBUCH | '4' SERVICEHEFT | '5' SAFE-LOCK | '6' MEISTER AI
-    const [activeSwitch, setActiveSwitch] = useState('1');
     const [retroAccentMode, setRetroAccentMode] = useState('AMBER'); // 'AMBER' | 'RED' | 'GREEN'
     const [selectedMwbGroup, setSelectedMwbGroup] = useState('engine');
     const [meisterPromptInput, setMeisterPromptInput] = useState('');

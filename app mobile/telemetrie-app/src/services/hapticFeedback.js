@@ -5,8 +5,15 @@ import { Vibration, Platform } from 'react-native';
  * Utilizează Vibration nativ din React Native — zero dependențe externe, 100% compatibil Expo / Bare.
  */
 
+const MIN_HAPTIC_INTERVAL_MS = 80;
+let lastHapticTimestamp = 0;
+
 // Vibrație tactilă discretă (12ms) la apăsarea comutatoarelor fizice, jog-wheel sau cardurilor
 export const hapticTap = () => {
+    const now = Date.now();
+    if (now - lastHapticTimestamp < MIN_HAPTIC_INTERVAL_MS) return;
+    lastHapticTimestamp = now;
+
     try {
         if (Platform.OS === 'android') {
             Vibration.vibrate(12);

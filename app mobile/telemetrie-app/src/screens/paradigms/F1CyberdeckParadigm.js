@@ -36,13 +36,13 @@ const theme = PARADIGM_THEMES[PARADIGM_KEYS.F1_CYBERDECK];
 
 export default function F1CyberdeckParadigm() {
     const insets = useSafeInsets();
-    const core = useParadigmCoreData();
+    // Stare Pagini Pitwall: 'P1' | 'P2' | 'P3' | 'P4' | 'P5'
+    const [pitwallPage, setPitwallPage] = useState('P1');
+    const isLiveViewActive = pitwallPage === 'P1' || pitwallPage === 'P2';
+    const core = useParadigmCoreData(isLiveViewActive);
     const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
-
-    // Stare Pagini Pitwall: 'P1' | 'P2' | 'P3' | 'P4' | 'P5'
-    const [pitwallPage, setPitwallPage] = useState('P1');
     const [f1AccentKey, setF1AccentKey] = useState('CYAN'); // 'CYAN' | 'RED' | 'LIME'
     const [radioPromptInput, setRadioPromptInput] = useState('');
 
@@ -126,25 +126,27 @@ export default function F1CyberdeckParadigm() {
 
     // 3. Alimentare osciloscop în ring buffer fără alocări masive
     useEffect(() => {
+        if (!isLiveViewActive) return;
+
         const idx = ringIndexRef.current;
         ringBufferRef.current[idx] = { boost, rpm };
         ringIndexRef.current = (idx + 1) % 25;
 
-        // Generate SVG points string directly
-        const bPoints = [];
-        const rPoints = [];
+        // Generate SVG points string directly without array allocations
+        let bPoints = '';
+        let rPoints = '';
         for (let i = 0; i < 25; i++) {
             const bufferIdx = (ringIndexRef.current + i) % 25;
             const pt = ringBufferRef.current[bufferIdx];
-            const x = i * (160 / 25);
-            const yBoost = 52 - (pt.boost * 20);
-            const yRpm = 56 - (pt.rpm / 110);
-            bPoints.push(`${x.toFixed(1)},${yBoost.toFixed(1)}`);
-            rPoints.push(`${x.toFixed(1)},${yRpm.toFixed(1)}`);
+            const x = (i * (160 / 25)).toFixed(1);
+            const yBoost = (52 - (pt.boost * 20)).toFixed(1);
+            const yRpm = (56 - (pt.rpm / 110)).toFixed(1);
+            bPoints += (i === 0 ? '' : ' ') + x + ',' + yBoost;
+            rPoints += (i === 0 ? '' : ' ') + x + ',' + yRpm;
         }
         setOscilloscopePoints({
-            boostPoints: bPoints.join(' '),
-            rpmPoints: rPoints.join(' '),
+            boostPoints: bPoints,
+            rpmPoints: rPoints,
         });
 
         // 1. Dynamic Shift Alert
@@ -156,7 +158,7 @@ export default function F1CyberdeckParadigm() {
         // Peak updates
         if (totalG > peakG) setPeakG(totalG);
         if (boost > peakBoost) setPeakBoost(boost);
-    }, [telemetry.rpm, telemetry.boost, targetShiftRpm, totalG, peakG, peakBoost]);
+    }, [isLiveViewActive, telemetry.rpm, telemetry.boost, targetShiftRpm, totalG, peakG, peakBoost]);
 
     const togglePanel = (panelId) => {
         hapticTap();

@@ -83,15 +83,51 @@ function isClockwise(p1, p2, p3) {
     return ((p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x)) > 0;
 }
 
+// ─── Zero-GC Geometrie 3D Înghețată ──────────────────────────────────────────
+const BASE_CAR_VERTICES = Object.freeze({
+    noseL: Object.freeze([-0.7, 0.12, 1.7]),
+    noseR: Object.freeze([0.7, 0.12, 1.7]),
+    hoodL: Object.freeze([-0.65, 0.38, 0.9]),
+    hoodR: Object.freeze([0.65, 0.38, 0.9]),
+    roofFrontL: Object.freeze([-0.52, 0.72, 0.35]),
+    roofFrontR: Object.freeze([0.52, 0.72, 0.35]),
+    roofRearL: Object.freeze([-0.50, 0.68, -0.65]),
+    roofRearR: Object.freeze([0.50, 0.68, -0.65]),
+    trunkL: Object.freeze([-0.62, 0.40, -1.35]),
+    trunkR: Object.freeze([0.62, 0.40, -1.35]),
+    tailL: Object.freeze([-0.68, 0.22, -1.75]),
+    tailR: Object.freeze([0.68, 0.22, -1.75]),
+    sillFrontL: Object.freeze([-0.72, -0.05, 0.9]),
+    sillFrontR: Object.freeze([0.72, -0.05, 0.9]),
+    sillRearL: Object.freeze([-0.72, -0.05, -1.0]),
+    sillRearR: Object.freeze([0.72, -0.05, -1.0]),
+    engineBlockFront: Object.freeze([0, 0.18, 1.2]),
+    turboCore: Object.freeze([0.28, 0.15, 0.85]),
+    exhaustDownpipe: Object.freeze([0.18, 0.05, -0.2]),
+    wheelFL: Object.freeze([-0.78, -0.02, 1.05]),
+    wheelFR: Object.freeze([0.78, -0.02, 1.05]),
+    wheelRL: Object.freeze([-0.78, -0.02, -1.05]),
+    wheelRR: Object.freeze([0.78, -0.02, -1.05]),
+});
+
+const SPATIAL_ACCENTS = Object.freeze({
+    CYAN: Object.freeze({ primary: '#00F0FF', border: 'rgba(0, 240, 255, 0.4)', bg: 'rgba(0, 240, 255, 0.12)' }),
+    GOLD: Object.freeze({ primary: '#FFB800', border: 'rgba(255, 184, 0, 0.4)', bg: 'rgba(255, 184, 0, 0.12)' }),
+    EMERALD: Object.freeze({ primary: '#00FF66', border: 'rgba(0, 255, 102, 0.4)', bg: 'rgba(0, 255, 102, 0.12)' }),
+});
+
+const GROUND_GRID_X = Object.freeze([-1.8, -0.9, 0, 0.9, 1.8]);
+const CYLINDER_ORDER = Object.freeze([1, 2, 4, 5, 3]);
+
 export default function SpatialCanvasParadigm() {
     const insets = useSafeInsets();
-    const core = useParadigmCoreData();
+    // Stări Standalone OS: 'XRAY' | 'REPLAY' | 'SERVICE' | 'SENTRY' | 'COPILOT'
+    const [spatialSheet, setSpatialSheet] = useState('XRAY');
+    const isLiveViewActive = spatialSheet === 'XRAY';
+    const core = useParadigmCoreData(isLiveViewActive);
     const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
-
-    // Stări Standalone OS: 'XRAY' | 'REPLAY' | 'SERVICE' | 'SENTRY' | 'COPILOT'
-    const [spatialSheet, setSpatialSheet] = useState('XRAY');
     const [spatialAccentKey, setSpatialAccentKey] = useState('CYAN'); // 'CYAN' | 'GOLD' | 'EMERALD'
     const [copilotInput, setCopilotInput] = useState('');
 
@@ -134,19 +170,14 @@ export default function SpatialCanvasParadigm() {
 
     // Telemetrie activă sincronizată cu modul Replay pas-cu-pas
     const isReplaying = core.isReplaying;
+    const isLive3DActive = spatialSheet === 'XRAY' || (spatialSheet === 'REPLAY' && isReplaying);
     const activeSpeed = (isReplaying && core.currentReplaySample) ? core.currentReplaySample.speed : speed;
     const activeRpm = (isReplaying && core.currentReplaySample) ? core.currentReplaySample.rpm : rpm;
     const activeBoost = (isReplaying && core.currentReplaySample) ? core.currentReplaySample.boost : boost;
     const activeLatG = (isReplaying && core.currentReplaySample) ? core.currentReplaySample.gForceLat : gForceLat;
     const activeLongG = (isReplaying && core.currentReplaySample) ? core.currentReplaySample.gForceLong : gForceLong;
 
-    // Paletă sub-accente dinamice
-    const spatialAccents = {
-        CYAN: { primary: '#00F0FF', border: 'rgba(0, 240, 255, 0.4)', bg: 'rgba(0, 240, 255, 0.12)' },
-        GOLD: { primary: '#FFB800', border: 'rgba(255, 184, 0, 0.4)', bg: 'rgba(255, 184, 0, 0.12)' },
-        EMERALD: { primary: '#00FF66', border: 'rgba(0, 255, 102, 0.4)', bg: 'rgba(0, 255, 102, 0.12)' },
-    };
-    const activeAccent = spatialAccents[spatialAccentKey] || spatialAccents.CYAN;
+    const activeAccent = SPATIAL_ACCENTS[spatialAccentKey] || SPATIAL_ACCENTS.CYAN;
 
     // Calcul Pitch & Roll din forțe G (animate și în mod Replay)
     const suspensionPitch = useMemo(() => {
@@ -157,16 +188,27 @@ export default function SpatialCanvasParadigm() {
         return Math.max(-0.09, Math.min(0.09, activeLatG * 0.06));
     }, [activeLatG]);
 
-    // Buclă de rotație a roților și linii aerodinamice CFD
+    // Buclă de rotație a roților și linii aerodinamice CFD (throttled când 3D nu e activ)
     useEffect(() => {
-        if (activeSpeed > 0) {
+        if (isLive3DActive && activeSpeed > 0) {
             const interval = setInterval(() => {
                 setWheelAngle((prev) => (prev + (activeSpeed / 12)) % 360);
                 setAeroOffset((prev) => (prev + (activeSpeed / 8)) % 100);
             }, 33);
             return () => clearInterval(interval);
         }
-    }, [activeSpeed]);
+    }, [isLive3DActive, activeSpeed]);
+
+    // Oprește timerul de inerție când părăsim modul 3D activ sau la demontare
+    useEffect(() => {
+        if (!isLive3DActive && inertiaTimerRef.current) {
+            clearInterval(inertiaTimerRef.current);
+            inertiaTimerRef.current = null;
+        }
+        return () => {
+            if (inertiaTimerRef.current) clearInterval(inertiaTimerRef.current);
+        };
+    }, [isLive3DActive]);
 
     // Comutare perspective cameră
     useEffect(() => {
@@ -220,42 +262,43 @@ export default function SpatialCanvasParadigm() {
     const carMesh3D = useMemo(() => {
         const explode = isExplodedView ? 0.35 : 0.0;
         const p = (x, y, z) => project3D(x, y, z, rotX, rotY, suspensionRoll, suspensionPitch, 0.85, SCREEN_WIDTH / 2, 125);
+        const V = BASE_CAR_VERTICES;
 
         // Capotă & Bot (cu explozie exterioară în mod X-Ray)
-        const noseL = p(-0.7 - explode, 0.12, 1.7 + explode);
-        const noseR = p(0.7 + explode, 0.12, 1.7 + explode);
-        const hoodL = p(-0.65 - explode, 0.38 + explode, 0.9);
-        const hoodR = p(0.65 + explode, 0.38 + explode, 0.9);
+        const noseL = p(V.noseL[0] - explode, V.noseL[1], V.noseL[2] + explode);
+        const noseR = p(V.noseR[0] + explode, V.noseR[1], V.noseR[2] + explode);
+        const hoodL = p(V.hoodL[0] - explode, V.hoodL[1] + explode, V.hoodL[2]);
+        const hoodR = p(V.hoodR[0] + explode, V.hoodR[1] + explode, V.hoodR[2]);
 
         // Cabină & Plafon
-        const roofFrontL = p(-0.52, 0.72 + explode * 0.5, 0.35);
-        const roofFrontR = p(0.52, 0.72 + explode * 0.5, 0.35);
-        const roofRearL = p(-0.50, 0.68 + explode * 0.5, -0.65);
-        const roofRearR = p(0.50, 0.68 + explode * 0.5, -0.65);
+        const roofFrontL = p(V.roofFrontL[0], V.roofFrontL[1] + explode * 0.5, V.roofFrontL[2]);
+        const roofFrontR = p(V.roofFrontR[0], V.roofFrontR[1] + explode * 0.5, V.roofFrontR[2]);
+        const roofRearL = p(V.roofRearL[0], V.roofRearL[1] + explode * 0.5, V.roofRearL[2]);
+        const roofRearR = p(V.roofRearR[0], V.roofRearR[1] + explode * 0.5, V.roofRearR[2]);
 
         // Spate & Portbagaj
-        const trunkL = p(-0.62 - explode, 0.40, -1.35 - explode);
-        const trunkR = p(0.62 + explode, 0.40, -1.35 - explode);
-        const tailL = p(-0.68 - explode, 0.22, -1.75 - explode);
-        const tailR = p(0.68 + explode, 0.22, -1.75 - explode);
+        const trunkL = p(V.trunkL[0] - explode, V.trunkL[1], V.trunkL[2] - explode);
+        const trunkR = p(V.trunkR[0] + explode, V.trunkR[1], V.trunkR[2] - explode);
+        const tailL = p(V.tailL[0] - explode, V.tailL[1], V.tailL[2] - explode);
+        const tailR = p(V.tailR[0] + explode, V.tailR[1], V.tailR[2] - explode);
 
         // Praguri inferioare
-        const sillFrontL = p(-0.72 - explode, -0.05, 0.9);
-        const sillFrontR = p(0.72 + explode, -0.05, 0.9);
-        const sillRearL = p(-0.72 - explode, -0.05, -1.0);
-        const sillRearR = p(0.72 + explode, -0.05, -1.0);
+        const sillFrontL = p(V.sillFrontL[0] - explode, V.sillFrontL[1], V.sillFrontL[2]);
+        const sillFrontR = p(V.sillFrontR[0] + explode, V.sillFrontR[1], V.sillFrontR[2]);
+        const sillRearL = p(V.sillRearL[0] - explode, V.sillRearL[1], V.sillRearL[2]);
+        const sillRearR = p(V.sillRearR[0] + explode, V.sillRearR[1], V.sillRearR[2]);
 
         // Componente Interne Powertrain expuse în X-Ray
-        const engineBlockFront = p(0, 0.18, 1.2);
-        const turboCore = p(0.28, 0.15, 0.85);
-        const exhaustDownpipe = p(0.18, 0.05, -0.2);
+        const engineBlockFront = p(V.engineBlockFront[0], V.engineBlockFront[1], V.engineBlockFront[2]);
+        const turboCore = p(V.turboCore[0], V.turboCore[1], V.turboCore[2]);
+        const exhaustDownpipe = p(V.exhaustDownpipe[0], V.exhaustDownpipe[1], V.exhaustDownpipe[2]);
 
         // Poziții 4 Roți cu virare dinamică
         const steerAngle = (activeLatG || 0) * 0.35;
-        const wheelFL = p(-0.78, -0.02, 1.05);
-        const wheelFR = p(0.78, -0.02, 1.05);
-        const wheelRL = p(-0.78, -0.02, -1.05);
-        const wheelRR = p(0.78, -0.02, -1.05);
+        const wheelFL = p(V.wheelFL[0], V.wheelFL[1], V.wheelFL[2]);
+        const wheelFR = p(V.wheelFR[0], V.wheelFR[1], V.wheelFR[2]);
+        const wheelRL = p(V.wheelRL[0], V.wheelRL[1], V.wheelRL[2]);
+        const wheelRR = p(V.wheelRR[0], V.wheelRR[1], V.wheelRR[2]);
 
         return {
             noseL, noseR, hoodL, hoodR,
@@ -384,7 +427,7 @@ export default function SpatialCanvasParadigm() {
                     </Defs>
 
                     {/* Grilă Perspective Sol */}
-                    {[-1.8, -0.9, 0, 0.9, 1.8].map((lineX, i) => {
+                    {GROUND_GRID_X.map((lineX, i) => {
                         const pStart = project3D(lineX, -0.06, -2.5, rotX, rotY, suspensionRoll, suspensionPitch, 0.85, SCREEN_WIDTH / 2, 125);
                         const pEnd = project3D(lineX, -0.06, 2.8, rotX, rotY, suspensionRoll, suspensionPitch, 0.85, SCREEN_WIDTH / 2, 125);
                         return (
@@ -619,7 +662,7 @@ export default function SpatialCanvasParadigm() {
                 {/* Secvență Aprindere */}
                 <View style={styles.firingSequenceBadge} pointerEvents="none">
                     <Text style={styles.firingBadgeLabel}>ORDINE: </Text>
-                    {[1, 2, 4, 5, 3].map((cyl) => (
+                    {CYLINDER_ORDER.map((cyl) => (
                         <View
                             key={cyl}
                             style={[

@@ -1,4 +1,4 @@
-import { useContext, useMemo } from 'react';
+import { useContext, useMemo, useRef } from 'react';
 import { LiveContext } from '../context/LiveContext';
 import { AppContext } from '../context/AppContext';
 
@@ -8,10 +8,14 @@ import { AppContext } from '../context/AppContext';
  * toate cele 5 stiluri vizuale (Classic, Nothing, Audi '96, F1, Spatial 3D)
  * primesc date curate, sigure (fara null-pointer exceptions) si normalizate,
  * indiferent daca datele vin prin MQTT real, socket sau simulator.
+ * 
+ * @param {boolean} [isLiveViewActive=true] - Cand este false, ingheata re-randarile la 1Hz/60FPS
+ * ale ceasurilor statice, pastrand in fundal doar verificarea alertelor critice.
  */
-export function useNormalizedTelemetry() {
+export function useNormalizedTelemetry(isLiveViewActive = true) {
   const liveCtx = useContext(LiveContext) || {};
   const appCtx = useContext(AppContext) || {};
+  const lastTelemetryRef = useRef(null);
 
   const {
     liveData = {},
@@ -27,6 +31,19 @@ export function useNormalizedTelemetry() {
   } = appCtx;
 
   return useMemo(() => {
+    // Daca vizualizarea Live nu este activa (ex: utilizatorul este pe Curse, Service, Sentry sau AI),
+    // si avem deja un snapshot precedent, inghetam valorile numerice pentru a preveni re-randarile parazite.
+    if (!isLiveViewActive && lastTelemetryRef.current) {
+      const v = (liveData && liveData.virtual) || {};
+      const t = (liveData && liveData.temperaturi) || {};
+      const coolant = Math.round(t.coolant || t.antigel || 90);
+      const hasCritical = Boolean(v.dieselRunawayRisk || v.mountainBrakeFadeRisk || v.roadGripStatus === 'BLACK_ICE_GRIP_LOSS_WARNING' || coolant > 105);
+      const prevHadCritical = lastTelemetryRef.current.criticalAlerts && lastTelemetryRef.current.criticalAlerts.length > 0;
+      
+      if (!hasCritical && !prevHadCritical) {
+        return lastTelemetryRef.current;
+      }
+    }
     const data = liveData || {};
     const d = data.dinamica || {};
     const t = data.temperaturi || {};
@@ -178,5 +195,7 @@ export function useNormalizedTelemetry() {
       setUiParadigm,
       getChartHistory: getChartHistory || (() => []),
     };
-  }, [liveData, isConnected, isReconnecting, openSimulatorModal, uiParadigm, setUiParadigm, getChartHistory]);
+    lastTelemetryRef.current = result;
+    return result;
+  }, [liveData, isConnected, isReconnecting, openSimulatorModal, uiParadigm, setUiParadigm, getChartHistory, isLiveViewActive]);
 }
