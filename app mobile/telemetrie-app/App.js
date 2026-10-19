@@ -1,6 +1,6 @@
 import React, { useRef, useContext, useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, ActivityIndicator, LogBox } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, LogBox, Animated } from 'react-native';
 
 LogBox.ignoreLogs([
     '`expo-notifications` functionality is not fully supported in Expo Go',
@@ -226,40 +226,60 @@ function AppNavigator() {
 
 function MainContent() {
     const { uiParadigm } = useContext(AppContext);
+    const fadeAnim = useRef(new Animated.Value(1)).current;
+    const [renderedParadigm, setRenderedParadigm] = useState(uiParadigm);
 
-    if (uiParadigm === 'NOTHING_MINIMAL') {
-        return (
+    useEffect(() => {
+        if (uiParadigm !== renderedParadigm) {
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 90,
+                useNativeDriver: true,
+            }).start(() => {
+                setRenderedParadigm(uiParadigm);
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 110,
+                    useNativeDriver: true,
+                }).start();
+            });
+        }
+    }, [uiParadigm]);
+
+    let content = null;
+    if (renderedParadigm === 'NOTHING_MINIMAL') {
+        content = (
             <ErrorBoundary>
                 <MinimalNothingParadigm />
             </ErrorBoundary>
         );
-    }
-
-    if (uiParadigm === 'RETRO_AUDI_96') {
-        return (
+    } else if (renderedParadigm === 'RETRO_AUDI_96') {
+        content = (
             <ErrorBoundary>
                 <RetroAudi96Paradigm />
             </ErrorBoundary>
         );
-    }
-
-    if (uiParadigm === 'F1_CYBERDECK') {
-        return (
+    } else if (renderedParadigm === 'F1_CYBERDECK') {
+        content = (
             <ErrorBoundary>
                 <F1CyberdeckParadigm />
             </ErrorBoundary>
         );
-    }
-
-    if (uiParadigm === 'SPATIAL_CANVAS') {
-        return (
+    } else if (renderedParadigm === 'SPATIAL_CANVAS') {
+        content = (
             <ErrorBoundary>
                 <SpatialCanvasParadigm />
             </ErrorBoundary>
         );
+    } else {
+        content = <AppNavigator />;
     }
 
-    return <AppNavigator />;
+    return (
+        <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+            {content}
+        </Animated.View>
+    );
 }
 
 function AppSecurityAndModals() {

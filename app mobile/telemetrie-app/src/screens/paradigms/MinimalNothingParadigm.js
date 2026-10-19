@@ -11,10 +11,12 @@ import {
     Dimensions,
     Animated,
     PanResponder,
+    TextInput,
 } from 'react-native';
 import { useSafeInsets } from '../../hooks/useSafeInsets';
 import Svg, { Path, Line, Defs, LinearGradient, Stop, Circle, Rect, G } from 'react-native-svg';
 import { useNormalizedTelemetry } from '../../hooks/useNormalizedTelemetry';
+import { useParadigmCoreData } from '../../hooks/useParadigmCoreData';
 import { useVehicle } from '../../context/VehicleContext';
 import { useUiParadigm } from '../../context/AppContext';
 import { hapticTap, hapticCriticalWarning, hapticShiftAlert } from '../../services/hapticFeedback';
@@ -105,16 +107,19 @@ function generateBionicPulsePath(width, height, loadPct = 20, coolantTemp = 90) 
 
 export default function MinimalNothingParadigm() {
     const insets = useSafeInsets();
-    const telemetry = useNormalizedTelemetry();
+    const core = useParadigmCoreData();
+    const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
 
     // Stări locale pentru modurile Nothing
-    const [activeTab, setActiveTab] = useState('01'); // '01'|'02'|'03'|'04'|'05'
+    const [activeTab, setActiveTab] = useState('01'); // '01'|'02'|'03'|'04'|'05'|'06'
     const [ghostMode, setGhostMode] = useState(false);
     const [mirrorHud, setMirrorHud] = useState(false);
     const [expandedAlerts, setExpandedAlerts] = useState(false);
     const [invertedEPaper, setInvertedEPaper] = useState(false); // 2. High-Contrast Inverted E-Paper Mode
+    const [aiPromptInput, setAiPromptInput] = useState('');
+    const [nothingAccentKey, setNothingAccentKey] = useState('RED'); // 'RED' | 'MONO' | 'ACID'
 
     // ─── 1. OLED Anti-Burn-In Micro-Jitter (Pixel Shifter) ─────────────────────
     const [jitterOffset, setJitterOffset] = useState({ x: 0, y: 0 });
@@ -265,7 +270,7 @@ export default function MinimalNothingParadigm() {
                 return Math.abs(gesture.dx) > 30 || Math.abs(gesture.dy) > 30;
             },
             onPanResponderRelease: (_, gesture) => {
-                const tabs = ['01', '02', '03', '04', '05'];
+                const tabs = ['01', '02', '03', '04', '05', '06'];
                 const currentIdx = tabs.indexOf(activeTab);
 
                 if (gesture.dy < -50 && Math.abs(gesture.dx) < 40) {
@@ -305,8 +310,9 @@ export default function MinimalNothingParadigm() {
 
     const isGhostDimmed = (ghostMode || cruiseStandby) && criticalAlerts.length === 0;
 
-    // Dinamic Theme mapping for E-Paper vs OLED True Black
+    // Dinamic Theme mapping for E-Paper vs OLED True Black & Sub-Accents
     const currentTheme = useMemo(() => {
+        const accent = nothingAccentKey === 'RED' ? '#D71920' : nothingAccentKey === 'ACID' ? '#D4E725' : '#FFFFFF';
         if (invertedEPaper) {
             return {
                 bg: '#FFFFFF',
@@ -315,7 +321,7 @@ export default function MinimalNothingParadigm() {
                 textPrimary: '#000000',
                 textSecondary: '#555555',
                 textDim: '#888888',
-                accent: baseTheme.accent,
+                accent,
                 barActive: '#000000',
                 barInactive: '#DDDDDD',
                 divider: '#E5E5E5',
@@ -328,12 +334,12 @@ export default function MinimalNothingParadigm() {
             textPrimary: '#FFFFFF',
             textSecondary: '#8E8E93',
             textDim: '#555555',
-            accent: baseTheme.accent,
+            accent,
             barActive: '#FFFFFF',
             barInactive: '#1E1E1E',
             divider: '#161616',
         };
-    }, [invertedEPaper]);
+    }, [invertedEPaper, nothingAccentKey]);
 
     return (
         <View
@@ -444,12 +450,31 @@ export default function MinimalNothingParadigm() {
                         </Text>
                     </TouchableOpacity>
 
+                    {/* Sub-Accent Switcher (RED / ACID / MONO) */}
+                    <TouchableOpacity
+                        style={[
+                            styles.v2Button,
+                            { borderColor: currentTheme.accent, backgroundColor: `${currentTheme.accent}15` }
+                        ]}
+                        onPress={() => {
+                            hapticTap();
+                            setNothingAccentKey(prev => prev === 'RED' ? 'ACID' : prev === 'ACID' ? 'MONO' : 'RED');
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.v2ButtonText, { color: currentTheme.accent }]}>
+                            {nothingAccentKey === 'RED' ? '🔴 RED' : nothingAccentKey === 'ACID' ? '🟢 ACID' : '⚪ MONO'}
+                        </Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity
                         style={[styles.v2Button, { borderColor: currentTheme.cardBorder, backgroundColor: currentTheme.cardBg }]}
                         onPress={() => {
                             hapticTap();
                             setUiParadigm('CLASSIC_V2');
                         }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         activeOpacity={0.7}
                     >
                         <Text style={[styles.v2ButtonText, { color: currentTheme.textSecondary }]}>⮌ V2</Text>
@@ -461,6 +486,7 @@ export default function MinimalNothingParadigm() {
                             hapticTap();
                             openExperiencePicker();
                         }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         activeOpacity={0.7}
                     >
                         <Text style={[styles.stylePickerText, { color: currentTheme.bg }]}>[ 🎨 STIL ]</Text>
@@ -586,7 +612,9 @@ export default function MinimalNothingParadigm() {
                     </View>
                 </View>
 
-                {/* 4. CONȚINUT DINAMIC BAZAT PE TAB-UL SELECTAT */}
+                {/* 4. CONȚINUT DINAMIC BAZAT PE CELE 6 STAȚII JOG-WHEEL */}
+
+                {/* ── 01 · PULS VITAL & DINAMICĂ ── */}
                 {activeTab === '01' && (
                     <View style={styles.tabContent}>
                         <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>// 01 · PARAMETRI VITALI DE RULARE</Text>
@@ -609,88 +637,485 @@ export default function MinimalNothingParadigm() {
                                 <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TEMPERATURĂ ULEI</Text>
                                 <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{oilTemp} <Text style={styles.metricUnit}>°C</Text></Text>
                             </View>
-                        </View>
-                    </View>
-                )}
-
-                {activeTab === '02' && (
-                    <View style={styles.tabContent}>
-                        <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>// 02 · TERMICĂ & EVACUARE EGT</Text>
-                        <View style={styles.grid2x2}>
                             <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
                                 <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>EGT EVACUARE</Text>
                                 <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{exhaustTemp} <Text style={styles.metricUnit}>°C</Text></Text>
                             </View>
                             <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>LICHID FRÂNĂ</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }, brakeFluidTemp > 140 && { color: currentTheme.accent }]}>
-                                    {brakeFluidTemp} <Text style={styles.metricUnit}>°C</Text>
-                                </Text>
-                            </View>
-                            <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>ENERGIE FRÂNARE</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{brakeEnergyTrip} <Text style={styles.metricUnit}>kJ</Text></Text>
-                            </View>
-                            <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>CONSUM TOTAL</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{fuelBurnedLiters} <Text style={styles.metricUnit}>L</Text></Text>
+                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>G-FORCE TOTAL</Text>
+                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{Math.sqrt(gForceLat * gForceLat + gForceLong * gForceLong).toFixed(2)} <Text style={styles.metricUnit}>G</Text></Text>
                             </View>
                         </View>
                     </View>
                 )}
 
+                {/* ── 02 · ANATOMIE VIRTUALĂ (32 SENZORI X-RAY) ── */}
+                {activeTab === '02' && (
+                    <View style={styles.tabContent}>
+                        <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>
+                            // 02 · ANATOMIE VIRTUALĂ // 32 OBSERVATORI KALMAN & FIZICĂ
+                        </Text>
+                        
+                        {Object.entries({
+                            'MOTOR & INJECȚIE': core.virtualSensors.engine,
+                            'TURBO & ADMISIE': core.virtualSensors.turbo,
+                            'TERMIC & RĂCIRE': core.virtualSensors.thermal,
+                            'DPF & EMISII': core.virtualSensors.emissions,
+                            'ELECTRIC & BATERIE': core.virtualSensors.electrical,
+                            'ȘASIU & SIGURANȚĂ': core.virtualSensors.safety,
+                        }).map(([category, sensors]) => (
+                            <View key={category} style={[styles.nothingGroupCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                                <Text style={[styles.nothingGroupTitle, { color: currentTheme.textDim }]}>▶ {category}</Text>
+                                {sensors.map((s) => (
+                                    <View key={s.id} style={[styles.nothingSensorRow, { borderBottomColor: currentTheme.divider }]}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.nothingSensorLabel, { color: currentTheme.textPrimary }]}>{s.label}</Text>
+                                            <Text style={[styles.nothingSensorTarget, { color: currentTheme.textDim }]}>Țintă: {s.target}</Text>
+                                        </View>
+                                        <Text style={[styles.nothingSensorVal, { color: s.status === 'WARN' ? '#FFB800' : s.status === 'CRIT' ? currentTheme.accent : currentTheme.textPrimary }]}>
+                                            {s.val}
+                                        </Text>
+                                        <View style={[
+                                            styles.nothingStatusBadge,
+                                            { borderColor: s.status === 'WARN' ? '#FFB800' : s.status === 'CRIT' ? currentTheme.accent : '#00FF66' }
+                                        ]}>
+                                            <Text style={[
+                                                styles.nothingStatusBadgeText,
+                                                { color: s.status === 'WARN' ? '#FFB800' : s.status === 'CRIT' ? currentTheme.accent : '#00FF66' }
+                                            ]}>
+                                                {s.status}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {/* ── 03 · JURNAL CURSE & REPLAY MINIMALIST ── */}
                 {activeTab === '03' && (
                     <View style={styles.tabContent}>
-                        <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>// 03 · VECTORI G-FORCE & DINAMICĂ</Text>
-                        <View style={styles.grid2x2}>
-                            <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>ACCELERAȚIE LATERALĂ</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{gForceLat} <Text style={styles.metricUnit}>G</Text></Text>
+                        <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>
+                            // 03 · JURNAL CURSE & TELEMETRIE REPLAY
+                        </Text>
+
+                        {/* Replay Player Controls Box */}
+                        <View style={[styles.nothingGroupCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                            <View style={styles.nothingReplayHeader}>
+                                <Text style={[styles.nothingGroupTitle, { color: currentTheme.textPrimary }]}>
+                                    {core.isReplaying ? '▶ REDARE REPLAY ACTIVĂ' : '⏸ REPLAY ÎN PAUZĂ'}
+                                </Text>
+                                <Text style={[styles.nothingSensorVal, { color: currentTheme.accent }]}>
+                                    PAS: {core.currentReplaySample.progressPct}%
+                                </Text>
                             </View>
-                            <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>ACCELERAȚIE LONGITUDINALĂ</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{gForceLong} <Text style={styles.metricUnit}>G</Text></Text>
+
+                            {/* Scrubber Bar */}
+                            <View style={[styles.scrubberBg, { backgroundColor: currentTheme.cardBorder }]}>
+                                <View style={[styles.scrubberFill, { width: `${core.currentReplaySample.progressPct}%`, backgroundColor: currentTheme.textPrimary }]} />
+                            </View>
+
+                            {/* Live Replay Metrics */}
+                            <View style={styles.replayMetricsRow}>
+                                <View style={styles.replayMetricCol}>
+                                    <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>VITEZĂ</Text>
+                                    <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{core.currentReplaySample.speed} <Text style={styles.metricUnit}>KM/H</Text></Text>
+                                </View>
+                                <View style={styles.replayMetricCol}>
+                                    <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TURAȚIE</Text>
+                                    <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{core.currentReplaySample.rpm} <Text style={styles.metricUnit}>RPM</Text></Text>
+                                </View>
+                                <View style={styles.replayMetricCol}>
+                                    <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>BOOST</Text>
+                                    <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{core.currentReplaySample.boost} <Text style={styles.metricUnit}>BAR</Text></Text>
+                                </View>
+                                <View style={styles.replayMetricCol}>
+                                    <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TREAPTĂ</Text>
+                                    <Text style={[styles.metricValue, { color: currentTheme.accent }]}>{core.currentReplaySample.gear}</Text>
+                                </View>
+                            </View>
+
+                            {/* Player Action Buttons */}
+                            <View style={styles.replayActionsRow}>
+                                <TouchableOpacity
+                                    style={[styles.replayBtn, { backgroundColor: currentTheme.textPrimary }]}
+                                    onPress={core.togglePlayPause}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.replayBtnText, { color: currentTheme.bg }]}>
+                                        {core.isReplaying ? '⏸ PAUZĂ' : '▶ REDARE'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.replayBtnOutlined, { borderColor: currentTheme.cardBorder }]}
+                                    onPress={core.cycleReplaySpeed}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.replayBtnText, { color: currentTheme.textPrimary }]}>
+                                        {core.replaySpeed}X VITEZĂ
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={[styles.replayBtnOutlined, { borderColor: currentTheme.cardBorder }]}
+                                    onPress={() => core.seekReplay(0)}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.replayBtnText, { color: currentTheme.textPrimary }]}>
+                                        ⏮ RESET
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Export Buttons */}
+                            <View style={[styles.replayActionsRow, { marginTop: 8 }]}>
+                                <TouchableOpacity
+                                    style={[styles.exportBtn, { borderColor: currentTheme.cardBorder }]}
+                                    onPress={() => core.exportTripPdf(core.selectedTripId)}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.exportBtnText, { color: currentTheme.textPrimary }]}>
+                                        📄 PDF EXPORT
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.exportBtn, { borderColor: currentTheme.accent }]}
+                                    onPress={core.exportItpDossier}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.exportBtnText, { color: currentTheme.accent }]}>
+                                        📑 DOSAR ITP
+                                    </Text>
+                                </TouchableOpacity>
                             </View>
                         </View>
+
+                        {/* Lista de curse */}
+                        <Text style={[styles.subSectionTitle, { color: currentTheme.textDim }]}>CURSE SALVATE ÎN MEMORIE:</Text>
+                        {core.tripsList.map((t) => {
+                            const isSelected = t.id === core.selectedTripId;
+                            return (
+                                <TouchableOpacity
+                                    key={t.id}
+                                    style={[
+                                        styles.tripCard,
+                                        { backgroundColor: currentTheme.cardBg, borderColor: isSelected ? currentTheme.textPrimary : currentTheme.cardBorder }
+                                    ]}
+                                    onPress={() => {
+                                        hapticTap();
+                                        core.setSelectedTripId(t.id);
+                                    }}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={styles.tripCardHeader}>
+                                        <Text style={[styles.tripTitle, { color: currentTheme.textPrimary }]}>{t.title}</Text>
+                                        <Text style={[styles.tripDate, { color: currentTheme.textDim }]}>{t.date}</Text>
+                                    </View>
+                                    <View style={styles.tripCardStats}>
+                                        <Text style={[styles.tripStatText, { color: currentTheme.textSecondary }]}>{t.km} KM</Text>
+                                        <Text style={[styles.tripStatText, { color: currentTheme.textSecondary }]}>VMAX: {t.maxSpeed} KM/H</Text>
+                                        <Text style={[styles.tripStatText, { color: currentTheme.textSecondary }]}>{t.avgConsumption} L/100</Text>
+                                        <Text style={[styles.tripStatText, { color: '#00FF66' }]}>HEALTH: {t.healthScore}%</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
                 )}
 
+                {/* ── 04 · SERVICE & ACTE (MENTENANȚĂ CBM & PORTOFEL) ── */}
                 {activeTab === '04' && (
                     <View style={styles.tabContent}>
-                        <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>// 04 · FIABILITATE WEIBULL & RUL</Text>
-                        <View style={styles.grid2x2}>
-                            <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>RUL MINIM PANĂ</Text>
-                                <Text style={[styles.metricValue, { color: '#00FF66' }]}>{minRulKm} <Text style={styles.metricUnit}>KM</Text></Text>
+                        <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>
+                            // 04 · CONDITION-BASED MAINTENANCE & PORTOFEL ACTE
+                        </Text>
+
+                        {/* CBM Degradare Fizică */}
+                        <Text style={[styles.subSectionTitle, { color: currentTheme.textDim }]}>UZURĂ FIZICĂ (ARRHENIUS / ARCHARD):</Text>
+                        {core.maintenanceItems.map((item) => (
+                            <View
+                                key={item.id}
+                                style={[styles.serviceCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}
+                            >
+                                <View style={styles.serviceHeader}>
+                                    <Text style={[styles.serviceName, { color: currentTheme.textPrimary }]}>{item.name}</Text>
+                                    <Text style={[styles.serviceWear, { color: item.status === 'URGENT' ? currentTheme.accent : '#00FF66' }]}>
+                                        UZURĂ: {item.wearPct}%
+                                    </Text>
+                                </View>
+                                <View style={[styles.progressBarBg, { backgroundColor: currentTheme.cardBorder }]}>
+                                    <View
+                                        style={[
+                                            styles.progressBarFill,
+                                            {
+                                                width: `${Math.min(100, item.wearPct)}%`,
+                                                backgroundColor: item.status === 'URGENT' ? currentTheme.accent : currentTheme.textPrimary
+                                            }
+                                        ]}
+                                    />
+                                </View>
+                                <View style={styles.serviceFooter}>
+                                    <Text style={[styles.serviceKmRemaining, { color: currentTheme.textSecondary }]}>
+                                        Rămas: {item.remainingKm} km din {item.totalKm} km
+                                    </Text>
+                                    <TouchableOpacity
+                                        style={[styles.resetServiceBtn, { borderColor: currentTheme.cardBorder }]}
+                                        onPress={() => core.markServiceItemCompleted(item.id)}
+                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={[styles.resetServiceBtnText, { color: currentTheme.textPrimary }]}>
+                                            [ ✓ RESET REVIZIE ]
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                            <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>RISC DEFECTARE</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{breakdownRisk} <Text style={styles.metricUnit}>%</Text></Text>
+                        ))}
+
+                        {/* Portofel Acte Legale */}
+                        <Text style={[styles.subSectionTitle, { color: currentTheme.textDim, marginTop: 16 }]}>PORTOFEL ACTE & VALABILITĂȚI:</Text>
+                        {core.legalDocuments.map((doc) => (
+                            <View
+                                key={doc.id}
+                                style={[styles.docCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}
+                            >
+                                <View style={styles.docHeader}>
+                                    <Text style={[styles.docName, { color: currentTheme.textPrimary }]}>{doc.name}</Text>
+                                    <View style={[
+                                        styles.docBadge,
+                                        { borderColor: doc.status === 'VALABIL' ? '#00FF66' : currentTheme.accent }
+                                    ]}>
+                                        <Text style={[
+                                            styles.docBadgeText,
+                                            { color: doc.status === 'VALABIL' ? '#00FF66' : currentTheme.accent }
+                                        ]}>
+                                            {doc.status}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <Text style={[styles.docIssuer, { color: currentTheme.textDim }]}>Emitent: {doc.issuer}</Text>
+                                <View style={styles.docFooter}>
+                                    <Text style={[styles.docExpiry, { color: currentTheme.textSecondary }]}>Expiră la: {doc.expiryDate}</Text>
+                                    <Text style={[styles.docDays, { color: doc.daysLeft < 45 ? currentTheme.accent : currentTheme.textPrimary }]}>
+                                        {doc.daysLeft} ZILE RĂMASE
+                                    </Text>
+                                </View>
                             </View>
-                            <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>SOH BATERIE</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{batterySoH} <Text style={styles.metricUnit}>%</Text></Text>
+                        ))}
+                    </View>
+                )}
+
+                {/* ── 05 · SENTRY & GPS (SMART MOBILITY & SECURITATE) ── */}
+                {activeTab === '05' && (
+                    <View style={styles.tabContent}>
+                        <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>
+                            // 05 · SENTRY GUARD, PARCARE & MOBILITATE
+                        </Text>
+
+                        {/* Sentry Guard */}
+                        <View style={[styles.nothingGroupCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                            <View style={styles.sentryHeader}>
+                                <View>
+                                    <Text style={[styles.nothingGroupTitle, { color: currentTheme.textPrimary }]}>SENTRY GUARD // SENTINELĂ</Text>
+                                    <Text style={[styles.sentryStatusSub, { color: core.sentryArmed ? '#00FF66' : currentTheme.accent }]}>
+                                        {core.sentryArmed ? '● ARMATĂ // SUPRAVEGHERE ACTIVĂ' : '○ DEZARMATĂ'}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.sentryToggleBtn,
+                                        { backgroundColor: core.sentryArmed ? currentTheme.textPrimary : currentTheme.cardBg, borderColor: currentTheme.cardBorder }
+                                    ]}
+                                    onPress={() => {
+                                        hapticTap();
+                                        core.setSentryArmed(!core.sentryArmed);
+                                    }}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.sentryToggleText, { color: core.sentryArmed ? currentTheme.bg : currentTheme.textPrimary }]}>
+                                        {core.sentryArmed ? 'DEZARMEAZĂ' : 'ARMEAZĂ'}
+                                    </Text>
+                                </TouchableOpacity>
                             </View>
-                            <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>RUL ULEI</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{weibullRul?.oil || 14200} <Text style={styles.metricUnit}>KM</Text></Text>
+
+                            <TouchableOpacity
+                                style={[styles.shockSimBtn, { borderColor: currentTheme.accent }]}
+                                onPress={core.triggerShockSimulation}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.shockSimText, { color: currentTheme.accent }]}>
+                                    ⚡ TEST SENZOR ȘOC / ÎNCLINARE
+                                </Text>
+                            </TouchableOpacity>
+
+                            <Text style={[styles.sentryLogTitle, { color: currentTheme.textDim }]}>JURNAL EVENIMENTE SENTINELĂ:</Text>
+                            {core.sentryEvents.map((ev) => (
+                                <View key={ev.id} style={styles.sentryLogRow}>
+                                    <Text style={[styles.sentryLogTime, { color: currentTheme.textDim }]}>[{ev.time}]</Text>
+                                    <Text style={[styles.sentryLogDesc, { color: ev.severity === 'crit' ? currentTheme.accent : currentTheme.textPrimary }]}>
+                                        {ev.type} — {ev.desc}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* Parcare & GPS Walking */}
+                        <View style={[styles.nothingGroupCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder, marginTop: 12 }]}>
+                            <Text style={[styles.nothingGroupTitle, { color: currentTheme.textPrimary }]}>GĂSEȘTE-MI MAȘINA & CRONOMETRU PARCARE</Text>
+                            <Text style={[styles.gpsCoordsText, { color: currentTheme.textSecondary }]}>
+                                Coordonate GPS: {core.carGpsCoords.lat} N, {core.carGpsCoords.lon} E
+                            </Text>
+                            <TouchableOpacity
+                                style={[styles.mapsBtn, { borderColor: currentTheme.cardBorder }]}
+                                onPress={core.openWalkingDirections}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.mapsBtnText, { color: currentTheme.textPrimary }]}>
+                                    🧭 NAVIGHEAZĂ PIETONAL LA MAȘINĂ (MAPS)
+                                </Text>
+                            </TouchableOpacity>
+
+                            <View style={[styles.parkingTimerFrame, { borderTopColor: currentTheme.divider }]}>
+                                <Text style={[styles.parkingLabel, { color: currentTheme.textDim }]}>EXPIRARE TICHET PARCARE:</Text>
+                                <Text style={[styles.parkingMinutes, { color: currentTheme.accent }]}>
+                                    {core.parkingMinutesRemaining} MINUTE RĂMASE
+                                </Text>
+                                <View style={styles.parkingBtnRow}>
+                                    {[15, 30, 60].map((mins) => (
+                                        <TouchableOpacity
+                                            key={mins}
+                                            style={[styles.addTimeBtn, { borderColor: currentTheme.cardBorder }]}
+                                            onPress={() => core.addParkingTime(mins)}
+                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Text style={[styles.addTimeText, { color: currentTheme.textPrimary }]}>+{mins}m</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
                             </View>
+                        </View>
+
+                        {/* Mod Valet & eCall SOS */}
+                        <View style={[styles.nothingGroupCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder, marginTop: 12 }]}>
+                            <View style={styles.sentryHeader}>
+                                <View>
+                                    <Text style={[styles.nothingGroupTitle, { color: currentTheme.textPrimary }]}>MOD VALET (LIMITATOR 70 KM/H)</Text>
+                                    <Text style={[styles.sentryStatusSub, { color: core.valetActive ? currentTheme.accent : currentTheme.textDim }]}>
+                                        {core.valetActive ? 'ACTIVAT // LIMITARE VITEZĂ & RAZĂ' : 'DEZACTIVAT'}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity
+                                    style={[styles.sentryToggleBtn, { borderColor: currentTheme.cardBorder }]}
+                                    onPress={core.toggleValetMode}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.sentryToggleText, { color: currentTheme.textPrimary }]}>
+                                        {core.valetActive ? 'OPREȘTE' : 'PORNEȘTE'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <TouchableOpacity
+                                style={[styles.ecallBtn, { borderColor: '#FF2A2A', backgroundColor: '#FF2A2A1A' }]}
+                                onPress={core.triggerEcallTest}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={styles.ecallBtnText}>📡 TEST SIMULARE eCALL SOS (112 AUTOMAT)</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 )}
 
-                {activeTab === '05' && (
+                {/* ── 06 · AI TELEX (INGINER MECANIC TERMINAL NOTHING OS) ── */}
+                {activeTab === '06' && (
                     <View style={styles.tabContent}>
-                        <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>// 05 · ECO & EFICIENȚĂ CALORICĂ</Text>
-                        <View style={styles.grid2x2}>
-                            <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>CONSUM INSTANT</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{fuelRate} <Text style={styles.metricUnit}>L/100</Text></Text>
+                        <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>
+                            // 06 · INGINER MECANIC AI // TERMINAL TELEX NOTHING OS
+                        </Text>
+
+                        {/* Quick Prompt Chips */}
+                        <View style={styles.aiChipsRow}>
+                            {[
+                                '? STARE TURBO',
+                                '? CONSUM OPTIM',
+                                '? DIAGNOZĂ UZURĂ',
+                                '? EXPLICĂ ALERTE',
+                            ].map((chip) => (
+                                <TouchableOpacity
+                                    key={chip}
+                                    style={[styles.aiChipBtn, { borderColor: currentTheme.cardBorder, backgroundColor: currentTheme.cardBg }]}
+                                    onPress={() => core.sendAiPrompt(chip)}
+                                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.aiChipText, { color: currentTheme.textPrimary }]}>{chip}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        {/* Message Transcript */}
+                        <View style={[styles.telexTerminalBox, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                            <View style={styles.telexHeader}>
+                                <View style={[styles.telexStatusDot, { backgroundColor: core.isAiLoading ? currentTheme.accent : '#00FF66' }]} />
+                                <Text style={[styles.telexTitle, { color: currentTheme.textPrimary }]}>
+                                    BOSCH ME9 & KALMAN AI EXPERT {core.isAiLoading ? '· ANALIZEAZĂ...' : '· GATA'}
+                                </Text>
                             </View>
-                            <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                                <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>COMBUSTIBIL ARS</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{fuelBurnedLiters} <Text style={styles.metricUnit}>L</Text></Text>
-                            </View>
+
+                            {core.aiMessages.map((msg) => (
+                                <View key={msg.id} style={styles.telexMsgRow}>
+                                    <Text style={[styles.telexSender, { color: msg.sender === 'ai' ? currentTheme.accent : currentTheme.textDim }]}>
+                                        {msg.sender === 'ai' ? '▶ AI INGINER:' : '▶ TFL MASTER:'}
+                                    </Text>
+                                    <Text style={[styles.telexMsgText, { color: currentTheme.textPrimary }]}>
+                                        {msg.text}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* Input Row */}
+                        <View style={[styles.aiInputRow, { borderColor: currentTheme.cardBorder, backgroundColor: currentTheme.cardBg }]}>
+                            <TextInput
+                                style={[styles.aiTextInput, { color: currentTheme.textPrimary }]}
+                                placeholder="Tastează întrebare mecanică..."
+                                placeholderTextColor={currentTheme.textDim}
+                                value={aiPromptInput}
+                                onChangeText={setAiPromptInput}
+                                onSubmitEditing={() => {
+                                    if (aiPromptInput.trim()) {
+                                        core.sendAiPrompt(aiPromptInput);
+                                        setAiPromptInput('');
+                                    }
+                                }}
+                            />
+                            <TouchableOpacity
+                                style={[styles.aiSendBtn, { backgroundColor: currentTheme.textPrimary }]}
+                                onPress={() => {
+                                    if (aiPromptInput.trim()) {
+                                        core.sendAiPrompt(aiPromptInput);
+                                        setAiPromptInput('');
+                                    }
+                                }}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.aiSendBtnText, { color: currentTheme.bg }]}>TRIMITE</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 )}
@@ -698,24 +1123,31 @@ export default function MinimalNothingParadigm() {
                 <View style={{ height: 40 }} />
             </ScrollView>
 
-            {/* ── Jog-Wheel Selector Inferior (01 .. 05) ── */}
+            {/* ── Jog-Wheel Selector Inferior (01 .. 06) ── */}
             <View style={[styles.jogWheelContainer, { borderTopColor: currentTheme.divider, backgroundColor: currentTheme.bg }]}>
-                {['01', '02', '03', '04', '05'].map((tab) => (
+                {[
+                    { id: '01', label: '01 PULS' },
+                    { id: '02', label: '02 ANAT' },
+                    { id: '03', label: '03 JURN' },
+                    { id: '04', label: '04 SERV' },
+                    { id: '05', label: '05 SENT' },
+                    { id: '06', label: '06 AI' },
+                ].map((item) => (
                     <TouchableOpacity
-                        key={tab}
+                        key={item.id}
                         style={[
                             styles.jogTab,
-                            activeTab === tab && { backgroundColor: currentTheme.textPrimary },
+                            activeTab === item.id && { backgroundColor: currentTheme.textPrimary },
                         ]}
                         onPress={() => {
                             hapticTap();
-                            setActiveTab(tab);
+                            setActiveTab(item.id);
                         }}
                         hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Text style={[styles.jogTabText, { color: activeTab === tab ? currentTheme.bg : currentTheme.textDim }]}>
-                            {tab}
+                        <Text style={[styles.jogTabText, { color: activeTab === item.id ? currentTheme.bg : currentTheme.textDim }]}>
+                            {item.label}
                         </Text>
                     </TouchableOpacity>
                 ))}
@@ -1032,6 +1464,444 @@ const styles = StyleSheet.create({
         fontSize: 10,
         color: '#8E8E93',
         fontWeight: '500',
+    },
+    nothingGroupCard: {
+        padding: 12,
+        borderRadius: 4,
+        borderWidth: 1,
+        marginBottom: 10,
+    },
+    nothingGroupTitle: {
+        fontFamily: MONO_FONT,
+        fontSize: 10,
+        fontWeight: '800',
+        letterSpacing: 1,
+        marginBottom: 8,
+    },
+    nothingSensorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 6,
+        borderBottomWidth: 1,
+    },
+    nothingSensorLabel: {
+        fontFamily: MONO_FONT,
+        fontSize: 10,
+        fontWeight: '600',
+    },
+    nothingSensorTarget: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        marginTop: 2,
+    },
+    nothingSensorVal: {
+        fontFamily: MONO_FONT,
+        fontSize: 11,
+        fontWeight: '800',
+        marginRight: 8,
+        fontVariant: ['tabular-nums'],
+    },
+    nothingStatusBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 3,
+        borderWidth: 1,
+    },
+    nothingStatusBadgeText: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        fontWeight: '800',
+    },
+    nothingReplayHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    scrubberBg: {
+        height: 6,
+        borderRadius: 3,
+        width: '100%',
+        marginBottom: 12,
+        overflow: 'hidden',
+    },
+    scrubberFill: {
+        height: '100%',
+        borderRadius: 3,
+    },
+    replayMetricsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+    },
+    replayMetricCol: {
+        alignItems: 'center',
+    },
+    replayActionsRow: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    replayBtn: {
+        flex: 1,
+        paddingVertical: 8,
+        borderRadius: 4,
+        alignItems: 'center',
+    },
+    replayBtnOutlined: {
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 4,
+        borderWidth: 1,
+        alignItems: 'center',
+    },
+    replayBtnText: {
+        fontFamily: MONO_FONT,
+        fontSize: 10,
+        fontWeight: '800',
+    },
+    exportBtn: {
+        flex: 1,
+        paddingVertical: 8,
+        borderRadius: 4,
+        borderWidth: 1,
+        alignItems: 'center',
+    },
+    exportBtnText: {
+        fontFamily: MONO_FONT,
+        fontSize: 10,
+        fontWeight: '800',
+    },
+    subSectionTitle: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '700',
+        letterSpacing: 1,
+        marginBottom: 8,
+    },
+    tripCard: {
+        padding: 10,
+        borderRadius: 4,
+        borderWidth: 1,
+        marginBottom: 8,
+    },
+    tripCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
+    tripTitle: {
+        fontFamily: MONO_FONT,
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    tripDate: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+    },
+    tripCardStats: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 4,
+    },
+    tripStatText: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '600',
+    },
+    serviceCard: {
+        padding: 10,
+        borderRadius: 4,
+        borderWidth: 1,
+        marginBottom: 8,
+    },
+    serviceHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+    },
+    serviceName: {
+        fontFamily: MONO_FONT,
+        fontSize: 10,
+        fontWeight: '700',
+        flex: 1,
+    },
+    serviceWear: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '800',
+    },
+    progressBarBg: {
+        height: 4,
+        borderRadius: 2,
+        width: '100%',
+        marginBottom: 6,
+        overflow: 'hidden',
+    },
+    progressBarFill: {
+        height: '100%',
+        borderRadius: 2,
+    },
+    serviceFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    serviceKmRemaining: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+    },
+    resetServiceBtn: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 3,
+        borderWidth: 1,
+    },
+    resetServiceBtnText: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        fontWeight: '800',
+    },
+    docCard: {
+        padding: 10,
+        borderRadius: 4,
+        borderWidth: 1,
+        marginBottom: 8,
+    },
+    docHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    docName: {
+        fontFamily: MONO_FONT,
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    docBadge: {
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 3,
+        borderWidth: 1,
+    },
+    docBadgeText: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        fontWeight: '800',
+    },
+    docIssuer: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        marginBottom: 4,
+    },
+    docFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    docExpiry: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+    },
+    docDays: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '800',
+    },
+    sentryHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    sentryStatusSub: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '700',
+        marginTop: 2,
+    },
+    sentryToggleBtn: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 4,
+        borderWidth: 1,
+    },
+    sentryToggleText: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '800',
+    },
+    shockSimBtn: {
+        paddingVertical: 8,
+        borderRadius: 4,
+        borderWidth: 1,
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    shockSimText: {
+        fontFamily: MONO_FONT,
+        fontSize: 10,
+        fontWeight: '800',
+    },
+    sentryLogTitle: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        fontWeight: '700',
+        letterSpacing: 1,
+        marginBottom: 4,
+    },
+    sentryLogRow: {
+        flexDirection: 'row',
+        gap: 6,
+        paddingVertical: 2,
+    },
+    sentryLogTime: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+    },
+    sentryLogDesc: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        flex: 1,
+    },
+    gpsCoordsText: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        marginBottom: 8,
+    },
+    mapsBtn: {
+        paddingVertical: 8,
+        borderRadius: 4,
+        borderWidth: 1,
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    mapsBtnText: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '800',
+    },
+    parkingTimerFrame: {
+        borderTopWidth: 1,
+        paddingTop: 8,
+    },
+    parkingLabel: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        letterSpacing: 1,
+    },
+    parkingMinutes: {
+        fontFamily: MONO_FONT,
+        fontSize: 14,
+        fontWeight: '900',
+        marginVertical: 4,
+    },
+    parkingBtnRow: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    addTimeBtn: {
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 3,
+        borderWidth: 1,
+    },
+    addTimeText: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '700',
+    },
+    ecallBtn: {
+        paddingVertical: 8,
+        borderRadius: 4,
+        borderWidth: 1,
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    ecallBtnText: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#FF2A2A',
+    },
+    aiChipsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: 10,
+    },
+    aiChipBtn: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 3,
+        borderWidth: 1,
+    },
+    aiChipText: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '700',
+    },
+    telexTerminalBox: {
+        padding: 10,
+        borderRadius: 4,
+        borderWidth: 1,
+        minHeight: 120,
+        marginBottom: 10,
+    },
+    telexHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+        gap: 6,
+    },
+    telexStatusDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+    },
+    telexTitle: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+    },
+    telexMsgRow: {
+        marginVertical: 4,
+    },
+    telexSender: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '800',
+    },
+    telexMsgText: {
+        fontFamily: MONO_FONT,
+        fontSize: 10,
+        lineHeight: 14,
+        marginTop: 2,
+    },
+    aiInputRow: {
+        flexDirection: 'row',
+        borderRadius: 4,
+        borderWidth: 1,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        alignItems: 'center',
+    },
+    aiTextInput: {
+        flex: 1,
+        fontFamily: MONO_FONT,
+        fontSize: 10,
+        paddingVertical: 4,
+    },
+    aiSendBtn: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 3,
+    },
+    aiSendBtnText: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '800',
     },
     jogWheelContainer: {
         flexDirection: 'row',

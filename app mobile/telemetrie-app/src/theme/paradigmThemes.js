@@ -29,6 +29,11 @@ export const PARADIGM_THEMES = {
     textMuted: '#4B5563',
     fontFamily: 'System',
     tabularNums: true,
+    subAccents: {
+      GREEN: '#00D26A',
+      CYAN: '#00E5FF',
+      AMBER: '#FFB800',
+    },
   },
 
   [PARADIGM_KEYS.NOTHING_MINIMAL]: {
@@ -48,6 +53,11 @@ export const PARADIGM_THEMES = {
     tabularNums: true,
     dotGridSize: 14,
     dotColor: '#161616',
+    subAccents: {
+      RED: '#D71920',
+      ACID: '#00FF66',
+      MONO: '#FFFFFF',
+    },
   },
 
   [PARADIGM_KEYS.RETRO_AUDI_96]: {
@@ -67,6 +77,11 @@ export const PARADIGM_THEMES = {
     textMuted: '#663300',
     fontFamily: 'monospace',
     tabularNums: true,
+    subAccents: {
+      AMBER: '#FF8800',
+      ROT: '#FF1100',
+      VAG: '#33FF33',
+    },
   },
 
   [PARADIGM_KEYS.F1_CYBERDECK]: {
@@ -84,6 +99,11 @@ export const PARADIGM_THEMES = {
     textMuted: '#334155',
     fontFamily: 'monospace',
     tabularNums: true,
+    subAccents: {
+      CYAN: '#00F0FF',
+      RED: '#FF2A2A',
+      LIME: '#00FF66',
+    },
   },
 
   [PARADIGM_KEYS.SPATIAL_CANVAS]: {
@@ -101,6 +121,11 @@ export const PARADIGM_THEMES = {
     textMuted: '#475569',
     fontFamily: 'System',
     tabularNums: true,
+    subAccents: {
+      CYAN: '#00F0FF',
+      GOLD: '#FFB800',
+      EMERALD: '#00FF66',
+    },
   },
 };
 
