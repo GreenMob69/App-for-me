@@ -10,6 +10,7 @@ import {
     Dimensions,
     Animated,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Rect, Path, Circle, Line, Defs, LinearGradient, Stop, G, Text as SvgText } from 'react-native-svg';
 import { useNormalizedTelemetry } from '../../hooks/useNormalizedTelemetry';
 import { useVehicle } from '../../context/VehicleContext';
@@ -131,6 +132,7 @@ function VerticalLedColumn({ label, value, unit, min, max, warnThreshold, critTh
 }
 
 export default function RetroAudi96Paradigm() {
+    const insets = useSafeAreaInsets();
     const telemetry = useNormalizedTelemetry();
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
@@ -216,8 +218,8 @@ export default function RetroAudi96Paradigm() {
     const isIceRisk = telemetry.criticalAlerts.some(a => a.id === 'BLACK_ICE');
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#050200" />
+        <View style={[styles.container, { paddingTop: Math.max(insets.top, 24) }]}>
+            <StatusBar barStyle="light-content" backgroundColor="#050200" translucent />
 
             {/* ── 1. Top Bar Audi VDO & Rheostat ── */}
             <View style={styles.topBar}>

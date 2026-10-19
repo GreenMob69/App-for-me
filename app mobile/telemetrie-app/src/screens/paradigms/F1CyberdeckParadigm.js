@@ -7,7 +7,9 @@ import {
     Platform,
     StatusBar,
     Dimensions,
+    ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, {
     Rect,
     Circle,
@@ -29,6 +31,7 @@ const MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 const theme = PARADIGM_THEMES[PARADIGM_KEYS.F1_CYBERDECK];
 
 export default function F1CyberdeckParadigm() {
+    const insets = useSafeAreaInsets();
     const telemetry = useNormalizedTelemetry();
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
@@ -39,7 +42,7 @@ export default function F1CyberdeckParadigm() {
     // Mod de sesiune: 'RACE' | 'QUAL' | 'PIT'
     const [sessionMode, setSessionMode] = useState('RACE');
 
-    // Buffer glisant 30 puncte pentru osciloscopul live
+    // Buffer glisant 25 puncte pentru osciloscopul live
     const [oscilloscopeHistory, setOscilloscopeHistory] = useState([]);
 
     const {
@@ -73,7 +76,7 @@ export default function F1CyberdeckParadigm() {
         isConnected,
     } = telemetry;
 
-    // Alimentare osciloscop la fiecare secundă
+    // Alimentare osciloscop la fiecare pachet
     useEffect(() => {
         setOscilloscopeHistory((prev) => {
             const next = [
@@ -108,117 +111,123 @@ export default function F1CyberdeckParadigm() {
     }, [rpm]);
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#030508" />
+        <View style={[styles.container, { paddingTop: Math.max(insets.top, 24) }]}>
+            <StatusBar barStyle="light-content" backgroundColor="#030508" translucent />
 
-            {/* ── Antet F1 Cyberdeck ── */}
+            {/* ── 1. ANTET CURAT CU SPAȚIERE SIGURĂ ȘI BUTOANE MARI ── */}
             <View style={styles.header}>
                 <View style={styles.brandGroup}>
                     <View style={styles.cyberTag}>
                         <Text style={styles.cyberTagText}>F1-DECK</Text>
                     </View>
+                    <View style={[styles.liveDot, { backgroundColor: isConnected ? '#00FF66' : '#FF2A2A' }]} />
                     <Text style={styles.modelText} numberOfLines={1}>
-                        {activeVehicle?.model ? activeVehicle.model.toUpperCase() : 'TELEMETRY WEC // CHASSIS 01'}
+                        {activeVehicle?.model ? activeVehicle.model.toUpperCase() : 'TELEMETRIE WEC'}
                     </Text>
                 </View>
 
-                {/* Sesiune & Simulator & Controluri */}
+                {/* Butoane Tactile Clare cu Zona Minima de 44px */}
                 <View style={styles.actionsGroup}>
-                    {/* Sesiune Mode Switcher */}
                     <TouchableOpacity
-                        style={[styles.smallBtn, { borderColor: '#FFB800', backgroundColor: '#FFB80014' }]}
-                        onPress={() => {
-                            hapticTap();
-                            setSessionMode(prev => prev === 'RACE' ? 'QUAL' : prev === 'QUAL' ? 'PIT' : 'RACE');
-                        }}
-                    >
-                        <Text style={[styles.smallBtnText, { color: '#FFB800' }]}>{sessionMode}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.smallBtn, { borderColor: '#00F0FF', backgroundColor: '#00F0FF14' }]}
+                        style={[styles.actionBtn, { borderColor: '#00F0FF', backgroundColor: '#00F0FF1A' }]}
                         onPress={() => {
                             hapticTap();
                             openSimulatorModal();
                         }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={[styles.smallBtnText, { color: '#00F0FF' }]}>PIT SIM</Text>
+                        <Text style={[styles.actionBtnText, { color: '#00F0FF' }]}>🎮 DEMO</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={styles.smallBtn}
+                        style={styles.actionBtn}
                         onPress={() => {
                             hapticTap();
                             setUiParadigm('CLASSIC_V2');
                         }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={styles.smallBtnText}>⮌ V2</Text>
+                        <Text style={styles.actionBtnText}>⮌ CLASIC</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={styles.launcherBtn}
+                        style={[styles.actionBtn, styles.stylePickerBtn]}
                         onPress={() => {
                             hapticTap();
                             openExperiencePicker();
                         }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={styles.launcherText}>[ 🎨 STIL ]</Text>
+                        <Text style={styles.stylePickerText}>🎨 STIL</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* ── F1 15-LED Shift Light Bar pe margine sus ── */}
+            {/* ── 2. Bara F1 Shift Lights & Comutator Sesiune ── */}
             <View style={styles.shiftLightRow}>
-                {shiftLights.map((led, idx) => (
-                    <View
-                        key={`shift-${idx}`}
-                        style={[
-                            styles.shiftLed,
-                            {
-                                backgroundColor: led.active ? led.color : '#0B1522',
-                                borderColor: led.active ? led.color : '#16263D',
-                                shadowColor: led.active ? led.color : 'transparent',
-                                shadowOpacity: led.active ? 0.9 : 0,
-                                shadowRadius: 4,
-                            },
-                        ]}
-                    />
-                ))}
+                <TouchableOpacity
+                    style={styles.sessionModePill}
+                    onPress={() => {
+                        hapticTap();
+                        setSessionMode(prev => prev === 'RACE' ? 'QUAL' : prev === 'QUAL' ? 'PIT' : 'RACE');
+                    }}
+                >
+                    <Text style={styles.sessionModeText}>{sessionMode}</Text>
+                </TouchableOpacity>
+
+                <View style={styles.ledsTrack}>
+                    {shiftLights.map((led, idx) => (
+                        <View
+                            key={`shift-${idx}`}
+                            style={[
+                                styles.shiftLed,
+                                {
+                                    backgroundColor: led.active ? led.color : '#0B1522',
+                                    borderColor: led.active ? led.color : '#16263D',
+                                    shadowColor: led.active ? led.color : 'transparent',
+                                    shadowOpacity: led.active ? 0.9 : 0,
+                                    shadowRadius: 3,
+                                },
+                            ]}
+                        />
+                    ))}
+                </View>
             </View>
 
-            {/* ── Corpul Central: Grilă 6 Monitoare sau Monitor Mărit ── */}
+            {/* ── 3. CORPUL CENTRAL: GRILĂ 6 MONITOARE SAU MONITOR MĂRIT ── */}
             <View style={styles.viewportLockedContent}>
                 {expandedPanel === null ? (
                     <View style={styles.monitorsGrid}>
                         {/* ── M1: NUCLEU VITEZĂ, TREAPTĂ & G-RADAR ── */}
-                        <TouchableOpacity
-                            style={[styles.monitorCell, styles.cornerBrackets]}
-                            onPress={() => togglePanel(1)}
-                            activeOpacity={0.8}
-                        >
+                        <View style={styles.monitorCell}>
                             <View style={styles.monHeader}>
                                 <Text style={styles.monTitle}>M1 // TELEMETRY NUCLEUS</Text>
-                                <Text style={styles.monMaxIcon}>[+]</Text>
+                                <TouchableOpacity
+                                    style={styles.expandHit}
+                                    onPress={() => togglePanel(1)}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Text style={styles.monMaxIcon}>[ ⤢ ]</Text>
+                                </TouchableOpacity>
                             </View>
                             <View style={styles.m1Body}>
                                 <View style={styles.gearBox}>
                                     <Text style={styles.gearNumber}>{gear}</Text>
-                                    <Text style={styles.gearLabel}>GEAR</Text>
+                                    <Text style={styles.gearLabel}>TREAPTĂ</Text>
                                 </View>
                                 <View style={styles.speedBox}>
                                     <Text style={styles.speedNumber}>{speed}</Text>
                                     <Text style={styles.speedLabel}>KM/H · {rpm} RPM</Text>
                                 </View>
-                                {/* Mini G-Force Radar */}
                                 <View style={styles.miniRadar}>
-                                    <Svg width={44} height={44} viewBox="0 0 44 44">
-                                        <Circle cx="22" cy="22" r="18" fill="none" stroke="#16263D" strokeWidth="1" />
-                                        <Circle cx="22" cy="22" r="9" fill="none" stroke="#0D1A2D" strokeWidth="1" />
-                                        <Line x1="4" y1="22" x2="40" y2="22" stroke="#16263D" strokeWidth="0.8" />
-                                        <Line x1="22" y1="4" x2="22" y2="40" stroke="#16263D" strokeWidth="0.8" />
+                                    <Svg width={42} height={42} viewBox="0 0 42 42">
+                                        <Circle cx="21" cy="21" r="18" fill="none" stroke="#16263D" strokeWidth="1" />
+                                        <Circle cx="21" cy="21" r="9" fill="none" stroke="#0D1A2D" strokeWidth="1" />
+                                        <Line x1="3" y1="21" x2="39" y2="21" stroke="#16263D" strokeWidth="0.8" />
+                                        <Line x1="21" y1="3" x2="21" y2="39" stroke="#16263D" strokeWidth="0.8" />
                                         <Circle
-                                            cx={22 + (gForceLat * 10)}
-                                            cy={22 - (gForceLong * 10)}
+                                            cx={21 + (gForceLat * 9)}
+                                            cy={21 - (gForceLong * 9)}
                                             r="3.5"
                                             fill="#00F0FF"
                                         />
@@ -226,28 +235,30 @@ export default function F1CyberdeckParadigm() {
                                     <Text style={styles.radarLabel}>{gForceLat}G</Text>
                                 </View>
                             </View>
-                        </TouchableOpacity>
+                        </View>
 
                         {/* ── M2: OSCILOSCOP DUAL-CHANNEL (BOOST VS RPM) ── */}
-                        <TouchableOpacity
-                            style={[styles.monitorCell, styles.cornerBrackets]}
-                            onPress={() => togglePanel(2)}
-                            activeOpacity={0.8}
-                        >
+                        <View style={styles.monitorCell}>
                             <View style={styles.monHeader}>
                                 <Text style={styles.monTitle}>M2 // OSCILLOSCOPE</Text>
-                                <Text style={styles.monSub}>{boost} BAR</Text>
+                                <TouchableOpacity
+                                    style={styles.expandHit}
+                                    onPress={() => togglePanel(2)}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Text style={styles.monMaxIcon}>[ ⤢ ]</Text>
+                                </TouchableOpacity>
                             </View>
                             <View style={styles.oscilloscopeContainer}>
-                                <Svg width={SCREEN_WIDTH * 0.44} height={64} viewBox="0 0 160 64">
-                                    <Line x1="0" y1="32" x2="160" y2="32" stroke="#112233" strokeDasharray="3, 3" />
+                                <Svg width={SCREEN_WIDTH * 0.42} height={56} viewBox="0 0 160 56">
+                                    <Line x1="0" y1="28" x2="160" y2="28" stroke="#112233" strokeDasharray="3, 3" />
                                     {oscilloscopeHistory.length > 1 && (
                                         <Polyline
                                             fill="none"
                                             stroke="#00F0FF"
                                             strokeWidth="2"
                                             points={oscilloscopeHistory
-                                                .map((pt, i) => `${i * (160 / 25)},${60 - (pt.boost * 24)}`)
+                                                .map((pt, i) => `${i * (160 / 25)},${52 - (pt.boost * 20)}`)
                                                 .join(' ')}
                                         />
                                     )}
@@ -258,23 +269,29 @@ export default function F1CyberdeckParadigm() {
                                             strokeWidth="1"
                                             strokeDasharray="2, 2"
                                             points={oscilloscopeHistory
-                                                .map((pt, i) => `${i * (160 / 25)},${64 - (pt.rpm / 100)}`)
+                                                .map((pt, i) => `${i * (160 / 25)},${56 - (pt.rpm / 110)}`)
                                                 .join(' ')}
                                         />
                                     )}
                                 </Svg>
+                                <View style={styles.scopeMetaRow}>
+                                    <Text style={styles.scopeLegend1}>― BOOST {boost}b</Text>
+                                    <Text style={styles.scopeLegend2}>┄ RPM {rpm}</Text>
+                                </View>
                             </View>
-                        </TouchableOpacity>
+                        </View>
 
                         {/* ── M3: ENGINE HEALTH HEATMAP (3x3) ── */}
-                        <TouchableOpacity
-                            style={[styles.monitorCell, styles.cornerBrackets]}
-                            onPress={() => togglePanel(3)}
-                            activeOpacity={0.8}
-                        >
+                        <View style={styles.monitorCell}>
                             <View style={styles.monHeader}>
                                 <Text style={styles.monTitle}>M3 // ENGINE DNA</Text>
-                                <Text style={styles.monSub}>{coolantTemp}°C</Text>
+                                <TouchableOpacity
+                                    style={styles.expandHit}
+                                    onPress={() => togglePanel(3)}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Text style={styles.monMaxIcon}>[ ⤢ ]</Text>
+                                </TouchableOpacity>
                             </View>
                             <View style={styles.heatmapGrid}>
                                 {[
@@ -300,17 +317,19 @@ export default function F1CyberdeckParadigm() {
                                     </View>
                                 ))}
                             </View>
-                        </TouchableOpacity>
+                        </View>
 
                         {/* ── M4: SANKEY THERMAL & CHRA TURBO ── */}
-                        <TouchableOpacity
-                            style={[styles.monitorCell, styles.cornerBrackets]}
-                            onPress={() => togglePanel(4)}
-                            activeOpacity={0.8}
-                        >
+                        <View style={styles.monitorCell}>
                             <View style={styles.monHeader}>
                                 <Text style={styles.monTitle}>M4 // SANKEY & CHRA</Text>
-                                <Text style={styles.monSub}>CHRA {chraTemp}°C</Text>
+                                <TouchableOpacity
+                                    style={styles.expandHit}
+                                    onPress={() => togglePanel(4)}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Text style={styles.monMaxIcon}>[ ⤢ ]</Text>
+                                </TouchableOpacity>
                             </View>
                             <View style={styles.m4Body}>
                                 <View style={styles.sankeyBarFrame}>
@@ -319,81 +338,133 @@ export default function F1CyberdeckParadigm() {
                                     <View style={[styles.sankeySeg, { flex: sankey.coolingFrictionPct, backgroundColor: '#FF2A2A' }]} />
                                 </View>
                                 <View style={styles.sankeyMeta}>
-                                    <Text style={styles.sankeyLabel}>MECH {sankey.mechanicalPct}%</Text>
-                                    <Text style={styles.sankeyLabel}>EXH {sankey.exhaustHeatPct}%</Text>
-                                    <Text style={styles.sankeyLabel}>COOL {sankey.coolingFrictionPct}%</Text>
+                                    <Text style={styles.sankeyLabel}>MEC {sankey.mechanicalPct}%</Text>
+                                    <Text style={styles.sankeyLabel}>EVAC {sankey.exhaustHeatPct}%</Text>
+                                    <Text style={styles.sankeyLabel}>RĂC {sankey.coolingFrictionPct}%</Text>
                                 </View>
-                                {chraCooldownSec > 0 && (
-                                    <Text style={styles.chraAlert}>TURBO COOLDOWN: {chraCooldownSec}s</Text>
+                                {chraCooldownSec > 0 ? (
+                                    <Text style={styles.chraAlert}>COOLDOWN: {chraCooldownSec}s</Text>
+                                ) : (
+                                    <Text style={styles.chraOk}>CHRA TURBO STABIL</Text>
                                 )}
                             </View>
-                        </TouchableOpacity>
+                        </View>
 
                         {/* ── M5: WEIBULL RELIABILITY & RUL ── */}
-                        <TouchableOpacity
-                            style={[styles.monitorCell, styles.cornerBrackets]}
-                            onPress={() => togglePanel(5)}
-                            activeOpacity={0.8}
-                        >
+                        <View style={styles.monitorCell}>
                             <View style={styles.monHeader}>
                                 <Text style={styles.monTitle}>M5 // WEIBULL RUL</Text>
-                                <Text style={[styles.monSub, { color: '#00FF66' }]}>{minRulKm} KM</Text>
+                                <TouchableOpacity
+                                    style={styles.expandHit}
+                                    onPress={() => togglePanel(5)}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Text style={styles.monMaxIcon}>[ ⤢ ]</Text>
+                                </TouchableOpacity>
                             </View>
                             <View style={styles.m5Body}>
-                                <Text style={styles.weibullLine}>ROAD RISK: <Text style={{ color: '#FFB800' }}>{breakdownRisk}%</Text></Text>
-                                <Text style={styles.weibullLine}>B2B ROI: <Text style={{ color: '#00F0FF' }}>+{b2bRoi} €/YR</Text></Text>
-                                <Text style={styles.weibullLine}>OIL RUL: {weibullRul.oil} KM</Text>
-                                <Text style={styles.weibullLine}>DPF RUL: {weibullRul.dpf} KM</Text>
+                                <Text style={styles.weibullLine}>RUL MIN: <Text style={{ color: '#00FF66', fontWeight: '900' }}>{minRulKm} KM</Text></Text>
+                                <Text style={styles.weibullLine}>RISC PANĂ: <Text style={{ color: '#FFB800' }}>{breakdownRisk}%</Text></Text>
+                                <Text style={styles.weibullLine}>B2B ROI: <Text style={{ color: '#00F0FF' }}>+{b2bRoi} €/AN</Text></Text>
+                                <Text style={styles.weibullLine}>REV. ULEI: {weibullRul.oil} KM</Text>
                             </View>
-                        </TouchableOpacity>
+                        </View>
 
                         {/* ── M6: BOSCH KALMAN & UDS LOG TERMINAL ── */}
-                        <TouchableOpacity
-                            style={[styles.monitorCell, styles.cornerBrackets]}
-                            onPress={() => togglePanel(6)}
-                            activeOpacity={0.8}
-                        >
+                        <View style={styles.monitorCell}>
                             <View style={styles.monHeader}>
                                 <Text style={styles.monTitle}>M6 // UDS TERMINAL</Text>
-                                <Text style={styles.monSub}>{steadyConfidence}% CONF</Text>
+                                <TouchableOpacity
+                                    style={styles.expandHit}
+                                    onPress={() => togglePanel(6)}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Text style={styles.monMaxIcon}>[ ⤢ ]</Text>
+                                </TouchableOpacity>
                             </View>
                             <View style={styles.udsTerminal}>
                                 <Text style={styles.udsLog}>[KALMAN] STEADY: {isSteadyState ? 'TRUE' : 'TRANSIENT'}</Text>
-                                <Text style={styles.udsLog}>[OBD-II] 32 OBSERV. NOMINAL</Text>
-                                <Text style={styles.udsLog}>[CAN-BUS] PACKET 1000ms OK</Text>
+                                <Text style={styles.udsLog}>[CONF] {steadyConfidence}% EXACTITATE</Text>
+                                <Text style={styles.udsLog}>[CAN-BUS] 1000ms OK</Text>
                                 {criticalAlerts.length > 0 ? (
-                                    <Text style={[styles.udsLog, { color: '#FF2A2A' }]}>[WARN] {criticalAlerts[0].title}</Text>
+                                    <Text style={[styles.udsLog, { color: '#FF2A2A' }]} numberOfLines={1}>
+                                        [ALERTA] {criticalAlerts[0].title}
+                                    </Text>
                                 ) : (
-                                    <Text style={[styles.udsLog, { color: '#00FF66' }]}>[SYS] NO FAULT RECORDED</Text>
+                                    <Text style={[styles.udsLog, { color: '#00FF66' }]}>[SISTEM] FĂRĂ ERORI</Text>
                                 )}
                             </View>
-                        </TouchableOpacity>
+                        </View>
                     </View>
                 ) : (
-                    /* ── MONITOR MĂRIT (EXPANDED PANEL VIEW) ── */
+                    /* ── MONITOR MĂRIT CU BUTON CLAR DE ÎNCHIDERE ── */
                     <View style={styles.expandedContainer}>
                         <View style={styles.expandedHeader}>
-                            <Text style={styles.expandedTitle}>MONITOR M{expandedPanel} // EXTENDED TELEMETRY</Text>
+                            <Text style={styles.expandedTitle}>MONITOR M{expandedPanel} // TELEMETRIE DETALIATĂ</Text>
                             <TouchableOpacity
                                 style={styles.closeExpandedBtn}
-                                onPress={() => togglePanel(expandedPanel)}
+                                onPress={() => setExpandedPanel(null)}
+                                activeOpacity={0.8}
                             >
-                                <Text style={styles.closeExpandedText}>[ ✖ CLOSE ]</Text>
+                                <Text style={styles.closeExpandedText}>◀ ÎNAPOI LA TOATE CELE 6 MONITOARE</Text>
                             </TouchableOpacity>
                         </View>
-                        <View style={styles.expandedBody}>
-                            <Text style={styles.expandedBigValue}>
-                                {expandedPanel === 1 && `${speed} KM/H // ${rpm} RPM // GEAR ${gear}`}
-                                {expandedPanel === 2 && `BOOST: ${boost} BAR // MAP: 101 kPa`}
-                                {expandedPanel === 3 && `COOLANT: ${coolantTemp}°C // OIL: ${oilTemp}°C // EGT: ${exhaustTemp}°C`}
-                                {expandedPanel === 4 && `SANKEY MECH EFF: ${sankey.mechanicalPct}% // CHRA: ${chraTemp}°C`}
-                                {expandedPanel === 5 && `MIN RUL: ${minRulKm} KM // RISK: ${breakdownRisk}%`}
-                                {expandedPanel === 6 && `UDS KALMAN FILTER // CONFIDENCE: ${steadyConfidence}%`}
-                            </Text>
-                            <Text style={styles.expandedSubText}>
-                                Algoritm fizic dinamic 1Hz activ · Transmisie securizată Socket.IO · Buffer local sincronizat.
-                            </Text>
-                        </View>
+
+                        <ScrollView style={styles.expandedBody} showsVerticalScrollIndicator={false}>
+                            {expandedPanel === 1 && (
+                                <View style={styles.expandedCard}>
+                                    <Text style={styles.expandedCardTitle}>DINAMICĂ ȘI CUPLU MOTOR</Text>
+                                    <Text style={styles.expandedMetricBig}>{speed} <Text style={styles.expandedMetricSub}>KM/H</Text></Text>
+                                    <Text style={styles.expandedSubText}>TURAȚIE: {rpm} RPM · TREAPTA: {gear} · ACCELERAȚIE: {throttle}%</Text>
+                                    <Text style={styles.expandedSubText}>FORȚĂ G LATERALĂ: {gForceLat} G · LONGITUDINALĂ: {gForceLong} G</Text>
+                                </View>
+                            )}
+
+                            {expandedPanel === 2 && (
+                                <View style={styles.expandedCard}>
+                                    <Text style={styles.expandedCardTitle}>OSCILOSCOP DUAL-CHANNEL PRESIUNI</Text>
+                                    <Text style={styles.expandedMetricBig}>{boost} <Text style={styles.expandedMetricSub}>BAR BOOST</Text></Text>
+                                    <Text style={styles.expandedSubText}>Turație motor corelată: {rpm} RPM · Temperatură antigel: {coolantTemp}°C</Text>
+                                    <Text style={styles.expandedSubText}>Eșantionare continuă la 1Hz cu interpolare la 60 FPS.</Text>
+                                </View>
+                            )}
+
+                            {expandedPanel === 3 && (
+                                <View style={styles.expandedCard}>
+                                    <Text style={styles.expandedCardTitle}>MATRICE TERMICĂ CHIULASĂ & EVACUARE</Text>
+                                    <Text style={styles.expandedMetricBig}>{coolantTemp}°C <Text style={styles.expandedMetricSub}>ANTIGEL</Text></Text>
+                                    <Text style={styles.expandedSubText}>Ulei: {oilTemp}°C · Evacuare EGT: {exhaustTemp}°C · Turbină CHRA: {chraTemp}°C</Text>
+                                    <Text style={styles.expandedSubText}>Tensiune alternator: {batteryVoltage}V · SoH baterie: {batterySoH}%</Text>
+                                </View>
+                            )}
+
+                            {expandedPanel === 4 && (
+                                <View style={styles.expandedCard}>
+                                    <Text style={styles.expandedCardTitle}>BALANȚĂ TERMODINAMICĂ SANKEY</Text>
+                                    <Text style={styles.expandedMetricBig}>{sankey.mechanicalPct}% <Text style={styles.expandedMetricSub}>LUCRU UTIL</Text></Text>
+                                    <Text style={styles.expandedSubText}>Pierderi evacuare: {sankey.exhaustHeatPct}% · Răcire și frecare: {sankey.coolingFrictionPct}%</Text>
+                                    <Text style={styles.expandedSubText}>Timp răcire turbină recomandat la oprire: {chraCooldownSec} secunde.</Text>
+                                </View>
+                            )}
+
+                            {expandedPanel === 5 && (
+                                <View style={styles.expandedCard}>
+                                    <Text style={styles.expandedCardTitle}>FIABILITATE WEIBULL & DURATĂ DE VIAȚĂ (RUL)</Text>
+                                    <Text style={styles.expandedMetricBig}>{minRulKm} <Text style={styles.expandedMetricSub}>KM PÂNĂ LA SERVICE</Text></Text>
+                                    <Text style={styles.expandedSubText}>Risc pană iminentă: {breakdownRisk}% · Economii B2B: +{b2bRoi} €/an</Text>
+                                    <Text style={styles.expandedSubText}>Ulei motor: {weibullRul.oil} km · Filtru DPF: {weibullRul.dpf} km · Frâne: {weibullRul.brakes} km</Text>
+                                </View>
+                            )}
+
+                            {expandedPanel === 6 && (
+                                <View style={styles.expandedCard}>
+                                    <Text style={styles.expandedCardTitle}>LOG UDS BOSCH & FILTRU KALMAN</Text>
+                                    <Text style={styles.expandedMetricBig}>{steadyConfidence}% <Text style={styles.expandedMetricSub}>ÎNCREDERE DIAGNOZĂ</Text></Text>
+                                    <Text style={styles.expandedSubText}>Stare motor: {isSteadyState ? 'STABIL (STEADY STATE)' : 'TRANZITORIU (TRANSIENT)'}</Text>
+                                    <Text style={styles.expandedSubText}>Filtru de debouncing Bosch la nivel industrial aplicat pe toți cei 32 de parametri.</Text>
+                                </View>
+                            )}
+                        </ScrollView>
                     </View>
                 )}
             </View>
@@ -411,7 +482,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 12,
-        paddingVertical: 8,
+        paddingBottom: 8,
         borderBottomWidth: 1,
         borderBottomColor: '#16263D',
     },
@@ -433,6 +504,12 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         color: '#030508',
     },
+    liveDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginRight: 6,
+    },
     modelText: {
         fontFamily: MONO,
         fontSize: 10,
@@ -445,44 +522,62 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 6,
     },
-    smallBtn: {
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-        borderRadius: 3,
+    actionBtn: {
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        borderRadius: 4,
         borderWidth: 1,
         borderColor: '#1E3654',
         backgroundColor: '#0A1424',
     },
-    smallBtnText: {
+    actionBtnText: {
         fontFamily: MONO,
-        fontSize: 8,
+        fontSize: 9,
         color: '#8CA0BA',
         fontWeight: '700',
     },
-    launcherBtn: {
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-        borderRadius: 3,
-        backgroundColor: '#00F0FF',
+    stylePickerBtn: {
+        backgroundColor: '#FFB800',
+        borderColor: '#FFB800',
     },
-    launcherText: {
+    stylePickerText: {
         fontFamily: MONO,
-        fontSize: 8,
+        fontSize: 9,
         color: '#030508',
         fontWeight: '900',
     },
     shiftLightRow: {
         flexDirection: 'row',
+        alignItems: 'center',
         paddingHorizontal: 12,
         paddingVertical: 6,
-        gap: 4,
+        gap: 8,
         backgroundColor: '#060B12',
+    },
+    sessionModePill: {
+        backgroundColor: '#0A1628',
+        borderWidth: 1,
+        borderColor: '#FFB800',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 2,
+    },
+    sessionModeText: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '800',
+        color: '#FFB800',
+    },
+    ledsTrack: {
+        flex: 1,
+        flexDirection: 'row',
+        gap: 3,
     },
     shiftLed: {
         flex: 1,
-        height: 6,
+        height: 5,
         borderRadius: 2,
-        borderWidth: 1,
+        borderWidth: 0.5,
     },
     viewportLockedContent: {
         flex: 1,
@@ -505,9 +600,6 @@ const styles = StyleSheet.create({
         padding: 6,
         justifyContent: 'space-between',
     },
-    cornerBrackets: {
-        position: 'relative',
-    },
     monHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -523,18 +615,15 @@ const styles = StyleSheet.create({
         color: '#8CA0BA',
         letterSpacing: 0.5,
     },
-    monSub: {
-        fontFamily: MONO,
-        fontSize: 8,
-        fontWeight: '700',
-        color: '#00F0FF',
-        fontVariant: ['tabular-nums'],
+    expandHit: {
+        paddingHorizontal: 4,
+        paddingVertical: 2,
     },
     monMaxIcon: {
         fontFamily: MONO,
-        fontSize: 9,
+        fontSize: 10,
         color: '#00F0FF',
-        fontWeight: '800',
+        fontWeight: '900',
     },
     m1Body: {
         flexDirection: 'row',
@@ -553,13 +642,13 @@ const styles = StyleSheet.create({
     },
     gearNumber: {
         fontFamily: MONO,
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: '900',
         color: '#00FF66',
     },
     gearLabel: {
         fontFamily: MONO,
-        fontSize: 7,
+        fontSize: 6,
         color: '#8CA0BA',
         fontWeight: '700',
     },
@@ -568,7 +657,7 @@ const styles = StyleSheet.create({
     },
     speedNumber: {
         fontFamily: MONO,
-        fontSize: 32,
+        fontSize: 28,
         fontWeight: '900',
         color: '#FFFFFF',
         fontVariant: ['tabular-nums'],
@@ -594,6 +683,24 @@ const styles = StyleSheet.create({
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    scopeMetaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+        marginTop: 2,
+    },
+    scopeLegend1: {
+        fontFamily: MONO,
+        fontSize: 6,
+        color: '#00F0FF',
+        fontWeight: '700',
+    },
+    scopeLegend2: {
+        fontFamily: MONO,
+        fontSize: 6,
+        color: '#FFB800',
+        fontWeight: '700',
     },
     heatmapGrid: {
         flexDirection: 'row',
@@ -628,10 +735,10 @@ const styles = StyleSheet.create({
     },
     sankeyBarFrame: {
         flexDirection: 'row',
-        height: 10,
+        height: 8,
         borderRadius: 2,
         overflow: 'hidden',
-        marginBottom: 6,
+        marginBottom: 4,
     },
     sankeySeg: {
         height: '100%',
@@ -642,7 +749,7 @@ const styles = StyleSheet.create({
     },
     sankeyLabel: {
         fontFamily: MONO,
-        fontSize: 7,
+        fontSize: 6,
         color: '#8CA0BA',
         fontVariant: ['tabular-nums'],
     },
@@ -651,7 +758,13 @@ const styles = StyleSheet.create({
         fontSize: 7,
         color: '#FF2A2A',
         fontWeight: '800',
-        marginTop: 4,
+        marginTop: 2,
+    },
+    chraOk: {
+        fontFamily: MONO,
+        fontSize: 6,
+        color: '#00FF66',
+        marginTop: 2,
     },
     m5Body: {
         flex: 1,
@@ -660,7 +773,7 @@ const styles = StyleSheet.create({
     },
     weibullLine: {
         fontFamily: MONO,
-        fontSize: 8,
+        fontSize: 7,
         color: '#8CA0BA',
         fontWeight: '600',
         fontVariant: ['tabular-nums'],
@@ -675,7 +788,7 @@ const styles = StyleSheet.create({
     },
     udsLog: {
         fontFamily: MONO,
-        fontSize: 7,
+        fontSize: 6,
         color: '#64748B',
         fontVariant: ['tabular-nums'],
     },
@@ -688,52 +801,67 @@ const styles = StyleSheet.create({
         padding: 12,
     },
     expandedHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        marginBottom: 12,
         borderBottomWidth: 1,
         borderBottomColor: '#16263D',
         paddingBottom: 8,
-        marginBottom: 12,
     },
     expandedTitle: {
         fontFamily: MONO,
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '900',
         color: '#00F0FF',
         letterSpacing: 1,
+        marginBottom: 8,
     },
     closeExpandedBtn: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 3,
-        backgroundColor: '#FF2A2A22',
-        borderWidth: 1,
-        borderColor: '#FF2A2A',
+        backgroundColor: '#00F0FF',
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 4,
+        alignItems: 'center',
     },
     closeExpandedText: {
         fontFamily: MONO,
         fontSize: 10,
-        color: '#FF2A2A',
-        fontWeight: '800',
+        color: '#030508',
+        fontWeight: '900',
     },
     expandedBody: {
         flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
     },
-    expandedBigValue: {
+    expandedCard: {
+        backgroundColor: '#0A1424',
+        borderRadius: 6,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#1E3654',
+    },
+    expandedCardTitle: {
         fontFamily: MONO,
-        fontSize: 20,
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#8CA0BA',
+        marginBottom: 8,
+    },
+    expandedMetricBig: {
+        fontFamily: MONO,
+        fontSize: 36,
         fontWeight: '900',
         color: '#FFFFFF',
-        textAlign: 'center',
-        marginBottom: 12,
+        fontVariant: ['tabular-nums'],
+        marginBottom: 8,
+    },
+    expandedMetricSub: {
+        fontSize: 14,
+        color: '#00F0FF',
+        fontWeight: '700',
     },
     expandedSubText: {
         fontFamily: MONO,
-        fontSize: 11,
-        color: '#8CA0BA',
-        textAlign: 'center',
+        fontSize: 10,
+        color: '#94A3B8',
+        marginTop: 6,
+        lineHeight: 16,
     },
 });

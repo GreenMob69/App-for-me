@@ -8,41 +8,72 @@ import {
     StatusBar,
     Dimensions,
     PanResponder,
-    Animated,
 } from 'react-native';
-import { GLView } from 'expo-gl';
-import * as THREE from 'three';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, {
+    Polygon,
+    Polyline,
+    Line,
+    Circle,
+    Defs,
+    LinearGradient,
+    Stop,
+    G,
+    Rect,
+    Path,
+} from 'react-native-svg';
 import { useNormalizedTelemetry } from '../../hooks/useNormalizedTelemetry';
 import { useVehicle } from '../../context/VehicleContext';
 import { useUiParadigm } from '../../context/AppContext';
-import { hapticTap, hapticCriticalWarning } from '../../services/hapticFeedback';
+import { hapticTap } from '../../services/hapticFeedback';
 import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 const theme = PARADIGM_THEMES[PARADIGM_KEYS.SPATIAL_CANVAS];
 
+// ─── Motor Matematic 3D Tridimensional ──────────────────────────────────────
+function project3D(x, y, z, rotX, rotY, zoom = 1.0, centerX = SCREEN_WIDTH / 2, centerY = 190) {
+    // Rotație pe axa Y (orizontală)
+    const cosY = Math.cos(rotY);
+    const sinY = Math.sin(rotY);
+    const x1 = x * cosY - z * sinY;
+    const z1 = x * sinY + z * cosY;
+
+    // Rotație pe axa X (verticală/înclinare)
+    const cosX = Math.cos(rotX);
+    const sinX = Math.sin(rotX);
+    const y2 = y * cosX - z1 * sinX;
+    const z2 = y * sinX + z1 * cosX;
+
+    // Proiecție perspectivă
+    const fov = 340 * zoom;
+    const distance = 4.2;
+    const zProj = z2 + distance;
+    const safeZ = zProj > 0.4 ? zProj : 0.4;
+    const scale = fov / safeZ;
+
+    return {
+        x: centerX + x1 * scale,
+        y: centerY - y2 * scale,
+        depth: z2,
+    };
+}
+
 export default function SpatialCanvasParadigm() {
+    const insets = useSafeAreaInsets();
     const telemetry = useNormalizedTelemetry();
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
 
     // 4 Zone de Cameră: 'OVERVIEW' | 'ENGINE_BAY' | 'CHASSIS_BRAKES' | 'HIGHWAY_CHASE'
     const [cameraZone, setCameraZone] = useState('OVERVIEW');
-
-    // Sertar holografic activ (null | 'AI' | 'TRIP' | 'BATTERY')
     const [activeDrawer, setActiveDrawer] = useState(null);
 
-    // Stare rotație 3D controlată prin gesturi tactile
-    const rotationX = useRef(0.3);
-    const rotationY = useRef(0.6);
-    const targetCamPos = useRef({ x: 3.5, y: 2.2, z: 4.5 });
-
-    // Referințe noduri 3D pentru rotație & shader frâne
-    const wheelsRef = useRef([]);
-    const brakeDiscsRef = useRef([]);
-    const carBodyRef = useRef(null);
-    const reqAnimRef = useRef(null);
+    // Unghiuri de rotație 3D
+    const [rotY, setRotY] = useState(0.55);
+    const [rotX, setRotX] = useState(0.35);
+    const [wheelAngle, setWheelAngle] = useState(0);
 
     const {
         speed,
@@ -71,303 +102,350 @@ export default function SpatialCanvasParadigm() {
         isConnected,
     } = telemetry;
 
-    // PanResponder pentru rotație tactilă 360° (Orbit Control)
-    const panResponder = useRef(
-        PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: () => true,
-            onPanResponderMove: (_, gestureState) => {
-                rotationY.current += gestureState.vx * 0.04;
-                rotationX.current = Math.max(0.05, Math.min(1.2, rotationX.current - gestureState.vy * 0.02));
-            },
-        })
-    ).current;
+    // Buclă de rotație a roților la deplasare (60 FPS sincronizat)
+    useEffect(() => {
+        if (speed > 0) {
+            const interval = setInterval(() => {
+                setWheelAngle((prev) => (prev + (speed / 12)) % 360);
+            }, 33);
+            return () => clearInterval(interval);
+        }
+    }, [speed]);
 
-    // Actualizare țintă cameră la schimbarea zonei
+    // Comutare perspective cameră
     useEffect(() => {
         if (cameraZone === 'OVERVIEW') {
-            targetCamPos.current = { x: 3.2, y: 1.8, z: 4.2 };
+            setRotY(0.55);
+            setRotX(0.35);
         } else if (cameraZone === 'ENGINE_BAY') {
-            targetCamPos.current = { x: 0.2, y: 1.4, z: 2.0 };
+            setRotY(0.12);
+            setRotX(0.52);
         } else if (cameraZone === 'CHASSIS_BRAKES') {
-            targetCamPos.current = { x: 2.2, y: 0.6, z: 1.8 };
+            setRotY(1.45);
+            setRotX(0.20);
         } else if (cameraZone === 'HIGHWAY_CHASE') {
-            targetCamPos.current = { x: 0.0, y: 1.2, z: -4.5 };
+            setRotY(3.14);
+            setRotX(0.22);
         }
     }, [cameraZone]);
 
-    // Inițializare Scenă 3D WebGL (Three.js peste expo-gl)
-    const onContextCreate = async (gl) => {
-        try {
-            const { drawingBufferWidth: width, drawingBufferHeight: height } = gl;
+    // PanResponder pentru rotire tactilă 360° fluidă
+    const panResponder = useMemo(
+        () =>
+            PanResponder.create({
+                onStartShouldSetPanResponder: () => true,
+                onMoveShouldSetPanResponder: () => true,
+                onPanResponderMove: (_, gestureState) => {
+                    setRotY((prev) => prev + gestureState.vx * 0.008);
+                    setRotX((prev) => Math.max(0.08, Math.min(1.2, prev - gestureState.vy * 0.006)));
+                },
+            }),
+        []
+    );
 
-            const renderer = new THREE.WebGLRenderer({
-                gl,
-                alpha: true,
-                antialias: true,
-            });
-            renderer.setSize(width, height);
-            renderer.setClearColor(0x04070d, 1);
+    // ── GEOMETRIE 3D DIGITAL TWIN (Stil Tesla Model 3 / Cyberpunk) ──
+    // Puncte esențiale caroserie (x: lățime, y: înălțime, z: lungime)
+    const carMesh3D = useMemo(() => {
+        const p = (x, y, z) => project3D(x, y, z, rotX, rotY);
 
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-            camera.position.set(3.5, 2.2, 4.5);
-            camera.lookAt(0, 0.4, 0);
+        // Capotă & Bot
+        const noseL = p(-0.7, 0.12, 1.7);
+        const noseR = p(0.7, 0.12, 1.7);
+        const hoodL = p(-0.65, 0.38, 0.9);
+        const hoodR = p(0.65, 0.38, 0.9);
 
-            // Lumini fotorealiste
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
-            scene.add(ambientLight);
+        // Cabină & Plafon
+        const roofFrontL = p(-0.52, 0.72, 0.35);
+        const roofFrontR = p(0.52, 0.72, 0.35);
+        const roofRearL = p(-0.50, 0.68, -0.65);
+        const roofRearR = p(0.50, 0.68, -0.65);
 
-            const mainLight = new THREE.DirectionalLight(0x00f0ff, 2.0);
-            mainLight.position.set(5, 8, 5);
-            scene.add(mainLight);
+        // Spate & Portbagaj
+        const trunkL = p(-0.62, 0.40, -1.35);
+        const trunkR = p(0.62, 0.40, -1.35);
+        const tailL = p(-0.68, 0.22, -1.75);
+        const tailR = p(0.68, 0.22, -1.75);
 
-            const rimLight = new THREE.DirectionalLight(0xff8800, 1.2);
-            rimLight.position.set(-5, 4, -5);
-            scene.add(rimLight);
+        // Praguri inferioare
+        const sillFrontL = p(-0.72, -0.05, 0.9);
+        const sillFrontR = p(0.72, -0.05, 0.9);
+        const sillRearL = p(-0.72, -0.05, -1.0);
+        const sillRearR = p(0.72, -0.05, -1.0);
 
-            // Grilă podea holografică
-            const gridHelper = new THREE.GridHelper(10, 20, 0x00f0ff, 0x112233);
-            gridHelper.position.y = -0.01;
-            scene.add(gridHelper);
+        // Poziții 4 Roți
+        const steerAngle = (gForceLat || 0) * 0.35;
+        const wheelFL = p(-0.78, -0.02, 1.05);
+        const wheelFR = p(0.78, -0.02, 1.05);
+        const wheelRL = p(-0.78, -0.02, -1.05);
+        const wheelRR = p(0.78, -0.02, -1.05);
 
-            // ── CONSTRUCȚIE MODEL 3D DIGITAL TWIN (Tesla Style) ──
-            const carGroup = new THREE.Group();
-
-            // 1. Caroserie metalică (PBR Metallic Paint)
-            const bodyMat = new THREE.MeshStandardMaterial({
-                color: 0x0a1424,
-                metalness: 0.85,
-                roughness: 0.2,
-            });
-
-            // Șasiu inferior
-            const chassisGeo = new THREE.BoxGeometry(1.6, 0.35, 3.6);
-            const chassisMesh = new THREE.Mesh(chassisGeo, bodyMat);
-            chassisMesh.position.y = 0.4;
-            carGroup.add(chassisMesh);
-
-            // Cabină și acoperiș aerodinamic
-            const cabinGeo = new THREE.BoxGeometry(1.3, 0.4, 1.8);
-            const cabinMat = new THREE.MeshStandardMaterial({
-                color: 0x050d18,
-                metalness: 0.9,
-                roughness: 0.15,
-            });
-            const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
-            cabinMesh.position.set(0, 0.72, -0.2);
-            carGroup.add(cabinMesh);
-
-            // Sticlă parbriz și lunetă
-            const glassMat = new THREE.MeshStandardMaterial({
-                color: 0x00f0ff,
-                transparent: true,
-                opacity: 0.35,
-                roughness: 0.05,
-            });
-            const windshieldGeo = new THREE.PlaneGeometry(1.2, 0.5);
-            const windshield = new THREE.Mesh(windshieldGeo, glassMat);
-            windshield.rotation.x = -Math.PI / 4;
-            windshield.position.set(0, 0.7, 0.8);
-            carGroup.add(windshield);
-
-            // Faruri LED Neon
-            const headlightMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
-            const hlGeo = new THREE.BoxGeometry(0.25, 0.08, 0.1);
-            const hlLeft = new THREE.Mesh(hlGeo, headlightMat);
-            hlLeft.position.set(-0.6, 0.45, 1.8);
-            const hlRight = new THREE.Mesh(hlGeo, headlightMat);
-            hlRight.position.set(0.6, 0.45, 1.8);
-            carGroup.add(hlLeft);
-            carGroup.add(hlRight);
-
-            // Stopuri LED Spate
-            const tailMat = new THREE.MeshBasicMaterial({ color: 0xff1122 });
-            const tlGeo = new THREE.BoxGeometry(1.4, 0.06, 0.08);
-            const tailStrip = new THREE.Mesh(tlGeo, tailMat);
-            tailStrip.position.set(0, 0.5, -1.8);
-            carGroup.add(tailStrip);
-
-            // 2. Cele 4 Roți Tridimensionale & Discuri de Frână
-            const wheelPositions = [
-                { x: -0.85, y: 0.3, z: 1.1, isFront: true },   // FL
-                { x: 0.85, y: 0.3, z: 1.1, isFront: true },    // FR
-                { x: -0.85, y: 0.3, z: -1.1, isFront: false }, // RL
-                { x: 0.85, y: 0.3, z: -1.1, isFront: false },  // RR
-            ];
-
-            const wheels = [];
-            const brakeDiscs = [];
-
-            wheelPositions.forEach((pos) => {
-                const wheelHub = new THREE.Group();
-                wheelHub.position.set(pos.x, pos.y, pos.z);
-
-                // Anvelopă cauciuc
-                const tireGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.22, 16);
-                const tireMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-                const tireMesh = new THREE.Mesh(tireGeo, tireMat);
-                tireMesh.rotation.z = Math.PI / 2;
-                wheelHub.add(tireMesh);
-
-                // Jantă aliaj
-                const rimGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.24, 12);
-                const rimMat = new THREE.MeshStandardMaterial({ color: 0x8899aa, metalness: 0.9, roughness: 0.2 });
-                const rimMesh = new THREE.Mesh(rimGeo, rimMat);
-                rimMesh.rotation.z = Math.PI / 2;
-                wheelHub.add(rimMesh);
-
-                // Disc frână cu shader termic emissiv
-                const discGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.04, 12);
-                const discMat = new THREE.MeshStandardMaterial({
-                    color: 0x444444,
-                    emissive: 0x000000,
-                    emissiveIntensity: 0,
-                    metalness: 0.8,
-                });
-                const discMesh = new THREE.Mesh(discGeo, discMat);
-                discMesh.rotation.z = Math.PI / 2;
-                discMesh.position.x = pos.x > 0 ? -0.1 : 0.1;
-                wheelHub.add(discMesh);
-
-                brakeDiscs.push(discMat);
-                wheels.push(wheelHub);
-                carGroup.add(wheelHub);
-            });
-
-            wheelsRef.current = wheels;
-            brakeDiscsRef.current = brakeDiscs;
-            carBodyRef.current = carGroup;
-            scene.add(carGroup);
-
-            // Buclă de Randare la 60 FPS
-            let currentCamPos = { ...camera.position };
-
-            const render = () => {
-                reqAnimRef.current = requestAnimationFrame(render);
-
-                // Interpolare lină a camerei
-                currentCamPos.x += (targetCamPos.current.x - currentCamPos.x) * 0.05;
-                currentCamPos.y += (targetCamPos.current.y - currentCamPos.y) * 0.05;
-                currentCamPos.z += (targetCamPos.current.z - currentCamPos.z) * 0.05;
-
-                // Aplicare rotație tactilă de orbită
-                const radius = Math.sqrt(currentCamPos.x * currentCamPos.x + currentCamPos.z * currentCamPos.z);
-                camera.position.x = Math.sin(rotationY.current) * radius;
-                camera.position.z = Math.cos(rotationY.current) * radius;
-                camera.position.y = currentCamPos.y + (rotationX.current - 0.5) * 2;
-                camera.lookAt(0, 0.4, 0);
-
-                // Rotație roți conform vitezei reale (km/h -> rad/s)
-                const wheelRotationSpeed = (telemetry.speed / 3.6) * 0.05;
-                wheelsRef.current.forEach((wheel, idx) => {
-                    wheel.children.forEach(part => {
-                        part.rotation.x += wheelRotationSpeed;
-                    });
-                    // Unghi virare roți față la viraj
-                    if (idx < 2) {
-                        wheel.rotation.y = telemetry.gForceLat * 0.4;
-                    }
-                });
-
-                // Căldură discuri de frână (Emissive Glow la peste 120°C)
-                const temp = telemetry.brakeFluidTemp || 80;
-                const glowIntensity = Math.max(0, Math.min(1.0, (temp - 90) / 100));
-                brakeDiscsRef.current.forEach(mat => {
-                    mat.emissive.setHex(temp > 150 ? 0xff2200 : 0xffaa00);
-                    mat.emissiveIntensity = glowIntensity * 1.5;
-                });
-
-                renderer.render(scene, camera);
-                gl.endFrameEXP();
-            };
-
-            render();
-        } catch (err) {
-            console.error('Eroare inițializare Three.js / GLView:', err);
-        }
-    };
-
-    // Cleanup la unmount
-    useEffect(() => {
-        return () => {
-            if (reqAnimRef.current) {
-                cancelAnimationFrame(reqAnimRef.current);
-            }
+        return {
+            noseL, noseR, hoodL, hoodR,
+            roofFrontL, roofFrontR, roofRearL, roofRearR,
+            trunkL, trunkR, tailL, tailR,
+            sillFrontL, sillFrontR, sillRearL, sillRearR,
+            wheels: [
+                { pos: wheelFL, label: 'FL', isFront: true, steer: steerAngle },
+                { pos: wheelFR, label: 'FR', isFront: true, steer: steerAngle },
+                { pos: wheelRL, label: 'RL', isFront: false, steer: 0 },
+                { pos: wheelRR, label: 'RR', isFront: false, steer: 0 },
+            ],
         };
-    }, []);
+    }, [rotX, rotY, gForceLat]);
 
-    const selectZone = (zone) => {
-        hapticTap();
-        setCameraZone(zone);
-    };
+    // Culoare dinamică frâne în funcție de temperatură
+    const brakeColor = brakeFluidTemp > 140 ? '#FF2A2A' : brakeFluidTemp > 105 ? '#FFB800' : '#00F0FF';
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
             <StatusBar barStyle="light-content" backgroundColor="#04070D" />
 
-            {/* ── 1. Top HUD Bar ── */}
+            {/* ── 1. Antet Spațial cu Butoane Protejate la Atingere ── */}
             <View style={styles.topHudBar}>
                 <View style={styles.hudBrand}>
                     <View style={styles.holoBadge}>
-                        <Text style={styles.holoBadgeText}>SPATIAL 3D DIGITAL TWIN</Text>
+                        <Text style={styles.holoBadgeText}>3D DIGITAL TWIN</Text>
                     </View>
                     <View style={[styles.netDot, { backgroundColor: isConnected ? '#00FF66' : '#FF2A2A' }]} />
                     <Text style={styles.vinHud} numberOfLines={1}>
-                        {activeVehicle?.model || 'TESLA / AUDI PBR TWIN'}
+                        {activeVehicle?.model || 'ACURA CDX // AUDI 3D'}
                     </Text>
                 </View>
 
-                {/* Butoane acțiune */}
+                {/* Acțiuni de Top cu Ținte Mari de Atingere */}
                 <View style={styles.hudActions}>
                     <TouchableOpacity
-                        style={[styles.smallBtn, { borderColor: '#00F0FF', backgroundColor: '#00F0FF14' }]}
+                        style={[styles.hudActionBtn, { borderColor: '#00F0FF', backgroundColor: '#00F0FF1A' }]}
                         onPress={() => {
                             hapticTap();
                             openSimulatorModal();
                         }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={[styles.smallBtnText, { color: '#00F0FF' }]}>🎮 DEMO</Text>
+                        <Text style={[styles.hudActionBtnText, { color: '#00F0FF' }]}>🎮 DEMO</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={styles.smallBtn}
+                        style={styles.hudActionBtn}
                         onPress={() => {
                             hapticTap();
                             setUiParadigm('CLASSIC_V2');
                         }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={styles.smallBtnText}>⮌ V2</Text>
+                        <Text style={styles.hudActionBtnText}>⮌ CLASIC</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={styles.launcherBtn}
+                        style={[styles.hudActionBtn, { backgroundColor: '#00F0FF', borderColor: '#00F0FF' }]}
                         onPress={() => {
                             hapticTap();
                             openExperiencePicker();
                         }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={styles.launcherText}>[ 🎨 STIL ]</Text>
+                        <Text style={[styles.hudActionBtnText, { color: '#04070D', fontWeight: '900' }]}>
+                            🎨 STIL
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* ── 2. Zona Centrală 3D WebGL (Direct GPU Rendering) ── */}
+            {/* ── 2. Zona Centrală: Canvas Tridimensional Interactiv ── */}
             <View style={styles.canvasContainer} {...panResponder.panHandlers}>
-                <GLView style={styles.glSurface} onContextCreate={onContextCreate} />
+                <Svg width={SCREEN_WIDTH} height={380} viewBox={`0 0 ${SCREEN_WIDTH} 380`}>
+                    <Defs>
+                        <LinearGradient id="carBodyGrad" x1="0" y1="0" x2="1" y2="1">
+                            <Stop offset="0" stopColor="#0B1A2E" stopOpacity="0.95" />
+                            <Stop offset="0.5" stopColor="#07101E" stopOpacity="0.9" />
+                            <Stop offset="1" stopColor="#03070E" stopOpacity="0.95" />
+                        </LinearGradient>
+                        <LinearGradient id="glassGrad" x1="0" y1="0" x2="0" y2="1">
+                            <Stop offset="0" stopColor="#00F0FF" stopOpacity="0.45" />
+                            <Stop offset="1" stopColor="#004466" stopOpacity="0.2" />
+                        </LinearGradient>
+                        <LinearGradient id="headlightBeam" x1="0" y1="0" x2="0" y2="1">
+                            <Stop offset="0" stopColor="#00F0FF" stopOpacity="0.3" />
+                            <Stop offset="1" stopColor="#00F0FF" stopOpacity="0.0" />
+                        </LinearGradient>
+                    </Defs>
 
-                {/* HUD Plutitor Suprapus cu Vitezometru Holografic */}
+                    {/* Grilă Perspective Sol */}
+                    {[-1.8, -0.9, 0, 0.9, 1.8].map((lineX, i) => {
+                        const pStart = project3D(lineX, -0.06, -2.5, rotX, rotY);
+                        const pEnd = project3D(lineX, -0.06, 2.8, rotX, rotY);
+                        return (
+                            <Line
+                                key={`grid-${i}`}
+                                x1={pStart.x}
+                                y1={pStart.y}
+                                x2={pEnd.x}
+                                y2={pEnd.y}
+                                stroke="rgba(0, 240, 255, 0.12)"
+                                strokeWidth="1"
+                                strokeDasharray="3, 3"
+                            />
+                        );
+                    })}
+
+                    {/* Fascicul Faruri 3D Proiectat în Față */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.noseL.x},${carMesh3D.noseL.y}
+                            ${carMesh3D.noseR.x},${carMesh3D.noseR.y}
+                            ${project3D(1.6, -0.05, 3.4, rotX, rotY).x},${project3D(1.6, -0.05, 3.4, rotX, rotY).y}
+                            ${project3D(-1.6, -0.05, 3.4, rotX, rotY).x},${project3D(-1.6, -0.05, 3.4, rotX, rotY).y}
+                        `}
+                        fill="url(#headlightBeam)"
+                    />
+
+                    {/* Fațete Poligonale Caroserie (PBR Shading) */}
+                    {/* Capotă */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.noseL.x},${carMesh3D.noseL.y}
+                            ${carMesh3D.noseR.x},${carMesh3D.noseR.y}
+                            ${carMesh3D.hoodR.x},${carMesh3D.hoodR.y}
+                            ${carMesh3D.hoodL.x},${carMesh3D.hoodL.y}
+                        `}
+                        fill="url(#carBodyGrad)"
+                        stroke="#00F0FF"
+                        strokeWidth="1.2"
+                    />
+
+                    {/* Parbriz Sticlă */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.hoodL.x},${carMesh3D.hoodL.y}
+                            ${carMesh3D.hoodR.x},${carMesh3D.hoodR.y}
+                            ${carMesh3D.roofFrontR.x},${carMesh3D.roofFrontR.y}
+                            ${carMesh3D.roofFrontL.x},${carMesh3D.roofFrontL.y}
+                        `}
+                        fill="url(#glassGrad)"
+                        stroke="#00F0FF"
+                        strokeWidth="1.5"
+                    />
+
+                    {/* Plafon Aerodinamic */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.roofFrontL.x},${carMesh3D.roofFrontL.y}
+                            ${carMesh3D.roofFrontR.x},${carMesh3D.roofFrontR.y}
+                            ${carMesh3D.roofRearR.x},${carMesh3D.roofRearR.y}
+                            ${carMesh3D.roofRearL.x},${carMesh3D.roofRearL.y}
+                        `}
+                        fill="url(#carBodyGrad)"
+                        stroke="#00F0FF"
+                        strokeWidth="1"
+                    />
+
+                    {/* Lunetă & Portbagaj */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.roofRearL.x},${carMesh3D.roofRearL.y}
+                            ${carMesh3D.roofRearR.x},${carMesh3D.roofRearR.y}
+                            ${carMesh3D.trunkR.x},${carMesh3D.trunkR.y}
+                            ${carMesh3D.trunkL.x},${carMesh3D.trunkL.y}
+                        `}
+                        fill="url(#glassGrad)"
+                        stroke="#00F0FF"
+                        strokeWidth="1.2"
+                    />
+
+                    {/* Spate & Stopuri LED */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.trunkL.x},${carMesh3D.trunkL.y}
+                            ${carMesh3D.trunkR.x},${carMesh3D.trunkR.y}
+                            ${carMesh3D.tailR.x},${carMesh3D.tailR.y}
+                            ${carMesh3D.tailL.x},${carMesh3D.tailL.y}
+                        `}
+                        fill="#0B1524"
+                        stroke="#FF2A2A"
+                        strokeWidth="2"
+                    />
+
+                    {/* Linii Laterale Profil */}
+                    <Line
+                        x1={carMesh3D.noseL.x} y1={carMesh3D.noseL.y}
+                        x2={carMesh3D.sillFrontL.x} y2={carMesh3D.sillFrontL.y}
+                        stroke="#00F0FF" strokeWidth="1"
+                    />
+                    <Line
+                        x1={carMesh3D.noseR.x} y1={carMesh3D.noseR.y}
+                        x2={carMesh3D.sillFrontR.x} y2={carMesh3D.sillFrontR.y}
+                        stroke="#00F0FF" strokeWidth="1"
+                    />
+                    <Line
+                        x1={carMesh3D.sillFrontL.x} y1={carMesh3D.sillFrontL.y}
+                        x2={carMesh3D.sillRearL.x} y2={carMesh3D.sillRearL.y}
+                        stroke="#00F0FF" strokeWidth="1"
+                    />
+                    <Line
+                        x1={carMesh3D.sillFrontR.x} y1={carMesh3D.sillFrontR.y}
+                        x2={carMesh3D.sillRearR.x} y2={carMesh3D.sillRearR.y}
+                        stroke="#00F0FF" strokeWidth="1"
+                    />
+
+                    {/* 4 Roți 3D Active cu Spițe și Discuri de Frână Incandescente */}
+                    {carMesh3D.wheels.map((wh, idx) => {
+                        const spokeRad = (wheelAngle * Math.PI) / 180;
+                        const r = 16;
+                        return (
+                            <G key={`wheel-${idx}`}>
+                                {/* Anvelopă */}
+                                <Circle
+                                    cx={wh.pos.x}
+                                    cy={wh.pos.y}
+                                    r={r}
+                                    fill="#060B12"
+                                    stroke="#1E293B"
+                                    strokeWidth="3"
+                                />
+                                {/* Disc de Frână Termic Activ */}
+                                <Circle
+                                    cx={wh.pos.x}
+                                    cy={wh.pos.y}
+                                    r={r * 0.65}
+                                    fill="#0C1524"
+                                    stroke={brakeColor}
+                                    strokeWidth="2"
+                                    strokeDasharray="8, 4"
+                                />
+                                {/* Spițe Roată Rotative */}
+                                <Line
+                                    x1={wh.pos.x - Math.cos(spokeRad) * (r * 0.7)}
+                                    y1={wh.pos.y - Math.sin(spokeRad) * (r * 0.7)}
+                                    x2={wh.pos.x + Math.cos(spokeRad) * (r * 0.7)}
+                                    y2={wh.pos.y + Math.sin(spokeRad) * (r * 0.7)}
+                                    stroke="#8CA0BA"
+                                    strokeWidth="1.8"
+                                />
+                                <Line
+                                    x1={wh.pos.x - Math.sin(spokeRad) * (r * 0.7)}
+                                    y1={wh.pos.y + Math.cos(spokeRad) * (r * 0.7)}
+                                    x2={wh.pos.x + Math.sin(spokeRad) * (r * 0.7)}
+                                    y2={wh.pos.y - Math.cos(spokeRad) * (r * 0.7)}
+                                    stroke="#8CA0BA"
+                                    strokeWidth="1.8"
+                                />
+                            </G>
+                        );
+                    })}
+                </Svg>
+
+                {/* HUD Plutitor Viteză */}
                 <View style={styles.floatingSpeedHud} pointerEvents="none">
                     <Text style={styles.floatingSpeedNumber}>{speed}</Text>
                     <View style={styles.floatingSpeedMeta}>
                         <Text style={styles.floatingSpeedUnit}>KM/H</Text>
-                        <Text style={styles.floatingRpmMeta}>{rpm} RPM · TREAPTA {gear}</Text>
+                        <Text style={styles.floatingRpmMeta}>{rpm} RPM · TR. {gear}</Text>
                     </View>
                 </View>
 
-                {/* Martor 3D Animație Aprindere Cilindri (1-2-4-5-3) */}
+                {/* Secvență Aprindere 1-2-4-5-3 */}
                 <View style={styles.firingSequenceBadge} pointerEvents="none">
-                    <Text style={styles.firingBadgeLabel}>SECVEȚĂ APRINDERE: </Text>
+                    <Text style={styles.firingBadgeLabel}>APRINDERE: </Text>
                     {[1, 2, 4, 5, 3].map((cyl) => (
                         <View
                             key={cyl}
@@ -383,9 +461,8 @@ export default function SpatialCanvasParadigm() {
                     ))}
                 </View>
 
-                {/* Hint tactil de rotație */}
                 <View style={styles.touchHintContainer} pointerEvents="none">
-                    <Text style={styles.touchHintText}>⟲ GLISEAZĂ PENTRU ROTAȚIE 360° // PINCH PENTRU ZOOM</Text>
+                    <Text style={styles.touchHintText}>⟲ ATINGE ȘI GLISEAZĂ PENTRU ROTAȚIE 360° SPAȚIALĂ</Text>
                 </View>
             </View>
 
@@ -403,7 +480,10 @@ export default function SpatialCanvasParadigm() {
                             styles.cameraPill,
                             cameraZone === cam.id && styles.cameraPillActive,
                         ]}
-                        onPress={() => selectZone(cam.id)}
+                        onPress={() => {
+                            hapticTap();
+                            setCameraZone(cam.id);
+                        }}
                     >
                         <Text
                             style={[
@@ -436,7 +516,7 @@ export default function SpatialCanvasParadigm() {
                         setActiveDrawer(activeDrawer === 'THERMAL' ? null : 'THERMAL');
                     }}
                 >
-                    <Text style={styles.drawerBtnText}>🔥 TERMICĂ FRÂNE</Text>
+                    <Text style={styles.drawerBtnText}>🔥 FRÂNE & MIEZ</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -446,7 +526,7 @@ export default function SpatialCanvasParadigm() {
                         setActiveDrawer(activeDrawer === 'RUL' ? null : 'RUL');
                     }}
                 >
-                    <Text style={styles.drawerBtnText}>🛡️ FIABILITATE WEIBULL</Text>
+                    <Text style={styles.drawerBtnText}>🛡️ FIABILITATE RUL</Text>
                 </TouchableOpacity>
             </View>
 
@@ -537,7 +617,7 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         borderBottomWidth: 1,
         borderBottomColor: 'rgba(0, 240, 255, 0.2)',
-        backgroundColor: 'rgba(4, 7, 13, 0.9)',
+        backgroundColor: 'rgba(4, 7, 13, 0.95)',
     },
     hudBrand: {
         flexDirection: 'row',
@@ -577,51 +657,36 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 6,
     },
-    smallBtn: {
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-        borderRadius: 3,
+    hudActionBtn: {
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 4,
         borderWidth: 1,
         borderColor: '#1E293B',
         backgroundColor: '#0F172A',
     },
-    smallBtnText: {
+    hudActionBtnText: {
         fontFamily: MONO,
-        fontSize: 8,
+        fontSize: 9,
         color: '#94A3B8',
         fontWeight: '700',
-    },
-    launcherBtn: {
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-        borderRadius: 3,
-        backgroundColor: '#00F0FF',
-    },
-    launcherText: {
-        fontFamily: MONO,
-        fontSize: 8,
-        color: '#04070D',
-        fontWeight: '900',
     },
     canvasContainer: {
         flex: 1,
         position: 'relative',
-    },
-    glSurface: {
-        flex: 1,
-        width: '100%',
-        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     floatingSpeedHud: {
         position: 'absolute',
-        top: 20,
+        top: 14,
         left: 20,
         flexDirection: 'row',
         alignItems: 'baseline',
     },
     floatingSpeedNumber: {
         fontFamily: MONO,
-        fontSize: 54,
+        fontSize: 50,
         fontWeight: '900',
         color: '#FFFFFF',
         fontVariant: ['tabular-nums'],
@@ -645,7 +710,7 @@ const styles = StyleSheet.create({
     },
     firingSequenceBadge: {
         position: 'absolute',
-        top: 24,
+        top: 18,
         right: 16,
         flexDirection: 'row',
         alignItems: 'center',

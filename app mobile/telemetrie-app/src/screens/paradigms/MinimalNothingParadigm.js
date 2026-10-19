@@ -10,6 +10,7 @@ import {
     Dimensions,
     Animated,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Line, Defs, LinearGradient, Stop, Circle, Rect } from 'react-native-svg';
 import { useNormalizedTelemetry } from '../../hooks/useNormalizedTelemetry';
 import { useVehicle } from '../../context/VehicleContext';
@@ -49,6 +50,7 @@ function generatePulsePath(width, height, loadPct = 20, rpm = 800) {
 }
 
 export default function MinimalNothingParadigm() {
+    const insets = useSafeAreaInsets();
     const telemetry = useNormalizedTelemetry();
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
@@ -123,8 +125,8 @@ export default function MinimalNothingParadigm() {
     const isGhostDimmed = ghostMode && speed < 5 && criticalAlerts.length === 0;
 
     return (
-        <View style={[styles.container, mirrorHud && styles.mirrorHudTransform]}>
-            <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <View style={[styles.container, { paddingTop: Math.max(insets.top, 24) }, mirrorHud && styles.mirrorHudTransform]}>
+            <StatusBar barStyle="light-content" backgroundColor="#000000" translucent />
 
             {/* ── 1. GLYPH INTERFACE MATRIX (Bara de lumina Nothing pe margine sus) ── */}
             <View style={styles.glyphMatrixContainer}>
