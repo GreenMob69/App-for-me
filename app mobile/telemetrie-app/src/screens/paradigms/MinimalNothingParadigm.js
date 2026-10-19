@@ -114,7 +114,15 @@ function generateBionicPulsePath(width, height, loadPct = 20, coolantTemp = 90) 
 
 // ─── MEMOIZED SUB-STATION COMPONENTS (ZERO GC & FRAME ISOLATION) ──────────────
 
-const StationNothingPulse = React.memo(function StationNothingPulse({ telemetry, currentTheme }) {
+const StationNothingPulse = React.memo(function StationNothingPulse({
+    telemetry,
+    tp7Anomalies,
+    zenDriveScore,
+    currentTheme,
+    appLang = 'RO'
+}) {
+    const isEn = appLang === 'EN';
+    const [pulseSubMode, setPulseSubMode] = useState('PULSE'); // 'PULSE' | 'TP7' | 'ZEN'
     const boost = safeNum(telemetry?.boost, 0);
     const coolantTemp = safeNum(telemetry?.coolantTemp, 90);
     const batteryVoltage = safeNum(telemetry?.batteryVoltage, 12);
@@ -126,40 +134,255 @@ const StationNothingPulse = React.memo(function StationNothingPulse({ telemetry,
 
     return (
         <View style={styles.tabContent}>
-            <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>// 01 · PARAMETRI VITALI DE RULARE</Text>
-            <View style={styles.grid2x2}>
-                <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                    <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>BOOST TURBO</Text>
-                    <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{boost} <Text style={styles.metricUnit}>BAR</Text></Text>
-                </View>
-                <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                    <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TEMPERATURĂ ANTIGEL</Text>
-                    <Text style={[styles.metricValue, { color: currentTheme.textPrimary }, coolantTemp > 98 && { color: currentTheme.accent }]}>
-                        {coolantTemp} <Text style={styles.metricUnit}>°C</Text>
-                    </Text>
-                </View>
-                <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                    <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TENSIUNE ALTERNATOR</Text>
-                    <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{batteryVoltage} <Text style={styles.metricUnit}>V</Text></Text>
-                </View>
-                <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                    <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TEMPERATURĂ ULEI</Text>
-                    <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{oilTemp} <Text style={styles.metricUnit}>°C</Text></Text>
-                </View>
-                <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                    <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>EGT EVACUARE</Text>
-                    <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{exhaustTemp} <Text style={styles.metricUnit}>°C</Text></Text>
-                </View>
-                <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
-                    <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>G-FORCE TOTAL</Text>
-                    <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{gTotal} <Text style={styles.metricUnit}>G</Text></Text>
-                </View>
+            {/* Sub-selector Nothing: Vital Pulse | TP-7 Tape Recorder | Zen Drive Coach */}
+            <View style={styles.nothingSubSwitchRow}>
+                {[
+                    { id: 'PULSE', label: isEn ? '01·VITAL PULSE' : '01·PULS VITAL' },
+                    { id: 'TP7', label: isEn ? '02·TP-7 TAPE' : '02·TP-7 TAPE' },
+                    { id: 'ZEN', label: isEn ? '03·ZEN COACH' : '03·ZEN COACH' },
+                ].map((m) => (
+                    <TouchableOpacity
+                        key={m.id}
+                        style={[
+                            styles.nothingSubSwitchBtn,
+                            { borderColor: currentTheme.cardBorder, backgroundColor: currentTheme.cardBg },
+                            pulseSubMode === m.id && { backgroundColor: currentTheme.textPrimary, borderColor: currentTheme.textPrimary },
+                        ]}
+                        onPress={() => {
+                            hapticTap();
+                            setPulseSubMode(m.id);
+                        }}
+                    >
+                        <Text
+                            style={[
+                                styles.nothingSubSwitchText,
+                                { color: pulseSubMode === m.id ? currentTheme.bg : currentTheme.textDim },
+                                pulseSubMode === m.id && { fontWeight: '900' },
+                            ]}
+                        >
+                            {m.label}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
             </View>
+
+            {/* MOD 1: PULS VITAL GRID */}
+            {pulseSubMode === 'PULSE' && (
+                <>
+                    <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>// 01 · PARAMETRI VITALI DE RULARE</Text>
+                    <View style={styles.grid2x2}>
+                        <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                            <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>BOOST TURBO</Text>
+                            <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{boost} <Text style={styles.metricUnit}>BAR</Text></Text>
+                        </View>
+                        <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                            <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TEMPERATURĂ ANTIGEL</Text>
+                            <Text style={[styles.metricValue, { color: currentTheme.textPrimary }, coolantTemp > 98 && { color: currentTheme.accent }]}>
+                                {coolantTemp} <Text style={styles.metricUnit}>°C</Text>
+                            </Text>
+                        </View>
+                        <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                            <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TENSIUNE ALTERNATOR</Text>
+                            <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{batteryVoltage} <Text style={styles.metricUnit}>V</Text></Text>
+                        </View>
+                        <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                            <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TEMPERATURĂ ULEI</Text>
+                            <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{oilTemp} <Text style={styles.metricUnit}>°C</Text></Text>
+                        </View>
+                        <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                            <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>EGT EVACUARE</Text>
+                            <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{exhaustTemp} <Text style={styles.metricUnit}>°C</Text></Text>
+                        </View>
+                        <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                            <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>G-FORCE TOTAL</Text>
+                            <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{gTotal} <Text style={styles.metricUnit}>G</Text></Text>
+                        </View>
+                    </View>
+                </>
+            )}
+
+            {/* MOD 2: TP-7 TELEMETRY TAPE RECORDER (EXCLUSIVE NOTHING SIGNATURE) */}
+            {pulseSubMode === 'TP7' && (
+                <View style={[styles.tp7Frame, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                    <View style={styles.tp7TopRow}>
+                        <View style={styles.tp7RecIndicator}>
+                            <View style={[styles.tp7Led, { backgroundColor: currentTheme.accent }]} />
+                            <Text style={[styles.tp7RecText, { color: currentTheme.accent }]}>● REC // CH-1 OB-II</Text>
+                        </View>
+                        <Text style={[styles.tp7Counter, { color: currentTheme.textPrimary }]}>04:18.92</Text>
+                    </View>
+
+                    {/* Bobine Casete Duble Animate Vectorial */}
+                    <View style={styles.tp7ReelsContainer}>
+                        <Svg width={SCREEN_WIDTH - 64} height={110} viewBox="0 0 300 110">
+                            {/* Bandă magnetică între role */}
+                            <Line x1="75" y1="55" x2="225" y2="55" stroke={currentTheme.divider} strokeWidth="12" />
+                            <Line x1="75" y1="55" x2="225" y2="55" stroke={currentTheme.textDim} strokeWidth="2" strokeDasharray="4,4" />
+
+                            {/* Rola Stânga (Supply Reel) */}
+                            <Circle cx="75" cy="55" r="42" fill="none" stroke={currentTheme.textPrimary} strokeWidth="2" />
+                            <Circle cx="75" cy="55" r="28" fill="none" stroke={currentTheme.cardBorder} strokeWidth="6" />
+                            <Circle cx="75" cy="55" r="14" fill={currentTheme.textPrimary} />
+                            <Line x1="75" y1="18" x2="75" y2="92" stroke={currentTheme.bg} strokeWidth="2" />
+                            <Line x1="38" y1="55" x2="112" y2="55" stroke={currentTheme.bg} strokeWidth="2" />
+
+                            {/* Rola Dreapta (Take-up Reel) */}
+                            <Circle cx="225" cy="55" r="42" fill="none" stroke={currentTheme.textPrimary} strokeWidth="2" />
+                            <Circle cx="225" cy="55" r="28" fill="none" stroke={currentTheme.cardBorder} strokeWidth="6" />
+                            <Circle cx="225" cy="55" r="14" fill={currentTheme.textPrimary} />
+                            <Line x1="225" y1="18" x2="225" y2="92" stroke={currentTheme.bg} strokeWidth="2" />
+                            <Line x1="188" y1="55" x2="262" y2="55" stroke={currentTheme.bg} strokeWidth="2" />
+
+                            {/* Cap de redare / Anomaly Marker Pin */}
+                            <Rect x="142" y="38" width="16" height="34" rx="3" fill={currentTheme.accent} />
+                            <Line x1="150" y1="38" x2="150" y2="72" stroke="#FFFFFF" strokeWidth="1" />
+                        </Svg>
+                    </View>
+
+                    {/* Pini Anomalii de pe Bandă */}
+                    <Text style={[styles.tp7AnomHeader, { color: currentTheme.textDim }]}>
+                        {isEn ? '// TAPE ANOMALY PINS (INDEXED):' : '// PINI ANOMALII PE BANDĂ (INDEXAȚI):'}
+                    </Text>
+                    <View style={styles.tp7AnomGrid}>
+                        {safeArr(tp7Anomalies).map((pin) => (
+                            <View key={pin.id} style={[styles.tp7AnomCard, { borderColor: currentTheme.cardBorder }]}>
+                                <View style={[styles.tp7PinTag, { backgroundColor: pin.pinColor }]} />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.tp7PinLabel, { color: currentTheme.textPrimary }]}>{pin.label}</Text>
+                                    <Text style={[styles.tp7PinTime, { color: currentTheme.textDim }]}>T+{pin.timeSec}s · {pin.val}</Text>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                </View>
+            )}
+
+            {/* MOD 3: ZEN DRIVE COACH (SMOOTHNESS SCORE 0-100%) */}
+            {pulseSubMode === 'ZEN' && (
+                <View style={[styles.zenFrame, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                    <Text style={[styles.zenHeader, { color: currentTheme.textDim }]}>
+                        {isEn ? '// ZEN DRIVE COACH · LATERAL & LONGITUDINAL SMOOTHNESS' : '// ZEN DRIVE COACH · FLUIDITATE ȘI REDUCERE UZURĂ'}
+                    </Text>
+
+                    {/* Ring Central de Scor Zen */}
+                    <View style={styles.zenScoreBox}>
+                        <Svg width={140} height={140} viewBox="0 0 140 140">
+                            <Circle cx="70" cy="70" r="54" fill="none" stroke={currentTheme.cardBorder} strokeWidth="8" />
+                            <Circle
+                                cx="70"
+                                cy="70"
+                                r="54"
+                                fill="none"
+                                stroke={zenDriveScore > 80 ? '#00FF66' : zenDriveScore > 60 ? '#FFB800' : currentTheme.accent}
+                                strokeWidth="8"
+                                strokeDasharray={`${(zenDriveScore / 100) * 339} 339`}
+                                strokeLinecap="round"
+                                transform="rotate(-90 70 70)"
+                            />
+                        </Svg>
+                        <View style={styles.zenScoreCenter}>
+                            <Text style={[styles.zenScoreNum, { color: currentTheme.textPrimary }]}>{zenDriveScore}</Text>
+                            <Text style={[styles.zenScorePct, { color: currentTheme.textDim }]}>/ 100</Text>
+                        </View>
+                    </View>
+
+                    <Text style={[styles.zenVerdict, { color: zenDriveScore > 80 ? '#00FF66' : currentTheme.textPrimary }]}>
+                        {zenDriveScore > 85
+                            ? (isEn ? 'SILKY SMOOTH // ZERO BRAKE/TIRE STRESS' : 'CONDUCERE FLUIDĂ // ZERO ȘOCURI MECANICE')
+                            : zenDriveScore > 65
+                            ? (isEn ? 'MODERATE CORNERING FORCES' : 'FORȚE MODERATE // REVIZIUIRE ACCELERAȚIE')
+                            : (isEn ? 'HIGH G-SPIKES // HIGH TIRE & FUEL WEAR' : 'ȘOCURI G RIDICATE // UZURĂ ANVELOPE ȘI COMBUSTIBIL')}
+                    </Text>
+
+                    <View style={styles.zenMetricsRow}>
+                        <View style={[styles.zenMetricCard, { borderColor: currentTheme.cardBorder }]}>
+                            <Text style={[styles.zenMetricLabel, { color: currentTheme.textDim }]}>{isEn ? 'LATERAL G' : 'FORȚĂ G LAT'}</Text>
+                            <Text style={[styles.zenMetricVal, { color: currentTheme.textPrimary }]}>{gLat} G</Text>
+                        </View>
+                        <View style={[styles.zenMetricCard, { borderColor: currentTheme.cardBorder }]}>
+                            <Text style={[styles.zenMetricLabel, { color: currentTheme.textDim }]}>{isEn ? 'LONG G' : 'FORȚĂ G LONG'}</Text>
+                            <Text style={[styles.zenMetricVal, { color: currentTheme.textPrimary }]}>{gLong} G</Text>
+                        </View>
+                        <View style={[styles.zenMetricCard, { borderColor: currentTheme.cardBorder }]}>
+                            <Text style={[styles.zenMetricLabel, { color: currentTheme.textDim }]}>{isEn ? 'ECO RATING' : 'SCOR ECO'}</Text>
+                            <Text style={[styles.zenMetricVal, { color: '#00FF66' }]}>{Math.round(zenDriveScore * 0.95)}%</Text>
+                        </View>
+                    </View>
+                </View>
+            )}
+            {/* ── MODAL POST-CURSĂ AUTOMAT // RECEIPT · NOT-01 ── */}
+            <Modal
+                visible={core.showDebriefModal}
+                transparent
+                animationType="fade"
+                onRequestClose={core.closeTripDebrief}
+            >
+                <View style={styles.nothingReceiptBackdrop}>
+                    <View style={[styles.nothingReceiptPaper, { backgroundColor: currentTheme.bg, borderColor: currentTheme.textPrimary }]}>
+                        <Text style={[styles.receiptHead, { color: currentTheme.textDim }]}>////////////////////////////////////////</Text>
+                        <Text style={[styles.receiptBrand, { color: currentTheme.accent }]}>RECEIPT // TRIP DEBRIEF · NOT-01</Text>
+                        <Text style={[styles.receiptSub, { color: currentTheme.textDim }]}>NOTHING (R) TELEMETRY OS // KERNEL 3.2</Text>
+                        <Text style={[styles.receiptHead, { color: currentTheme.textDim }]}>----------------------------------------</Text>
+
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>DISTANȚĂ PARCURSĂ</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.km} KM</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>DURATĂ CURSĂ</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.duration}</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>VITEZĂ MAXIMĂ</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.maxSpeed} KM/H</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>CONSUM ESTIMAT</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.fuelBurnedLiters} L ({core.lastTripDebrief?.avgConsumption} L/100)</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>COST TOTAL COMBUSTIBIL</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.accent }]}>{core.lastTripDebrief?.fuelCostRon} RON</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>SCOR EFICIENȚĂ ZEN</Text>
+                            <Text style={[styles.receiptVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.healthScore}%</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>ENERGIE DISIPATĂ FRÂNE</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.brakeEnergyMj} MJ</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>STRES ULEI ARRHENIUS</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.oilStressFactor}x</Text>
+                        </View>
+
+                        <Text style={[styles.receiptHead, { color: currentTheme.textDim }]}>----------------------------------------</Text>
+                        <TouchableOpacity
+                            style={[styles.receiptCloseBtn, { borderColor: currentTheme.textPrimary }]}
+                            onPress={() => {
+                                hapticTap();
+                                core.closeTripDebrief();
+                            }}
+                        >
+                            <Text style={[styles.receiptCloseText, { color: currentTheme.textPrimary }]}>[ ✕ DISMISS DEBRIEF ]</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 });
 
-const StationNothingAnatomy = React.memo(function StationNothingAnatomy({ virtualSensors, currentTheme }) {
+const StationNothingAnatomy = React.memo(function StationNothingAnatomy({
+    virtualSensors,
+    searchQuery = '',
+    setSearchQuery,
+    matchedDtc = [],
+    currentTheme,
+    appLang = 'RO'
+}) {
+    const isEn = appLang === 'EN';
     const categories = {
         'MOTOR & INJECȚIE': virtualSensors?.engine || [],
         'TURBO & ADMISIE': virtualSensors?.turbo || [],
@@ -171,6 +394,50 @@ const StationNothingAnatomy = React.memo(function StationNothingAnatomy({ virtua
 
     return (
         <View style={styles.tabContent}>
+            {/* DTC & Sensor Fast Search Box */}
+            <View style={[styles.nothingSearchBox, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                <Text style={[styles.searchPrefix, { color: currentTheme.accent }]}>// FIND:</Text>
+                <TextInput
+                    style={[styles.nothingSearchInput, { color: currentTheme.textPrimary }]}
+                    placeholder={isEn ? "Search DTC (P0234, 00550, MAF, DPF) or sensor..." : "Caută cod DTC (P0234, 00550, MAF, DPF) sau senzor..."}
+                    placeholderTextColor={currentTheme.textDim}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                />
+                {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={{ color: currentTheme.accent, fontFamily: MONO_FONT, fontWeight: '900' }}>✕</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {/* Matched DTC Cards */}
+            {safeArr(matchedDtc).length > 0 && (
+                <View style={[styles.nothingDtcBox, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                    <Text style={[styles.nothingDtcTitle, { color: currentTheme.accent }]}>
+                        {isEn ? '// DTC DATABASE MATCHES:' : '// REZULTATE BAZĂ DATE DTC:'}
+                    </Text>
+                    {matchedDtc.map(item => (
+                        <View key={item.code} style={[styles.nothingDtcCard, { borderColor: currentTheme.cardBorder }]}>
+                            <View style={styles.nothingDtcHead}>
+                                <Text style={[styles.nothingDtcCode, { color: currentTheme.accent }]}>{item.code} / VAG {item.vagCode}</Text>
+                                <Text style={[styles.nothingDtcSev, { color: item.severity === 'CRIT' ? currentTheme.accent : '#FFB800' }]}>{item.severity}</Text>
+                            </View>
+                            <Text style={[styles.nothingDtcCardTitle, { color: currentTheme.textPrimary }]}>{item.title}</Text>
+                            <Text style={[styles.nothingDtcDesc, { color: currentTheme.textSecondary }]}>
+                                <Text style={{ color: currentTheme.textDim }}>CAUZĂ: </Text>{item.cause}
+                            </Text>
+                            <Text style={[styles.nothingDtcDesc, { color: currentTheme.textSecondary }]}>
+                                <Text style={{ color: currentTheme.textDim }}>SIMPTOM: </Text>{item.symptoms}
+                            </Text>
+                            <Text style={[styles.nothingDtcCost, { color: '#00FF66' }]}>
+                                COST ESTIMAT: {item.costEst} · {item.action}
+                            </Text>
+                        </View>
+                    ))}
+                </View>
+            )}
+
             <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>
                 // 02 · ANATOMIE VIRTUALĂ // 32 OBSERVATORI KALMAN & FIZICĂ
             </Text>
@@ -361,10 +628,82 @@ const StationNothingService = React.memo(function StationNothingService({
     maintenanceItems,
     legalDocuments,
     markServiceItemCompleted,
-    currentTheme
+    tireSize,
+    setTireSize,
+    vehicleMassKg,
+    setVehicleMassKg,
+    fuelPricePerLiter,
+    setFuelPricePerLiter,
+    currentTheme,
+    appLang = 'RO'
 }) {
+    const isEn = appLang === 'EN';
     return (
         <View style={styles.tabContent}>
+            {/* Rapid Vehicle & Tire Configurator */}
+            <View style={[styles.nothingConfigCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
+                <Text style={[styles.nothingConfigTitle, { color: currentTheme.textPrimary }]}>
+                    {isEn ? '// VEHICLE SPECS & TIRE CONFIGURATOR' : '// CONFIGURATOR RAPID ROȚI & PREȚ CARBURANT'}
+                </Text>
+
+                <Text style={[styles.nothingConfigLabel, { color: currentTheme.textDim }]}>
+                    {isEn ? 'TIRE SIZE (ROLLING RADIUS):' : 'DIMENSIUNE ANVELOPE (RAZĂ RULARE):'}
+                </Text>
+                <View style={styles.nothingConfigRow}>
+                    {['205/55 R16', '225/50 R17', '225/45 R18', '235/40 R19'].map(s => (
+                        <TouchableOpacity
+                            key={s}
+                            style={[
+                                styles.nothingConfigBtn,
+                                { borderColor: currentTheme.cardBorder },
+                                tireSize === s && { backgroundColor: currentTheme.textPrimary, borderColor: currentTheme.textPrimary }
+                            ]}
+                            onPress={() => { hapticTap(); setTireSize(s); }}
+                        >
+                            <Text style={[styles.nothingConfigBtnText, { color: tireSize === s ? currentTheme.bg : currentTheme.textDim }]}>{s}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                <Text style={[styles.nothingConfigLabel, { color: currentTheme.textDim }]}>
+                    {isEn ? 'CURB WEIGHT (DYNO POWER):' : 'MASĂ VEHICUL (PENTRU ESTIMARE CP):'}
+                </Text>
+                <View style={styles.nothingConfigRow}>
+                    {[1250, 1450, 1650, 1850].map(m => (
+                        <TouchableOpacity
+                            key={m}
+                            style={[
+                                styles.nothingConfigBtn,
+                                { borderColor: currentTheme.cardBorder },
+                                vehicleMassKg === m && { backgroundColor: currentTheme.textPrimary, borderColor: currentTheme.textPrimary }
+                            ]}
+                            onPress={() => { hapticTap(); setVehicleMassKg(m); }}
+                        >
+                            <Text style={[styles.nothingConfigBtnText, { color: vehicleMassKg === m ? currentTheme.bg : currentTheme.textDim }]}>{m} kg</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                <Text style={[styles.nothingConfigLabel, { color: currentTheme.textDim }]}>
+                    {isEn ? 'FUEL PRICE (RON/L):' : 'PREȚ COMBUSTIBIL (RON/L):'}
+                </Text>
+                <View style={styles.nothingConfigRow}>
+                    {[7.10, 7.45, 7.80, 8.20].map(p => (
+                        <TouchableOpacity
+                            key={p}
+                            style={[
+                                styles.nothingConfigBtn,
+                                { borderColor: currentTheme.cardBorder },
+                                fuelPricePerLiter === p && { backgroundColor: currentTheme.textPrimary, borderColor: currentTheme.textPrimary }
+                            ]}
+                            onPress={() => { hapticTap(); setFuelPricePerLiter(p); }}
+                        >
+                            <Text style={[styles.nothingConfigBtnText, { color: fuelPricePerLiter === p ? currentTheme.bg : currentTheme.textDim }]}>{p.toFixed(2)}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            </View>
+
             <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>
                 // 04 · CONDITION-BASED MAINTENANCE & PORTOFEL ACTE
             </Text>
@@ -993,6 +1332,19 @@ export default function MinimalNothingParadigm() {
                         <Text style={[styles.v2ButtonText, { color: '#00F0FF' }]}>🎮</Text>
                     </TouchableOpacity>
 
+                    {/* Bilanț Cursă Rapid (Receipt) */}
+                    <TouchableOpacity
+                        style={[styles.v2Button, { borderColor: currentTheme.accent, backgroundColor: `${currentTheme.accent}18` }]}
+                        onPress={() => {
+                            hapticTap();
+                            core.openTripDebrief();
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.v2ButtonText, { color: currentTheme.accent }]}>🧾</Text>
+                    </TouchableOpacity>
+
                     {/* Inverted E-Paper Daylight Toggle */}
                     <TouchableOpacity
                         style={[styles.v2Button, { borderColor: currentTheme.cardBorder, backgroundColor: currentTheme.cardBg }]}
@@ -1173,10 +1525,27 @@ export default function MinimalNothingParadigm() {
                 {/* 4. CONȚINUT DINAMIC BAZAT PE CELE 6 STAȚII JOG-WHEEL */}
 
                 {/* ── 01 · PULS VITAL & DINAMICĂ ── */}
-                {activeTab === '01' && <StationNothingPulse telemetry={telemetry} currentTheme={currentTheme} />}
+                {activeTab === '01' && (
+                    <StationNothingPulse
+                        telemetry={telemetry}
+                        tp7Anomalies={core.tp7Anomalies}
+                        zenDriveScore={core.zenDriveScore}
+                        currentTheme={currentTheme}
+                        appLang={appLang}
+                    />
+                )}
 
                 {/* ── 02 · ANATOMIE VIRTUALĂ (32 SENZORI X-RAY) ── */}
-                {activeTab === '02' && <StationNothingAnatomy virtualSensors={core.virtualSensors} currentTheme={currentTheme} />}
+                {activeTab === '02' && (
+                    <StationNothingAnatomy
+                        virtualSensors={core.virtualSensors}
+                        searchQuery={core.searchQuery}
+                        setSearchQuery={core.setSearchQuery}
+                        matchedDtc={core.matchedDtc}
+                        currentTheme={currentTheme}
+                        appLang={appLang}
+                    />
+                )}
 
                 {/* ── 03 · JURNAL CURSE & REPLAY MINIMALIST ── */}
                 {activeTab === '03' && (
@@ -1202,7 +1571,14 @@ export default function MinimalNothingParadigm() {
                         maintenanceItems={core.maintenanceItems}
                         legalDocuments={core.legalDocuments}
                         markServiceItemCompleted={core.markServiceItemCompleted}
+                        tireSize={core.tireSize}
+                        setTireSize={core.setTireSize}
+                        vehicleMassKg={core.vehicleMassKg}
+                        setVehicleMassKg={core.setVehicleMassKg}
+                        fuelPricePerLiter={core.fuelPricePerLiter}
+                        setFuelPricePerLiter={core.setFuelPricePerLiter}
                         currentTheme={currentTheme}
+                        appLang={appLang}
                     />
                 )}
 
@@ -1277,6 +1653,319 @@ export default function MinimalNothingParadigm() {
 }
 
 const styles = StyleSheet.create({
+
+    nothingSubSwitchRow: {
+        flexDirection: 'row',
+        gap: 6,
+        marginBottom: 12,
+    },
+    nothingSubSwitchBtn: {
+        flex: 1,
+        borderWidth: 1,
+        borderRadius: 4,
+        paddingVertical: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    nothingSubSwitchText: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+    },
+    tp7Frame: {
+        borderWidth: 1,
+        borderRadius: 4,
+        padding: 12,
+        marginBottom: 12,
+    },
+    tp7TopRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    tp7RecIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    tp7Led: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    tp7RecText: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '900',
+    },
+    tp7Counter: {
+        fontFamily: MONO_FONT,
+        fontSize: 14,
+        fontWeight: '900',
+    },
+    tp7ReelsContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginVertical: 4,
+    },
+    tp7AnomHeader: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        marginTop: 10,
+        marginBottom: 6,
+    },
+    tp7AnomGrid: {
+        flexDirection: 'row',
+        gap: 6,
+    },
+    tp7AnomCard: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        borderWidth: 1,
+        borderRadius: 3,
+        padding: 6,
+    },
+    tp7PinTag: {
+        width: 4,
+        height: 20,
+        borderRadius: 2,
+    },
+    tp7PinLabel: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        fontWeight: '800',
+    },
+    tp7PinTime: {
+        fontFamily: MONO_FONT,
+        fontSize: 7,
+    },
+    zenFrame: {
+        borderWidth: 1,
+        borderRadius: 4,
+        padding: 12,
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    zenHeader: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        marginBottom: 10,
+    },
+    zenScoreBox: {
+        position: 'relative',
+        width: 140,
+        height: 140,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    zenScoreCenter: {
+        position: 'absolute',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    zenScoreNum: {
+        fontFamily: MONO_FONT,
+        fontSize: 32,
+        fontWeight: '900',
+    },
+    zenScorePct: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+    },
+    zenVerdict: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '900',
+        marginTop: 10,
+        textAlign: 'center',
+    },
+    zenMetricsRow: {
+        flexDirection: 'row',
+        gap: 6,
+        marginTop: 12,
+        width: '100%',
+    },
+    zenMetricCard: {
+        flex: 1,
+        borderWidth: 1,
+        borderRadius: 3,
+        padding: 6,
+        alignItems: 'center',
+    },
+    zenMetricLabel: {
+        fontFamily: MONO_FONT,
+        fontSize: 7,
+        marginBottom: 2,
+    },
+    zenMetricVal: {
+        fontFamily: MONO_FONT,
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    nothingSearchBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderRadius: 4,
+        paddingHorizontal: 8,
+        marginBottom: 8,
+    },
+    searchPrefix: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '900',
+        marginRight: 6,
+    },
+    nothingSearchInput: {
+        flex: 1,
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        paddingVertical: 6,
+    },
+    nothingDtcBox: {
+        borderWidth: 1,
+        borderRadius: 4,
+        padding: 8,
+        marginBottom: 10,
+    },
+    nothingDtcTitle: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        fontWeight: '900',
+        marginBottom: 4,
+    },
+    nothingDtcCard: {
+        borderWidth: 1,
+        borderRadius: 3,
+        padding: 6,
+        marginBottom: 6,
+    },
+    nothingDtcHead: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 2,
+    },
+    nothingDtcCode: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '900',
+    },
+    nothingDtcSev: {
+        fontFamily: MONO_FONT,
+        fontSize: 7,
+        fontWeight: '900',
+    },
+    nothingDtcCardTitle: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        fontWeight: '800',
+    },
+    nothingDtcDesc: {
+        fontFamily: MONO_FONT,
+        fontSize: 7,
+        marginTop: 2,
+    },
+    nothingDtcCost: {
+        fontFamily: MONO_FONT,
+        fontSize: 7,
+        fontWeight: '800',
+        marginTop: 2,
+    },
+    nothingConfigCard: {
+        borderWidth: 1,
+        borderRadius: 4,
+        padding: 8,
+        marginBottom: 12,
+    },
+    nothingConfigTitle: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '900',
+        marginBottom: 6,
+    },
+    nothingConfigLabel: {
+        fontFamily: MONO_FONT,
+        fontSize: 7,
+        marginTop: 4,
+        marginBottom: 2,
+    },
+    nothingConfigRow: {
+        flexDirection: 'row',
+        gap: 4,
+        flexWrap: 'wrap',
+    },
+    nothingConfigBtn: {
+        borderWidth: 1,
+        paddingHorizontal: 6,
+        paddingVertical: 4,
+        borderRadius: 3,
+    },
+    nothingConfigBtnText: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        fontWeight: '800',
+    },
+    nothingReceiptBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 16,
+    },
+    nothingReceiptPaper: {
+        width: '100%',
+        maxWidth: 360,
+        borderWidth: 2,
+        borderRadius: 6,
+        padding: 14,
+    },
+    receiptHead: {
+        fontFamily: MONO_FONT,
+        fontSize: 7,
+        textAlign: 'center',
+    },
+    receiptBrand: {
+        fontFamily: MONO_FONT,
+        fontSize: 11,
+        fontWeight: '900',
+        textAlign: 'center',
+        marginTop: 2,
+    },
+    receiptSub: {
+        fontFamily: MONO_FONT,
+        fontSize: 7,
+        textAlign: 'center',
+        marginBottom: 4,
+    },
+    receiptRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginVertical: 2,
+    },
+    receiptLabel: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+    },
+    receiptVal: {
+        fontFamily: MONO_FONT,
+        fontSize: 8,
+        fontWeight: '900',
+    },
+    receiptCloseBtn: {
+        borderWidth: 1,
+        borderRadius: 4,
+        paddingVertical: 8,
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    receiptCloseText: {
+        fontFamily: MONO_FONT,
+        fontSize: 9,
+        fontWeight: '900',
+    },
+
     container: {
         flex: 1,
     },

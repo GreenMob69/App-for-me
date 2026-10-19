@@ -37,7 +37,228 @@ const theme = PARADIGM_THEMES[PARADIGM_KEYS.F1_CYBERDECK];
 
 // ─── MEMOIZED F1 SUB-STATION COMPONENTS (FRAME ISOLATION & ZERO GC) ──────────
 
-const StationF1Sensors = React.memo(function StationF1Sensors({ virtualSensors, primaryAccent }) {
+// ─── P6 SIGNATURE: F1 VIRTUAL DYNO & DRAG BOX ────────────────────────────────
+const StationF1DynoDrag = React.memo(function StationF1DynoDrag({
+    dynoData,
+    dragBox,
+    telemetry,
+    primaryAccent,
+    appLang = 'RO'
+}) {
+    const isEn = appLang === 'EN';
+    const rpm = safeNum(telemetry?.rpm, 800);
+    const speed = safeNum(telemetry?.speed, 0);
+    const throttle = safeNum(telemetry?.throttle, 0);
+
+    // Dyno points SVG Path generator
+    const dynoGraphWidth = SCREEN_WIDTH - 48;
+    const dynoGraphHeight = 150;
+    const points = dynoData?.points || [];
+
+    // Scale helpers (RPM: 1000-6000, HP/Nm: 0-400)
+    const mapX = (r) => Math.max(25, Math.min(dynoGraphWidth - 15, 25 + ((r - 1000) / 5000) * (dynoGraphWidth - 40)));
+    const mapY = (v) => Math.max(15, Math.min(dynoGraphHeight - 25, dynoGraphHeight - 25 - (v / 400) * (dynoGraphHeight - 40)));
+
+    let hpPath = '';
+    let nmPath = '';
+    points.forEach((p, idx) => {
+        const x = mapX(p.rpm);
+        const yHp = mapY(p.powerHp);
+        const yNm = mapY(p.torqueNm);
+        const cmd = idx === 0 ? 'M' : 'L';
+        hpPath += `${cmd}${x.toFixed(1)},${yHp.toFixed(1)} `;
+        nmPath += `${cmd}${x.toFixed(1)},${yNm.toFixed(1)} `;
+    });
+
+    const curX = mapX(rpm);
+    const curYHp = mapY(dynoData?.currentHp || 0);
+
+    return (
+        <View style={styles.pitwallPageContainer}>
+            <View style={styles.pitwallPageHeader}>
+                <Text style={[styles.pitwallPageTitle, { color: primaryAccent }]}>
+                    {isEn ? '[ P6 ] VIRTUAL DYNO CHASSIS & PERFORMANCE DRAG BOX' : '[ P6 ] STAND DYNO VIRTUAL & TELEMETRIE DRAG RACING'}
+                </Text>
+                <Text style={styles.pitwallPageSub}>CALCUL PUTERE SAE & CUPLU DINAMIC PE BAZA FIZICII VEHICULULUI</Text>
+            </View>
+            <ScrollView style={styles.pitwallPageScroll} showsVerticalScrollIndicator={false}>
+                {/* 1. Virtual Dyno Graph Card */}
+                <View style={styles.f1DynoCard}>
+                    <View style={styles.f1DynoHeader}>
+                        <View>
+                            <Text style={[styles.f1DynoTitle, { color: primaryAccent }]}>
+                                {isEn ? 'POWER & TORQUE CURVES (SAE J1349)' : 'CURBĂ PUTERE ȘI CUPLU MOTOR'}
+                            </Text>
+                            <Text style={styles.f1DynoSub}>TURBO POWER SIMULATION · OBSERVER COUPLING</Text>
+                        </View>
+                        <View style={styles.f1DynoPeakBadge}>
+                            <Text style={[styles.f1DynoPeakText, { color: '#00F0FF' }]}>PEAK: {dynoData?.peakHp} CP / {dynoData?.peakNm} Nm</Text>
+                        </View>
+                    </View>
+
+                    {/* SVG Dyno Graph */}
+                    <View style={styles.f1DynoGraphWrap}>
+                        <Svg width={dynoGraphWidth} height={dynoGraphHeight}>
+                            {/* Grid Lines */}
+                            <Line x1="25" y1="20" x2={dynoGraphWidth - 10} y2="20" stroke="#16263D" strokeDasharray="3,3" />
+                            <Line x1="25" y1="60" x2={dynoGraphWidth - 10} y2="60" stroke="#16263D" strokeDasharray="3,3" />
+                            <Line x1="25" y1="100" x2={dynoGraphWidth - 10} y2="100" stroke="#16263D" strokeDasharray="3,3" />
+                            <Line x1="25" y1={dynoGraphHeight - 25} x2={dynoGraphWidth - 10} y2={dynoGraphHeight - 25} stroke="#2D446B" strokeWidth="1.5" />
+                            <Line x1="25" y1="15" x2="25" y2={dynoGraphHeight - 25} stroke="#2D446B" strokeWidth="1.5" />
+
+                            {/* Axis Labels */}
+                            <SvgText x="5" y="25" fill="#64748B" fontSize="8" fontFamily={MONO}>350</SvgText>
+                            <SvgText x="5" y="65" fill="#64748B" fontSize="8" fontFamily={MONO}>200</SvgText>
+                            <SvgText x="5" y="105" fill="#64748B" fontSize="8" fontFamily={MONO}>100</SvgText>
+                            <SvgText x="25" y={dynoGraphHeight - 10} fill="#64748B" fontSize="8" fontFamily={MONO}>1k</SvgText>
+                            <SvgText x={mapX(3000)} y={dynoGraphHeight - 10} fill="#64748B" fontSize="8" fontFamily={MONO}>3k</SvgText>
+                            <SvgText x={mapX(5000)} y={dynoGraphHeight - 10} fill="#64748B" fontSize="8" fontFamily={MONO}>5k RPM</SvgText>
+
+                            {/* Torque Curve (Cyan) */}
+                            {nmPath ? <Polyline points={nmPath} fill="none" stroke="#00F0FF" strokeWidth="2.5" /> : null}
+
+                            {/* Power Curve (Orange/Amber) */}
+                            {hpPath ? <Polyline points={hpPath} fill="none" stroke="#FFB800" strokeWidth="2.5" /> : null}
+
+                            {/* Current Operating Point */}
+                            <Line x1={curX} y1="15" x2={curX} y2={dynoGraphHeight - 25} stroke={primaryAccent} strokeWidth="1.5" strokeDasharray="2,2" />
+                            <Circle cx={curX} cy={curYHp} r="5" fill={primaryAccent} stroke="#FFFFFF" strokeWidth="1" />
+                        </Svg>
+                    </View>
+
+                    {/* Live Metric Badges */}
+                    <View style={styles.f1DynoReadoutRow}>
+                        <View style={styles.f1DynoReadout}>
+                            <Text style={styles.f1DynoReadoutLabel}>{isEn ? 'CURRENT POWER' : 'PUTERE INSTANTANEE'}</Text>
+                            <Text style={[styles.f1DynoReadoutVal, { color: '#FFB800' }]}>{dynoData?.currentHp || 0} CP</Text>
+                            <Text style={styles.f1DynoReadoutSub}>@ {rpm} RPM ({throttle}% Sarcină)</Text>
+                        </View>
+                        <View style={styles.f1DynoReadout}>
+                            <Text style={styles.f1DynoReadoutLabel}>{isEn ? 'CURRENT TORQUE' : 'CUPLU MOTOR REAL'}</Text>
+                            <Text style={[styles.f1DynoReadoutVal, { color: '#00F0FF' }]}>{dynoData?.currentNm || 0} Nm</Text>
+                            <Text style={styles.f1DynoReadoutSub}>Peak: {dynoData?.peakNm} Nm @ {dynoData?.peakNmRpm} RPM</Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* 2. Drag Box Precision Timing Card */}
+                <View style={[styles.f1DynoCard, { marginTop: 12 }]}>
+                    <View style={styles.f1DynoHeader}>
+                        <View>
+                            <Text style={[styles.f1DynoTitle, { color: primaryAccent }]}>
+                                {isEn ? 'PERFORMANCE DRAG BOX TELEMETRY' : 'CRONOMETRU ACCELERAȚIE & DRAG BOX'}
+                            </Text>
+                            <Text style={styles.f1DynoSub}>10Hz GPS / CAN SPEED VALIDATION</Text>
+                        </View>
+                        <View style={[styles.f1DynoPeakBadge, { borderColor: '#00FF66' }]}>
+                            <Text style={[styles.f1DynoPeakText, { color: '#00FF66' }]}>STAGE: READY</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.f1DragGrid}>
+                        <View style={styles.f1DragCell}>
+                            <Text style={styles.f1DragCellLabel}>0 — 100 KM/H</Text>
+                            <Text style={[styles.f1DragCellVal, { color: '#00FF66' }]}>{dragBox?.time0_100}</Text>
+                            <Text style={styles.f1DragCellSub}>Sprint Dinamic</Text>
+                        </View>
+                        <View style={styles.f1DragCell}>
+                            <Text style={styles.f1DragCellLabel}>80 — 120 KM/H</Text>
+                            <Text style={[styles.f1DragCellVal, { color: '#00F0FF' }]}>{dragBox?.time80_120}</Text>
+                            <Text style={styles.f1DragCellSub}>Repriză Treapta 4</Text>
+                        </View>
+                        <View style={styles.f1DragCell}>
+                            <Text style={styles.f1DragCellLabel}>400 METRI (1/4 MILE)</Text>
+                            <Text style={[styles.f1DragCellVal, { color: '#FFB800' }]}>{dragBox?.drag400m}</Text>
+                            <Text style={styles.f1DragCellSub}>Trap Speed: 148 km/h</Text>
+                        </View>
+                        <View style={styles.f1DragCell}>
+                            <Text style={styles.f1DragCellLabel}>100 — 0 FRÂNARE</Text>
+                            <Text style={[styles.f1DragCellVal, { color: '#FF2A2A' }]}>{dragBox?.brake100_0}</Text>
+                            <Text style={styles.f1DragCellSub}>Decelerație: 1.08 G</Text>
+                        </View>
+                    </View>
+                </View>
+            </ScrollView>
+            {/* ── PARC FERMÉ STINT DEBRIEF MODAL ── */}
+            <Modal
+                visible={core.showDebriefModal}
+                transparent
+                animationType="fade"
+                onRequestClose={core.closeTripDebrief}
+            >
+                <View style={styles.f1DebriefBackdrop}>
+                    <View style={[styles.f1DebriefCard, { borderColor: primaryAccent }]}>
+                        <View style={styles.f1DebriefHead}>
+                            <View style={[styles.f1DebriefBadge, { backgroundColor: primaryAccent }]}>
+                                <Text style={styles.f1DebriefBadgeText}>FIA PARC FERMÉ</Text>
+                            </View>
+                            <Text style={[styles.f1DebriefTitle, { color: primaryAccent }]}>
+                                {isEn ? 'STINT TELEMETRY DEBRIEF' : 'BILANȚ TELEMETRIE STINT'}
+                            </Text>
+                        </View>
+                        <Text style={styles.f1DebriefSub}>McLAREN TELEMETRY ACQUISITION SYSTEM · CAN-BUS LOG</Text>
+
+                        <View style={styles.f1DebriefGrid}>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'STINT DISTANCE' : 'DISTANȚĂ STINT'}</Text>
+                                <Text style={[styles.f1DebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.km} KM</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'STINT DURATION' : 'DURATĂ STINT'}</Text>
+                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.duration}</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'TOP SPEED' : 'VITEZĂ MAXIMĂ'}</Text>
+                                <Text style={[styles.f1DebriefVal, { color: '#00F0FF' }]}>{core.lastTripDebrief?.maxSpeed} KM/H</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'AVG CONSUMPTION' : 'CONSUM MEDIU'}</Text>
+                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.avgConsumption} L/100</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'FUEL BURNED' : 'CARBURANT ARS'}</Text>
+                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.fuelBurnedLiters} L ({core.lastTripDebrief?.fuelCostRon} RON)</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'BRAKE ENERGY' : 'DISIPARE FRÂNE'}</Text>
+                                <Text style={[styles.f1DebriefVal, { color: '#FFB800' }]}>{core.lastTripDebrief?.brakeEnergyMj} MJ</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'OIL WEAR FACTOR' : 'UZURĂ ULEI ARRHENIUS'}</Text>
+                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.oilStressFactor}x</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'HEALTH SCORE' : 'SCOR DE SĂNĂTATE'}</Text>
+                                <Text style={[styles.f1DebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.healthScore}%</Text>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.f1DebriefCloseBtn, { borderColor: primaryAccent, backgroundColor: `${primaryAccent}22` }]}
+                            onPress={() => {
+                                hapticTap();
+                                core.closeTripDebrief();
+                            }}
+                        >
+                            <Text style={[styles.f1DebriefCloseText, { color: primaryAccent }]}>
+                                [ ✕ {isEn ? 'CLOSE PARC FERMÉ DEBRIEF' : 'ÎNCHIDE BILANȚ STINT'} ]
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+        </View>
+    );
+});
+
+const StationF1Sensors = React.memo(function StationF1Sensors({
+    virtualSensors,
+    searchQuery = '',
+    setSearchQuery,
+    matchedDtc = [],
+    primaryAccent,
+    appLang = 'RO'
+}) {
     const catLabels = {
         engine: '01. GRUP PROPULSOR & INJECȚIE',
         turbo: '02. SUPRAALIMENTARE & ADMISIE',
@@ -47,14 +268,54 @@ const StationF1Sensors = React.memo(function StationF1Sensors({ virtualSensors, 
         safety: '06. DINAMICĂ ȘASIU & SIGURANȚĂ',
     };
 
+    const isEn = appLang === 'EN';
     return (
         <View style={styles.pitwallPageContainer}>
             <View style={styles.pitwallPageHeader}>
                 <Text style={[styles.pitwallPageTitle, { color: primaryAccent }]}>
-                    [ P2 ] McLAREN PITWALL · 32 VIRTUAL SENSORS MATRIX
+                    {isEn ? '[ P2 ] McLAREN PITWALL · 32 VIRTUAL SENSORS MATRIX' : '[ P2 ] McLAREN PITWALL · 32 SENZORI VIRTUALI KALMAN'}
                 </Text>
                 <Text style={styles.pitwallPageSub}>CAN-BUS 500kbps · OBSERVER KALMAN HYBRID</Text>
             </View>
+
+            {/* Fast DTC & Sensor Search Box */}
+            <View style={styles.f1SearchBox}>
+                <Text style={[styles.f1SearchPrefix, { color: primaryAccent }]}>// CAN QUERY:</Text>
+                <TextInput
+                    style={styles.f1SearchInput}
+                    placeholder={isEn ? "Search DTC (P0234, 00550, MAF, DPF) or sensor..." : "Caută cod DTC (P0234, 00550, MAF, DPF) sau senzor..."}
+                    placeholderTextColor="#475569"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                />
+                {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={{ color: primaryAccent, fontFamily: MONO, fontWeight: '900' }}>✕</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {/* Matched DTC Cards */}
+            {safeArr(matchedDtc).length > 0 && (
+                <View style={styles.f1DtcMatchesBox}>
+                    <Text style={[styles.f1DtcMatchesTitle, { color: primaryAccent }]}>
+                        {isEn ? '// DTC DATABASE TELEMETRY MATCHES:' : '// ANOMALII DTC IDENTIFICATE ÎN CAN:'}
+                    </Text>
+                    {matchedDtc.map(item => (
+                        <View key={item.code} style={styles.f1DtcCard}>
+                            <View style={styles.f1DtcCardHead}>
+                                <Text style={[styles.f1DtcCode, { color: primaryAccent }]}>{item.code} / VAG {item.vagCode}</Text>
+                                <Text style={[styles.f1DtcSev, { color: item.severity === 'CRIT' ? '#FF2A2A' : '#FFB800' }]}>{item.severity}</Text>
+                            </View>
+                            <Text style={styles.f1DtcCardTitle}>{item.title}</Text>
+                            <Text style={styles.f1DtcDesc}><Text style={{ color: '#64748B' }}>CAUZĂ: </Text>{item.cause}</Text>
+                            <Text style={styles.f1DtcDesc}><Text style={{ color: '#64748B' }}>SIMPTOM: </Text>{item.symptoms}</Text>
+                            <Text style={styles.f1DtcCost}><Text style={{ color: '#00FF66' }}>COST EST: </Text>{item.costEst} · {item.action}</Text>
+                        </View>
+                    ))}
+                </View>
+            )}
+
             <ScrollView style={styles.pitwallPageScroll} showsVerticalScrollIndicator={false}>
                 {Object.entries(virtualSensors || {}).map(([catKey, sensors]) => (
                     <View key={catKey} style={styles.pitwallSensorsBox}>
@@ -263,17 +524,73 @@ const StationF1Scrutineering = React.memo(function StationF1Scrutineering({
     maintenanceItems,
     legalDocuments,
     markServiceItemCompleted,
-    primaryAccent
+    tireSize,
+    setTireSize,
+    vehicleMassKg,
+    setVehicleMassKg,
+    fuelPricePerLiter,
+    setFuelPricePerLiter,
+    primaryAccent,
+    appLang = 'RO'
 }) {
+    const isEn = appLang === 'EN';
     return (
         <View style={styles.pitwallPageContainer}>
             <View style={styles.pitwallPageHeader}>
                 <Text style={[styles.pitwallPageTitle, { color: primaryAccent }]}>
-                    [ P4 ] FIA SCRUTINEERING · MENTENANȚĂ & PAȘAPORT TEHNIC
+                    {isEn ? '[ P4 ] FIA SCRUTINEERING · VEHICLE SETUP & MAINTENANCE' : '[ P4 ] FIA SCRUTINEERING · CONFIGURARE VEHICUL & SERVICE'}
                 </Text>
                 <Text style={styles.pitwallPageSub}>UZURĂ ARRHENIUS / ARCHARD & MONITORIZARE LICENȚE</Text>
             </View>
             <ScrollView style={styles.pitwallPageScroll} showsVerticalScrollIndicator={false}>
+                {/* ── F1 Vehicle & Tire Configurator ── */}
+                <View style={styles.f1ConfigCard}>
+                    <Text style={[styles.f1ConfigTitle, { color: primaryAccent }]}>
+                        {isEn ? '// CHASSIS MASS, TIRES & FUEL SETUP' : '// CONFIGURATOR RAPID ANVELOPE, MASĂ & COMBUSTIBIL'}
+                    </Text>
+
+                    {/* Tire Size */}
+                    <Text style={styles.f1ConfigLabel}>{isEn ? 'TIRE PROFILE (ROLLING RADIUS):' : 'PROFIL ANVELOPE (RAZĂ RULARE):'}</Text>
+                    <View style={styles.f1ConfigRow}>
+                        {['205/55 R16', '225/50 R17', '225/45 R18', '235/40 R19'].map(s => (
+                            <TouchableOpacity
+                                key={s}
+                                style={[styles.f1ConfigBtn, tireSize === s && { backgroundColor: `${primaryAccent}22`, borderColor: primaryAccent }]}
+                                onPress={() => { hapticTap(); setTireSize(s); }}
+                            >
+                                <Text style={[styles.f1ConfigBtnText, tireSize === s && { color: primaryAccent, fontWeight: '900' }]}>{s}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    {/* Vehicle Mass */}
+                    <Text style={styles.f1ConfigLabel}>{isEn ? 'CURB WEIGHT (CHASSIS INERTIA):' : 'MASĂ ȘASIU (CALCUL DYNO & INERȚIE):'}</Text>
+                    <View style={styles.f1ConfigRow}>
+                        {[1250, 1450, 1650, 1850].map(m => (
+                            <TouchableOpacity
+                                key={m}
+                                style={[styles.f1ConfigBtn, vehicleMassKg === m && { backgroundColor: `${primaryAccent}22`, borderColor: primaryAccent }]}
+                                onPress={() => { hapticTap(); setVehicleMassKg(m); }}
+                            >
+                                <Text style={[styles.f1ConfigBtnText, vehicleMassKg === m && { color: primaryAccent, fontWeight: '900' }]}>{m} kg</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
+                    {/* Fuel Price */}
+                    <Text style={styles.f1ConfigLabel}>{isEn ? 'FUEL PRICE (RON/L):' : 'PREȚ COMBUSTIBIL (RON/L):'}</Text>
+                    <View style={styles.f1ConfigRow}>
+                        {[7.10, 7.45, 7.80, 8.20].map(p => (
+                            <TouchableOpacity
+                                key={p}
+                                style={[styles.f1ConfigBtn, fuelPricePerLiter === p && { backgroundColor: `${primaryAccent}22`, borderColor: primaryAccent }]}
+                                onPress={() => { hapticTap(); setFuelPricePerLiter(p); }}
+                            >
+                                <Text style={[styles.f1ConfigBtnText, fuelPricePerLiter === p && { color: primaryAccent, fontWeight: '900' }]}>{p.toFixed(2)}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
                 {/* Wear / CBM List */}
                 <Text style={[styles.sensorsGroupTitle, { color: primaryAccent }]}>
                     COMPONENT WEAR & LIFESPAN (CBM)
@@ -769,6 +1086,18 @@ export default function F1CyberdeckParadigm() {
                         <Text style={[styles.actionBtnText, { color: '#00F0FF' }]}>🎮</Text>
                     </TouchableOpacity>
 
+                    {/* Stint Debrief Button */}
+                    <TouchableOpacity
+                        style={[styles.actionBtn, { borderColor: primaryAccent, backgroundColor: `${primaryAccent}1A` }]}
+                        onPress={() => {
+                            hapticTap();
+                            core.openTripDebrief();
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                    >
+                        <Text style={[styles.actionBtnText, { color: primaryAccent }]}>🧾</Text>
+                    </TouchableOpacity>
+
                     {/* Sub-Accent Switcher (CYAN / RED / LIME) */}
                     <TouchableOpacity
                         style={[styles.actionBtn, { borderColor: primaryAccent, backgroundColor: `${primaryAccent}1A` }]}
@@ -822,14 +1151,15 @@ export default function F1CyberdeckParadigm() {
                 </View>
             </View>
 
-            {/* ── PITWALL PAGES SELECTOR (P1..P5) ── */}
+            {/* ── PITWALL PAGES SELECTOR (P1..P6) ── */}
             <View style={styles.pitwallTabBar}>
                 {[
                     { id: 'P1', label: isEn ? 'P1·RACE' : 'P1·CURSĂ' },
                     { id: 'P2', label: isEn ? 'P2·SENSORS' : 'P2·SENZORI' },
                     { id: 'P3', label: isEn ? 'P3·REPLAY' : 'P3·REPLAY' },
                     { id: 'P4', label: isEn ? 'P4·SCRUT' : 'P4·VERIF' },
-                    { id: 'P5', label: isEn ? 'P5·PIT RADIO' : 'P5·RADIO PIT' },
+                    { id: 'P5', label: isEn ? 'P5·RADIO' : 'P5·RADIO' },
+                    { id: 'P6', label: isEn ? 'P6·DYNO' : 'P6·DYNO' },
                 ].map((tab) => {
                     const isActive = pitwallPage === tab.id;
                     return (
@@ -1153,7 +1483,11 @@ export default function F1CyberdeckParadigm() {
                 {pitwallPage === 'P2' && (
                     <StationF1Sensors
                         virtualSensors={core.virtualSensors}
+                        searchQuery={core.searchQuery}
+                        setSearchQuery={core.setSearchQuery}
+                        matchedDtc={core.matchedDtc}
                         primaryAccent={primaryAccent}
+                        appLang={appLang}
                     />
                 )}
 
@@ -1186,7 +1520,14 @@ export default function F1CyberdeckParadigm() {
                         maintenanceItems={core.maintenanceItems}
                         legalDocuments={core.legalDocuments}
                         markServiceItemCompleted={core.markServiceItemCompleted}
+                        tireSize={core.tireSize}
+                        setTireSize={core.setTireSize}
+                        vehicleMassKg={core.vehicleMassKg}
+                        setVehicleMassKg={core.setVehicleMassKg}
+                        fuelPricePerLiter={core.fuelPricePerLiter}
+                        setFuelPricePerLiter={core.setFuelPricePerLiter}
                         primaryAccent={primaryAccent}
+                        appLang={appLang}
                     />
                 )}
 
@@ -1211,12 +1552,328 @@ export default function F1CyberdeckParadigm() {
                         primaryAccent={primaryAccent}
                     />
                 )}
+
+                {/* ── P6: VIRTUAL DYNO CHASSIS & PERFORMANCE DRAG BOX ── */}
+                {pitwallPage === 'P6' && (
+                    <StationF1DynoDrag
+                        dynoData={core.dynoData}
+                        dragBox={core.dragBox}
+                        telemetry={telemetry}
+                        primaryAccent={primaryAccent}
+                        appLang={appLang}
+                    />
+                )}
             </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
+
+    f1DynoCard: {
+        backgroundColor: '#080D16',
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#16263D',
+        padding: 10,
+    },
+    f1DynoHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    f1DynoTitle: {
+        fontFamily: MONO,
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    f1DynoSub: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#64748B',
+    },
+    f1DynoPeakBadge: {
+        borderWidth: 1,
+        borderColor: '#00F0FF',
+        borderRadius: 3,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+    },
+    f1DynoPeakText: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '900',
+    },
+    f1DynoGraphWrap: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginVertical: 4,
+        backgroundColor: '#04070B',
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#0E1726',
+        paddingVertical: 4,
+    },
+    f1DynoReadoutRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 8,
+    },
+    f1DynoReadout: {
+        flex: 1,
+        backgroundColor: '#0B1524',
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#16263D',
+        padding: 8,
+    },
+    f1DynoReadoutLabel: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#64748B',
+        marginBottom: 2,
+    },
+    f1DynoReadoutVal: {
+        fontFamily: MONO,
+        fontSize: 15,
+        fontWeight: '900',
+    },
+    f1DynoReadoutSub: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#8EADC8',
+        marginTop: 2,
+    },
+    f1DragGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginTop: 6,
+    },
+    f1DragCell: {
+        width: (SCREEN_WIDTH - 64) / 2,
+        backgroundColor: '#0B1524',
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#16263D',
+        padding: 8,
+    },
+    f1DragCellLabel: {
+        fontFamily: MONO,
+        fontSize: 8,
+        color: '#8EADC8',
+        fontWeight: '800',
+    },
+    f1DragCellVal: {
+        fontFamily: MONO,
+        fontSize: 16,
+        fontWeight: '900',
+        marginVertical: 2,
+    },
+    f1DragCellSub: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#64748B',
+    },
+    f1SearchBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#080D16',
+        borderWidth: 1,
+        borderColor: '#16263D',
+        borderRadius: 4,
+        paddingHorizontal: 8,
+        marginBottom: 8,
+    },
+    f1SearchPrefix: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '900',
+        marginRight: 6,
+    },
+    f1SearchInput: {
+        flex: 1,
+        fontFamily: MONO,
+        fontSize: 9,
+        color: '#FFFFFF',
+        paddingVertical: 6,
+    },
+    f1DtcMatchesBox: {
+        backgroundColor: '#080D16',
+        borderWidth: 1,
+        borderColor: '#16263D',
+        borderRadius: 4,
+        padding: 8,
+        marginBottom: 8,
+    },
+    f1DtcMatchesTitle: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '900',
+        marginBottom: 4,
+    },
+    f1DtcCard: {
+        backgroundColor: '#04070B',
+        borderWidth: 1,
+        borderColor: '#16263D',
+        borderRadius: 3,
+        padding: 6,
+        marginBottom: 6,
+    },
+    f1DtcCardHead: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 2,
+    },
+    f1DtcCode: {
+        fontFamily: MONO,
+        fontSize: 9,
+        fontWeight: '900',
+    },
+    f1DtcSev: {
+        fontFamily: MONO,
+        fontSize: 7,
+        fontWeight: '900',
+    },
+    f1DtcCardTitle: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '800',
+        color: '#FFFFFF',
+    },
+    f1DtcDesc: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#8EADC8',
+        marginTop: 1,
+    },
+    f1DtcCost: {
+        fontFamily: MONO,
+        fontSize: 7,
+        marginTop: 2,
+    },
+    f1ConfigCard: {
+        backgroundColor: '#080D16',
+        borderWidth: 1,
+        borderColor: '#16263D',
+        borderRadius: 6,
+        padding: 10,
+        marginBottom: 12,
+    },
+    f1ConfigTitle: {
+        fontFamily: MONO,
+        fontSize: 9,
+        fontWeight: '900',
+        marginBottom: 6,
+    },
+    f1ConfigLabel: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#64748B',
+        marginTop: 4,
+        marginBottom: 2,
+    },
+    f1ConfigRow: {
+        flexDirection: 'row',
+        gap: 4,
+        flexWrap: 'wrap',
+    },
+    f1ConfigBtn: {
+        backgroundColor: '#0B1524',
+        borderWidth: 1,
+        borderColor: '#16263D',
+        paddingHorizontal: 6,
+        paddingVertical: 4,
+        borderRadius: 3,
+    },
+    f1ConfigBtnText: {
+        fontFamily: MONO,
+        fontSize: 8,
+        color: '#8EADC8',
+    },
+    f1DebriefBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(3, 5, 8, 0.88)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 16,
+    },
+    f1DebriefCard: {
+        width: '100%',
+        maxWidth: 360,
+        backgroundColor: '#080D16',
+        borderWidth: 2,
+        borderRadius: 6,
+        padding: 14,
+    },
+    f1DebriefHead: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 4,
+    },
+    f1DebriefBadge: {
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 2,
+    },
+    f1DebriefBadgeText: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#000000',
+    },
+    f1DebriefTitle: {
+        fontFamily: MONO,
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    f1DebriefSub: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#64748B',
+        marginBottom: 10,
+    },
+    f1DebriefGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginVertical: 4,
+    },
+    f1DebriefCell: {
+        width: '48%',
+        backgroundColor: '#04070B',
+        borderWidth: 1,
+        borderColor: '#16263D',
+        borderRadius: 3,
+        padding: 6,
+    },
+    f1DebriefLabel: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#64748B',
+    },
+    f1DebriefVal: {
+        fontFamily: MONO,
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        marginTop: 2,
+    },
+    f1DebriefCloseBtn: {
+        borderWidth: 1,
+        borderRadius: 4,
+        paddingVertical: 8,
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    f1DebriefCloseText: {
+        fontFamily: MONO,
+        fontSize: 9,
+        fontWeight: '900',
+    },
+
     container: {
         flex: 1,
         backgroundColor: '#030508',

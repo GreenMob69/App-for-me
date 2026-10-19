@@ -219,6 +219,7 @@ export function useNormalizedTelemetry(isLiveViewActive = true) {
       steadyConfidence: Math.round(v.steadyConfidencePct ?? 94),
       cylinderBal,
       activeCylinder,
+      engineState: data.stare_motor || (rpm === 0 ? 'OPRIRE' : speed > 0 ? 'MERS' : 'RALANTI'),
       // Conectivitate & Simulator
       isConnected,
       isReconnecting,

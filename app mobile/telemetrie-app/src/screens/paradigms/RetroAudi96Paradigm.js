@@ -117,6 +117,73 @@ const AudiTachometerBargraph = React.memo(function AudiTachometerBargraph({ rpm 
                 <SvgText x={width * 0.58} y="32" fill="#884422" fontSize="7" fontFamily={RETRO_FONT}>4</SvgText>
                 <SvgText x={width * 0.82} y="32" fill="#FF4422" fontSize="7" fontFamily={RETRO_FONT}>6</SvgText>
             </Svg>
+            {/* ── MODAL POST-CURSĂ AUTOMAT STIL VAG 1551 HÂRTIE TERMICĂ ── */}
+            <Modal
+                visible={core.showDebriefModal}
+                transparent
+                animationType="fade"
+                onRequestClose={core.closeTripDebrief}
+            >
+                <View style={styles.debriefBackdrop}>
+                    <View style={styles.debriefPaper}>
+                        <Text style={styles.debriefHead}>═════ VAG 1551 // DRUCK-BERICHT ═════</Text>
+                        <Text style={styles.debriefTitle}>
+                            {isEn ? 'POST-TRIP TELEMETRY DEBRIEF' : 'BILANȚ TELEMETRIC POST-CURSĂ'}
+                        </Text>
+                        <Text style={styles.debriefSub}>AUDI A6 C4 2.5 TDI · VDO EEPROM LOG</Text>
+                        <View style={styles.debriefDivider} />
+
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'DISTANCE' : 'DISTANȚĂ'}:</Text>
+                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.km} KM</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'DURATION' : 'DURATĂ'}:</Text>
+                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.durationMin} MIN (MED. {core.lastTripDebrief?.avgSpeed} KM/H)</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'AVG CONSUMPTION' : 'CONSUM MEDIU'}:</Text>
+                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.avgConsumption} L/100KM ({core.lastTripDebrief?.fuelBurnedLiters} L)</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'FUEL EXPENSE' : 'COST ESTIMAT'}:</Text>
+                            <Text style={[styles.debriefVal, { color: '#FFAA00' }]}>{core.lastTripDebrief?.costRon} RON</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'PEAK BOOST' : 'PRESIUNE TURBO MAX'}:</Text>
+                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.peakBoost} BAR</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'PEAK G-FORCE' : 'FORȚĂ G MAXIMĂ'}:</Text>
+                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.peakLatG} G</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'ECO SCORE' : 'SCOR EFICIENȚĂ'}:</Text>
+                            <Text style={[styles.debriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.ecoScore} / 100</Text>
+                        </View>
+
+                        <View style={styles.debriefDivider} />
+
+                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                            <TouchableOpacity
+                                style={[styles.cassetteKey, { flex: 1, backgroundColor: '#FF8800' }]}
+                                onPress={() => {
+                                    hapticTap();
+                                    core.exportTripPdf(core.selectedTripId);
+                                }}
+                            >
+                                <Text style={[styles.cassetteKeyText, { color: '#090403' }]}>🖨️ {isEn ? 'PRINT (PDF)' : 'TIPĂREȘTE (PDF)'}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.cassetteKey, { flex: 1 }]}
+                                onPress={core.closeTripDebrief}
+                            >
+                                <Text style={styles.cassetteKeyText}>✕ {isEn ? 'CLOSE' : 'ÎNCHIDE'}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 });
@@ -182,12 +249,180 @@ function VerticalLedColumn({
 
 // ─── MEMOIZED AUDI RETRO SUB-STATIONS ─────────────────────────────────────────
 
-const StationAudiVag1551 = React.memo(function StationAudiVag1551({ virtualSensors, appLang = 'RO' }) {
+const StationAudiVag1551 = React.memo(function StationAudiVag1551({
+    virtualSensors,
+    tdiTiming,
+    klimatronicChannels,
+    searchQuery,
+    setSearchQuery,
+    matchedDtc,
+    accentColor,
+    appLang = 'RO'
+}) {
     const isEn = appLang === 'EN';
+    const [vagToolMode, setVagToolMode] = useState('SENSORS'); // 'SENSORS' | 'TDI_TIMING' | 'KLIMA_60'
     const [selectedMwbGroup, setSelectedMwbGroup] = useState('engine');
 
     return (
         <View style={styles.vagStationContainer}>
+            {/* Sub-Bara Instrumente VAG: Senzori 32 | TDI-Timing VP37 | Klimatronic 60c */}
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+                {[
+                    { id: 'SENSORS', label: isEn ? '1·32 VAG SENSORS' : '1·32 SENZORI VAG' },
+                    { id: 'TDI_TIMING', label: isEn ? '2·TDI-TIMING VP37' : '2·TDI-TIMING VP37' },
+                    { id: 'KLIMA_60', label: isEn ? '3·KLIMATRONIC 60c' : '3·KLIMATRONIC 60c' },
+                ].map(tool => (
+                    <TouchableOpacity
+                        key={tool.id}
+                        style={[
+                            styles.mwbBtn,
+                            vagToolMode === tool.id && { backgroundColor: accentColor, borderColor: accentColor },
+                            { flex: 1, paddingVertical: 8 }
+                        ]}
+                        onPress={() => {
+                            hapticTap();
+                            setVagToolMode(tool.id);
+                        }}
+                    >
+                        <Text style={[styles.mwbBtnText, vagToolMode === tool.id && { color: '#090403', fontWeight: '900' }]}>
+                            {tool.label}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            {/* ── ARMA SECRETĂ A: TDI-TIMING CHECKER (BOSCH VP37) ── */}
+            {vagToolMode === 'TDI_TIMING' && (
+                <View style={styles.tdiContainer}>
+                    <View style={styles.tdiHeader}>
+                        <Text style={[styles.tdiTitle, { color: accentColor }]}>
+                            {isEn ? 'VP37 TDI-TIMING CHECKER // BOSCH EDC15' : 'VERIFICARE AVANS POMPĂ VP37 // TDI-TIMING'}
+                        </Text>
+                        <View style={[styles.tdiStatusBadge, { borderColor: tdiTiming?.status === 'OPTIMAL' ? '#00FF66' : '#FF3300' }]}>
+                            <Text style={[styles.tdiStatusText, { color: tdiTiming?.status === 'OPTIMAL' ? '#00FF66' : '#FF3300' }]}>
+                                {isEn ? tdiTiming?.verdictEn : tdiTiming?.verdictRo}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Diagramă Vectorială VCDS */}
+                    <View style={styles.tdiGraphFrame}>
+                        <Svg width={SCREEN_WIDTH - 48} height={150} viewBox="0 0 320 150">
+                            {/* Grilă */}
+                            <Line x1="30" y1="20" x2="300" y2="20" stroke="#2A0E08" strokeDasharray="3,3" />
+                            <Line x1="30" y1="60" x2="300" y2="60" stroke="#2A0E08" strokeDasharray="3,3" />
+                            <Line x1="30" y1="100" x2="300" y2="100" stroke="#2A0E08" strokeDasharray="3,3" />
+                            <Line x1="30" y1="130" x2="300" y2="130" stroke="#4A180C" strokeWidth="1.5" />
+                            <Line x1="30" y1="20" x2="30" y2="130" stroke="#4A180C" strokeWidth="1.5" />
+
+                            {/* Cele 3 drepte oblice VCDS */}
+                            <Line x1="35" y1="35" x2="295" y2="20" stroke="#00FF66" strokeWidth="2" />
+                            <Line x1="35" y1="75" x2="295" y2="55" stroke="#00F0FF" strokeWidth="2.5" />
+                            <Line x1="35" y1="120" x2="295" y2="95" stroke="#FF3300" strokeWidth="2" />
+
+                            {/* Cursor poziție dinamică */}
+                            <Circle cx={Math.min(290, Math.max(35, (tdiTiming?.fuelTempC || 50) * 2.8 + 20))} cy={Math.min(130, Math.max(20, 140 - (tdiTiming?.injectionTimingDeg || 5) * 12))} r="7" fill={accentColor} opacity={0.3} />
+                            <Circle cx={Math.min(290, Math.max(35, (tdiTiming?.fuelTempC || 50) * 2.8 + 20))} cy={Math.min(130, Math.max(20, 140 - (tdiTiming?.injectionTimingDeg || 5) * 12))} r="4" fill={accentColor} stroke="#FFFFFF" strokeWidth="1" />
+
+                            <SvgText x="35" y="145" fill="#884422" fontSize="8" fontFamily={RETRO_FONT}>25°C</SvgText>
+                            <SvgText x="150" y="145" fill="#884422" fontSize="8" fontFamily={RETRO_FONT}>55°C</SvgText>
+                            <SvgText x="260" y="145" fill="#884422" fontSize="8" fontFamily={RETRO_FONT}>90°C ULEI</SvgText>
+                            <SvgText x="5" y="30" fill="#00FF66" fontSize="7" fontFamily={RETRO_FONT}>ADV</SvgText>
+                            <SvgText x="5" y="70" fill="#00F0FF" fontSize="7" fontFamily={RETRO_FONT}>OEM</SvgText>
+                            <SvgText x="5" y="115" fill="#FF3300" fontSize="7" fontFamily={RETRO_FONT}>RET</SvgText>
+                        </Svg>
+                    </View>
+
+                    {/* Citiri specifice VAG */}
+                    <View style={styles.tdiReadoutGrid}>
+                        <View style={styles.tdiReadoutCell}>
+                            <Text style={styles.tdiCellLabel}>{isEn ? 'FUEL TEMP RAW' : 'TEMP. POMPĂ RAW'}</Text>
+                            <Text style={[styles.tdiCellVal, { color: accentColor }]}>{tdiTiming?.fuelTempRaw} ({tdiTiming?.fuelTempC}°C)</Text>
+                        </View>
+                        <View style={styles.tdiReadoutCell}>
+                            <Text style={styles.tdiCellLabel}>{isEn ? 'TIMING BTDC' : 'AVANS DINAMIC'}</Text>
+                            <Text style={[styles.tdiCellVal, { color: '#00FF66' }]}>{tdiTiming?.injectionTimingDeg}° BTDC</Text>
+                        </View>
+                        <View style={styles.tdiReadoutCell}>
+                            <Text style={styles.tdiCellLabel}>{isEn ? 'N108 VALVE DUTY' : 'VALVĂ N108 CICLU'}</Text>
+                            <Text style={[styles.tdiCellVal, { color: '#FFAA00' }]}>{tdiTiming?.n108DutyPct}%</Text>
+                        </View>
+                    </View>
+                </View>
+            )}
+
+            {/* ── ARMA SECRETĂ B: KLIMATRONIC 60-CANALE SECRETE ── */}
+            {vagToolMode === 'KLIMA_60' && (
+                <View style={styles.klimaContainer}>
+                    <Text style={[styles.klimaTitle, { color: accentColor }]}>
+                        {isEn ? 'AUDI C4 KLIMATRONIC // 60-CHANNEL ONBOARD DIAGNOSTIC' : 'CLIMATRONIC AUDI C4 // DIAGNOZĂ 60 CANALE SECRETE'}
+                    </Text>
+
+                    {/* Afișaj Dublu Climatronic Roșu */}
+                    <View style={styles.klimaDisplayFrame}>
+                        <View style={styles.klimaDisplayBox}>
+                            <Text style={styles.klimaGhost}>88c</Text>
+                            <Text style={styles.klimaVal}>{klimatronicChannels?.[0]?.ch || '17c'}</Text>
+                            <Text style={styles.klimaSub}>{isEn ? 'CHANNEL' : 'CANAL'}</Text>
+                        </View>
+
+                        <View style={styles.klimaDisplayBox}>
+                            <Text style={styles.klimaGhost}>8888</Text>
+                            <Text style={styles.klimaVal}>{klimatronicChannels?.[0]?.val || '0'}</Text>
+                            <Text style={styles.klimaSub}>{klimatronicChannels?.[0]?.unit || 'km/h'}</Text>
+                        </View>
+                    </View>
+
+                    {/* Canale Rapide */}
+                    <View style={styles.klimaListGrid}>
+                        {safeArr(klimatronicChannels).map(ch => (
+                            <View key={ch.ch} style={styles.klimaRowCard}>
+                                <Text style={styles.klimaChannelTag}>{ch.ch}</Text>
+                                <Text style={styles.klimaChannelLabel}>{ch.label}</Text>
+                                <Text style={[styles.klimaChannelVal, { color: accentColor }]}>{ch.val} {ch.unit}</Text>
+                            </View>
+                        ))}
+                    </View>
+                </View>
+            )}
+
+            {/* ── BARA DE CĂUTARE DTC ȘI SENZORI ── */}
+            {vagToolMode === 'SENSORS' && (
+                <View style={styles.dtcSearchBox}>
+                    <TextInput
+                        style={styles.dtcSearchInput}
+                        placeholder={isEn ? "Search DTC (P0234, 00550, N75, MAF, DPF) or sensor..." : "Caută cod DTC (P0234, 00550, N75, MAF, DPF) sau senzor..."}
+                        placeholderTextColor="#663300"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.dtcClearBtn}>
+                            <Text style={styles.dtcClearText}>✕</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            )}
+
+            {/* Rezultate Baza DTC dacă există */}
+            {vagToolMode === 'SENSORS' && safeArr(matchedDtc).length > 0 && (
+                <View style={styles.dtcResultsBox}>
+                    <Text style={styles.dtcResultsTitle}>{isEn ? 'DTC DATABASE MATCHES:' : 'REZULTATE BAZĂ DATE DTC:'}</Text>
+                    {matchedDtc.map(item => (
+                        <View key={item.code} style={styles.dtcCard}>
+                            <View style={styles.dtcCardHead}>
+                                <Text style={styles.dtcCode}>{item.code} / VAG {item.vagCode}</Text>
+                                <Text style={[styles.dtcSeverity, { color: item.severity === 'CRIT' ? '#FF3300' : '#FFAA00' }]}>{item.severity}</Text>
+                            </View>
+                            <Text style={styles.dtcTitle}>{item.title}</Text>
+                            <Text style={styles.dtcCause}><Text style={{ color: '#FFAA00' }}>CAUZĂ:</Text> {item.cause}</Text>
+                            <Text style={styles.dtcSymptoms}><Text style={{ color: '#FF3300' }}>SIMPTOM:</Text> {item.symptoms}</Text>
+                            <Text style={styles.dtcCost}><Text style={{ color: '#00FF66' }}>COST EST:</Text> {item.costEst} · {item.action}</Text>
+                        </View>
+                    ))}
+                </View>
+            )}
+
             {/* Casetă VAG 1551 de atelier */}
             <View style={styles.vagStationCasing}>
                 <View style={styles.vagStationLcdFrame}>
@@ -404,11 +639,66 @@ const StationAudiServiceheft = React.memo(function StationAudiServiceheft({
     maintenanceItems,
     legalDocuments,
     markServiceItemCompleted,
+    tireSize,
+    setTireSize,
+    vehicleMassKg,
+    setVehicleMassKg,
+    fuelPricePerLiter,
+    setFuelPricePerLiter,
     appLang = 'RO',
 }) {
     const isEn = appLang === 'EN';
     return (
         <View style={styles.serviceheftContainer}>
+                        {/* ── CONFIGURATOR RAPID VEHICUL, ROȚI & PREȚ CARBURANT ── */}
+            <View style={styles.audiConfiguratorCard}>
+                <Text style={styles.audiConfigTitle}>
+                    {isEn ? 'VEHICLE SPECS & TIRE CONFIGURATOR' : 'CONFIGURATOR RAPID ROȚI & PREȚ CARBURANT'}
+                </Text>
+
+                {/* Anvelope */}
+                <Text style={styles.audiConfigLabel}>{isEn ? 'TIRE SIZE (ROLLING RADIUS):' : 'DIMENSIUNE ANVELOPE (RAZĂ RULARE):'}</Text>
+                <View style={styles.audiConfigRow}>
+                    {['205/55 R16', '225/50 R17', '225/45 R18', '235/40 R19'].map(s => (
+                        <TouchableOpacity
+                            key={s}
+                            style={[styles.audiConfigBtn, tireSize === s && styles.audiConfigBtnActive]}
+                            onPress={() => { hapticTap(); setTireSize(s); }}
+                        >
+                            <Text style={[styles.audiConfigBtnText, tireSize === s && styles.audiConfigBtnTextActive]}>{s}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* Masă Mașină */}
+                <Text style={styles.audiConfigLabel}>{isEn ? 'CURB WEIGHT (DYNO CP):' : 'MASĂ VEHICUL (PENTRU DYNO):'}</Text>
+                <View style={styles.audiConfigRow}>
+                    {[1250, 1450, 1650, 1850].map(m => (
+                        <TouchableOpacity
+                            key={m}
+                            style={[styles.audiConfigBtn, vehicleMassKg === m && styles.audiConfigBtnActive]}
+                            onPress={() => { hapticTap(); setVehicleMassKg(m); }}
+                        >
+                            <Text style={[styles.audiConfigBtnText, vehicleMassKg === m && styles.audiConfigBtnTextActive]}>{m} kg</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* Preț Carburant */}
+                <Text style={styles.audiConfigLabel}>{isEn ? 'FUEL PRICE (RON/L):' : 'PREȚ COMBUSTIBIL (RON/L):'}</Text>
+                <View style={styles.audiConfigRow}>
+                    {[7.10, 7.45, 7.80, 8.20].map(p => (
+                        <TouchableOpacity
+                            key={p}
+                            style={[styles.audiConfigBtn, fuelPricePerLiter === p && styles.audiConfigBtnActive]}
+                            onPress={() => { hapticTap(); setFuelPricePerLiter(p); }}
+                        >
+                            <Text style={[styles.audiConfigBtnText, fuelPricePerLiter === p && styles.audiConfigBtnTextActive]}>{p.toFixed(2)}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            </View>
+
             <Text style={styles.vagSectionHeader}>{isEn ? 'AUDI SERVICE BOOK // CONDITION-BASED MAINTENANCE (CBM):' : 'CARNET SERVICE AUDI // MENTENANȚĂ PREDICTIVĂ (CBM):'}</Text>
             {safeArr(maintenanceItems).map((item) => (
                 <View key={item.id} style={styles.serviceheftCard}>
@@ -900,6 +1190,19 @@ export default function RetroAudi96Paradigm() {
                         <Text style={[styles.v2ButtonText, { color: clusterAccentColor }]}>🎮</Text>
                     </TouchableOpacity>
 
+                    {/* Bilanț Cursă Rapid */}
+                    <TouchableOpacity
+                        style={[styles.v2Button, { borderColor: clusterAccentColor, backgroundColor: `${clusterAccentColor}18` }]}
+                        onPress={() => {
+                            hapticTap();
+                            core.openTripDebrief();
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.v2ButtonText, { color: clusterAccentColor }]}>🧾</Text>
+                    </TouchableOpacity>
+
                     {/* 5. Dimmer Tag/Nacht Rheostat */}
                     <TouchableOpacity
                         style={[styles.v2Button, { borderColor: clusterAccentColor }]}
@@ -1168,7 +1471,16 @@ export default function RetroAudi96Paradigm() {
                 )}
 
                 {/* ── 2 VAG 1551: DIAGNOSE & 32 MESSWERTBLÖCKE ── */}
-                {activeSwitch === '2' && <StationAudiVag1551 virtualSensors={core.virtualSensors} appLang={appLang} />}
+                {activeSwitch === '2' && <StationAudiVag1551
+                        virtualSensors={core.virtualSensors}
+                        tdiTiming={core.tdiTiming}
+                        klimatronicChannels={core.klimatronicChannels}
+                        searchQuery={core.searchQuery}
+                        setSearchQuery={core.setSearchQuery}
+                        matchedDtc={core.matchedDtc}
+                        accentColor={clusterAccentColor}
+                        appLang={appLang}
+                    />}
 
                 {/* ── 3 FAHRTENBUCH: JURNAL & REPLAY CASSETE AUDI GAMMA ── */}
                 {activeSwitch === '3' && (
@@ -1195,6 +1507,12 @@ export default function RetroAudi96Paradigm() {
                         maintenanceItems={core.maintenanceItems}
                         legalDocuments={core.legalDocuments}
                         markServiceItemCompleted={core.markServiceItemCompleted}
+                        tireSize={core.tireSize}
+                        setTireSize={core.setTireSize}
+                        vehicleMassKg={core.vehicleMassKg}
+                        setVehicleMassKg={core.setVehicleMassKg}
+                        fuelPricePerLiter={core.fuelPricePerLiter}
+                        setFuelPricePerLiter={core.setFuelPricePerLiter}
                     />
                 )}
 
@@ -1285,6 +1603,356 @@ export default function RetroAudi96Paradigm() {
 }
 
 const styles = StyleSheet.create({
+
+    /* TDI Timing & Klimatronic Styles */
+    tdiContainer: {
+        backgroundColor: '#110502',
+        borderWidth: 1,
+        borderColor: '#4A180C',
+        borderRadius: 4,
+        padding: 10,
+        marginBottom: 12,
+    },
+    tdiHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    tdiTitle: {
+        fontFamily: RETRO_FONT,
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    tdiStatusBadge: {
+        borderWidth: 1,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 3,
+    },
+    tdiStatusText: {
+        fontFamily: RETRO_FONT,
+        fontSize: 8,
+        fontWeight: '900',
+    },
+    tdiGraphFrame: {
+        backgroundColor: '#090201',
+        borderWidth: 1,
+        borderColor: '#2A0E08',
+        borderRadius: 4,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 4,
+    },
+    tdiReadoutGrid: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 8,
+        gap: 6,
+    },
+    tdiReadoutCell: {
+        flex: 1,
+        backgroundColor: '#190703',
+        borderWidth: 1,
+        borderColor: '#3D150A',
+        borderRadius: 3,
+        padding: 6,
+    },
+    tdiCellLabel: {
+        fontFamily: RETRO_FONT,
+        fontSize: 7,
+        color: '#884422',
+        marginBottom: 2,
+    },
+    tdiCellVal: {
+        fontFamily: RETRO_FONT,
+        fontSize: 9,
+        fontWeight: '900',
+    },
+    klimaContainer: {
+        backgroundColor: '#110502',
+        borderWidth: 1,
+        borderColor: '#4A180C',
+        borderRadius: 4,
+        padding: 10,
+        marginBottom: 12,
+    },
+    klimaTitle: {
+        fontFamily: RETRO_FONT,
+        fontSize: 10,
+        fontWeight: '900',
+        marginBottom: 6,
+    },
+    klimaDisplayFrame: {
+        flexDirection: 'row',
+        gap: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#060100',
+        borderWidth: 2,
+        borderColor: '#2A0803',
+        borderRadius: 4,
+        padding: 10,
+        marginBottom: 8,
+    },
+    klimaDisplayBox: {
+        flex: 1,
+        backgroundColor: '#160401',
+        borderWidth: 1,
+        borderColor: '#4A1205',
+        borderRadius: 4,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 8,
+        position: 'relative',
+    },
+    klimaGhost: {
+        position: 'absolute',
+        fontFamily: RETRO_FONT,
+        fontSize: 24,
+        fontWeight: '900',
+        color: '#FF2200',
+        opacity: 0.12,
+    },
+    klimaVal: {
+        fontFamily: RETRO_FONT,
+        fontSize: 24,
+        fontWeight: '900',
+        color: '#FF3300',
+    },
+    klimaSub: {
+        fontFamily: RETRO_FONT,
+        fontSize: 7,
+        color: '#883311',
+        marginTop: 2,
+    },
+    klimaListGrid: {
+        gap: 4,
+        marginTop: 6,
+    },
+    klimaRowCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#1A0803',
+        borderWidth: 1,
+        borderColor: '#331005',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 3,
+    },
+    klimaChannelTag: {
+        fontFamily: RETRO_FONT,
+        fontSize: 9,
+        fontWeight: '900',
+        color: '#FF8800',
+        width: 32,
+    },
+    klimaChannelLabel: {
+        fontFamily: RETRO_FONT,
+        fontSize: 8,
+        color: '#AA6644',
+        flex: 1,
+    },
+    klimaChannelVal: {
+        fontFamily: RETRO_FONT,
+        fontSize: 9,
+        fontWeight: '900',
+    },
+    dtcSearchBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#120502',
+        borderWidth: 1,
+        borderColor: '#3D150A',
+        borderRadius: 4,
+        paddingHorizontal: 8,
+        marginBottom: 8,
+    },
+    dtcSearchInput: {
+        flex: 1,
+        fontFamily: RETRO_FONT,
+        fontSize: 9,
+        color: '#FFFFFF',
+        paddingVertical: 6,
+    },
+    dtcClearBtn: {
+        padding: 4,
+    },
+    dtcClearText: {
+        color: '#FF8800',
+        fontSize: 12,
+        fontWeight: '900',
+    },
+    dtcResultsBox: {
+        backgroundColor: '#120502',
+        borderWidth: 1,
+        borderColor: '#4A180C',
+        borderRadius: 4,
+        padding: 8,
+        marginBottom: 10,
+    },
+    dtcResultsTitle: {
+        fontFamily: RETRO_FONT,
+        fontSize: 8,
+        color: '#FFAA00',
+        fontWeight: '900',
+        marginBottom: 4,
+    },
+    dtcCard: {
+        backgroundColor: '#0A0301',
+        borderWidth: 1,
+        borderColor: '#2A0E08',
+        borderRadius: 3,
+        padding: 6,
+        marginBottom: 6,
+    },
+    dtcCardHead: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 2,
+    },
+    dtcCode: {
+        fontFamily: RETRO_FONT,
+        fontSize: 9,
+        fontWeight: '900',
+        color: '#FF3300',
+    },
+    dtcSeverity: {
+        fontFamily: RETRO_FONT,
+        fontSize: 7,
+        fontWeight: '900',
+    },
+    dtcTitle: {
+        fontFamily: RETRO_FONT,
+        fontSize: 8,
+        color: '#FFFFFF',
+        fontWeight: '800',
+    },
+    dtcCause: {
+        fontFamily: RETRO_FONT,
+        fontSize: 7,
+        color: '#888888',
+        marginTop: 2,
+    },
+    dtcSymptoms: {
+        fontFamily: RETRO_FONT,
+        fontSize: 7,
+        color: '#888888',
+        marginTop: 1,
+    },
+    dtcCost: {
+        fontFamily: RETRO_FONT,
+        fontSize: 7,
+        marginTop: 2,
+    },
+    audiConfiguratorCard: {
+        backgroundColor: '#140602',
+        borderWidth: 1,
+        borderColor: '#3D150A',
+        borderRadius: 4,
+        padding: 8,
+        marginBottom: 12,
+    },
+    audiConfigTitle: {
+        fontFamily: RETRO_FONT,
+        fontSize: 9,
+        fontWeight: '900',
+        color: '#FFAA00',
+        marginBottom: 6,
+    },
+    audiConfigLabel: {
+        fontFamily: RETRO_FONT,
+        fontSize: 7,
+        color: '#884422',
+        marginTop: 4,
+        marginBottom: 2,
+    },
+    audiConfigRow: {
+        flexDirection: 'row',
+        gap: 4,
+        flexWrap: 'wrap',
+    },
+    audiConfigBtn: {
+        backgroundColor: '#0A0301',
+        borderWidth: 1,
+        borderColor: '#2A0E08',
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 3,
+    },
+    audiConfigBtnActive: {
+        backgroundColor: '#FF6600',
+        borderColor: '#FF8800',
+    },
+    audiConfigBtnText: {
+        fontFamily: RETRO_FONT,
+        fontSize: 8,
+        color: '#AA6644',
+    },
+    audiConfigBtnTextActive: {
+        color: '#090403',
+        fontWeight: '900',
+    },
+    debriefBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 16,
+    },
+    debriefPaper: {
+        width: '100%',
+        maxWidth: 360,
+        backgroundColor: '#1A0803',
+        borderWidth: 2,
+        borderColor: '#FFAA00',
+        borderRadius: 6,
+        padding: 14,
+    },
+    debriefHead: {
+        fontFamily: RETRO_FONT,
+        fontSize: 8,
+        color: '#884422',
+        textAlign: 'center',
+    },
+    debriefTitle: {
+        fontFamily: RETRO_FONT,
+        fontSize: 11,
+        fontWeight: '900',
+        color: '#FFAA00',
+        textAlign: 'center',
+        marginTop: 4,
+    },
+    debriefSub: {
+        fontFamily: RETRO_FONT,
+        fontSize: 7,
+        color: '#663311',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    debriefDivider: {
+        height: 1,
+        backgroundColor: '#4A180C',
+        marginVertical: 6,
+    },
+    debriefRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginVertical: 2,
+    },
+    debriefLabel: {
+        fontFamily: RETRO_FONT,
+        fontSize: 8,
+        color: '#885533',
+    },
+    debriefVal: {
+        fontFamily: RETRO_FONT,
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+
     container: {
         flex: 1,
         backgroundColor: '#050200',

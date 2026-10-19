@@ -128,8 +128,235 @@ const CYLINDER_ORDER = Object.freeze([1, 2, 4, 5, 3]);
 
 // ─── MEMOIZED SPATIAL SHEET SUB-STATIONS (FRAME ISOLATION & ZERO GC) ──────────
 
+// ─── CFD SIGNATURE: 3D WIND TUNNEL & THERMAL STRESS MAPPING ──────────────────
+const StationSpatialCfd = React.memo(function StationSpatialCfd({
+    cfdData,
+    telemetry,
+    activeAccent,
+    appLang = 'RO'
+}) {
+    const isEn = appLang === 'EN';
+    const speed = safeNum(telemetry?.speed, 0);
+    const coolantTemp = safeNum(telemetry?.coolantTemp, 90);
+    const oilTemp = safeNum(telemetry?.oilTemp, 90);
+    const exhaustTemp = safeNum(telemetry?.exhaustTemp, 380);
+    const chraTemp = safeNum(telemetry?.chraTemp, 210);
+
+    const cfdWidth = SCREEN_WIDTH - 48;
+    const cfdHeight = 150;
+
+    return (
+        <View>
+            <View style={styles.sheetHeaderRow}>
+                <View>
+                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
+                        {isEn ? '3D CFD WIND TUNNEL & THERMAL STRESS MAPPING' : 'TUNEL AERODINAMIC 3D CFD & HARTĂ STRES TERMIC'}
+                    </Text>
+                    <Text style={styles.sheetSub}>ANALIZĂ REZISTENȚĂ LA ÎNAINTARE (Cd=0.29) ȘI FLUXURI LAMINARE</Text>
+                </View>
+                <View style={[styles.cfdBadge, { borderColor: activeAccent.primary }]}>
+                    <Text style={[styles.cfdBadgeText, { color: activeAccent.primary }]}>Cd: {cfdData?.dragCoefficientCd}</Text>
+                </View>
+            </View>
+
+            {/* 1. SVG Aerodynamic Wind Tunnel Visualization */}
+            <View style={styles.cfdChamberBox}>
+                <Svg width={cfdWidth} height={cfdHeight} viewBox="0 0 320 150">
+                    {/* Tunnel Boundary */}
+                    <Line x1="10" y1="15" x2="310" y2="15" stroke="rgba(255,255,255,0.15)" strokeWidth="1" strokeDasharray="4,4" />
+                    <Line x1="10" y1="135" x2="310" y2="135" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+
+                    {/* Ground boundary layer */}
+                    <Rect x="10" y="136" width="300" height="4" fill="rgba(0, 240, 255, 0.15)" />
+
+                    {/* Simplified Car Profile Silhouettes */}
+                    <Path
+                        d="M 60 135 L 75 110 L 110 100 L 145 70 L 210 70 L 245 105 L 270 110 L 275 135 Z"
+                        fill="rgba(10, 25, 45, 0.8)"
+                        stroke={activeAccent.primary}
+                        strokeWidth="1.8"
+                    />
+
+                    {/* Wind Tunnel Streamlines */}
+                    {/* Streamline 1: Roof laminar flow */}
+                    <Path
+                        d="M 15 50 Q 80 50 115 62 Q 145 58 210 58 Q 250 65 305 95"
+                        fill="none"
+                        stroke="#00F0FF"
+                        strokeWidth="2"
+                        strokeDasharray="12, 6"
+                    />
+                    {/* Streamline 2: Hood flow */}
+                    <Path
+                        d="M 15 85 Q 70 85 105 88 Q 140 68 200 68 Q 240 85 305 110"
+                        fill="none"
+                        stroke="#00FF66"
+                        strokeWidth="2"
+                        strokeDasharray="10, 5"
+                    />
+                    {/* Streamline 3: Underbody ground-effect Venturi */}
+                    <Path
+                        d="M 15 128 L 70 128 L 265 128 Q 285 125 305 118"
+                        fill="none"
+                        stroke="#FFB800"
+                        strokeWidth="1.8"
+                        strokeDasharray="8, 4"
+                    />
+                    {/* Wake turbulence vortex behind trunk */}
+                    <Circle cx="282" cy="98" r="8" fill="none" stroke="#FF5500" strokeWidth="1.5" strokeDasharray="3,3" />
+                    <Circle cx="295" cy="112" r="6" fill="none" stroke="#FF2A2A" strokeWidth="1.5" strokeDasharray="3,3" />
+
+                    {/* Flow Velocity Vectors */}
+                    <Line x1="20" y1="28" x2="55" y2="28" stroke="#00F0FF" strokeWidth="2" />
+                    <Line x1="50" y1="24" x2="56" y2="28" stroke="#00F0FF" strokeWidth="2" />
+                    <Line x1="50" y1="32" x2="56" y2="28" stroke="#00F0FF" strokeWidth="2" />
+                </Svg>
+            </View>
+
+            {/* Aerodynamic Real-time Metrics Grid */}
+            <View style={styles.cfdMetricsGrid}>
+                <View style={styles.cfdMetricCard}>
+                    <Text style={styles.cfdMetricLabel}>{isEn ? 'DRAG FORCE (Fx)' : 'REZISTENȚĂ LA ÎNAINTARE'}</Text>
+                    <Text style={[styles.cfdMetricVal, { color: '#00F0FF' }]}>{cfdData?.dragForceNewtons || 0} N</Text>
+                    <Text style={styles.cfdMetricSub}>Suprafață: {cfdData?.frontalAreaM2} m²</Text>
+                </View>
+                <View style={styles.cfdMetricCard}>
+                    <Text style={styles.cfdMetricLabel}>{isEn ? 'AERO DOWNFORCE (Fz)' : 'APĂSARE AERODINAMICĂ'}</Text>
+                    <Text style={[styles.cfdMetricVal, { color: '#00FF66' }]}>{cfdData?.downforceNewtons || 0} N</Text>
+                    <Text style={styles.cfdMetricSub}>Echilibru Axe: 48:52</Text>
+                </View>
+                <View style={styles.cfdMetricCard}>
+                    <Text style={styles.cfdMetricLabel}>{isEn ? 'AERO POWER LOSS' : 'PUTERE CONSUMATĂ AER'}</Text>
+                    <Text style={[styles.cfdMetricVal, { color: '#FFB800' }]}>{cfdData?.aeroPowerLossKw || 0} kW</Text>
+                    <Text style={styles.cfdMetricSub}>Viteză Aer: {cfdData?.airSpeedMs} m/s</Text>
+                </View>
+            </View>
+
+            {/* 2. Component Thermal Stress Color Mapping */}
+            <Text style={[styles.categoryTitle, { color: activeAccent.primary, marginTop: 14 }]}>
+                {isEn ? '3D COMPONENT THERMAL STRESS MAPPING' : 'HARTĂ GRADIENT STRES TERMIC PE COMPONENTE'}
+            </Text>
+
+            <View style={styles.thermalStressGrid}>
+                {/* Engine Bay Block */}
+                <View style={styles.thermalStressCard}>
+                    <View style={styles.thermalCardHeader}>
+                        <Text style={styles.thermalCardTitle}>BLOC MOTOR & CHIULASĂ</Text>
+                        <View style={[styles.thermalBadge, { backgroundColor: coolantTemp > 98 ? '#FF2A2A22' : '#00FF6622', borderColor: coolantTemp > 98 ? '#FF2A2A' : '#00FF66' }]}>
+                            <Text style={[styles.thermalBadgeText, { color: coolantTemp > 98 ? '#FF2A2A' : '#00FF66' }]}>
+                                {coolantTemp > 98 ? 'STRES RIDICAT' : 'OPTIM'}
+                            </Text>
+                        </View>
+                    </View>
+                    <Text style={styles.thermalMetric}>{coolantTemp}°C <Text style={styles.thermalUnit}>ANTIGEL</Text> · {oilTemp}°C <Text style={styles.thermalUnit}>ULEI</Text></Text>
+                    <Text style={styles.thermalDesc}>Gradient de temperatură carter: Stres termomecanic nominal.</Text>
+                </View>
+
+                {/* Turbo Core CHRA */}
+                <View style={styles.thermalStressCard}>
+                    <View style={styles.thermalCardHeader}>
+                        <Text style={styles.thermalCardTitle}>MIEZ TURBINĂ CHRA</Text>
+                        <View style={[styles.thermalBadge, { backgroundColor: chraTemp > 240 ? '#FFB80022' : '#00FF6622', borderColor: chraTemp > 240 ? '#FFB800' : '#00FF66' }]}>
+                            <Text style={[styles.thermalBadgeText, { color: chraTemp > 240 ? '#FFB800' : '#00FF66' }]}>
+                                {chraTemp > 240 ? 'COOLDOWN NECESAR' : 'NOMINAL'}
+                            </Text>
+                        </View>
+                    </View>
+                    <Text style={styles.thermalMetric}>{chraTemp}°C <Text style={styles.thermalUnit}>RĂCIRE LAGĂRE</Text></Text>
+                    <Text style={styles.thermalDesc}>Risc de cocsare a uleiului la oprire bruscă: Minim la ralanti.</Text>
+                </View>
+
+                {/* Exhaust & Downpipe */}
+                <View style={styles.thermalStressCard}>
+                    <View style={styles.thermalCardHeader}>
+                        <Text style={styles.thermalCardTitle}>EVACUARE & DPF REGENERARE</Text>
+                        <View style={[styles.thermalBadge, { backgroundColor: exhaustTemp > 650 ? '#FF550022' : '#00F0FF22', borderColor: exhaustTemp > 650 ? '#FF5500' : '#00F0FF' }]}>
+                            <Text style={[styles.thermalBadgeText, { color: exhaustTemp > 650 ? '#FF5500' : '#00F0FF' }]}>
+                                {exhaustTemp > 650 ? 'REGEN DPF' : 'TERMIC OK'}
+                            </Text>
+                        </View>
+                    </View>
+                    <Text style={styles.thermalMetric}>{exhaustTemp}°C <Text style={styles.thermalUnit}>EGT GAZE</Text></Text>
+                    <Text style={styles.thermalDesc}>Disipare termică galerie evacuare & conector flexibil.</Text>
+                </View>
+            </View>
+            {/* ── HOLOGRAPHIC FLOATING GLASS CAPSULE DEBRIEF ── */}
+            <Modal
+                visible={core.showDebriefModal}
+                transparent
+                animationType="fade"
+                onRequestClose={core.closeTripDebrief}
+            >
+                <View style={styles.spatialDebriefBackdrop}>
+                    <View style={[styles.spatialDebriefCard, { borderColor: activeAccent.primary }]}>
+                        <View style={styles.spatialDebriefHead}>
+                            <View style={[styles.spatialDebriefBadge, { backgroundColor: activeAccent.primary }]}>
+                                <Text style={styles.spatialDebriefBadgeText}>3D TELEMETRY CAPSULE</Text>
+                            </View>
+                            <Text style={[styles.spatialDebriefTitle, { color: activeAccent.primary }]}>
+                                {isEn ? 'POST-TRIP TELEMETRY DEBRIEF' : 'BILANȚ HOLOGRAFIC POST-CURSĂ'}
+                            </Text>
+                        </View>
+                        <Text style={styles.spatialDebriefSub}>HOLOGRAM RECONSTRUCTION · 32 KALMAN OBSERVERS LOG</Text>
+
+                        <View style={styles.spatialDebriefGrid}>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'DISTANCE' : 'DISTANȚĂ'}</Text>
+                                <Text style={[styles.spatialDebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.km} KM</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'DURATION' : 'DURATĂ'}</Text>
+                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.duration}</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'MAX SPEED' : 'VITEZĂ MAXIMĂ'}</Text>
+                                <Text style={[styles.spatialDebriefVal, { color: '#00F0FF' }]}>{core.lastTripDebrief?.maxSpeed} KM/H</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'AVG CONSUMPTION' : 'CONSUM MEDIU'}</Text>
+                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.avgConsumption} L/100</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'FUEL BURNED' : 'CARBURANT'}</Text>
+                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.fuelBurnedLiters} L ({core.lastTripDebrief?.fuelCostRon} RON)</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'BRAKE ENERGY' : 'DISIPARE FRÂNE'}</Text>
+                                <Text style={[styles.spatialDebriefVal, { color: '#FFB800' }]}>{core.lastTripDebrief?.brakeEnergyMj} MJ</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'OIL WEAR' : 'UZURĂ ULEI'}</Text>
+                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.oilStressFactor}x</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'HEALTH SCORE' : 'SCOR SĂNĂTATE'}</Text>
+                                <Text style={[styles.spatialDebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.healthScore}%</Text>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.spatialDebriefCloseBtn, { borderColor: activeAccent.primary, backgroundColor: `${activeAccent.primary}22` }]}
+                            onPress={() => {
+                                hapticTap();
+                                core.closeTripDebrief();
+                            }}
+                        >
+                            <Text style={[styles.spatialDebriefCloseText, { color: activeAccent.primary }]}>
+                                [ ✕ {isEn ? 'DISMISS CAPSULE' : 'ÎNCHIDE CAPSULĂ'} ]
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+        </View>
+    );
+});
+
 const StationSpatialXRay = React.memo(function StationSpatialXRay({
     virtualSensors,
+    searchQuery = '',
+    setSearchQuery,
+    matchedDtc = [],
     isExplodedView,
     setIsExplodedView,
     activeAccent,
@@ -150,7 +377,7 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
             <View style={styles.sheetHeaderRow}>
                 <View>
                     <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
-                        3D ANATOMIE VIRTUALĂ · 32 OBSERVATORI FIZICI
+                        {isEn ? '3D VIRTUAL ANATOMY · 32 PHYSICAL OBSERVERS' : '3D ANATOMIE VIRTUALĂ · 32 OBSERVATORI FIZICI'}
                     </Text>
                     <Text style={styles.sheetSub}>MOTOR KALMAN FILTER · DIAGNOZĂ TOLERANȚE</Text>
                 </View>
@@ -167,6 +394,44 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
                     </Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Fast DTC & Sensor Holographic Search Box */}
+            <View style={styles.spatialSearchBox}>
+                <Text style={[styles.spatialSearchPrefix, { color: activeAccent.primary }]}>🔍 DTC QUERY:</Text>
+                <TextInput
+                    style={styles.spatialSearchInput}
+                    placeholder={isEn ? "Search DTC (P0234, 00550, MAF, DPF) or sensor..." : "Caută cod DTC (P0234, 00550, MAF, DPF) sau senzor..."}
+                    placeholderTextColor="#64748B"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                />
+                {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Text style={{ color: activeAccent.primary, fontFamily: MONO, fontWeight: '900' }}>✕</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {/* Matched DTC Cards */}
+            {safeArr(matchedDtc).length > 0 && (
+                <View style={styles.spatialDtcMatchesBox}>
+                    <Text style={[styles.spatialDtcMatchesTitle, { color: activeAccent.primary }]}>
+                        {isEn ? '// DTC DATABASE HOLOGRAPHIC MATCHES:' : '// ANOMALII DTC IDENTIFICATE:'}
+                    </Text>
+                    {matchedDtc.map(item => (
+                        <View key={item.code} style={styles.spatialDtcCard}>
+                            <View style={styles.spatialDtcCardHead}>
+                                <Text style={[styles.spatialDtcCode, { color: activeAccent.primary }]}>{item.code} / VAG {item.vagCode}</Text>
+                                <Text style={[styles.spatialDtcSev, { color: item.severity === 'CRIT' ? '#FF2A2A' : '#FFB800' }]}>{item.severity}</Text>
+                            </View>
+                            <Text style={styles.spatialDtcCardTitle}>{item.title}</Text>
+                            <Text style={styles.spatialDtcDesc}><Text style={{ color: '#64748B' }}>CAUZĂ: </Text>{item.cause}</Text>
+                            <Text style={styles.spatialDtcDesc}><Text style={{ color: '#64748B' }}>SIMPTOM: </Text>{item.symptoms}</Text>
+                            <Text style={styles.spatialDtcCost}><Text style={{ color: '#00FF66' }}>COST EST: </Text>{item.costEst} · {item.action}</Text>
+                        </View>
+                    ))}
+                </View>
+            )}
 
             {Object.entries(virtualSensors || {}).map(([catKey, sensors]) => (
                 <View key={catKey} style={styles.spatialCategoryBox}>
@@ -354,16 +619,72 @@ const StationSpatialService = React.memo(function StationSpatialService({
     maintenanceItems,
     legalDocuments,
     markServiceItemCompleted,
+    tireSize,
+    setTireSize,
+    vehicleMassKg,
+    setVehicleMassKg,
+    fuelPricePerLiter,
+    setFuelPricePerLiter,
     activeAccent
 }) {
+    const isEn = appLang === 'EN';
     return (
         <View>
             <View style={styles.sheetHeaderRow}>
                 <View>
                     <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
-                        TESLA SERVICE CENTER · UZURĂ FIZICĂ & ACTE
+                        {isEn ? 'TESLA SERVICE CENTER · VEHICLE SPECS & WEAR' : 'TESLA SERVICE CENTER · CONFIGURARE VEHICUL & UZURĂ'}
                     </Text>
                     <Text style={styles.sheetSub}>MODELE ARRHENIUS / ARCHARD & TERMENE VALABILITATE</Text>
+                </View>
+            </View>
+
+            {/* ── Holographic Glass Configurator ── */}
+            <View style={styles.spatialConfigCard}>
+                <Text style={[styles.spatialConfigTitle, { color: activeAccent.primary }]}>
+                    {isEn ? '// VEHICLE SPECS, TIRES & FUEL SETUP' : '// CONFIGURATOR ANVELOPE, MASĂ & CARBURANT'}
+                </Text>
+
+                {/* Tire Size */}
+                <Text style={styles.spatialConfigLabel}>{isEn ? 'TIRE PROFILE (ROLLING RADIUS):' : 'PROFIL ANVELOPE (RAZĂ RULARE):'}</Text>
+                <View style={styles.spatialConfigRow}>
+                    {['205/55 R16', '225/50 R17', '225/45 R18', '235/40 R19'].map(s => (
+                        <TouchableOpacity
+                            key={s}
+                            style={[styles.spatialConfigBtn, tireSize === s && { backgroundColor: activeAccent.primary, borderColor: activeAccent.primary }]}
+                            onPress={() => { hapticTap(); setTireSize(s); }}
+                        >
+                            <Text style={[styles.spatialConfigBtnText, tireSize === s && { color: '#04070D', fontWeight: '900' }]}>{s}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* Vehicle Mass */}
+                <Text style={styles.spatialConfigLabel}>{isEn ? 'CURB WEIGHT (CHASSIS INERTIA):' : 'MASĂ ȘASIU (CALCUL DYNO & INERȚIE):'}</Text>
+                <View style={styles.spatialConfigRow}>
+                    {[1250, 1450, 1650, 1850].map(m => (
+                        <TouchableOpacity
+                            key={m}
+                            style={[styles.spatialConfigBtn, vehicleMassKg === m && { backgroundColor: activeAccent.primary, borderColor: activeAccent.primary }]}
+                            onPress={() => { hapticTap(); setVehicleMassKg(m); }}
+                        >
+                            <Text style={[styles.spatialConfigBtnText, vehicleMassKg === m && { color: '#04070D', fontWeight: '900' }]}>{m} kg</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* Fuel Price */}
+                <Text style={styles.spatialConfigLabel}>{isEn ? 'FUEL PRICE (RON/L):' : 'PREȚ COMBUSTIBIL (RON/L):'}</Text>
+                <View style={styles.spatialConfigRow}>
+                    {[7.10, 7.45, 7.80, 8.20].map(p => (
+                        <TouchableOpacity
+                            key={p}
+                            style={[styles.spatialConfigBtn, fuelPricePerLiter === p && { backgroundColor: activeAccent.primary, borderColor: activeAccent.primary }]}
+                            onPress={() => { hapticTap(); setFuelPricePerLiter(p); }}
+                        >
+                            <Text style={[styles.spatialConfigBtnText, fuelPricePerLiter === p && { color: '#04070D', fontWeight: '900' }]}>{p.toFixed(2)}</Text>
+                        </TouchableOpacity>
+                    ))}
                 </View>
             </View>
 
@@ -952,6 +1273,18 @@ export default function SpatialCanvasParadigm() {
                         <Text style={[styles.hudActionBtnText, { color: '#FFB800' }]}>🎮</Text>
                     </TouchableOpacity>
 
+                    {/* Bilanț Cursă Holografic */}
+                    <TouchableOpacity
+                        style={[styles.hudActionBtn, { borderColor: activeAccent.primary, backgroundColor: `${activeAccent.primary}22` }]}
+                        onPress={() => {
+                            hapticTap();
+                            core.openTripDebrief();
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                    >
+                        <Text style={[styles.hudActionBtnText, { color: activeAccent.primary }]}>🧾</Text>
+                    </TouchableOpacity>
+
                     {/* Buton Mod X-Ray Powertrain */}
                     <TouchableOpacity
                         style={[
@@ -1428,12 +1761,13 @@ export default function SpatialCanvasParadigm() {
                 ))}
             </View>
 
-            {/* ── 4. BARA TABS PENTRU CELE 5 FOI DE STICLĂ SPATIALE ── */}
+            {/* ── 4. BARA TABS PENTRU CELE 6 FOI DE STICLĂ SPATIALE ── */}
             <View style={styles.spatialTabBar}>
                 {[
                     { id: 'XRAY', label: '🔬 X-RAY' },
                     { id: 'REPLAY', label: '📼 REPLAY' },
                     { id: 'SERVICE', label: '🔧 SERVICE' },
+                    { id: 'CFD', label: '🌪️ CFD' },
                     { id: 'SENTRY', label: '🛡️ SENTRY' },
                     { id: 'COPILOT', label: '🧠 COPILOT' },
                 ].map((tab) => {
@@ -1470,6 +1804,9 @@ export default function SpatialCanvasParadigm() {
                         <StationSpatialXRay
                             appLang={appLang}
                             virtualSensors={core.virtualSensors}
+                            searchQuery={core.searchQuery}
+                            setSearchQuery={core.setSearchQuery}
+                            matchedDtc={core.matchedDtc}
                             isExplodedView={isExplodedView}
                             setIsExplodedView={setIsExplodedView}
                             activeAccent={activeAccent}
@@ -1504,7 +1841,22 @@ export default function SpatialCanvasParadigm() {
                             maintenanceItems={core.maintenanceItems}
                             legalDocuments={core.legalDocuments}
                             markServiceItemCompleted={core.markServiceItemCompleted}
+                            tireSize={core.tireSize}
+                            setTireSize={core.setTireSize}
+                            vehicleMassKg={core.vehicleMassKg}
+                            setVehicleMassKg={core.setVehicleMassKg}
+                            fuelPricePerLiter={core.fuelPricePerLiter}
+                            setFuelPricePerLiter={core.setFuelPricePerLiter}
                             activeAccent={activeAccent}
+                        />
+                    )}
+
+                    {spatialSheet === 'CFD' && (
+                        <StationSpatialCfd
+                            cfdData={core.cfdData}
+                            telemetry={telemetry}
+                            activeAccent={activeAccent}
+                            appLang={appLang}
                         />
                     )}
 
@@ -1544,6 +1896,307 @@ export default function SpatialCanvasParadigm() {
 }
 
 const styles = StyleSheet.create({
+
+    cfdBadge: {
+        borderWidth: 1,
+        borderRadius: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+    },
+    cfdBadgeText: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '900',
+    },
+    cfdChamberBox: {
+        backgroundColor: '#060B12',
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#16283D',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 4,
+        marginVertical: 6,
+    },
+    cfdMetricsGrid: {
+        flexDirection: 'row',
+        gap: 6,
+        marginTop: 6,
+    },
+    cfdMetricCard: {
+        flex: 1,
+        backgroundColor: '#08121E',
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#162B44',
+        padding: 6,
+    },
+    cfdMetricLabel: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#8CA0BA',
+        marginBottom: 2,
+    },
+    cfdMetricVal: {
+        fontFamily: MONO,
+        fontSize: 14,
+        fontWeight: '900',
+    },
+    cfdMetricSub: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#64748B',
+        marginTop: 2,
+    },
+    thermalStressGrid: {
+        gap: 6,
+        marginTop: 6,
+    },
+    thermalStressCard: {
+        backgroundColor: '#08121E',
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#162B44',
+        padding: 8,
+    },
+    thermalCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    thermalCardTitle: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    thermalBadge: {
+        borderWidth: 1,
+        borderRadius: 3,
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+    },
+    thermalBadgeText: {
+        fontFamily: MONO,
+        fontSize: 7,
+        fontWeight: '900',
+    },
+    thermalMetric: {
+        fontFamily: MONO,
+        fontSize: 11,
+        fontWeight: '900',
+        color: '#FFFFFF',
+    },
+    thermalUnit: {
+        fontSize: 8,
+        color: '#8CA0BA',
+        fontWeight: '600',
+    },
+    thermalDesc: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#64748B',
+        marginTop: 2,
+    },
+    spatialSearchBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#08121E',
+        borderWidth: 1,
+        borderColor: '#162B44',
+        borderRadius: 4,
+        paddingHorizontal: 8,
+        marginBottom: 8,
+    },
+    spatialSearchPrefix: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '900',
+        marginRight: 6,
+    },
+    spatialSearchInput: {
+        flex: 1,
+        fontFamily: MONO,
+        fontSize: 9,
+        color: '#FFFFFF',
+        paddingVertical: 6,
+    },
+    spatialDtcMatchesBox: {
+        backgroundColor: '#08121E',
+        borderWidth: 1,
+        borderColor: '#162B44',
+        borderRadius: 4,
+        padding: 8,
+        marginBottom: 8,
+    },
+    spatialDtcMatchesTitle: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '900',
+        marginBottom: 4,
+    },
+    spatialDtcCard: {
+        backgroundColor: '#040912',
+        borderWidth: 1,
+        borderColor: '#162B44',
+        borderRadius: 3,
+        padding: 6,
+        marginBottom: 6,
+    },
+    spatialDtcCardHead: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 2,
+    },
+    spatialDtcCode: {
+        fontFamily: MONO,
+        fontSize: 9,
+        fontWeight: '900',
+    },
+    spatialDtcSev: {
+        fontFamily: MONO,
+        fontSize: 7,
+        fontWeight: '900',
+    },
+    spatialDtcCardTitle: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '800',
+        color: '#FFFFFF',
+    },
+    spatialDtcDesc: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#8CA0BA',
+        marginTop: 1,
+    },
+    spatialDtcCost: {
+        fontFamily: MONO,
+        fontSize: 7,
+        marginTop: 2,
+    },
+    spatialConfigCard: {
+        backgroundColor: '#08121E',
+        borderWidth: 1,
+        borderColor: '#162B44',
+        borderRadius: 6,
+        padding: 10,
+        marginBottom: 12,
+    },
+    spatialConfigTitle: {
+        fontFamily: MONO,
+        fontSize: 9,
+        fontWeight: '900',
+        marginBottom: 6,
+    },
+    spatialConfigLabel: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#8CA0BA',
+        marginTop: 4,
+        marginBottom: 2,
+    },
+    spatialConfigRow: {
+        flexDirection: 'row',
+        gap: 4,
+        flexWrap: 'wrap',
+    },
+    spatialConfigBtn: {
+        backgroundColor: '#0A1728',
+        borderWidth: 1,
+        borderColor: '#162B44',
+        paddingHorizontal: 6,
+        paddingVertical: 4,
+        borderRadius: 3,
+    },
+    spatialConfigBtnText: {
+        fontFamily: MONO,
+        fontSize: 8,
+        color: '#8CA0BA',
+    },
+    spatialDebriefBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(4, 7, 13, 0.88)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 16,
+    },
+    spatialDebriefCard: {
+        width: '100%',
+        maxWidth: 360,
+        backgroundColor: '#08121E',
+        borderWidth: 2,
+        borderRadius: 6,
+        padding: 14,
+    },
+    spatialDebriefHead: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 4,
+    },
+    spatialDebriefBadge: {
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 2,
+    },
+    spatialDebriefBadgeText: {
+        fontFamily: MONO,
+        fontSize: 8,
+        fontWeight: '900',
+        color: '#04070D',
+    },
+    spatialDebriefTitle: {
+        fontFamily: MONO,
+        fontSize: 10,
+        fontWeight: '900',
+    },
+    spatialDebriefSub: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#8CA0BA',
+        marginBottom: 10,
+    },
+    spatialDebriefGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginVertical: 4,
+    },
+    spatialDebriefCell: {
+        width: '48%',
+        backgroundColor: '#040912',
+        borderWidth: 1,
+        borderColor: '#162B44',
+        borderRadius: 3,
+        padding: 6,
+    },
+    spatialDebriefLabel: {
+        fontFamily: MONO,
+        fontSize: 7,
+        color: '#8CA0BA',
+    },
+    spatialDebriefVal: {
+        fontFamily: MONO,
+        fontSize: 10,
+        fontWeight: '900',
+        color: '#FFFFFF',
+        marginTop: 2,
+    },
+    spatialDebriefCloseBtn: {
+        borderWidth: 1,
+        borderRadius: 4,
+        paddingVertical: 8,
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    spatialDebriefCloseText: {
+        fontFamily: MONO,
+        fontSize: 9,
+        fontWeight: '900',
+    },
+
     container: {
         flex: 1,
         backgroundColor: '#04070D',
