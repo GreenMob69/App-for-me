@@ -317,10 +317,11 @@ export default function SpatialCanvasParadigm() {
 
     // Culoare dinamică frâne în funcție de temperatură
     const brakeColor = brakeFluidTemp > 140 ? '#FF2A2A' : brakeFluidTemp > 105 ? '#FFB800' : activeAccent.primary;
-    const isIceRisk = telemetry.criticalAlerts.some(a => a.id === 'BLACK_ICE');
+    const safeTop = typeof insets?.top === 'number' && !isNaN(insets.top) ? Math.max(insets.top, 24) : 24;
+    const safeBottom = typeof insets?.bottom === 'number' && !isNaN(insets.bottom) ? Math.max(insets.bottom, 12) : 12;
 
     return (
-        <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
+        <View style={[styles.container, { paddingTop: safeTop, paddingBottom: safeBottom }]}>
             <StatusBar barStyle="light-content" backgroundColor="#04070D" />
 
             {/* ── 1. Antet Spațial cu Butoane Protejate la Atingere ── */}
@@ -1233,6 +1234,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+        flex: 1,
         flexShrink: 1,
     },
     holoBadge: {
@@ -1262,6 +1264,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+        flexShrink: 0,
     },
     hudActionBtn: {
         paddingHorizontal: 8,

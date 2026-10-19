@@ -331,11 +331,13 @@ export default function RetroAudi96Paradigm() {
         : (dimmerLevel === 1.0 ? '#00FF66' : '#00AA44');
     const clusterDimColor = dimmerLevel === 1.0 ? '#882200' : '#551100';
 
+    const safeTop = typeof insets?.top === 'number' && !isNaN(insets.top) ? Math.max(insets.top, 24) : 24;
+    const safeBottom = typeof insets?.bottom === 'number' && !isNaN(insets.bottom) ? Math.max(insets.bottom, 12) : 12;
+
     return (
         <View style={[
             styles.container,
-            { paddingTop: Math.max(insets.top, 24) },
-            { transform: [{ translateY: idleJitterY }] }, // 2. 5-Cylinder Micro-Jitter
+            { paddingTop: safeTop, paddingBottom: safeBottom },
         ]}>
             <StatusBar barStyle="light-content" backgroundColor="#050200" translucent />
 
@@ -474,7 +476,7 @@ export default function RetroAudi96Paradigm() {
             {/* ── 2. Panoul Central VFD Cluster & Module Rocker ── */}
             <ScrollView
                 style={styles.mainScroll}
-                contentContainerStyle={styles.mainScrollContent}
+                contentContainerStyle={[styles.mainScrollContent, { transform: [{ translateY: idleJitterY }] }]}
                 showsVerticalScrollIndicator={false}
             >
                 {/* ── 1 DIGIFIZ: KOMBIINSTRUMENT ── */}
@@ -1165,6 +1167,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+        flex: 1,
         flexShrink: 1,
     },
     audiRingsText: {
@@ -1183,6 +1186,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
+        flexShrink: 0,
     },
     v2Button: {
         paddingHorizontal: 6,

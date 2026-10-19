@@ -192,10 +192,13 @@ export default function F1CyberdeckParadigm() {
     const primaryAccent = isQualy ? '#B000FF' : activeAccentSet.primary;
     const borderAccent = isQualy ? '#600099' : activeAccentSet.border;
 
+    const safeTop = typeof insets?.top === 'number' && !isNaN(insets.top) ? Math.max(insets.top, 24) : 24;
+    const safeBottom = typeof insets?.bottom === 'number' && !isNaN(insets.bottom) ? Math.max(insets.bottom, 12) : 12;
+
     return (
         <View style={[
             styles.container,
-            { paddingTop: Math.max(insets.top, 24) },
+            { paddingTop: safeTop, paddingBottom: safeBottom },
             isPit && styles.pitLimiterActiveBorder, // 9. Flashing Pit border
         ]}>
             <StatusBar barStyle="light-content" backgroundColor="#030508" translucent />
@@ -1090,6 +1093,7 @@ const styles = StyleSheet.create({
     brandGroup: {
         flexDirection: 'row',
         alignItems: 'center',
+        flex: 1,
         flexShrink: 1,
         gap: 6,
     },
@@ -1134,6 +1138,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+        flexShrink: 0,
     },
     actionBtn: {
         paddingHorizontal: 8,

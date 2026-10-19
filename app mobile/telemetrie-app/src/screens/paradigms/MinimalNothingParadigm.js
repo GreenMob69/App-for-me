@@ -351,15 +351,15 @@ export default function MinimalNothingParadigm() {
         };
     }, [invertedEPaper, nothingAccentKey]);
 
+    const safeTop = typeof insets?.top === 'number' && !isNaN(insets.top) ? Math.max(insets.top, 24) : 24;
+    const safeBottom = typeof insets?.bottom === 'number' && !isNaN(insets.bottom) ? Math.max(insets.bottom, 12) : 12;
+
     return (
         <View
             style={[
                 styles.container,
-                { backgroundColor: currentTheme.bg, paddingTop: Math.max(insets.top, 24) },
-                mirrorHud && styles.mirrorHudTrapezoid, // 5. Trapezoidal Keystone Projection
-                { transform: [{ translateX: jitterOffset.x }, { translateY: jitterOffset.y }] }, // 1. Pixel Shifter
+                { backgroundColor: currentTheme.bg, paddingTop: safeTop, paddingBottom: safeBottom },
             ]}
-            {...panResponder.panHandlers}
         >
             <StatusBar
                 barStyle={invertedEPaper ? 'dark-content' : 'light-content'}
@@ -367,13 +367,15 @@ export default function MinimalNothingParadigm() {
                 translucent
             />
 
-            {/* Ambient Nothing OS Dot-Matrix Pattern Background */}
-            <Svg style={StyleSheet.absoluteFillObject} pointerEvents="none">
-                <Path d={AMBIENT_DOT_GRID_PATH} fill={invertedEPaper ? '#E0E0E0' : '#141414'} />
-            </Svg>
+            {/* Ambient Nothing OS Dot-Matrix Pattern Background - Layered safely behind UI */}
+            <View style={[StyleSheet.absoluteFillObject, { zIndex: -1 }]} pointerEvents="none">
+                <Svg width="100%" height="100%">
+                    <Path d={AMBIENT_DOT_GRID_PATH} fill={invertedEPaper ? '#E0E0E0' : '#141414'} />
+                </Svg>
+            </View>
 
             {/* ── 1. GLYPH INTERFACE MATRIX (7 Segmente Telegraphic) ── */}
-            <View style={[styles.glyphMatrixContainer, { backgroundColor: currentTheme.bg }]}>
+            <View style={[styles.glyphMatrixContainer, { backgroundColor: currentTheme.bg, zIndex: 2 }]}>
                 {glyphLeds.map((active, idx) => (
                     <View
                         key={`glyph-${idx}`}
@@ -388,7 +390,7 @@ export default function MinimalNothingParadigm() {
             </View>
 
             {/* ── 2. Top Bar Minimalist & Controluri ── */}
-            <View style={[styles.topBar, { borderBottomColor: currentTheme.divider }]}>
+            <View style={[styles.topBar, { borderBottomColor: currentTheme.divider, zIndex: 2 }]}>
                 <View style={styles.brandRow}>
                     <View style={[styles.statusDot, { backgroundColor: isConnected ? '#00FF66' : '#FF3B00' }]} />
                     <Text style={[styles.brandText, { color: currentTheme.textPrimary }]} numberOfLines={1}>
@@ -490,9 +492,14 @@ export default function MinimalNothingParadigm() {
 
             {/* ── Corpul Central (cu Ghost Mode Dimming & Sub-Rendering) ── */}
             <ScrollView
-                style={[styles.mainScroll, isGhostDimmed && styles.ghostDimmed]}
+                style={[
+                    styles.mainScroll,
+                    isGhostDimmed && styles.ghostDimmed,
+                    mirrorHud && styles.mirrorHudTrapezoid,
+                ]}
                 contentContainerStyle={styles.mainScrollContent}
                 showsVerticalScrollIndicator={false}
+                {...panResponder.panHandlers}
             >
                 {/* 1. AFISAJ MONUMENTAL VITEZĂ & BIO-PULSE */}
                 <View style={styles.heroSection}>
@@ -1118,7 +1125,7 @@ export default function MinimalNothingParadigm() {
             </ScrollView>
 
             {/* ── Jog-Wheel Selector Inferior (01 .. 06) ── */}
-            <View style={[styles.jogWheelContainer, { borderTopColor: currentTheme.divider, backgroundColor: currentTheme.bg }]}>
+            <View style={[styles.jogWheelContainer, { borderTopColor: currentTheme.divider, backgroundColor: currentTheme.bg, zIndex: 2 }]}>
                 {[
                     { id: '01', label: '01 PULS' },
                     { id: '02', label: '02 ANAT' },
@@ -1186,6 +1193,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
+        flex: 1,
         flexShrink: 1,
     },
     statusDot: {
@@ -1214,6 +1222,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
+        flexShrink: 0,
     },
     v2Button: {
         paddingHorizontal: 6,
@@ -1901,18 +1910,18 @@ const styles = StyleSheet.create({
     jogWheelContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingHorizontal: 24,
-        paddingVertical: 14,
+        paddingHorizontal: 8,
+        paddingVertical: 10,
         borderTopWidth: 1,
     },
     jogTab: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingHorizontal: 6,
+        paddingVertical: 5,
         borderRadius: 4,
     },
     jogTabText: {
         fontFamily: MONO_FONT,
-        fontSize: 12,
+        fontSize: 10,
         fontWeight: '700',
     },
 });
