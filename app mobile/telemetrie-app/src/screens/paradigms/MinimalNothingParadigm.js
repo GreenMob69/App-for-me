@@ -12,6 +12,7 @@ import {
     Animated,
     PanResponder,
     TextInput,
+    Modal,
 } from 'react-native';
 import { useSafeInsets } from '../../hooks/useSafeInsets';
 import Svg, { Path, Line, Defs, LinearGradient, Stop, Circle, Rect, G } from 'react-native-svg';

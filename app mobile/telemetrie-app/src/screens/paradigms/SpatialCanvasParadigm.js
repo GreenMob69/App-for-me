@@ -12,6 +12,7 @@ import {
     Animated,
     ScrollView,
     TextInput,
+    Modal,
 } from 'react-native';
 import { useSafeInsets } from '../../hooks/useSafeInsets';
 import Svg, {
@@ -936,6 +937,19 @@ const StationSpatialCopilot = React.memo(function StationSpatialCopilot({
                         <Text style={styles.copilotChipText} numberOfLines={1}>{chip}</Text>
                     </TouchableOpacity>
                 ))}
+                {/* Buton Auto-Rotire 360° */}
+                <TouchableOpacity
+                    style={[styles.zoneBtn, autoRotate && { backgroundColor: activeAccent.primary, borderColor: activeAccent.primary }]}
+                    onPress={() => {
+                        hapticTap();
+                        setAutoRotate(!autoRotate);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                    <Text style={[styles.zoneBtnText, autoRotate && styles.zoneBtnTextActive]}>
+                        🔄 360°
+                    </Text>
+                </TouchableOpacity>
             </View>
 
             {/* Chat Messages */}
@@ -1084,73 +1098,64 @@ export default function SpatialCanvasParadigm() {
         }
     }, [cameraZone]);
 
-    // PanResponder cu Inerție Fină, rAF Throttle (max 1 update/frame) și freeze când un sheet e deschis
+    // PanResponder Ultra-Fluid: Rotație 360° instantanee la atingere pe ORICE tab
     const inertiaTimerRef = useRef(null);
     const lastGestureRef = useRef({ dx: 0, dy: 0 });
-    const rafHandleRef = useRef(null);
-    const pendingDeltaRef = useRef({ dx: 0, dy: 0 });
+    const [autoRotate, setAutoRotate] = useState(false);
+
+    // Mod Auto-Rotire 360° opțional (prezentare cinematografică)
+    useEffect(() => {
+        if (autoRotate) {
+            const timer = setInterval(() => {
+                setRotY((prev) => (prev + 0.025) % (Math.PI * 2));
+            }, 33);
+            return () => clearInterval(timer);
+        }
+    }, [autoRotate]);
 
     const panResponder = useMemo(
         () =>
             PanResponder.create({
-                onStartShouldSetPanResponder: () => isLive3DActive,
-                onMoveShouldSetPanResponder: () => isLive3DActive,
+                onStartShouldSetPanResponder: () => true,
+                onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 1 || Math.abs(gestureState.dy) > 1,
                 onPanResponderGrant: () => {
                     lastGestureRef.current = { dx: 0, dy: 0 };
-                    pendingDeltaRef.current = { dx: 0, dy: 0 };
-                    if (rafHandleRef.current) {
-                        cancelAnimationFrame(rafHandleRef.current);
-                        rafHandleRef.current = null;
+                    if (inertiaTimerRef.current) {
+                        clearInterval(inertiaTimerRef.current);
+                        inertiaTimerRef.current = null;
                     }
-                    if (inertiaTimerRef.current) clearInterval(inertiaTimerRef.current);
                 },
                 onPanResponderMove: (_, gestureState) => {
-                    if (!isLive3DActive) return;
                     const deltaX = gestureState.dx - lastGestureRef.current.dx;
                     const deltaY = gestureState.dy - lastGestureRef.current.dy;
                     lastGestureRef.current = { dx: gestureState.dx, dy: gestureState.dy };
-                    pendingDeltaRef.current.dx += deltaX;
-                    pendingDeltaRef.current.dy += deltaY;
-
-                    if (!rafHandleRef.current) {
-                        rafHandleRef.current = requestAnimationFrame(() => {
-                            const curDx = pendingDeltaRef.current.dx;
-                            const curDy = pendingDeltaRef.current.dy;
-                            pendingDeltaRef.current = { dx: 0, dy: 0 };
-                            rafHandleRef.current = null;
-                            setRotY((prev) => prev + curDx * 0.022);
-                            setRotX((prev) => Math.max(0.08, Math.min(1.2, prev - curDy * 0.012)));
-                        });
-                    }
+                    // Rotație imediată, receptivă și fluidă (1 swipe complet = rotație 360°)
+                    setRotY((prev) => prev + deltaX * 0.018);
+                    setRotX((prev) => Math.max(0.05, Math.min(1.35, prev - deltaY * 0.010)));
                 },
                 onPanResponderRelease: (_, gestureState) => {
-                    if (!isLive3DActive) return;
-                    if (rafHandleRef.current) {
-                        cancelAnimationFrame(rafHandleRef.current);
-                        rafHandleRef.current = null;
+                    let vY = gestureState.vx * 0.08;
+                    let vX = -gestureState.vy * 0.03;
+                    if (Math.abs(vY) > 0.003 || Math.abs(vX) > 0.003) {
+                        inertiaTimerRef.current = setInterval(() => {
+                            vY *= 0.92;
+                            vX *= 0.92;
+                            setRotY((prev) => prev + vY);
+                            setRotX((prev) => Math.max(0.05, Math.min(1.35, prev + vX)));
+                            if (Math.abs(vY) < 0.0005 && Math.abs(vX) < 0.0005) {
+                                clearInterval(inertiaTimerRef.current);
+                                inertiaTimerRef.current = null;
+                            }
+                        }, 16);
                     }
-                    let vY = gestureState.vx * 0.14;
-                    let vX = -gestureState.vy * 0.04;
-                    inertiaTimerRef.current = setInterval(() => {
-                        vY *= 0.93;
-                        vX *= 0.93;
-                        setRotY((prev) => prev + vY);
-                        setRotX((prev) => Math.max(0.08, Math.min(1.2, prev + vX)));
-                        if (Math.abs(vY) < 0.0004 && Math.abs(vX) < 0.0004) {
-                            clearInterval(inertiaTimerRef.current);
-                        }
-                    }, 16);
                 },
             }),
-        [isLive3DActive]
+        []
     );
 
     // ── GEOMETRIE 3D DIGITAL TWIN CU BACK-FACE CULLING & X-RAY VIEW ──────
     const lastMeshRef = useRef(null);
     const carMesh3D = useMemo(() => {
-        if (!isLive3DActive && lastMeshRef.current) {
-            return lastMeshRef.current;
-        }
 
         const explode = isExplodedView ? 0.35 : 0.0;
         const p = (x, y, z) => project3D(x, y, z, rotX, rotY, suspensionRoll, suspensionPitch, 0.85, SCREEN_WIDTH / 2, 125);
@@ -1322,19 +1327,25 @@ export default function SpatialCanvasParadigm() {
             <View style={styles.canvasContainer} {...panResponder.panHandlers}>
                 <Svg width={SCREEN_WIDTH} height={250} viewBox={`0 0 ${SCREEN_WIDTH} 250`}>
                     <Defs>
-                        {/* PBR Metal Shading Gradient */}
+                        {/* PBR Metal Shading Gradient (Vivid Metallic Contrast) */}
                         <LinearGradient id="carBodyGrad" x1="0" y1="0" x2="1" y2="1">
-                            <Stop offset="0" stopColor="#12253B" stopOpacity={isExplodedView ? 0.45 : 0.98} />
-                            <Stop offset="0.5" stopColor="#1E3E63" stopOpacity={isExplodedView ? 0.35 : 0.95} />
-                            <Stop offset="1" stopColor="#0B1726" stopOpacity={isExplodedView ? 0.45 : 0.98} />
+                            <Stop offset="0" stopColor="#2A5384" stopOpacity={isExplodedView ? 0.45 : 1.0} />
+                            <Stop offset="0.4" stopColor="#4A82BF" stopOpacity={isExplodedView ? 0.35 : 1.0} />
+                            <Stop offset="1" stopColor="#183659" stopOpacity={isExplodedView ? 0.45 : 1.0} />
                         </LinearGradient>
                         <LinearGradient id="carSideGrad" x1="0" y1="0" x2="0" y2="1">
-                            <Stop offset="0" stopColor="#163255" stopOpacity={isExplodedView ? 0.4 : 0.95} />
-                            <Stop offset="1" stopColor="#08111D" stopOpacity={isExplodedView ? 0.4 : 0.98} />
+                            <Stop offset="0" stopColor="#35669C" stopOpacity={isExplodedView ? 0.4 : 1.0} />
+                            <Stop offset="0.6" stopColor="#1E436B" stopOpacity={isExplodedView ? 0.4 : 1.0} />
+                            <Stop offset="1" stopColor="#11253D" stopOpacity={isExplodedView ? 0.4 : 1.0} />
                         </LinearGradient>
                         <LinearGradient id="glassGrad" x1="0" y1="0" x2="0" y2="1">
-                            <Stop offset="0" stopColor={activeAccent.primary} stopOpacity={isExplodedView ? 0.3 : 0.55} />
-                            <Stop offset="1" stopColor="#003554" stopOpacity={isExplodedView ? 0.15 : 0.35} />
+                            <Stop offset="0" stopColor="#00F0FF" stopOpacity={isExplodedView ? 0.5 : 0.75} />
+                            <Stop offset="0.5" stopColor="#0284C7" stopOpacity={isExplodedView ? 0.3 : 0.60} />
+                            <Stop offset="1" stopColor="#03254C" stopOpacity={isExplodedView ? 0.2 : 0.50} />
+                        </LinearGradient>
+                        <LinearGradient id="hoodHighlight" x1="0" y1="0" x2="0" y2="1">
+                            <Stop offset="0" stopColor="#5B9DE5" stopOpacity="0.9" />
+                            <Stop offset="1" stopColor="#224872" stopOpacity="0.95" />
                         </LinearGradient>
                         {/* Fascicul Faruri 3D Proiectat în Față */}
                         <LinearGradient id="headlightBeam" x1="0" y1="0" x2="0" y2="1">
@@ -1414,7 +1425,7 @@ export default function SpatialCanvasParadigm() {
                         `}
                         fill="url(#carSideGrad)"
                         stroke={activeAccent.primary}
-                        strokeWidth="1.2"
+                        strokeWidth="1.8"
                     />
 
                     {/* 2. Geamuri Laterale Stânga */}
@@ -1444,7 +1455,7 @@ export default function SpatialCanvasParadigm() {
                         `}
                         fill="url(#carSideGrad)"
                         stroke={activeAccent.primary}
-                        strokeWidth="1.2"
+                        strokeWidth="1.8"
                     />
 
                     {/* 4. Geamuri Laterale Dreapta */}
@@ -1737,13 +1748,13 @@ export default function SpatialCanvasParadigm() {
                 </View>
             </View>
 
-            {/* ── 3. Selector Zone de Cameră Cinematică ── */}
+            {/* ── 3. Selector Zone de Cameră Cinematică & Auto-Rotire ── */}
             <View style={styles.cameraZonesBar}>
                 {[
-                    { id: 'OVERVIEW', label: isEn ? '1. OVERVIEW' : '1. GENERAL' },
-                    { id: 'ENGINE_BAY', label: isEn ? '2. ENGINE' : '2. MOTOR' },
-                    { id: 'CHASSIS_BRAKES', label: isEn ? '3. BRAKES' : '3. FRÂNE' },
-                    { id: 'HIGHWAY_CHASE', label: isEn ? '4. CHASE' : '4. PILOT' },
+                    { id: 'OVERVIEW', label: isEn ? '1. GENERAL' : '1. GENERAL' },
+                    { id: 'ENGINE_BAY', label: isEn ? '2. MOTOR' : '2. MOTOR' },
+                    { id: 'CHASSIS_BRAKES', label: isEn ? '3. FRÂNE' : '3. FRÂNE' },
+                    { id: 'HIGHWAY_CHASE', label: isEn ? '4. PILOT' : '4. PILOT' },
                 ].map((zone) => (
                     <TouchableOpacity
                         key={zone.id}

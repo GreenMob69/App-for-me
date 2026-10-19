@@ -10,6 +10,7 @@ import {
     Dimensions,
     ScrollView,
     TextInput,
+    Modal,
 } from 'react-native';
 import { useSafeInsets } from '../../hooks/useSafeInsets';
 import Svg, {
