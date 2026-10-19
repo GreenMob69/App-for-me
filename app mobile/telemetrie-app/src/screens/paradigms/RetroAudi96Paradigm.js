@@ -1,5 +1,5 @@
 // @ts-check
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -47,7 +47,8 @@ function getGhostBargraphPath(width, totalBlocks = 25) {
     return cleanD;
 }
 
-const AudiTachometerBargraph = React.memo(function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH - 40, brightness = 1.0, phosphorTrailRpm = 800 }) {
+const AudiTachometerBargraph = React.memo(function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH - 40, brightness = 1.0, phosphorTrailRpm = 800, appLang = 'RO' }) {
+    const isEn = appLang === 'EN';
     const totalBlocks = 25;
     const sMaxRpm = Math.max(1000, safeNum(maxRpm, 6500));
     const sRpm = safeNum(rpm, 0);
@@ -1243,6 +1244,7 @@ export default function RetroAudi96Paradigm() {
                             maxRpm={6000}
                             brightness={dimmerLevel}
                             phosphorTrailRpm={phosphorTrailRpm}
+                            appLang={appLang}
                         />
 
                         {/* 2.2 Vitezometru Monumental VFD & Autocheck */}

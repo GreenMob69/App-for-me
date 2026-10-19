@@ -1,5 +1,5 @@
 // @ts-check
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -18,6 +18,7 @@ import Svg, {
     Circle,
     Line,
     Polyline,
+    Path,
     Text as SvgText,
     Defs,
     LinearGradient,

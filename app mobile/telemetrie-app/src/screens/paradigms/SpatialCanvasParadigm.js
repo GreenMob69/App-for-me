@@ -1,5 +1,5 @@
 // @ts-check
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -869,19 +869,6 @@ const StationSpatialCopilot = React.memo(function StationSpatialCopilot({
                         <Text style={styles.copilotChipText} numberOfLines={1}>{chip}</Text>
                     </TouchableOpacity>
                 ))}
-                {/* Buton Auto-Rotire 360° */}
-                <TouchableOpacity
-                    style={[styles.zoneBtn, autoRotate && { backgroundColor: activeAccent.primary, borderColor: activeAccent.primary }]}
-                    onPress={() => {
-                        hapticTap();
-                        setAutoRotate(!autoRotate);
-                    }}
-                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                >
-                    <Text style={[styles.zoneBtnText, autoRotate && styles.zoneBtnTextActive]}>
-                        🔄 360°
-                    </Text>
-                </TouchableOpacity>
             </View>
 
             {/* Chat Messages */}
@@ -1702,6 +1689,19 @@ export default function SpatialCanvasParadigm() {
                         </Text>
                     </TouchableOpacity>
                 ))}
+                {/* Buton Auto-Rotire 360° */}
+                <TouchableOpacity
+                    style={[styles.zoneBtn, autoRotate && { backgroundColor: activeAccent.primary, borderColor: activeAccent.primary }]}
+                    onPress={() => {
+                        hapticTap();
+                        setAutoRotate(!autoRotate);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                    <Text style={[styles.zoneBtnText, autoRotate && styles.zoneBtnTextActive]}>
+                        🔄 360°
+                    </Text>
+                </TouchableOpacity>
             </View>
 
             {/* ── 4. BARA TABS PENTRU CELE 6 FOI DE STICLĂ SPATIALE ── */}

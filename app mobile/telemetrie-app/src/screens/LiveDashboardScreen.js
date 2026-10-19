@@ -25,6 +25,7 @@ import { getCachedClockwiseArc } from '../utils/arcLut';
 import { exportWorkshopDossier } from '../utils/dossierExport';
 import { lttbDownsample } from '../utils/lttbDownsample';
 import { audioGong } from '../services/audioGongService';
+import { hapticTap } from '../services/hapticFeedback';
 import Svg, {
     Path,
     Circle,
@@ -1972,7 +1973,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                     style={[styles.hudLaunchBtn, { borderColor: '#00FF66', backgroundColor: '#00FF6618', marginRight: spacing[1] }]}
                     onPress={() => {
                         hapticTap();
-                        exportWorkshopDossier(smoothedData, activeVehicle);
+                        exportWorkshopDossier((numeric || liveData), activeVehicle);
                     }}
                     accessibilityRole="button"
                     accessibilityLabel="Exportă Dosar Tehnic Diagnoză ITP"
