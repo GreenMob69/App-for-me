@@ -67,11 +67,11 @@ const DEMO_TRIPS = [
 ];
 
 const DEFAULT_MAINTENANCE_ITEMS = [
-    { id: 'oil', title: 'Schimb Ulei & Filtru (Model Arrhenius)', currentKm: 11600, maxKm: 15000, wearPct: 77, status: 'WARN', costEstimat: 450, riskFactor: 'Mediu' },
-    { id: 'brakes', title: 'Plăcuțe & Discuri Frână (Model Archard)', currentKm: 21600, maxKm: 40000, wearPct: 54, status: 'OK', costEstimat: 680, riskFactor: 'Scăzut' },
-    { id: 'turbo', title: 'Miez Turbină CHRA (Degradare Termică)', currentKm: 18500, maxKm: 25000, wearPct: 74, status: 'WARN', costEstimat: 1200, riskFactor: 'Mediu' },
-    { id: 'dpf', title: 'Filtru Particule DPF (Soot & Ash Load)', currentKm: 46500, maxKm: 60000, wearPct: 78, status: 'WARN', costEstimat: 850, riskFactor: 'Mediu' },
-    { id: 'battery', title: 'Baterie Plumb-Acid (Sulfatare CBM)', currentKm: 48000, maxKm: 60000, wearPct: 80, status: 'WARN', costEstimat: 520, riskFactor: 'Scăzut' },
+    { id: 'oil', title: 'Schimb Ulei & Filtru (Model Arrhenius)', name: 'Schimb Ulei & Filtru (Model Arrhenius)', currentKm: 11600, maxKm: 15000, remainingKm: 3400, totalKm: 15000, wearPct: 77, status: 'WARN', costEstimat: 450, riskFactor: 'Mediu' },
+    { id: 'brakes', title: 'Plăcuțe & Discuri Frână (Model Archard)', name: 'Plăcuțe & Discuri Frână (Model Archard)', currentKm: 21600, maxKm: 40000, remainingKm: 18400, totalKm: 40000, wearPct: 54, status: 'OK', costEstimat: 680, riskFactor: 'Scăzut' },
+    { id: 'turbo', title: 'Miez Turbină CHRA (Degradare Termică)', name: 'Miez Turbină CHRA (Degradare Termică)', currentKm: 18500, maxKm: 25000, remainingKm: 6500, totalKm: 25000, wearPct: 74, status: 'WARN', costEstimat: 1200, riskFactor: 'Mediu' },
+    { id: 'dpf', title: 'Filtru Particule DPF (Soot & Ash Load)', name: 'Filtru Particule DPF (Soot & Ash Load)', currentKm: 46500, maxKm: 60000, remainingKm: 13500, totalKm: 60000, wearPct: 78, status: 'WARN', costEstimat: 850, riskFactor: 'Mediu' },
+    { id: 'battery', title: 'Baterie Plumb-Acid (Sulfatare CBM)', name: 'Baterie Plumb-Acid (Sulfatare CBM)', currentKm: 48000, maxKm: 60000, remainingKm: 12000, totalKm: 60000, wearPct: 80, status: 'WARN', costEstimat: 520, riskFactor: 'Scăzut' },
 ];
 
 const DEFAULT_AI_MESSAGES = [
@@ -344,7 +344,13 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         setMaintenanceItems((prev) => {
             const updated = prev.map((item) =>
                 item.id === itemId
-                    ? { ...item, currentKm: 0, wearPct: 0, status: 'OK' }
+                    ? {
+                        ...item,
+                        currentKm: 0,
+                        remainingKm: item.maxKm || item.totalKm || 15000,
+                        wearPct: 0,
+                        status: 'OK',
+                    }
                     : item
             );
             SHARED_PARADIGM_CACHE.maintenanceItems = updated;
@@ -355,10 +361,10 @@ export function useParadigmCoreData(isLiveViewActive = true) {
 
     // Portofel Acte Legale
     const legalDocuments = useMemo(() => [
-        { id: 'rca', type: 'RCA', issuer: 'Groupama Asigurări', daysRemaining: 142, expiryDate: '10.03.2027', status: 'VALABIL' },
-        { id: 'itp', type: 'ITP', issuer: 'Stație ITP RAR #442', daysRemaining: 24, expiryDate: '12.11.2026', status: 'EXPIRĂ' },
-        { id: 'rovinieta', type: 'ROVINIETĂ', issuer: 'CNAIR Rom', daysRemaining: 284, expiryDate: '30.07.2027', status: 'VALABIL' },
-        { id: 'casco', type: 'CASCO', issuer: 'Omniasig VIG', daysRemaining: 210, expiryDate: '17.05.2027', status: 'VALABIL' },
+        { id: 'rca', type: 'RCA', name: 'RCA - Asigurare Obligatorie', issuer: 'Groupama Asigurări', daysRemaining: 142, daysLeft: 142, expiryDate: '10.03.2027', status: 'VALABIL' },
+        { id: 'itp', type: 'ITP', name: 'ITP - Inspecție Tehnică Periodică', issuer: 'Stație ITP RAR #442', daysRemaining: 24, daysLeft: 24, expiryDate: '12.11.2026', status: 'EXPIRĂ' },
+        { id: 'rovinieta', type: 'ROVINIETĂ', name: 'Rovinietă Națională CNAIR', issuer: 'CNAIR Rom', daysRemaining: 284, daysLeft: 284, expiryDate: '30.07.2027', status: 'VALABIL' },
+        { id: 'casco', type: 'CASCO', name: 'Poliță CASCO All-Risk', issuer: 'Omniasig VIG', daysRemaining: 210, daysLeft: 210, expiryDate: '17.05.2027', status: 'VALABIL' },
     ], []);
 
     // ─────────────────────────────────────────────────────────────────────────

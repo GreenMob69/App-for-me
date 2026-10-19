@@ -853,7 +853,7 @@ export default function MinimalNothingParadigm() {
                                 style={[styles.serviceCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}
                             >
                                 <View style={styles.serviceHeader}>
-                                    <Text style={[styles.serviceName, { color: currentTheme.textPrimary }]}>{item.name}</Text>
+                                    <Text style={[styles.serviceName, { color: currentTheme.textPrimary }]}>{item.name || item.title || item.id}</Text>
                                     <Text style={[styles.serviceWear, { color: item.status === 'URGENT' ? currentTheme.accent : '#00FF66' }]}>
                                         UZURĂ: {item.wearPct}%
                                     </Text>
@@ -871,7 +871,7 @@ export default function MinimalNothingParadigm() {
                                 </View>
                                 <View style={styles.serviceFooter}>
                                     <Text style={[styles.serviceKmRemaining, { color: currentTheme.textSecondary }]}>
-                                        Rămas: {item.remainingKm} km din {item.totalKm} km
+                                        Rămas: {item.remainingKm ?? (item.maxKm ? Math.max(0, item.maxKm - item.currentKm) : 3400)} km din {item.totalKm ?? item.maxKm ?? 15000} km
                                     </Text>
                                     <TouchableOpacity
                                         style={[styles.resetServiceBtn, { borderColor: currentTheme.cardBorder }]}

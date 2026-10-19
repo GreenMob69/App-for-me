@@ -343,26 +343,35 @@ export default function RetroAudi96Paradigm() {
             <View style={styles.topBar}>
                 <View style={styles.audiBadgeRow}>
                     <Text style={[styles.audiRingsText, { color: clusterAccentColor, opacity: dimmerLevel }]}>OOOO</Text>
-                    <Text style={[styles.clusterTitle, { color: clusterAccentColor, opacity: dimmerLevel }]}>
-                        AUDI A6 C4 // DIGIFIZ VDO
+                    <Text style={[styles.clusterTitle, { color: clusterAccentColor, opacity: dimmerLevel }]} numberOfLines={1}>
+                        DIGIFIZ
                     </Text>
                 </View>
 
                 {/* Acțiuni & Rheostat */}
                 <View style={styles.headerActions}>
-                    {/* Sub-Accent Switcher (AMBER / RED / GREEN) */}
                     <TouchableOpacity
-                        style={[styles.v2Button, { borderColor: clusterAccentColor, backgroundColor: `${clusterAccentColor}18` }]}
+                        style={[styles.stylePickerButton, { backgroundColor: clusterAccentColor }]}
                         onPress={() => {
                             hapticTap();
-                            setRetroAccentMode(prev => prev === 'AMBER' ? 'RED' : prev === 'RED' ? 'GREEN' : 'AMBER');
+                            openExperiencePicker();
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Text style={[styles.v2ButtonText, { color: clusterAccentColor }]}>
-                            {retroAccentMode === 'AMBER' ? '🟧 AMBER' : retroAccentMode === 'RED' ? '🟥 ROT' : '🟩 VAG'}
-                        </Text>
+                        <Text style={styles.stylePickerText}>🎨 STIL</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.v2Button}
+                        onPress={() => {
+                            hapticTap();
+                            setUiParadigm('CLASSIC_V2');
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.v2ButtonText}>⮌ V2</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -371,10 +380,10 @@ export default function RetroAudi96Paradigm() {
                             hapticTap();
                             openSimulatorModal();
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Text style={[styles.v2ButtonText, { color: clusterAccentColor }]}>🎮 DEMO</Text>
+                        <Text style={[styles.v2ButtonText, { color: clusterAccentColor }]}>🎮</Text>
                     </TouchableOpacity>
 
                     {/* 5. Dimmer Tag/Nacht Rheostat */}
@@ -384,36 +393,27 @@ export default function RetroAudi96Paradigm() {
                             hapticTap();
                             setDimmerLevel(dimmerLevel === 1.0 ? 0.6 : 1.0);
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
                         <Text style={[styles.v2ButtonText, { color: clusterAccentColor }]}>
-                            {dimmerLevel === 1.0 ? '☀️ TAG' : '🌙 NACHT'}
+                            {dimmerLevel === 1.0 ? '☀️' : '🌙'}
                         </Text>
                     </TouchableOpacity>
 
+                    {/* Sub-Accent Switcher (AMBER / RED / GREEN) */}
                     <TouchableOpacity
-                        style={styles.v2Button}
+                        style={[styles.v2Button, { borderColor: clusterAccentColor, backgroundColor: `${clusterAccentColor}18` }]}
                         onPress={() => {
                             hapticTap();
-                            setUiParadigm('CLASSIC_V2');
+                            setRetroAccentMode(prev => prev === 'AMBER' ? 'RED' : prev === 'RED' ? 'GREEN' : 'AMBER');
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Text style={styles.v2ButtonText}>⮌ V2</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.stylePickerButton, { backgroundColor: clusterAccentColor }]}
-                        onPress={() => {
-                            hapticTap();
-                            openExperiencePicker();
-                        }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.stylePickerText}>[ 🎨 STIL ]</Text>
+                        <Text style={[styles.v2ButtonText, { color: clusterAccentColor }]}>
+                            {retroAccentMode === 'AMBER' ? '🟧' : retroAccentMode === 'RED' ? '🟥' : '🟩'}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -852,7 +852,7 @@ export default function RetroAudi96Paradigm() {
                         {core.maintenanceItems.map((item) => (
                             <View key={item.id} style={styles.serviceheftCard}>
                                 <View style={styles.serviceheftHeaderRow}>
-                                    <Text style={styles.serviceheftName}>{item.name.toUpperCase()}</Text>
+                                    <Text style={styles.serviceheftName}>{String(item.name || item.title || item.id || '').toUpperCase()}</Text>
                                     <Text style={[styles.serviceheftWear, item.status === 'URGENT' && { color: '#FF3300' }]}>
                                         VERSCHLEISS: {item.wearPct}%
                                     </Text>
@@ -865,7 +865,7 @@ export default function RetroAudi96Paradigm() {
                                 </View>
                                 <View style={styles.serviceheftFooter}>
                                     <Text style={styles.serviceheftKm}>
-                                        Restlaufstrecke: {item.remainingKm} km / {item.totalKm} km
+                                        Restlaufstrecke: {item.remainingKm ?? (item.maxKm ? Math.max(0, item.maxKm - item.currentKm) : 3400)} km / {item.totalKm ?? item.maxKm ?? 15000} km
                                     </Text>
                                     <TouchableOpacity
                                         style={styles.werkstattResetBtn}
@@ -1156,19 +1156,20 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
         borderBottomWidth: 1,
         borderBottomColor: '#260B05',
     },
     audiBadgeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
+        flexShrink: 1,
     },
     audiRingsText: {
         fontFamily: RETRO_FONT,
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: '900',
         letterSpacing: 1,
     },
@@ -1181,10 +1182,10 @@ const styles = StyleSheet.create({
     headerActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 4,
     },
     v2Button: {
-        paddingHorizontal: 8,
+        paddingHorizontal: 6,
         paddingVertical: 4,
         borderRadius: 4,
         borderWidth: 1,
