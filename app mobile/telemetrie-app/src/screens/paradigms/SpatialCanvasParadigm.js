@@ -33,6 +33,7 @@ import { useVehicle } from '../../context/VehicleContext';
 import { useUiParadigm } from '../../context/AppContext';
 import { hapticTap } from '../../services/hapticFeedback';
 import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
+import { safeNum, safeFmt, safeArr, safeCoord } from '../../utils/safeMath';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
@@ -71,10 +72,12 @@ function project3D(x, y, z, rotX, rotY, roll = 0, pitch = 0, zoom = 0.85, center
     const safeZ = zProj > 0.4 ? zProj : 0.4;
     const scale = fov / safeZ;
 
+    const finalX = centerX + x1 * scale;
+    const finalY = centerY - y2 * scale;
     return {
-        x: centerX + x1 * scale,
-        y: centerY - y2 * scale,
-        depth: z2,
+        x: safeCoord(finalX, centerX),
+        y: safeCoord(finalY, centerY),
+        depth: safeCoord(z2, 0),
     };
 }
 
@@ -87,6 +90,8 @@ function isClockwise(p1, p2, p3) {
 const BASE_CAR_VERTICES = Object.freeze({
     noseL: Object.freeze([-0.7, 0.12, 1.7]),
     noseR: Object.freeze([0.7, 0.12, 1.7]),
+    bumperFrontL: Object.freeze([-0.68, -0.05, 1.68]),
+    bumperFrontR: Object.freeze([0.68, -0.05, 1.68]),
     hoodL: Object.freeze([-0.65, 0.38, 0.9]),
     hoodR: Object.freeze([0.65, 0.38, 0.9]),
     roofFrontL: Object.freeze([-0.52, 0.72, 0.35]),
@@ -97,6 +102,8 @@ const BASE_CAR_VERTICES = Object.freeze({
     trunkR: Object.freeze([0.62, 0.40, -1.35]),
     tailL: Object.freeze([-0.68, 0.22, -1.75]),
     tailR: Object.freeze([0.68, 0.22, -1.75]),
+    bumperRearL: Object.freeze([-0.68, -0.05, -1.72]),
+    bumperRearR: Object.freeze([0.68, -0.05, -1.72]),
     sillFrontL: Object.freeze([-0.72, -0.05, 0.9]),
     sillFrontR: Object.freeze([0.72, -0.05, 0.9]),
     sillRearL: Object.freeze([-0.72, -0.05, -1.0]),
@@ -227,32 +234,37 @@ export default function SpatialCanvasParadigm() {
         }
     }, [cameraZone]);
 
-    // PanResponder cu Inerție Fină și Spring Decay
+    // PanResponder cu Inerție Fină și Spring Decay (rotație naturală 1:1)
     const inertiaTimerRef = useRef(null);
+    const lastGestureRef = useRef({ dx: 0, dy: 0 });
     const panResponder = useMemo(
         () =>
             PanResponder.create({
                 onStartShouldSetPanResponder: () => true,
                 onMoveShouldSetPanResponder: () => true,
                 onPanResponderGrant: () => {
+                    lastGestureRef.current = { dx: 0, dy: 0 };
                     if (inertiaTimerRef.current) clearInterval(inertiaTimerRef.current);
                 },
                 onPanResponderMove: (_, gestureState) => {
-                    setRotY((prev) => prev + gestureState.vx * 0.008);
-                    setRotX((prev) => Math.max(0.08, Math.min(1.2, prev - gestureState.vy * 0.006)));
+                    const deltaX = gestureState.dx - lastGestureRef.current.dx;
+                    const deltaY = gestureState.dy - lastGestureRef.current.dy;
+                    lastGestureRef.current = { dx: gestureState.dx, dy: gestureState.dy };
+                    setRotY((prev) => prev + deltaX * 0.022);
+                    setRotX((prev) => Math.max(0.08, Math.min(1.2, prev - deltaY * 0.012)));
                 },
                 onPanResponderRelease: (_, gestureState) => {
-                    let vY = gestureState.vx * 0.006;
-                    let vX = -gestureState.vy * 0.004;
+                    let vY = gestureState.vx * 0.14;
+                    let vX = -gestureState.vy * 0.04;
                     inertiaTimerRef.current = setInterval(() => {
-                        vY *= 0.88;
-                        vX *= 0.88;
+                        vY *= 0.93;
+                        vX *= 0.93;
                         setRotY((prev) => prev + vY);
                         setRotX((prev) => Math.max(0.08, Math.min(1.2, prev + vX)));
-                        if (Math.abs(vY) < 0.0005 && Math.abs(vX) < 0.0005) {
+                        if (Math.abs(vY) < 0.0004 && Math.abs(vX) < 0.0004) {
                             clearInterval(inertiaTimerRef.current);
                         }
-                    }, 25);
+                    }, 16);
                 },
             }),
         []
@@ -267,6 +279,8 @@ export default function SpatialCanvasParadigm() {
         // Capotă & Bot (cu explozie exterioară în mod X-Ray)
         const noseL = p(V.noseL[0] - explode, V.noseL[1], V.noseL[2] + explode);
         const noseR = p(V.noseR[0] + explode, V.noseR[1], V.noseR[2] + explode);
+        const bumperFrontL = p(V.bumperFrontL[0] - explode, V.bumperFrontL[1], V.bumperFrontL[2] + explode);
+        const bumperFrontR = p(V.bumperFrontR[0] + explode, V.bumperFrontR[1], V.bumperFrontR[2] + explode);
         const hoodL = p(V.hoodL[0] - explode, V.hoodL[1] + explode, V.hoodL[2]);
         const hoodR = p(V.hoodR[0] + explode, V.hoodR[1] + explode, V.hoodR[2]);
 
@@ -281,6 +295,8 @@ export default function SpatialCanvasParadigm() {
         const trunkR = p(V.trunkR[0] + explode, V.trunkR[1], V.trunkR[2] - explode);
         const tailL = p(V.tailL[0] - explode, V.tailL[1], V.tailL[2] - explode);
         const tailR = p(V.tailR[0] + explode, V.tailR[1], V.tailR[2] - explode);
+        const bumperRearL = p(V.bumperRearL[0] - explode, V.bumperRearL[1], V.bumperRearL[2] - explode);
+        const bumperRearR = p(V.bumperRearR[0] + explode, V.bumperRearR[1], V.bumperRearR[2] - explode);
 
         // Praguri inferioare
         const sillFrontL = p(V.sillFrontL[0] - explode, V.sillFrontL[1], V.sillFrontL[2]);
@@ -302,6 +318,7 @@ export default function SpatialCanvasParadigm() {
 
         return {
             noseL, noseR, hoodL, hoodR,
+            bumperFrontL, bumperFrontR, bumperRearL, bumperRearR,
             roofFrontL, roofFrontR, roofRearL, roofRearR,
             trunkL, trunkR, tailL, tailR,
             sillFrontL, sillFrontR, sillRearL, sillRearR,
@@ -317,6 +334,7 @@ export default function SpatialCanvasParadigm() {
 
     // Culoare dinamică frâne în funcție de temperatură
     const brakeColor = brakeFluidTemp > 140 ? '#FF2A2A' : brakeFluidTemp > 105 ? '#FFB800' : activeAccent.primary;
+    const isIceRisk = Boolean(telemetry?.criticalAlerts && safeArr(telemetry.criticalAlerts).some(a => a?.id === 'BLACK_ICE'));
     const safeTop = typeof insets?.top === 'number' && !isNaN(insets.top) ? Math.max(insets.top, 24) : 24;
     const safeBottom = typeof insets?.bottom === 'number' && !isNaN(insets.bottom) ? Math.max(insets.bottom, 12) : 12;
 
@@ -412,13 +430,17 @@ export default function SpatialCanvasParadigm() {
                     <Defs>
                         {/* PBR Metal Shading Gradient */}
                         <LinearGradient id="carBodyGrad" x1="0" y1="0" x2="1" y2="1">
-                            <Stop offset="0" stopColor="#0B1A2E" stopOpacity={isExplodedView ? 0.35 : 0.95} />
-                            <Stop offset="0.5" stopColor="#1E3A5F" stopOpacity={isExplodedView ? 0.25 : 0.9} />
-                            <Stop offset="1" stopColor="#03070E" stopOpacity={isExplodedView ? 0.35 : 0.95} />
+                            <Stop offset="0" stopColor="#12253B" stopOpacity={isExplodedView ? 0.45 : 0.98} />
+                            <Stop offset="0.5" stopColor="#1E3E63" stopOpacity={isExplodedView ? 0.35 : 0.95} />
+                            <Stop offset="1" stopColor="#0B1726" stopOpacity={isExplodedView ? 0.45 : 0.98} />
+                        </LinearGradient>
+                        <LinearGradient id="carSideGrad" x1="0" y1="0" x2="0" y2="1">
+                            <Stop offset="0" stopColor="#163255" stopOpacity={isExplodedView ? 0.4 : 0.95} />
+                            <Stop offset="1" stopColor="#08111D" stopOpacity={isExplodedView ? 0.4 : 0.98} />
                         </LinearGradient>
                         <LinearGradient id="glassGrad" x1="0" y1="0" x2="0" y2="1">
-                            <Stop offset="0" stopColor={activeAccent.primary} stopOpacity={isExplodedView ? 0.2 : 0.45} />
-                            <Stop offset="1" stopColor="#004466" stopOpacity={isExplodedView ? 0.1 : 0.2} />
+                            <Stop offset="0" stopColor={activeAccent.primary} stopOpacity={isExplodedView ? 0.3 : 0.55} />
+                            <Stop offset="1" stopColor="#003554" stopOpacity={isExplodedView ? 0.15 : 0.35} />
                         </LinearGradient>
                         {/* Fascicul Faruri 3D Proiectat în Față */}
                         <LinearGradient id="headlightBeam" x1="0" y1="0" x2="0" y2="1">
@@ -484,7 +506,98 @@ export default function SpatialCanvasParadigm() {
                         </G>
                     )}
 
-                    {/* Fațete Poligonale Caroserie */}
+                    {/* 1. Flanc Lateral Stânga (Portiere, Aripi, Prag) */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.noseL.x},${carMesh3D.noseL.y}
+                            ${carMesh3D.hoodL.x},${carMesh3D.hoodL.y}
+                            ${carMesh3D.trunkL.x},${carMesh3D.trunkL.y}
+                            ${carMesh3D.tailL.x},${carMesh3D.tailL.y}
+                            ${carMesh3D.bumperRearL.x},${carMesh3D.bumperRearL.y}
+                            ${carMesh3D.sillRearL.x},${carMesh3D.sillRearL.y}
+                            ${carMesh3D.sillFrontL.x},${carMesh3D.sillFrontL.y}
+                            ${carMesh3D.bumperFrontL.x},${carMesh3D.bumperFrontL.y}
+                        `}
+                        fill="url(#carSideGrad)"
+                        stroke={activeAccent.primary}
+                        strokeWidth="1.2"
+                    />
+
+                    {/* 2. Geamuri Laterale Stânga */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.hoodL.x},${carMesh3D.hoodL.y}
+                            ${carMesh3D.roofFrontL.x},${carMesh3D.roofFrontL.y}
+                            ${carMesh3D.roofRearL.x},${carMesh3D.roofRearL.y}
+                            ${carMesh3D.trunkL.x},${carMesh3D.trunkL.y}
+                        `}
+                        fill="url(#glassGrad)"
+                        stroke={activeAccent.primary}
+                        strokeWidth="1"
+                    />
+
+                    {/* 3. Flanc Lateral Dreapta (Portiere, Aripi, Prag) */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.noseR.x},${carMesh3D.noseR.y}
+                            ${carMesh3D.hoodR.x},${carMesh3D.hoodR.y}
+                            ${carMesh3D.trunkR.x},${carMesh3D.trunkR.y}
+                            ${carMesh3D.tailR.x},${carMesh3D.tailR.y}
+                            ${carMesh3D.bumperRearR.x},${carMesh3D.bumperRearR.y}
+                            ${carMesh3D.sillRearR.x},${carMesh3D.sillRearR.y}
+                            ${carMesh3D.sillFrontR.x},${carMesh3D.sillFrontR.y}
+                            ${carMesh3D.bumperFrontR.x},${carMesh3D.bumperFrontR.y}
+                        `}
+                        fill="url(#carSideGrad)"
+                        stroke={activeAccent.primary}
+                        strokeWidth="1.2"
+                    />
+
+                    {/* 4. Geamuri Laterale Dreapta */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.hoodR.x},${carMesh3D.hoodR.y}
+                            ${carMesh3D.roofFrontR.x},${carMesh3D.roofFrontR.y}
+                            ${carMesh3D.roofRearR.x},${carMesh3D.roofRearR.y}
+                            ${carMesh3D.trunkR.x},${carMesh3D.trunkR.y}
+                        `}
+                        fill="url(#glassGrad)"
+                        stroke={activeAccent.primary}
+                        strokeWidth="1"
+                    />
+
+                    {/* 5. Bară Față & Grilă Aerodinamică */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.noseL.x},${carMesh3D.noseL.y}
+                            ${carMesh3D.noseR.x},${carMesh3D.noseR.y}
+                            ${carMesh3D.bumperFrontR.x},${carMesh3D.bumperFrontR.y}
+                            ${carMesh3D.bumperFrontL.x},${carMesh3D.bumperFrontL.y}
+                        `}
+                        fill="#0A1828"
+                        stroke={activeAccent.primary}
+                        strokeWidth="1.5"
+                    />
+
+                    {/* 6. Faruri LED Matrix Neon */}
+                    <Line
+                        x1={carMesh3D.noseL.x}
+                        y1={carMesh3D.noseL.y}
+                        x2={carMesh3D.bumperFrontL.x}
+                        y2={carMesh3D.bumperFrontL.y}
+                        stroke="#FFFFFF"
+                        strokeWidth="2.5"
+                    />
+                    <Line
+                        x1={carMesh3D.noseR.x}
+                        y1={carMesh3D.noseR.y}
+                        x2={carMesh3D.bumperFrontR.x}
+                        y2={carMesh3D.bumperFrontR.y}
+                        stroke="#FFFFFF"
+                        strokeWidth="2.5"
+                    />
+
+                    {/* 7. Fațete Superioare: Capotă */}
                     <Polygon
                         points={`
                             ${carMesh3D.noseL.x},${carMesh3D.noseL.y}
@@ -497,6 +610,7 @@ export default function SpatialCanvasParadigm() {
                         strokeWidth="1.2"
                     />
 
+                    {/* 8. Parbriz */}
                     <Polygon
                         points={`
                             ${carMesh3D.hoodL.x},${carMesh3D.hoodL.y}
@@ -509,6 +623,7 @@ export default function SpatialCanvasParadigm() {
                         strokeWidth="1.5"
                     />
 
+                    {/* 9. Plafon */}
                     <Polygon
                         points={`
                             ${carMesh3D.roofFrontL.x},${carMesh3D.roofFrontL.y}
@@ -521,6 +636,7 @@ export default function SpatialCanvasParadigm() {
                         strokeWidth="1"
                     />
 
+                    {/* 10. Lunetă */}
                     <Polygon
                         points={`
                             ${carMesh3D.roofRearL.x},${carMesh3D.roofRearL.y}
@@ -533,6 +649,7 @@ export default function SpatialCanvasParadigm() {
                         strokeWidth="1.2"
                     />
 
+                    {/* 11. Portbagaj */}
                     <Polygon
                         points={`
                             ${carMesh3D.trunkL.x},${carMesh3D.trunkL.y}
@@ -543,6 +660,29 @@ export default function SpatialCanvasParadigm() {
                         fill="#0B1524"
                         stroke="#FF2A2A"
                         strokeWidth="2"
+                    />
+
+                    {/* 12. Bară Spate & Difuzor */}
+                    <Polygon
+                        points={`
+                            ${carMesh3D.tailL.x},${carMesh3D.tailL.y}
+                            ${carMesh3D.tailR.x},${carMesh3D.tailR.y}
+                            ${carMesh3D.bumperRearR.x},${carMesh3D.bumperRearR.y}
+                            ${carMesh3D.bumperRearL.x},${carMesh3D.bumperRearL.y}
+                        `}
+                        fill="#0A121E"
+                        stroke="#FF2A2A"
+                        strokeWidth="1.5"
+                    />
+
+                    {/* 13. Bandă Stopuri LED Spate Roșie */}
+                    <Line
+                        x1={carMesh3D.tailL.x}
+                        y1={carMesh3D.tailL.y}
+                        x2={carMesh3D.tailR.x}
+                        y2={carMesh3D.tailR.y}
+                        stroke="#FF1744"
+                        strokeWidth="3"
                     />
 
                     {/* Linii Aerodinamice CFD animate */}
@@ -849,11 +989,11 @@ export default function SpatialCanvasParadigm() {
                                     </View>
                                     <View style={styles.replayMetricCol}>
                                         <Text style={styles.replayMetricKey}>BOOST</Text>
-                                        <Text style={styles.replayMetricVal}>{Number(activeBoost).toFixed(2)} bar</Text>
+                                        <Text style={styles.replayMetricVal}>{safeFmt(activeBoost, 2, '0.00')} bar</Text>
                                     </View>
                                     <View style={styles.replayMetricCol}>
                                         <Text style={styles.replayMetricKey}>G-LAT</Text>
-                                        <Text style={styles.replayMetricVal}>{Number(activeLatG).toFixed(2)} G</Text>
+                                        <Text style={styles.replayMetricVal}>{safeFmt(activeLatG, 2, '0.00')} G</Text>
                                     </View>
                                 </View>
 
@@ -911,7 +1051,7 @@ export default function SpatialCanvasParadigm() {
                             <Text style={[styles.categoryTitle, { color: activeAccent.primary, marginTop: 10 }]}>
                                 CURSE RECENTE ÎNREGISTRATE
                             </Text>
-                            {core.tripsList.map((t) => {
+                            {safeArr(core.tripsList).map((t) => {
                                 const isSelected = core.selectedTripId === t.id;
                                 return (
                                     <TouchableOpacity
@@ -955,7 +1095,7 @@ export default function SpatialCanvasParadigm() {
                             <Text style={[styles.categoryTitle, { color: activeAccent.primary }]}>
                                 COMPONENTE ȘI UZURĂ FIZICĂ PREDICTIVĂ (CBM)
                             </Text>
-                            {core.maintenanceItems.map((item) => {
+                            {safeArr(core.maintenanceItems).map((item) => {
                                 const isWarn = item.status === 'WARN';
                                 const isCrit = item.status === 'ALERT';
                                 const barColor = isCrit ? '#FF2A2A' : isWarn ? '#FFB800' : '#00FF66';
@@ -990,7 +1130,7 @@ export default function SpatialCanvasParadigm() {
                                 PORTOFEL DIGITAL ACTE LEGALE
                             </Text>
                             <View style={styles.sensorsGrid}>
-                                {core.legalDocuments.map((doc, idx) => {
+                                {safeArr(core.legalDocuments).map((doc, idx) => {
                                     const isExp = doc.daysRemaining < 30;
                                     return (
                                         <View key={idx} style={[styles.docGlassCard, { borderColor: isExp ? '#FF2A2A66' : '#162B44' }]}>
@@ -1093,7 +1233,7 @@ export default function SpatialCanvasParadigm() {
                                     <View>
                                         <Text style={styles.sentryTitle}>GĂSEȘTE-MI MAȘINA (GPS)</Text>
                                         <Text style={[styles.sentrySub, { color: activeAccent.primary }]}>
-                                            {core.carGpsCoords.lat.toFixed(4)}°N, {core.carGpsCoords.lng.toFixed(4)}°E
+                                            {safeFmt(core.carGpsCoords?.lat, 4, '44.4323')}°N, {safeFmt(core.carGpsCoords?.lng ?? core.carGpsCoords?.lon, 4, '26.1063')}°E
                                         </Text>
                                     </View>
                                     <TouchableOpacity
@@ -1287,7 +1427,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     hotspotsLayer: {
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
     },
     spatialHotspot: {
         position: 'absolute',

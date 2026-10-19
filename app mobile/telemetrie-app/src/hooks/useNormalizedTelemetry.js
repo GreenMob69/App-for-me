@@ -1,6 +1,7 @@
 import { useContext, useMemo, useRef } from 'react';
 import { LiveContext } from '../context/LiveContext';
 import { AppContext } from '../context/AppContext';
+import { safeNum, safeFmt } from '../utils/safeMath';
 
 /**
  * useNormalizedTelemetry
@@ -66,24 +67,24 @@ export function useNormalizedTelemetry(isLiveViewActive = true) {
 
     // Presiuni (bar)
     const boostRaw = p.turbo_boost ?? p.boost ?? 0.85;
-    const boost = Number(Number(boostRaw).toFixed(2));
-    const railPressure = Math.round(p.rail_bar ?? p.rampa ?? 780);
-    const oilPressure = Number(Number(p.ulei_bar ?? 3.4).toFixed(1));
+    const boost = safeNum(parseFloat(safeFmt(boostRaw, 2, '0.85')), 0.85);
+    const railPressure = Math.round(safeNum(p.rail_bar ?? p.rampa, 780));
+    const oilPressure = safeNum(parseFloat(safeFmt(p.ulei_bar, 1, '3.4')), 3.4);
 
     // Electricitate
-    const batteryVoltage = Number(Number(e.tensiune || 14.1).toFixed(1));
-    const batterySoH = Math.round(v.batterySoH || 92);
+    const batteryVoltage = safeNum(parseFloat(safeFmt(e.tensiune, 1, '14.1')), 14.1);
+    const batterySoH = Math.round(safeNum(v.batterySoH, 92));
 
     // Combustibil & Consum
-    const fuelLevel = Math.round(c.nivel_litri ? (c.nivel_litri / 70) * 100 : (c.procent || 68));
-    const fuelRate = Number(Number(c.consum_instant ?? (speed > 10 ? 5.8 : 0.8)).toFixed(1));
-    const fuelBurnedLiters = Number(Number(v.fuelBurnedLiters || c.litri_consumati || 1.45).toFixed(2));
+    const fuelLevel = Math.round(c.nivel_litri ? (safeNum(c.nivel_litri) / 70) * 100 : safeNum(c.procent, 68));
+    const fuelRate = safeNum(parseFloat(safeFmt(c.consum_instant ?? (speed > 10 ? 5.8 : 0.8), 1, '5.8')), 5.8);
+    const fuelBurnedLiters = safeNum(parseFloat(safeFmt(v.fuelBurnedLiters || c.litri_consumati, 2, '1.45')), 1.45);
 
     // Frâne & Dinamică
-    const brakeFluidTemp = Math.round(v.brakeFluidTempC || 85);
-    const brakeEnergyTrip = Math.round((v.brakeEnergyJoulesTrip || 0) / 1000); // kJ
-    const gForceLat = Number(Number(v.gForceLateral || 0).toFixed(2));
-    const gForceLong = Number(Number(v.gForceLongitudinal || 0).toFixed(2));
+    const brakeFluidTemp = Math.round(safeNum(v.brakeFluidTempC, 85));
+    const brakeEnergyTrip = Math.round(safeNum(v.brakeEnergyJoulesTrip, 0) / 1000); // kJ
+    const gForceLat = safeNum(parseFloat(safeFmt(v.gForceLateral, 2, '0.00')), 0.0);
+    const gForceLong = safeNum(parseFloat(safeFmt(v.gForceLongitudinal, 2, '0.00')), 0.0);
 
     // RUL & Fiabilitate Weibull
     const weibullRul = v.weibullRulMatrix || {
@@ -145,7 +146,7 @@ export function useNormalizedTelemetry(isLiveViewActive = true) {
     const firingOrder = [1, 2, 4, 5, 3];
     const activeCylinder = firingOrder[firingIndex];
 
-    return {
+    const result = {
       // Dinamica
       speed,
       rpm,

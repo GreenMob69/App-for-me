@@ -22,23 +22,11 @@ import { useUiParadigm } from '../../context/AppContext';
 import { hapticTap, hapticCriticalWarning, hapticShiftAlert } from '../../services/hapticFeedback';
 import { audioGong } from '../../services/audioGongService';
 import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
+import { safeNum, safeFmt, safeArr, sanitizeSvgPath } from '../../utils/safeMath';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MONO_FONT = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 const baseTheme = PARADIGM_THEMES[PARADIGM_KEYS.NOTHING_MINIMAL];
-
-// Pre-computed single SVG path for ambient dot-matrix background (Zero-GC, 100% native SVG compatible)
-const AMBIENT_DOT_GRID_PATH = (() => {
-    let d = '';
-    const step = 20;
-    const r = 1;
-    for (let y = 10; y < 900; y += step) {
-        for (let x = 10; x < 450; x += step) {
-            d += `M ${x - r},${y} a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 -${r * 2},0 `;
-        }
-    }
-    return d;
-})();
 
 // ─── 8. Pre-baked 5x7 Vector Dot Matrix Numbers for SVG ──────────────────────
 const FONT_5X7 = {
@@ -58,27 +46,36 @@ const FONT_5X7 = {
 
 const SvgDotMatrixChar = React.memo(function SvgDotMatrixChar({ char = '0', x = 0, y = 0, dotSize = 4, gap = 2, color = '#FFFFFF' }) {
     const matrix = FONT_5X7[char] || FONT_5X7['0'];
-    const r = dotSize / 2;
+    const sDotSize = safeNum(dotSize, 4);
+    const sGap = safeNum(gap, 2);
+    const sX = safeNum(x, 0);
+    const sY = safeNum(y, 0);
+    const r = sDotSize / 2;
     let path = '';
     for (let row = 0; row < 5; row++) {
         for (let col = 0; col < 3; col++) {
             if (matrix[row][col] === 1) {
-                const cx = x + col * (dotSize + gap) + r;
-                const cy = y + row * (dotSize + gap) + r;
+                const cx = sX + col * (sDotSize + sGap) + r;
+                const cy = sY + row * (sDotSize + sGap) + r;
                 path += `M ${cx - r},${cy} a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 -${r * 2},0 `;
             }
         }
     }
-    return <Path d={path} fill={color} />;
+    return <Path d={sanitizeSvgPath(path)} fill={color} />;
 });
 
 // ─── 10. Bionic Thermal Ribbon (Color-Free Contrast Shading) ─────────────────
 function generateBionicPulsePath(width, height, loadPct = 20, coolantTemp = 90) {
-    const baselineY = height / 2;
-    const intensity = Math.min(Math.max(loadPct / 100, 0.15), 1.0);
-    const peakHeight = (height * 0.44) * (0.35 + intensity * 0.65);
+    const sWidth = Math.max(10, safeNum(width, 300));
+    const sHeight = Math.max(10, safeNum(height, 50));
+    const sLoad = safeNum(loadPct, 20);
+    const sTemp = safeNum(coolantTemp, 90);
 
-    const step = width / 12;
+    const baselineY = sHeight / 2;
+    const intensity = Math.min(Math.max(sLoad / 100, 0.15), 1.0);
+    const peakHeight = (sHeight * 0.44) * (0.35 + intensity * 0.65);
+
+    const step = sWidth / 12;
     const p1 = baselineY;
     const p2 = baselineY - (peakHeight * 0.25);
     const p3 = baselineY + (peakHeight * 0.2);
@@ -87,7 +84,7 @@ function generateBionicPulsePath(width, height, loadPct = 20, coolantTemp = 90) 
     const p6 = baselineY - (peakHeight * 0.45);
     const p7 = baselineY;
 
-    const pathD = `M 0 ${baselineY} ` +
+    const rawPath = `M 0 ${baselineY} ` +
         `L ${step * 2} ${baselineY} ` +
         `L ${step * 3} ${p1} ` +
         `L ${step * 3.8} ${p2} ` +
@@ -96,16 +93,18 @@ function generateBionicPulsePath(width, height, loadPct = 20, coolantTemp = 90) 
         `L ${step * 6.0} ${p5} ` +
         `L ${step * 6.8} ${p6} ` +
         `L ${step * 7.5} ${p7} ` +
-        `L ${width} ${baselineY}`;
+        `L ${sWidth} ${baselineY}`;
+
+    const pathD = sanitizeSvgPath(rawPath);
 
     // Contrast shading properties:
     // Cold (<75°C) = Dotted 1px; Optimal (75-96°C) = Solid 2.5px; Stress (>98°C) = Heavy Stipple
     let strokeWidth = 2.0;
     let strokeDasharray = undefined;
-    if (coolantTemp < 75) {
+    if (sTemp < 75) {
         strokeWidth = 1.2;
         strokeDasharray = '3, 4';
-    } else if (coolantTemp > 98) {
+    } else if (sTemp > 98) {
         strokeWidth = 3.2;
         strokeDasharray = '6, 2';
     }
@@ -150,14 +149,17 @@ export default function MinimalNothingParadigm() {
 
     // ─── 4. Ultra-Low-Power Standby Sub-Rendering during Steady Highway Cruise ──
     const [cruiseStandby, setCruiseStandby] = useState(false);
-    const prevSpeedRef = useRef(telemetry.speed);
+    const prevSpeedRef = useRef(safeNum(telemetry?.speed, 0));
     const steadyCounterRef = useRef(0);
 
-    useEffect(() => {
-        const speedDelta = Math.abs(telemetry.speed - prevSpeedRef.current);
-        prevSpeedRef.current = telemetry.speed;
+    const safeSpeed = safeNum(telemetry?.speed, 0);
+    const safeAlertsCount = safeArr(telemetry?.criticalAlerts).length;
 
-        if (telemetry.speed > 55 && speedDelta < 1.0 && telemetry.criticalAlerts.length === 0) {
+    useEffect(() => {
+        const speedDelta = Math.abs(safeSpeed - prevSpeedRef.current);
+        prevSpeedRef.current = safeSpeed;
+
+        if (safeSpeed > 55 && speedDelta < 1.0 && safeAlertsCount === 0) {
             steadyCounterRef.current += 1;
             if (steadyCounterRef.current >= 5) { // 5 consecutive seconds of steady speed
                 setCruiseStandby(true);
@@ -168,24 +170,24 @@ export default function MinimalNothingParadigm() {
                 setCruiseStandby(false);
             }
         }
-    }, [telemetry.speed, telemetry.criticalAlerts.length]);
+    }, [safeSpeed, safeAlertsCount]);
 
     // ─── 9. Tactile Haptic Metronome for Speed Limit Thresholds ────────────────
     const lastMetronomeRef = useRef(0);
     useEffect(() => {
-        if (telemetry.speed > 130) {
+        if (safeSpeed > 130) {
             const now = Date.now();
             if (now - lastMetronomeRef.current > 4000) {
                 lastMetronomeRef.current = now;
                 hapticTap();
             }
         }
-    }, [telemetry.speed]);
+    }, [safeSpeed]);
 
     // Animație pentru Red Pill Alert
     const pulseAnim = useRef(new Animated.Value(1)).current;
     useEffect(() => {
-        if (telemetry.criticalAlerts.length > 0) {
+        if (safeAlertsCount > 0) {
             hapticCriticalWarning();
             audioGong.playGong('critical');
             const loop = Animated.loop(
@@ -199,7 +201,7 @@ export default function MinimalNothingParadigm() {
         } else {
             pulseAnim.setValue(1);
         }
-    }, [telemetry.criticalAlerts.length]);
+    }, [safeAlertsCount]);
 
     const {
         speed,
@@ -314,11 +316,12 @@ export default function MinimalNothingParadigm() {
     // Perforated Fuel Dots
     const fuelDots = useMemo(() => {
         const total = 10;
-        const filled = Math.round((fuelLevel / 100) * total);
+        const sFuel = safeNum(fuelLevel, 0);
+        const filled = Math.round((sFuel / 100) * total);
         return Array.from({ length: total }, (_, i) => i < filled);
     }, [fuelLevel]);
 
-    const isGhostDimmed = (ghostMode || cruiseStandby) && criticalAlerts.length === 0;
+    const isGhostDimmed = (ghostMode || cruiseStandby) && safeArr(criticalAlerts).length === 0;
 
     // Dinamic Theme mapping for E-Paper vs OLED True Black & Sub-Accents
     const currentTheme = useMemo(() => {
@@ -367,16 +370,9 @@ export default function MinimalNothingParadigm() {
                 translucent
             />
 
-            {/* Ambient Nothing OS Dot-Matrix Pattern Background - Layered safely behind UI */}
-            <View style={[StyleSheet.absoluteFillObject, { zIndex: -1 }]} pointerEvents="none">
-                <Svg width="100%" height="100%">
-                    <Path d={AMBIENT_DOT_GRID_PATH} fill={invertedEPaper ? '#E0E0E0' : '#141414'} />
-                </Svg>
-            </View>
-
             {/* ── 1. GLYPH INTERFACE MATRIX (7 Segmente Telegraphic) ── */}
             <View style={[styles.glyphMatrixContainer, { backgroundColor: currentTheme.bg, zIndex: 2 }]}>
-                {glyphLeds.map((active, idx) => (
+                {safeArr(glyphLeds).map((active, idx) => (
                     <View
                         key={`glyph-${idx}`}
                         style={[
@@ -577,12 +573,12 @@ export default function MinimalNothingParadigm() {
                             <View style={styles.alertHeader}>
                                 <Animated.View style={[styles.redPillDot, { transform: [{ scale: pulseAnim }] }]} />
                                 <Text style={styles.alertBadge}>[ ! PERICOL CRITIC DETECTAT ]</Text>
-                                <Text style={styles.alertCount}>{criticalAlerts.length} ALERTE</Text>
+                                <Text style={styles.alertCount}>{safeArr(criticalAlerts).length} ALERTE</Text>
                             </View>
-                            {criticalAlerts.map((alt, idx) => (
-                                <View key={alt.id || idx} style={styles.alertItemRow}>
-                                    <Text style={styles.alertMsg}>▶ {alt.title}</Text>
-                                    {expandedAlerts && <Text style={styles.alertDesc}>{alt.desc}</Text>}
+                            {safeArr(criticalAlerts).map((alt, idx) => (
+                                <View key={alt?.id || idx} style={styles.alertItemRow}>
+                                    <Text style={styles.alertMsg}>▶ {alt?.title || 'ALERTĂ'}</Text>
+                                    {expandedAlerts && <Text style={styles.alertDesc}>{alt?.desc || ''}</Text>}
                                 </View>
                             ))}
                         </TouchableOpacity>
@@ -594,11 +590,11 @@ export default function MinimalNothingParadigm() {
                     <View style={styles.fuelStripHeader}>
                         <Text style={[styles.fuelStripLabel, { color: currentTheme.textDim }]}>REZERVOR COMBUSTIBIL</Text>
                         <Text style={[styles.fuelStripValue, { color: currentTheme.textPrimary }]}>
-                            {fuelLevel}% · {fuelRate} L/100KM
+                            {safeNum(fuelLevel, 0)}% · {safeNum(fuelRate, 0)} L/100KM
                         </Text>
                     </View>
                     <View style={styles.fuelDotsRow}>
-                        {fuelDots.map((isFilled, idx) => (
+                        {safeArr(fuelDots).map((isFilled, idx) => (
                             <View
                                 key={`fdot-${idx}`}
                                 style={[
@@ -622,29 +618,29 @@ export default function MinimalNothingParadigm() {
                         <View style={styles.grid2x2}>
                             <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
                                 <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>BOOST TURBO</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{boost} <Text style={styles.metricUnit}>BAR</Text></Text>
+                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{safeNum(boost, 0)} <Text style={styles.metricUnit}>BAR</Text></Text>
                             </View>
                             <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
                                 <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TEMPERATURĂ ANTIGEL</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }, coolantTemp > 98 && { color: currentTheme.accent }]}>
-                                    {coolantTemp} <Text style={styles.metricUnit}>°C</Text>
+                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }, safeNum(coolantTemp, 90) > 98 && { color: currentTheme.accent }]}>
+                                    {safeNum(coolantTemp, 90)} <Text style={styles.metricUnit}>°C</Text>
                                 </Text>
                             </View>
                             <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
                                 <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TENSIUNE ALTERNATOR</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{batteryVoltage} <Text style={styles.metricUnit}>V</Text></Text>
+                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{safeNum(batteryVoltage, 12)} <Text style={styles.metricUnit}>V</Text></Text>
                             </View>
                             <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
                                 <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>TEMPERATURĂ ULEI</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{oilTemp} <Text style={styles.metricUnit}>°C</Text></Text>
+                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{safeNum(oilTemp, 90)} <Text style={styles.metricUnit}>°C</Text></Text>
                             </View>
                             <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
                                 <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>EGT EVACUARE</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{exhaustTemp} <Text style={styles.metricUnit}>°C</Text></Text>
+                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{safeNum(exhaustTemp, 380)} <Text style={styles.metricUnit}>°C</Text></Text>
                             </View>
                             <View style={[styles.metricCell, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
                                 <Text style={[styles.metricLabel, { color: currentTheme.textDim }]}>G-FORCE TOTAL</Text>
-                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{Math.sqrt(gForceLat * gForceLat + gForceLong * gForceLong).toFixed(2)} <Text style={styles.metricUnit}>G</Text></Text>
+                                <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{safeFmt(Math.sqrt(safeNum(gForceLat) * safeNum(gForceLat) + safeNum(gForceLong) * safeNum(gForceLong)), 2, '0.00')} <Text style={styles.metricUnit}>G</Text></Text>
                             </View>
                         </View>
                     </View>
@@ -658,16 +654,16 @@ export default function MinimalNothingParadigm() {
                         </Text>
                         
                         {Object.entries({
-                            'MOTOR & INJECȚIE': core.virtualSensors.engine,
-                            'TURBO & ADMISIE': core.virtualSensors.turbo,
-                            'TERMIC & RĂCIRE': core.virtualSensors.thermal,
-                            'DPF & EMISII': core.virtualSensors.emissions,
-                            'ELECTRIC & BATERIE': core.virtualSensors.electrical,
-                            'ȘASIU & SIGURANȚĂ': core.virtualSensors.safety,
+                            'MOTOR & INJECȚIE': core.virtualSensors?.engine || [],
+                            'TURBO & ADMISIE': core.virtualSensors?.turbo || [],
+                            'TERMIC & RĂCIRE': core.virtualSensors?.thermal || [],
+                            'DPF & EMISII': core.virtualSensors?.emissions || [],
+                            'ELECTRIC & BATERIE': core.virtualSensors?.electrical || [],
+                            'ȘASIU & SIGURANȚĂ': core.virtualSensors?.safety || [],
                         }).map(([category, sensors]) => (
                             <View key={category} style={[styles.nothingGroupCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}>
                                 <Text style={[styles.nothingGroupTitle, { color: currentTheme.textDim }]}>▶ {category}</Text>
-                                {sensors.map((s) => (
+                                {safeArr(sensors).map((s) => (
                                     <View key={s.id} style={[styles.nothingSensorRow, { borderBottomColor: currentTheme.divider }]}>
                                         <View style={{ flex: 1 }}>
                                             <Text style={[styles.nothingSensorLabel, { color: currentTheme.textPrimary }]}>{s.label}</Text>
@@ -708,7 +704,7 @@ export default function MinimalNothingParadigm() {
                                     {core.isReplaying ? '▶ REDARE REPLAY ACTIVĂ' : '⏸ REPLAY ÎN PAUZĂ'}
                                 </Text>
                                 <Text style={[styles.nothingSensorVal, { color: currentTheme.accent }]}>
-                                    PAS: {core.currentReplaySample.progressPct}%
+                                    PAS: {safeNum(core.currentReplaySample?.progressPct, 0)}%
                                 </Text>
                             </View>
 
@@ -800,7 +796,7 @@ export default function MinimalNothingParadigm() {
 
                         {/* Lista de curse */}
                         <Text style={[styles.subSectionTitle, { color: currentTheme.textDim }]}>CURSE SALVATE ÎN MEMORIE:</Text>
-                        {core.tripsList.map((t) => {
+                        {safeArr(core.tripsList).map((t) => {
                             const isSelected = t.id === core.selectedTripId;
                             return (
                                 <TouchableOpacity
@@ -841,7 +837,7 @@ export default function MinimalNothingParadigm() {
 
                         {/* CBM Degradare Fizică */}
                         <Text style={[styles.subSectionTitle, { color: currentTheme.textDim }]}>UZURĂ FIZICĂ (ARRHENIUS / ARCHARD):</Text>
-                        {core.maintenanceItems.map((item) => (
+                        {safeArr(core.maintenanceItems).map((item) => (
                             <View
                                 key={item.id}
                                 style={[styles.serviceCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}
@@ -883,7 +879,7 @@ export default function MinimalNothingParadigm() {
 
                         {/* Portofel Acte Legale */}
                         <Text style={[styles.subSectionTitle, { color: currentTheme.textDim, marginTop: 16 }]}>PORTOFEL ACTE & VALABILITĂȚI:</Text>
-                        {core.legalDocuments.map((doc) => (
+                        {safeArr(core.legalDocuments).map((doc) => (
                             <View
                                 key={doc.id}
                                 style={[styles.docCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder }]}
@@ -960,7 +956,7 @@ export default function MinimalNothingParadigm() {
                             </TouchableOpacity>
 
                             <Text style={[styles.sentryLogTitle, { color: currentTheme.textDim }]}>JURNAL EVENIMENTE SENTINELĂ:</Text>
-                            {core.sentryEvents.map((ev) => (
+                            {safeArr(core.sentryEvents).map((ev) => (
                                 <View key={ev.id} style={styles.sentryLogRow}>
                                     <Text style={[styles.sentryLogTime, { color: currentTheme.textDim }]}>[{ev.time}]</Text>
                                     <Text style={[styles.sentryLogDesc, { color: ev.severity === 'crit' ? currentTheme.accent : currentTheme.textPrimary }]}>
@@ -974,7 +970,7 @@ export default function MinimalNothingParadigm() {
                         <View style={[styles.nothingGroupCard, { backgroundColor: currentTheme.cardBg, borderColor: currentTheme.cardBorder, marginTop: 12 }]}>
                             <Text style={[styles.nothingGroupTitle, { color: currentTheme.textPrimary }]}>GĂSEȘTE-MI MAȘINA & CRONOMETRU PARCARE</Text>
                             <Text style={[styles.gpsCoordsText, { color: currentTheme.textSecondary }]}>
-                                Coordonate GPS: {core.carGpsCoords.lat} N, {core.carGpsCoords.lon} E
+                                Coordonate GPS: {safeFmt(core.carGpsCoords?.lat, 4, '44.4323')}°N, {safeFmt(core.carGpsCoords?.lng ?? core.carGpsCoords?.lon, 4, '26.1063')}°E
                             </Text>
                             <TouchableOpacity
                                 style={[styles.mapsBtn, { borderColor: currentTheme.cardBorder }]}
@@ -1077,7 +1073,7 @@ export default function MinimalNothingParadigm() {
                                 </Text>
                             </View>
 
-                            {core.aiMessages.map((msg) => (
+                            {safeArr(core.aiMessages).map((msg) => (
                                 <View key={msg.id} style={styles.telexMsgRow}>
                                     <Text style={[styles.telexSender, { color: msg.sender === 'ai' ? currentTheme.accent : currentTheme.textDim }]}>
                                         {msg.sender === 'ai' ? '▶ AI INGINER:' : '▶ TFL MASTER:'}

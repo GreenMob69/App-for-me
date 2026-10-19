@@ -29,6 +29,7 @@ import { useUiParadigm } from '../../context/AppContext';
 import { hapticTap, hapticShiftAlert, hapticCriticalWarning } from '../../services/hapticFeedback';
 import { audioGong } from '../../services/audioGongService';
 import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
+import { safeNum, safeFmt, safeArr, sanitizeSvgPath } from '../../utils/safeMath';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
@@ -106,8 +107,8 @@ export default function F1CyberdeckParadigm() {
 
     // 2. Kamm Friction Circle Adhesion Vector
     const totalG = useMemo(() => {
-        const val = Math.sqrt(gForceLat * gForceLat + gForceLong * gForceLong);
-        return Number(val.toFixed(2));
+        const val = Math.sqrt(safeNum(gForceLat) * safeNum(gForceLat) + safeNum(gForceLong) * safeNum(gForceLong));
+        return Number(safeFmt(val, 2, '0.00'));
     }, [gForceLat, gForceLong]);
 
     const gripUtilizationPct = useMemo(() => {
@@ -116,11 +117,13 @@ export default function F1CyberdeckParadigm() {
 
     // 5. 4-Corner Brake Disc Pyrometer simulation (°C)
     const brakePyrometer = useMemo(() => {
-        const base = Math.max(brakeFluidTemp + 80, 180);
-        const biasFL = Math.round(base + Math.abs(gForceLat) * 25 + (gForceLong < 0 ? Math.abs(gForceLong) * 45 : 0));
-        const biasFR = Math.round(base - Math.abs(gForceLat) * 10 + (gForceLong < 0 ? Math.abs(gForceLong) * 45 : 0));
-        const biasRL = Math.round(base * 0.75 + Math.abs(gForceLat) * 15);
-        const biasRR = Math.round(base * 0.75 - Math.abs(gForceLat) * 5);
+        const base = Math.max(safeNum(brakeFluidTemp, 90) + 80, 180);
+        const sLat = safeNum(gForceLat, 0);
+        const sLong = safeNum(gForceLong, 0);
+        const biasFL = Math.round(base + Math.abs(sLat) * 25 + (sLong < 0 ? Math.abs(sLong) * 45 : 0));
+        const biasFR = Math.round(base - Math.abs(sLat) * 10 + (sLong < 0 ? Math.abs(sLong) * 45 : 0));
+        const biasRL = Math.round(base * 0.75 + Math.abs(sLat) * 15);
+        const biasRR = Math.round(base * 0.75 - Math.abs(sLat) * 5);
         return { fl: biasFL, fr: biasFR, rl: biasRL, rr: biasRR };
     }, [brakeFluidTemp, gForceLat, gForceLong]);
 
@@ -129,7 +132,7 @@ export default function F1CyberdeckParadigm() {
         if (!isLiveViewActive) return;
 
         const idx = ringIndexRef.current;
-        ringBufferRef.current[idx] = { boost, rpm };
+        ringBufferRef.current[idx] = { boost: safeNum(boost, 0), rpm: safeNum(rpm, 800) };
         ringIndexRef.current = (idx + 1) % 25;
 
         // Generate SVG points string directly without array allocations
@@ -137,10 +140,12 @@ export default function F1CyberdeckParadigm() {
         let rPoints = '';
         for (let i = 0; i < 25; i++) {
             const bufferIdx = (ringIndexRef.current + i) % 25;
-            const pt = ringBufferRef.current[bufferIdx];
-            const x = (i * (160 / 25)).toFixed(1);
-            const yBoost = (52 - (pt.boost * 20)).toFixed(1);
-            const yRpm = (56 - (pt.rpm / 110)).toFixed(1);
+            const pt = ringBufferRef.current[bufferIdx] || { boost: 0, rpm: 800 };
+            const ptBoost = safeNum(pt.boost, 0);
+            const ptRpm = safeNum(pt.rpm, 800);
+            const x = safeFmt(i * (160 / 25), 1, '0.0');
+            const yBoost = safeFmt(52 - (ptBoost * 20), 1, '0.0');
+            const yRpm = safeFmt(56 - (ptRpm / 110), 1, '0.0');
             bPoints += (i === 0 ? '' : ' ') + x + ',' + yBoost;
             rPoints += (i === 0 ? '' : ' ') + x + ',' + yRpm;
         }
@@ -647,7 +652,7 @@ export default function F1CyberdeckParadigm() {
                             <Text style={styles.pitwallPageSub}>CAN-BUS 500kbps · OBSERVER KALMAN HYBRID</Text>
                         </View>
                         <ScrollView style={styles.pitwallPageScroll} showsVerticalScrollIndicator={false}>
-                            {Object.entries(core.virtualSensors).map(([catKey, sensors]) => {
+                            {Object.entries(core.virtualSensors || {}).map(([catKey, sensors]) => {
                                 const catLabels = {
                                     engine: '01. GRUP PROPULSOR & INJECȚIE',
                                     turbo: '02. SUPRAALIMENTARE & ADMISIE',
@@ -662,7 +667,7 @@ export default function F1CyberdeckParadigm() {
                                             {catLabels[catKey] || catKey.toUpperCase()}
                                         </Text>
                                         <View style={styles.sensorsGrid2Col}>
-                                            {sensors.map((s) => {
+                                            {safeArr(sensors).map((s) => {
                                                 const isWarn = s.status === 'WARN';
                                                 const isAlert = s.status === 'ALERT';
                                                 const statusColor = isAlert ? '#FF2A2A' : isWarn ? '#FFB800' : '#00FF66';
@@ -723,11 +728,11 @@ export default function F1CyberdeckParadigm() {
                                     </View>
                                     <View style={styles.f1ReplayCol}>
                                         <Text style={styles.f1ReplayLabel}>BOOST</Text>
-                                        <Text style={styles.f1ReplayVal}>{(core.currentReplaySample?.boost ?? boost).toFixed(2)} <Text style={styles.f1Unit}>bar</Text></Text>
+                                        <Text style={styles.f1ReplayVal}>{safeFmt(core.currentReplaySample?.boost ?? boost, 2, '0.00')} <Text style={styles.f1Unit}>bar</Text></Text>
                                     </View>
                                     <View style={styles.f1ReplayCol}>
                                         <Text style={styles.f1ReplayLabel}>G-LAT</Text>
-                                        <Text style={styles.f1ReplayVal}>{(core.currentReplaySample?.gForceLat ?? gForceLat).toFixed(2)} <Text style={styles.f1Unit}>G</Text></Text>
+                                        <Text style={styles.f1ReplayVal}>{safeFmt(core.currentReplaySample?.gForceLat ?? gForceLat, 2, '0.00')} <Text style={styles.f1Unit}>G</Text></Text>
                                     </View>
                                 </View>
 
@@ -785,7 +790,7 @@ export default function F1CyberdeckParadigm() {
                             <Text style={[styles.sensorsGroupTitle, { color: primaryAccent, marginTop: 12 }]}>
                                 ISTORIC SESIUNI & STINTURI SALVATE
                             </Text>
-                            {core.tripsList.map((trip) => {
+                            {safeArr(core.tripsList).map((trip) => {
                                 const isSelected = core.selectedTripId === trip.id;
                                 return (
                                     <TouchableOpacity
@@ -828,7 +833,7 @@ export default function F1CyberdeckParadigm() {
                             <Text style={[styles.sensorsGroupTitle, { color: primaryAccent }]}>
                                 COMPONENT WEAR & LIFESPAN (CBM)
                             </Text>
-                            {core.maintenanceItems.map((item) => {
+                            {safeArr(core.maintenanceItems).map((item) => {
                                 const isWarn = item.status === 'WARN';
                                 const isCrit = item.status === 'ALERT';
                                 const barColor = isCrit ? '#FF2A2A' : isWarn ? '#FFB800' : '#00FF66';
@@ -863,7 +868,7 @@ export default function F1CyberdeckParadigm() {
                                 PAȘAPORT TEHNIC & LICENȚE DE CIRCULAȚIE
                             </Text>
                             <View style={styles.sensorsGrid2Col}>
-                                {core.legalDocuments.map((doc, idx) => {
+                                {safeArr(core.legalDocuments).map((doc, idx) => {
                                     const isExp = doc.daysRemaining < 30;
                                     return (
                                         <View key={idx} style={[styles.scrutCard, { flex: 1, marginHorizontal: 2 }]}>
@@ -927,10 +932,10 @@ export default function F1CyberdeckParadigm() {
                                 </TouchableOpacity>
 
                                 {/* Sentry Events Log */}
-                                {core.sentryEvents?.length > 0 && (
+                                {safeArr(core.sentryEvents).length > 0 && (
                                     <View style={styles.paddockEventsBox}>
                                         <Text style={styles.paddockEventsTitle}>JURNAL ALERTE SENZORI VIBRAȚIE</Text>
-                                        {core.sentryEvents.slice(0, 2).map((ev) => (
+                                        {safeArr(core.sentryEvents).slice(0, 2).map((ev) => (
                                             <View key={ev.id} style={styles.paddockEventRow}>
                                                 <Text style={styles.paddockEventTime}>{ev.time}</Text>
                                                 <Text style={styles.paddockEventDesc}>{ev.desc}</Text>
@@ -963,7 +968,7 @@ export default function F1CyberdeckParadigm() {
                                 <View style={[styles.paddockHeaderRow, { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#16263D' }]}>
                                     <View>
                                         <Text style={styles.paddockTitle}>COORDONATE GPS MAȘINĂ</Text>
-                                        <Text style={styles.paddockCoords}>{core.carGpsCoords.lat.toFixed(4)}°N, {core.carGpsCoords.lng.toFixed(4)}°E</Text>
+                                        <Text style={styles.paddockCoords}>{safeFmt(core.carGpsCoords?.lat, 4, '44.4323')}°N, {safeFmt(core.carGpsCoords?.lng ?? core.carGpsCoords?.lon, 4, '26.1063')}°E</Text>
                                     </View>
                                     <TouchableOpacity
                                         style={[styles.paddockNavBtn, { borderColor: primaryAccent }]}
@@ -1029,7 +1034,7 @@ export default function F1CyberdeckParadigm() {
 
                             {/* AI Radio Messages Box */}
                             <View style={styles.radioCommsBox}>
-                                {core.aiMessages.slice(-3).map((msg) => (
+                                {safeArr(core.aiMessages).slice(-3).map((msg) => (
                                     <View key={msg.id} style={styles.radioMsgRow}>
                                         <Text style={[styles.radioSender, { color: msg.sender === 'user' ? '#00F0FF' : '#FFB800' }]}>
                                             {msg.sender === 'user' ? '[PILOT]' : '[PITWALL ENG]'}:

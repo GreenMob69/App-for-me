@@ -190,7 +190,8 @@ export default function ExperienceLauncherModal() {
                     <ScrollView
                         style={styles.scrollList}
                         contentContainerStyle={styles.scrollContent}
-                        showsVerticalScrollIndicator={false}
+                        showsVerticalScrollIndicator={true}
+                        bounces={true}
                     >
                         {PARADIGMS.map((p) => {
                             const isSelected = uiParadigm === p.id;
@@ -217,13 +218,13 @@ export default function ExperienceLauncherModal() {
                                                     {isSelected ? '✓ ACTIV ACUM' : p.badge}
                                                 </Text>
                                             </View>
-                                            <Text style={[styles.cardTitle, isSelected && { color: p.accent }]}>
+                                            <Text style={[styles.cardTitle, isSelected && { color: p.accent }]} numberOfLines={1}>
                                                 {p.title}
                                             </Text>
                                         </View>
                                     </View>
 
-                                    <Text style={styles.cardSubtitle}>{p.subtitle}</Text>
+                                    <Text style={styles.cardSubtitle} numberOfLines={2}>{p.subtitle}</Text>
 
                                     <View style={styles.cardFooter}>
                                         <Text style={[styles.statusHint, { color: p.isAvailable ? p.accent : colors.text.disabled }]}>
@@ -278,12 +279,12 @@ const styles = StyleSheet.create({
     },
     container: {
         width: '100%',
-        maxHeight: '90%',
+        maxHeight: '92%',
         backgroundColor: '#07090E',
         borderRadius: radii.xl,
         borderWidth: 1,
         borderColor: '#1E2536',
-        padding: spacing[4],
+        padding: spacing[3],
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.6,
@@ -305,7 +306,7 @@ const styles = StyleSheet.create({
     },
     mainTitle: {
         color: '#FFFFFF',
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: typography.weights.heavy,
         letterSpacing: 0.3,
         marginTop: 2,
@@ -327,22 +328,24 @@ const styles = StyleSheet.create({
     },
     introText: {
         color: '#8A94A6',
-        fontSize: 12,
-        lineHeight: 16,
-        marginBottom: spacing[3],
+        fontSize: 11,
+        lineHeight: 15,
+        marginBottom: spacing[2],
     },
     scrollList: {
-        maxHeight: 380,
+        flexGrow: 0,
+        flexShrink: 1,
+        maxHeight: 420,
     },
     scrollContent: {
-        gap: spacing[3],
+        gap: spacing[2],
         paddingBottom: spacing[2],
     },
     card: {
         backgroundColor: '#0D111A',
         borderRadius: radii.lg,
         borderWidth: 1.5,
-        padding: spacing[3],
+        padding: spacing[2] + 2,
     },
     cardDisabled: {
         opacity: 0.55,
@@ -399,13 +402,13 @@ const styles = StyleSheet.create({
     footer: {
         borderTopWidth: 1,
         borderTopColor: '#1A2130',
-        paddingTop: spacing[3],
-        marginTop: spacing[2],
+        paddingTop: spacing[2],
+        marginTop: spacing[1],
     },
     switchRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: spacing[3],
+        marginBottom: spacing[2],
     },
     switchLabel: {
         color: '#CBD5E1',

@@ -22,6 +22,7 @@ import { useUiParadigm } from '../../context/AppContext';
 import { hapticTap, hapticShiftAlert } from '../../services/hapticFeedback';
 import { audioGong } from '../../services/audioGongService';
 import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
+import { safeNum, safeFmt, safeArr, sanitizeSvgPath } from '../../utils/safeMath';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RETRO_FONT = Platform.OS === 'ios' ? 'Courier' : 'monospace';
@@ -30,9 +31,10 @@ const theme = PARADIGM_THEMES[PARADIGM_KEYS.RETRO_AUDI_96];
 // ─── 8. Stepped Tachometer Bitmask Vector Optimization (Single Path SVG) ────
 const GHOST_BARGRAPH_CACHE = {};
 function getGhostBargraphPath(width, totalBlocks = 25) {
-    if (GHOST_BARGRAPH_CACHE[width]) return GHOST_BARGRAPH_CACHE[width];
+    const sWidth = Math.max(100, safeNum(width, SCREEN_WIDTH - 40));
+    if (GHOST_BARGRAPH_CACHE[sWidth]) return GHOST_BARGRAPH_CACHE[sWidth];
     let d = '';
-    const blockWidth = Math.max((width - 60) / totalBlocks, 6);
+    const blockWidth = Math.max((sWidth - 60) / totalBlocks, 6);
     const blockGap = 2.5;
     for (let i = 0; i < totalBlocks; i++) {
         const x = i * (blockWidth + blockGap) + 10;
@@ -40,23 +42,27 @@ function getGhostBargraphPath(width, totalBlocks = 25) {
         const y = 34 - blockHeight;
         d += `M ${x} ${y} h ${blockWidth} v ${blockHeight} h -${blockWidth} Z `;
     }
-    GHOST_BARGRAPH_CACHE[width] = d;
-    return d;
+    const cleanD = sanitizeSvgPath(d);
+    GHOST_BARGRAPH_CACHE[sWidth] = cleanD;
+    return cleanD;
 }
 
 const AudiTachometerBargraph = React.memo(function AudiTachometerBargraph({ rpm = 800, maxRpm = 6500, width = SCREEN_WIDTH - 40, brightness = 1.0, phosphorTrailRpm = 800 }) {
     const totalBlocks = 25;
-    const clampedRpm = Math.min(Math.max(rpm, 0), maxRpm);
-    const activeBlocksCount = Math.round((clampedRpm / maxRpm) * totalBlocks);
-    const trailBlocksCount = Math.round((Math.min(Math.max(phosphorTrailRpm, 0), maxRpm) / maxRpm) * totalBlocks);
+    const sMaxRpm = Math.max(1000, safeNum(maxRpm, 6500));
+    const sRpm = safeNum(rpm, 0);
+    const sWidth = Math.max(100, safeNum(width, SCREEN_WIDTH - 40));
+    const clampedRpm = Math.min(Math.max(sRpm, 0), sMaxRpm);
+    const activeBlocksCount = Math.round((clampedRpm / sMaxRpm) * totalBlocks);
+    const trailBlocksCount = Math.round((Math.min(Math.max(safeNum(phosphorTrailRpm, 0), 0), sMaxRpm) / sMaxRpm) * totalBlocks);
 
-    const blockWidth = Math.max((width - 60) / totalBlocks, 6);
+    const blockWidth = Math.max((sWidth - 60) / totalBlocks, 6);
     const blockGap = 2.5;
 
     // Build unified path strings using bitwise index iteration (Zero DOM reconciliation overhead)
     let activePathD = '';
     let trailPathD = '';
-    const inactivePathD = getGhostBargraphPath(width, totalBlocks);
+    const inactivePathD = getGhostBargraphPath(sWidth, totalBlocks);
 
     const maxLit = Math.max(activeBlocksCount, trailBlocksCount);
     for (let i = 0; i < maxLit; i++) {
@@ -77,11 +83,11 @@ const AudiTachometerBargraph = React.memo(function AudiTachometerBargraph({ rpm 
             <View style={styles.tachoHeader}>
                 <Text style={[styles.tachoLabel, { opacity: brightness }]}>DREHZAHL // x1000 min⁻¹</Text>
                 <Text style={[styles.tachoValue, { opacity: brightness }]}>
-                    {(rpm / 1000).toFixed(1)} <Text style={styles.tachoUnit}>RPM</Text>
+                    {safeFmt(sRpm / 1000, 1, '0.0')} <Text style={styles.tachoUnit}>RPM</Text>
                 </Text>
             </View>
 
-            <Svg width={width} height={38} viewBox={`0 0 ${width} 38`}>
+            <Svg width={sWidth} height={38} viewBox={`0 0 ${sWidth} 38`}>
                 <Defs>
                     <LinearGradient id="tachoActiveGrad" x1="0" y1="0" x2="1" y2="0">
                         <Stop offset="0" stopColor="#00FF66" stopOpacity={brightness} />
@@ -304,14 +310,16 @@ export default function RetroAudi96Paradigm() {
 
     // ─── 4. Mechanical Drum Odometer Physics with Roll Rollover ────────────────
     const totalKm = 348912;
-    const currentTripKm = Number((tripKmOffset + (speed > 0 ? 0.1 : 0)).toFixed(1));
+    const currentTripKm = Number(safeFmt(safeNum(tripKmOffset, 247.4) + (safeNum(speed, 0) > 0 ? 0.1 : 0), 1, '0.0'));
 
     // ─── 7. Bordcomputer DTE (Reichweite) with Historic VDO 2-Stage Averaging ──
     const dteKm = useMemo(() => {
         // Weighted average: 70% short term, 30% long term
-        const effectiveRate = fuelRate > 0 ? fuelRate * 0.7 + 6.2 * 0.3 : 6.5;
-        const availableLiters = (fuelLevel / 100) * 70; // 70-liter Audi C4 fuel tank
-        return Math.round((availableLiters / effectiveRate) * 100);
+        const sFuelRate = safeNum(fuelRate, 6.5);
+        const sFuelLevel = safeNum(fuelLevel, 50);
+        const effectiveRate = sFuelRate > 0 ? sFuelRate * 0.7 + 6.2 * 0.3 : 6.5;
+        const availableLiters = (sFuelLevel / 100) * 70; // 70-liter Audi C4 fuel tank
+        return Math.round((availableLiters / Math.max(1, effectiveRate)) * 100);
     }, [fuelLevel, fuelRate]);
 
     const bcModes = [
@@ -701,7 +709,7 @@ export default function RetroAudi96Paradigm() {
 
                         {/* Listă Observatori Fizici VAG */}
                         <Text style={styles.vagSectionHeader}>MESSWERTBLÖCKE // ISTWERT VS. SOLLWERT:</Text>
-                        {(core.virtualSensors[selectedMwbGroup] || []).map((s) => (
+                        {safeArr(core.virtualSensors?.[selectedMwbGroup]).map((s) => (
                             <View key={s.id} style={styles.vagMwbCard}>
                                 <View style={styles.vagMwbHeaderRow}>
                                     <Text style={styles.vagMwbLabel}>{s.label.toUpperCase()}</Text>
@@ -815,7 +823,7 @@ export default function RetroAudi96Paradigm() {
 
                         {/* Fahrtenbuch Liste */}
                         <Text style={styles.vagSectionHeader}>FAHRTENBUCH // VERZEICHNIS DER FAHRTEN:</Text>
-                        {core.tripsList.map((t) => {
+                        {safeArr(core.tripsList).map((t) => {
                             const isSelected = t.id === core.selectedTripId;
                             return (
                                 <TouchableOpacity
@@ -851,7 +859,7 @@ export default function RetroAudi96Paradigm() {
                 {activeSwitch === '4' && (
                     <View style={styles.serviceheftContainer}>
                         <Text style={styles.vagSectionHeader}>AUDI SERVICEHEFT // ZUSTANDSBASIERTE WARTUNG (CBM):</Text>
-                        {core.maintenanceItems.map((item) => (
+                        {safeArr(core.maintenanceItems).map((item) => (
                             <View key={item.id} style={styles.serviceheftCard}>
                                 <View style={styles.serviceheftHeaderRow}>
                                     <Text style={styles.serviceheftName}>{String(item.name || item.title || item.id || '').toUpperCase()}</Text>
@@ -881,7 +889,7 @@ export default function RetroAudi96Paradigm() {
                         ))}
 
                         <Text style={[styles.vagSectionHeader, { marginTop: 16 }]}>KRAFTFAHRZEUG-PAPIERE // DOKUMENTE:</Text>
-                        {core.legalDocuments.map((doc) => (
+                        {safeArr(core.legalDocuments).map((doc) => (
                             <View key={doc.id} style={styles.papiereCard}>
                                 <View style={styles.papiereHeader}>
                                     <Text style={styles.papiereName}>{doc.name}</Text>
@@ -940,7 +948,7 @@ export default function RetroAudi96Paradigm() {
                             </TouchableOpacity>
 
                             <Text style={styles.ereignisseHeader}>EREIGNISPROTOKOLL (ALARM-LOG):</Text>
-                            {core.sentryEvents.map((ev) => (
+                            {safeArr(core.sentryEvents).map((ev) => (
                                 <View key={ev.id} style={styles.ereignisRow}>
                                     <Text style={styles.ereignisTime}>[{ev.time}]</Text>
                                     <Text style={[styles.ereignisDesc, ev.severity === 'crit' && { color: '#FF3300' }]}>
@@ -954,7 +962,7 @@ export default function RetroAudi96Paradigm() {
                         <View style={[styles.safeLockCard, { marginTop: 12 }]}>
                             <Text style={styles.safeLockTitle}>PARKUHR & STANDORT (VDO QUARTZ)</Text>
                             <Text style={styles.standortText}>
-                                KOORDINATEN: {core.carGpsCoords.lat} N, {core.carGpsCoords.lon} E
+                                KOORDINATEN: {safeFmt(core.carGpsCoords?.lat, 4, '44.4323')}°N, {safeFmt(core.carGpsCoords?.lng ?? core.carGpsCoords?.lon, 4, '26.1063')}°E
                             </Text>
                             <TouchableOpacity
                                 style={styles.mapsRetroBtn}
@@ -1050,7 +1058,7 @@ export default function RetroAudi96Paradigm() {
                                 </Text>
                             </View>
 
-                            {core.aiMessages.map((m) => (
+                            {safeArr(core.aiMessages).map((m) => (
                                 <View key={m.id} style={styles.meisterMsgRow}>
                                     <Text style={[styles.meisterSender, { color: m.sender === 'ai' ? '#FF8800' : '#00FF66' }]}>
                                         {m.sender === 'ai' ? '▶ MEISTER INGOLSTADT:' : '▶ FAHRER:'}
@@ -1166,8 +1174,7 @@ const styles = StyleSheet.create({
     audiBadgeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        flex: 1,
+        gap: 5,
         flexShrink: 1,
     },
     audiRingsText: {

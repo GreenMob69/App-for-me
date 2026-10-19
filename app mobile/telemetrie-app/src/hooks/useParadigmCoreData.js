@@ -8,6 +8,10 @@ import { LiveContext, useLive } from '../context/LiveContext';
 import { exportWorkshopDossier } from '../utils/dossierExport';
 import { hapticTap, hapticCriticalWarning } from '../services/hapticFeedback';
 import { audioGong } from '../services/audioGongService';
+import { safeNum, safeFmt, safeArr } from '../utils/safeMath';
+
+// @ts-ignore
+const SafeAbortController = typeof AbortController !== 'undefined' ? AbortController : class { abort() {} signal = {}; };
 
 const STORAGE_KEYS = {
     SERVICE_HISTORY: '@telemetrie_service_history_v3',
@@ -128,9 +132,9 @@ export function useParadigmCoreData(isLiveViewActive = true) {
                 { id: 've', label: 'Eficiență Volumetrică (VE)', val: `${v.volumetricEfficiencyPct ?? 88.4}%`, status: 'OK', target: '85-95%' },
                 { id: 'power', label: 'Putere Corectată SAE', val: `${Math.round(v.saeCorrectedPowerHp ?? 142)} CP`, status: 'OK', target: 'OEM' },
                 { id: 'torque', label: 'Cuplu Efectiv Arbore', val: `${Math.round(v.torqueNm ?? 310)} Nm`, status: 'OK', target: 'OEM' },
-                { id: 'bsfc', label: 'Consum Specific BSFC', val: `${Math.round(v.bsfcGPerKwh ?? 218)} g/kWh`, status: 'OK', target: '< 240' },
-                { id: 'lambda', label: 'Amestec Lambda / AFR', val: `${(v.afr ?? 16.8).toFixed(1)}:1`, status: 'OK', target: '14.7-22' },
-                { id: 'injector_drift', label: 'Derivă Injecție Ralanti', val: `${(v.warmIdleDriftMg ?? 0.4).toFixed(1)} mg`, status: v.cokedInjectorRisk ? 'WARN' : 'OK', target: '< 1.5 mg' },
+                { id: 'bsfc', label: 'Consum Specific BSFC', val: `${Math.round(safeNum(v.bsfcGPerKwh, 218))} g/kWh`, status: 'OK', target: '< 240' },
+                { id: 'lambda', label: 'Amestec Lambda / AFR', val: `${safeFmt(v.afr ?? 16.8, 1, '16.8')}:1`, status: 'OK', target: '14.7-22' },
+                { id: 'injector_drift', label: 'Derivă Injecție Ralanti', val: `${safeFmt(v.warmIdleDriftMg ?? 0.4, 1, '0.4')} mg`, status: v.cokedInjectorRisk ? 'WARN' : 'OK', target: '< 1.5 mg' },
                 { id: 'dmf_balance', label: 'Echilibru Volantă DMF', val: v.dmfImbalanceWarning ? 'VIBRAȚIE' : 'STABIL', status: v.dmfImbalanceWarning ? 'WARN' : 'OK', target: 'Stabil' },
             ],
             // Grupul 2: Turbo & Admisie
@@ -206,7 +210,7 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
         }
-        abortControllerRef.current = new AbortController();
+        abortControllerRef.current = new SafeAbortController();
 
         setIsLoadingTrips(true);
         try {
@@ -269,7 +273,7 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         const vMax = currentTrip?.maxSpeed || 130;
         const speed = Math.round(Math.sin(progress * Math.PI) * vMax);
         const rpm = Math.round(800 + (speed / 130) * 3200);
-        const boost = Number(((speed / 130) * 1.6).toFixed(2));
+        const boost = safeNum(parseFloat(safeFmt((speed / 130) * 1.6, 2, '0.85')), 0.85);
         const gear = speed === 0 ? 'N' : speed < 25 ? '1' : speed < 45 ? '2' : speed < 70 ? '3' : speed < 95 ? '4' : '5';
         return {
             speed,
@@ -278,8 +282,8 @@ export function useParadigmCoreData(isLiveViewActive = true) {
             gear,
             progressPct: Math.round(progress * 100),
             coolant: Math.round(85 + progress * 5),
-            gForceLat: Number((Math.sin(progress * Math.PI * 4) * 0.4).toFixed(2)),
-            gForceLong: Number((Math.cos(progress * Math.PI * 2) * 0.3).toFixed(2)),
+            gForceLat: safeNum(parseFloat(safeFmt(Math.sin(progress * Math.PI * 4) * 0.4, 2, '0.00')), 0.0),
+            gForceLong: safeNum(parseFloat(safeFmt(Math.cos(progress * Math.PI * 2) * 0.3, 2, '0.00')), 0.0),
         };
     }, [replayIndex, selectedTripId, tripsList]);
 
@@ -342,7 +346,7 @@ export function useParadigmCoreData(isLiveViewActive = true) {
     const markServiceItemCompleted = async (itemId) => {
         hapticTap();
         setMaintenanceItems((prev) => {
-            const updated = prev.map((item) =>
+            const updated = safeArr(prev).map((item) =>
                 item.id === itemId
                     ? {
                         ...item,
@@ -391,7 +395,7 @@ export function useParadigmCoreData(isLiveViewActive = true) {
     };
 
     // Parcare & Găsește-mi Mașina
-    const carGpsCoords = { lat: 44.4323, lng: 26.1063 };
+    const carGpsCoords = { lat: 44.4323, lng: 26.1063, lon: 26.1063 };
 
     // Calculăm minutele rămase pe baza timestamp-ului absolut din Singleton
     const computeRemainingParkingMinutes = () => {
