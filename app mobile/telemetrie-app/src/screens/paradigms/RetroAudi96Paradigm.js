@@ -117,73 +117,6 @@ const AudiTachometerBargraph = React.memo(function AudiTachometerBargraph({ rpm 
                 <SvgText x={width * 0.58} y="32" fill="#884422" fontSize="7" fontFamily={RETRO_FONT}>4</SvgText>
                 <SvgText x={width * 0.82} y="32" fill="#FF4422" fontSize="7" fontFamily={RETRO_FONT}>6</SvgText>
             </Svg>
-            {/* ── MODAL POST-CURSĂ AUTOMAT STIL VAG 1551 HÂRTIE TERMICĂ ── */}
-            <Modal
-                visible={core.showDebriefModal}
-                transparent
-                animationType="fade"
-                onRequestClose={core.closeTripDebrief}
-            >
-                <View style={styles.debriefBackdrop}>
-                    <View style={styles.debriefPaper}>
-                        <Text style={styles.debriefHead}>═════ VAG 1551 // DRUCK-BERICHT ═════</Text>
-                        <Text style={styles.debriefTitle}>
-                            {isEn ? 'POST-TRIP TELEMETRY DEBRIEF' : 'BILANȚ TELEMETRIC POST-CURSĂ'}
-                        </Text>
-                        <Text style={styles.debriefSub}>AUDI A6 C4 2.5 TDI · VDO EEPROM LOG</Text>
-                        <View style={styles.debriefDivider} />
-
-                        <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'DISTANCE' : 'DISTANȚĂ'}:</Text>
-                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.km} KM</Text>
-                        </View>
-                        <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'DURATION' : 'DURATĂ'}:</Text>
-                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.durationMin} MIN (MED. {core.lastTripDebrief?.avgSpeed} KM/H)</Text>
-                        </View>
-                        <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'AVG CONSUMPTION' : 'CONSUM MEDIU'}:</Text>
-                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.avgConsumption} L/100KM ({core.lastTripDebrief?.fuelBurnedLiters} L)</Text>
-                        </View>
-                        <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'FUEL EXPENSE' : 'COST ESTIMAT'}:</Text>
-                            <Text style={[styles.debriefVal, { color: '#FFAA00' }]}>{core.lastTripDebrief?.costRon} RON</Text>
-                        </View>
-                        <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'PEAK BOOST' : 'PRESIUNE TURBO MAX'}:</Text>
-                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.peakBoost} BAR</Text>
-                        </View>
-                        <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'PEAK G-FORCE' : 'FORȚĂ G MAXIMĂ'}:</Text>
-                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.peakLatG} G</Text>
-                        </View>
-                        <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'ECO SCORE' : 'SCOR EFICIENȚĂ'}:</Text>
-                            <Text style={[styles.debriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.ecoScore} / 100</Text>
-                        </View>
-
-                        <View style={styles.debriefDivider} />
-
-                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                            <TouchableOpacity
-                                style={[styles.cassetteKey, { flex: 1, backgroundColor: '#FF8800' }]}
-                                onPress={() => {
-                                    hapticTap();
-                                    core.exportTripPdf(core.selectedTripId);
-                                }}
-                            >
-                                <Text style={[styles.cassetteKeyText, { color: '#090403' }]}>🖨️ {isEn ? 'PRINT (PDF)' : 'TIPĂREȘTE (PDF)'}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.cassetteKey, { flex: 1 }]}
-                                onPress={core.closeTripDebrief}
-                            >
-                                <Text style={styles.cassetteKeyText}>✕ {isEn ? 'CLOSE' : 'ÎNCHIDE'}</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            </Modal>
         </View>
     );
 });
@@ -1595,6 +1528,74 @@ export default function RetroAudi96Paradigm() {
                         >
                             <Text style={styles.vagCloseText}>SCHLIEßEN // CLOSE</Text>
                         </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── MODAL POST-CURSĂ AUTOMAT STIL VAG 1551 HÂRTIE TERMICĂ ── */}
+            <Modal
+                visible={core.showDebriefModal}
+                transparent
+                animationType="fade"
+                onRequestClose={core.closeTripDebrief}
+            >
+                <View style={styles.debriefBackdrop}>
+                    <View style={styles.debriefPaper}>
+                        <Text style={styles.debriefHead}>═════ VAG 1551 // DRUCK-BERICHT ═════</Text>
+                        <Text style={styles.debriefTitle}>
+                            {isEn ? 'POST-TRIP TELEMETRY DEBRIEF' : 'BILANȚ TELEMETRIC POST-CURSĂ'}
+                        </Text>
+                        <Text style={styles.debriefSub}>AUDI A6 C4 2.5 TDI · VDO EEPROM LOG</Text>
+                        <View style={styles.debriefDivider} />
+
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'DISTANCE' : 'DISTANȚĂ'}:</Text>
+                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.km} KM</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'DURATION' : 'DURATĂ'}:</Text>
+                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.durationMin} MIN (MED. {core.lastTripDebrief?.avgSpeed} KM/H)</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'AVG CONSUMPTION' : 'CONSUM MEDIU'}:</Text>
+                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.avgConsumption} L/100KM ({core.lastTripDebrief?.fuelBurnedLiters} L)</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'FUEL EXPENSE' : 'COST ESTIMAT'}:</Text>
+                            <Text style={[styles.debriefVal, { color: '#FFAA00' }]}>{core.lastTripDebrief?.costRon} RON</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'PEAK BOOST' : 'PRESIUNE TURBO MAX'}:</Text>
+                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.peakBoost} BAR</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'PEAK G-FORCE' : 'FORȚĂ G MAXIMĂ'}:</Text>
+                            <Text style={styles.debriefVal}>{core.lastTripDebrief?.peakLatG} G</Text>
+                        </View>
+                        <View style={styles.debriefRow}>
+                            <Text style={styles.debriefLabel}>{isEn ? 'ECO SCORE' : 'SCOR EFICIENȚĂ'}:</Text>
+                            <Text style={[styles.debriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.ecoScore} / 100</Text>
+                        </View>
+
+                        <View style={styles.debriefDivider} />
+
+                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                            <TouchableOpacity
+                                style={[styles.cassetteKey, { flex: 1, backgroundColor: '#FF8800' }]}
+                                onPress={() => {
+                                    hapticTap();
+                                    core.exportTripPdf(core.selectedTripId);
+                                }}
+                            >
+                                <Text style={[styles.cassetteKeyText, { color: '#090403' }]}>🖨️ {isEn ? 'PRINT (PDF)' : 'TIPĂREȘTE (PDF)'}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.cassetteKey, { flex: 1 }]}
+                                onPress={core.closeTripDebrief}
+                            >
+                                <Text style={styles.cassetteKeyText}>✕ {isEn ? 'CLOSE' : 'ÎNCHIDE'}</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </Modal>

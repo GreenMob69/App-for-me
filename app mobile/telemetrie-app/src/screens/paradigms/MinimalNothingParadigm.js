@@ -311,66 +311,6 @@ const StationNothingPulse = React.memo(function StationNothingPulse({
                     </View>
                 </View>
             )}
-            {/* ── MODAL POST-CURSĂ AUTOMAT // RECEIPT · NOT-01 ── */}
-            <Modal
-                visible={core.showDebriefModal}
-                transparent
-                animationType="fade"
-                onRequestClose={core.closeTripDebrief}
-            >
-                <View style={styles.nothingReceiptBackdrop}>
-                    <View style={[styles.nothingReceiptPaper, { backgroundColor: currentTheme.bg, borderColor: currentTheme.textPrimary }]}>
-                        <Text style={[styles.receiptHead, { color: currentTheme.textDim }]}>////////////////////////////////////////</Text>
-                        <Text style={[styles.receiptBrand, { color: currentTheme.accent }]}>RECEIPT // TRIP DEBRIEF · NOT-01</Text>
-                        <Text style={[styles.receiptSub, { color: currentTheme.textDim }]}>NOTHING (R) TELEMETRY OS // KERNEL 3.2</Text>
-                        <Text style={[styles.receiptHead, { color: currentTheme.textDim }]}>----------------------------------------</Text>
-
-                        <View style={styles.receiptRow}>
-                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>DISTANȚĂ PARCURSĂ</Text>
-                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.km} KM</Text>
-                        </View>
-                        <View style={styles.receiptRow}>
-                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>DURATĂ CURSĂ</Text>
-                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.duration}</Text>
-                        </View>
-                        <View style={styles.receiptRow}>
-                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>VITEZĂ MAXIMĂ</Text>
-                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.maxSpeed} KM/H</Text>
-                        </View>
-                        <View style={styles.receiptRow}>
-                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>CONSUM ESTIMAT</Text>
-                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.fuelBurnedLiters} L ({core.lastTripDebrief?.avgConsumption} L/100)</Text>
-                        </View>
-                        <View style={styles.receiptRow}>
-                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>COST TOTAL COMBUSTIBIL</Text>
-                            <Text style={[styles.receiptVal, { color: currentTheme.accent }]}>{core.lastTripDebrief?.fuelCostRon} RON</Text>
-                        </View>
-                        <View style={styles.receiptRow}>
-                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>SCOR EFICIENȚĂ ZEN</Text>
-                            <Text style={[styles.receiptVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.healthScore}%</Text>
-                        </View>
-                        <View style={styles.receiptRow}>
-                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>ENERGIE DISIPATĂ FRÂNE</Text>
-                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.brakeEnergyMj} MJ</Text>
-                        </View>
-                        <View style={styles.receiptRow}>
-                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>STRES ULEI ARRHENIUS</Text>
-                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.oilStressFactor}x</Text>
-                        </View>
-
-                        <Text style={[styles.receiptHead, { color: currentTheme.textDim }]}>----------------------------------------</Text>
-                        <TouchableOpacity
-                            style={[styles.receiptCloseBtn, { borderColor: currentTheme.textPrimary }]}
-                            onPress={() => {
-                                hapticTap();
-                                core.closeTripDebrief();
-                            }}
-                        >
-                            <Text style={[styles.receiptCloseText, { color: currentTheme.textPrimary }]}>[ ✕ DISMISS DEBRIEF ]</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
         </View>
     );
 });
@@ -1649,6 +1589,67 @@ export default function MinimalNothingParadigm() {
                     );
                 })}
             </View>
+
+            {/* ── MODAL POST-CURSĂ AUTOMAT // RECEIPT · NOT-01 ── */}
+            <Modal
+                visible={core.showDebriefModal}
+                transparent
+                animationType="fade"
+                onRequestClose={core.closeTripDebrief}
+            >
+                <View style={styles.nothingReceiptBackdrop}>
+                    <View style={[styles.nothingReceiptPaper, { backgroundColor: currentTheme.bg, borderColor: currentTheme.textPrimary }]}>
+                        <Text style={[styles.receiptHead, { color: currentTheme.textDim }]}>////////////////////////////////////////</Text>
+                        <Text style={[styles.receiptBrand, { color: currentTheme.accent }]}>RECEIPT // TRIP DEBRIEF · NOT-01</Text>
+                        <Text style={[styles.receiptSub, { color: currentTheme.textDim }]}>NOTHING (R) TELEMETRY OS // KERNEL 3.2</Text>
+                        <Text style={[styles.receiptHead, { color: currentTheme.textDim }]}>----------------------------------------</Text>
+
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>DISTANȚĂ PARCURSĂ</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.km} KM</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>DURATĂ CURSĂ</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.duration}</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>VITEZĂ MAXIMĂ</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.maxSpeed} KM/H</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>CONSUM ESTIMAT</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.fuelBurnedLiters} L ({core.lastTripDebrief?.avgConsumption} L/100)</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>COST TOTAL COMBUSTIBIL</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.accent }]}>{core.lastTripDebrief?.fuelCostRon} RON</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>SCOR EFICIENȚĂ ZEN</Text>
+                            <Text style={[styles.receiptVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.healthScore}%</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>ENERGIE DISIPATĂ FRÂNE</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.brakeEnergyMj} MJ</Text>
+                        </View>
+                        <View style={styles.receiptRow}>
+                            <Text style={[styles.receiptLabel, { color: currentTheme.textDim }]}>STRES ULEI ARRHENIUS</Text>
+                            <Text style={[styles.receiptVal, { color: currentTheme.textPrimary }]}>{core.lastTripDebrief?.oilStressFactor}x</Text>
+                        </View>
+
+                        <Text style={[styles.receiptHead, { color: currentTheme.textDim }]}>----------------------------------------</Text>
+                        <TouchableOpacity
+                            style={[styles.receiptCloseBtn, { borderColor: currentTheme.textPrimary }]}
+                            onPress={() => {
+                                hapticTap();
+                                core.closeTripDebrief();
+                            }}
+                        >
+                            <Text style={[styles.receiptCloseText, { color: currentTheme.textPrimary }]}>[ ✕ DISMISS DEBRIEF ]</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }

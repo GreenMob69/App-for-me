@@ -281,74 +281,6 @@ const StationSpatialCfd = React.memo(function StationSpatialCfd({
                     <Text style={styles.thermalDesc}>Disipare termică galerie evacuare & conector flexibil.</Text>
                 </View>
             </View>
-            {/* ── HOLOGRAPHIC FLOATING GLASS CAPSULE DEBRIEF ── */}
-            <Modal
-                visible={core.showDebriefModal}
-                transparent
-                animationType="fade"
-                onRequestClose={core.closeTripDebrief}
-            >
-                <View style={styles.spatialDebriefBackdrop}>
-                    <View style={[styles.spatialDebriefCard, { borderColor: activeAccent.primary }]}>
-                        <View style={styles.spatialDebriefHead}>
-                            <View style={[styles.spatialDebriefBadge, { backgroundColor: activeAccent.primary }]}>
-                                <Text style={styles.spatialDebriefBadgeText}>3D TELEMETRY CAPSULE</Text>
-                            </View>
-                            <Text style={[styles.spatialDebriefTitle, { color: activeAccent.primary }]}>
-                                {isEn ? 'POST-TRIP TELEMETRY DEBRIEF' : 'BILANȚ HOLOGRAFIC POST-CURSĂ'}
-                            </Text>
-                        </View>
-                        <Text style={styles.spatialDebriefSub}>HOLOGRAM RECONSTRUCTION · 32 KALMAN OBSERVERS LOG</Text>
-
-                        <View style={styles.spatialDebriefGrid}>
-                            <View style={styles.spatialDebriefCell}>
-                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'DISTANCE' : 'DISTANȚĂ'}</Text>
-                                <Text style={[styles.spatialDebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.km} KM</Text>
-                            </View>
-                            <View style={styles.spatialDebriefCell}>
-                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'DURATION' : 'DURATĂ'}</Text>
-                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.duration}</Text>
-                            </View>
-                            <View style={styles.spatialDebriefCell}>
-                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'MAX SPEED' : 'VITEZĂ MAXIMĂ'}</Text>
-                                <Text style={[styles.spatialDebriefVal, { color: '#00F0FF' }]}>{core.lastTripDebrief?.maxSpeed} KM/H</Text>
-                            </View>
-                            <View style={styles.spatialDebriefCell}>
-                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'AVG CONSUMPTION' : 'CONSUM MEDIU'}</Text>
-                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.avgConsumption} L/100</Text>
-                            </View>
-                            <View style={styles.spatialDebriefCell}>
-                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'FUEL BURNED' : 'CARBURANT'}</Text>
-                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.fuelBurnedLiters} L ({core.lastTripDebrief?.fuelCostRon} RON)</Text>
-                            </View>
-                            <View style={styles.spatialDebriefCell}>
-                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'BRAKE ENERGY' : 'DISIPARE FRÂNE'}</Text>
-                                <Text style={[styles.spatialDebriefVal, { color: '#FFB800' }]}>{core.lastTripDebrief?.brakeEnergyMj} MJ</Text>
-                            </View>
-                            <View style={styles.spatialDebriefCell}>
-                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'OIL WEAR' : 'UZURĂ ULEI'}</Text>
-                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.oilStressFactor}x</Text>
-                            </View>
-                            <View style={styles.spatialDebriefCell}>
-                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'HEALTH SCORE' : 'SCOR SĂNĂTATE'}</Text>
-                                <Text style={[styles.spatialDebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.healthScore}%</Text>
-                            </View>
-                        </View>
-
-                        <TouchableOpacity
-                            style={[styles.spatialDebriefCloseBtn, { borderColor: activeAccent.primary, backgroundColor: `${activeAccent.primary}22` }]}
-                            onPress={() => {
-                                hapticTap();
-                                core.closeTripDebrief();
-                            }}
-                        >
-                            <Text style={[styles.spatialDebriefCloseText, { color: activeAccent.primary }]}>
-                                [ ✕ {isEn ? 'DISMISS CAPSULE' : 'ÎNCHIDE CAPSULĂ'} ]
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
         </View>
     );
 });
@@ -1902,6 +1834,75 @@ export default function SpatialCanvasParadigm() {
 
                 </ScrollView>
             </View>
+
+            {/* ── HOLOGRAPHIC FLOATING GLASS CAPSULE DEBRIEF ── */}
+            <Modal
+                visible={core.showDebriefModal}
+                transparent
+                animationType="fade"
+                onRequestClose={core.closeTripDebrief}
+            >
+                <View style={styles.spatialDebriefBackdrop}>
+                    <View style={[styles.spatialDebriefCard, { borderColor: activeAccent.primary }]}>
+                        <View style={styles.spatialDebriefHead}>
+                            <View style={[styles.spatialDebriefBadge, { backgroundColor: activeAccent.primary }]}>
+                                <Text style={styles.spatialDebriefBadgeText}>3D TELEMETRY CAPSULE</Text>
+                            </View>
+                            <Text style={[styles.spatialDebriefTitle, { color: activeAccent.primary }]}>
+                                {isEn ? 'POST-TRIP TELEMETRY DEBRIEF' : 'BILANȚ HOLOGRAFIC POST-CURSĂ'}
+                            </Text>
+                        </View>
+                        <Text style={styles.spatialDebriefSub}>HOLOGRAM RECONSTRUCTION · 32 KALMAN OBSERVERS LOG</Text>
+
+                        <View style={styles.spatialDebriefGrid}>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'DISTANCE' : 'DISTANȚĂ'}</Text>
+                                <Text style={[styles.spatialDebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.km} KM</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'DURATION' : 'DURATĂ'}</Text>
+                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.duration}</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'MAX SPEED' : 'VITEZĂ MAXIMĂ'}</Text>
+                                <Text style={[styles.spatialDebriefVal, { color: '#00F0FF' }]}>{core.lastTripDebrief?.maxSpeed} KM/H</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'AVG CONSUMPTION' : 'CONSUM MEDIU'}</Text>
+                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.avgConsumption} L/100</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'FUEL BURNED' : 'CARBURANT'}</Text>
+                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.fuelBurnedLiters} L ({core.lastTripDebrief?.fuelCostRon} RON)</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'BRAKE ENERGY' : 'DISIPARE FRÂNE'}</Text>
+                                <Text style={[styles.spatialDebriefVal, { color: '#FFB800' }]}>{core.lastTripDebrief?.brakeEnergyMj} MJ</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'OIL WEAR' : 'UZURĂ ULEI'}</Text>
+                                <Text style={styles.spatialDebriefVal}>{core.lastTripDebrief?.oilStressFactor}x</Text>
+                            </View>
+                            <View style={styles.spatialDebriefCell}>
+                                <Text style={styles.spatialDebriefLabel}>{isEn ? 'HEALTH SCORE' : 'SCOR SĂNĂTATE'}</Text>
+                                <Text style={[styles.spatialDebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.healthScore}%</Text>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.spatialDebriefCloseBtn, { borderColor: activeAccent.primary, backgroundColor: `${activeAccent.primary}22` }]}
+                            onPress={() => {
+                                hapticTap();
+                                core.closeTripDebrief();
+                            }}
+                        >
+                            <Text style={[styles.spatialDebriefCloseText, { color: activeAccent.primary }]}>
+                                [ ✕ {isEn ? 'DISMISS CAPSULE' : 'ÎNCHIDE CAPSULĂ'} ]
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }

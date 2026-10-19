@@ -180,74 +180,6 @@ const StationF1DynoDrag = React.memo(function StationF1DynoDrag({
                     </View>
                 </View>
             </ScrollView>
-            {/* ── PARC FERMÉ STINT DEBRIEF MODAL ── */}
-            <Modal
-                visible={core.showDebriefModal}
-                transparent
-                animationType="fade"
-                onRequestClose={core.closeTripDebrief}
-            >
-                <View style={styles.f1DebriefBackdrop}>
-                    <View style={[styles.f1DebriefCard, { borderColor: primaryAccent }]}>
-                        <View style={styles.f1DebriefHead}>
-                            <View style={[styles.f1DebriefBadge, { backgroundColor: primaryAccent }]}>
-                                <Text style={styles.f1DebriefBadgeText}>FIA PARC FERMÉ</Text>
-                            </View>
-                            <Text style={[styles.f1DebriefTitle, { color: primaryAccent }]}>
-                                {isEn ? 'STINT TELEMETRY DEBRIEF' : 'BILANȚ TELEMETRIE STINT'}
-                            </Text>
-                        </View>
-                        <Text style={styles.f1DebriefSub}>McLAREN TELEMETRY ACQUISITION SYSTEM · CAN-BUS LOG</Text>
-
-                        <View style={styles.f1DebriefGrid}>
-                            <View style={styles.f1DebriefCell}>
-                                <Text style={styles.f1DebriefLabel}>{isEn ? 'STINT DISTANCE' : 'DISTANȚĂ STINT'}</Text>
-                                <Text style={[styles.f1DebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.km} KM</Text>
-                            </View>
-                            <View style={styles.f1DebriefCell}>
-                                <Text style={styles.f1DebriefLabel}>{isEn ? 'STINT DURATION' : 'DURATĂ STINT'}</Text>
-                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.duration}</Text>
-                            </View>
-                            <View style={styles.f1DebriefCell}>
-                                <Text style={styles.f1DebriefLabel}>{isEn ? 'TOP SPEED' : 'VITEZĂ MAXIMĂ'}</Text>
-                                <Text style={[styles.f1DebriefVal, { color: '#00F0FF' }]}>{core.lastTripDebrief?.maxSpeed} KM/H</Text>
-                            </View>
-                            <View style={styles.f1DebriefCell}>
-                                <Text style={styles.f1DebriefLabel}>{isEn ? 'AVG CONSUMPTION' : 'CONSUM MEDIU'}</Text>
-                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.avgConsumption} L/100</Text>
-                            </View>
-                            <View style={styles.f1DebriefCell}>
-                                <Text style={styles.f1DebriefLabel}>{isEn ? 'FUEL BURNED' : 'CARBURANT ARS'}</Text>
-                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.fuelBurnedLiters} L ({core.lastTripDebrief?.fuelCostRon} RON)</Text>
-                            </View>
-                            <View style={styles.f1DebriefCell}>
-                                <Text style={styles.f1DebriefLabel}>{isEn ? 'BRAKE ENERGY' : 'DISIPARE FRÂNE'}</Text>
-                                <Text style={[styles.f1DebriefVal, { color: '#FFB800' }]}>{core.lastTripDebrief?.brakeEnergyMj} MJ</Text>
-                            </View>
-                            <View style={styles.f1DebriefCell}>
-                                <Text style={styles.f1DebriefLabel}>{isEn ? 'OIL WEAR FACTOR' : 'UZURĂ ULEI ARRHENIUS'}</Text>
-                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.oilStressFactor}x</Text>
-                            </View>
-                            <View style={styles.f1DebriefCell}>
-                                <Text style={styles.f1DebriefLabel}>{isEn ? 'HEALTH SCORE' : 'SCOR DE SĂNĂTATE'}</Text>
-                                <Text style={[styles.f1DebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.healthScore}%</Text>
-                            </View>
-                        </View>
-
-                        <TouchableOpacity
-                            style={[styles.f1DebriefCloseBtn, { borderColor: primaryAccent, backgroundColor: `${primaryAccent}22` }]}
-                            onPress={() => {
-                                hapticTap();
-                                core.closeTripDebrief();
-                            }}
-                        >
-                            <Text style={[styles.f1DebriefCloseText, { color: primaryAccent }]}>
-                                [ ✕ {isEn ? 'CLOSE PARC FERMÉ DEBRIEF' : 'ÎNCHIDE BILANȚ STINT'} ]
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
         </View>
     );
 });
@@ -1565,6 +1497,75 @@ export default function F1CyberdeckParadigm() {
                     />
                 )}
             </View>
+
+            {/* ── PARC FERMÉ STINT DEBRIEF MODAL ── */}
+            <Modal
+                visible={core.showDebriefModal}
+                transparent
+                animationType="fade"
+                onRequestClose={core.closeTripDebrief}
+            >
+                <View style={styles.f1DebriefBackdrop}>
+                    <View style={[styles.f1DebriefCard, { borderColor: primaryAccent }]}>
+                        <View style={styles.f1DebriefHead}>
+                            <View style={[styles.f1DebriefBadge, { backgroundColor: primaryAccent }]}>
+                                <Text style={styles.f1DebriefBadgeText}>FIA PARC FERMÉ</Text>
+                            </View>
+                            <Text style={[styles.f1DebriefTitle, { color: primaryAccent }]}>
+                                {isEn ? 'STINT TELEMETRY DEBRIEF' : 'BILANȚ TELEMETRIE STINT'}
+                            </Text>
+                        </View>
+                        <Text style={styles.f1DebriefSub}>McLAREN TELEMETRY ACQUISITION SYSTEM · CAN-BUS LOG</Text>
+
+                        <View style={styles.f1DebriefGrid}>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'STINT DISTANCE' : 'DISTANȚĂ STINT'}</Text>
+                                <Text style={[styles.f1DebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.km} KM</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'STINT DURATION' : 'DURATĂ STINT'}</Text>
+                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.duration}</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'TOP SPEED' : 'VITEZĂ MAXIMĂ'}</Text>
+                                <Text style={[styles.f1DebriefVal, { color: '#00F0FF' }]}>{core.lastTripDebrief?.maxSpeed} KM/H</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'AVG CONSUMPTION' : 'CONSUM MEDIU'}</Text>
+                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.avgConsumption} L/100</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'FUEL BURNED' : 'CARBURANT ARS'}</Text>
+                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.fuelBurnedLiters} L ({core.lastTripDebrief?.fuelCostRon} RON)</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'BRAKE ENERGY' : 'DISIPARE FRÂNE'}</Text>
+                                <Text style={[styles.f1DebriefVal, { color: '#FFB800' }]}>{core.lastTripDebrief?.brakeEnergyMj} MJ</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'OIL WEAR FACTOR' : 'UZURĂ ULEI ARRHENIUS'}</Text>
+                                <Text style={styles.f1DebriefVal}>{core.lastTripDebrief?.oilStressFactor}x</Text>
+                            </View>
+                            <View style={styles.f1DebriefCell}>
+                                <Text style={styles.f1DebriefLabel}>{isEn ? 'HEALTH SCORE' : 'SCOR DE SĂNĂTATE'}</Text>
+                                <Text style={[styles.f1DebriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.healthScore}%</Text>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.f1DebriefCloseBtn, { borderColor: primaryAccent, backgroundColor: `${primaryAccent}22` }]}
+                            onPress={() => {
+                                hapticTap();
+                                core.closeTripDebrief();
+                            }}
+                        >
+                            <Text style={[styles.f1DebriefCloseText, { color: primaryAccent }]}>
+                                [ ✕ {isEn ? 'CLOSE PARC FERMÉ DEBRIEF' : 'ÎNCHIDE BILANȚ STINT'} ]
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
