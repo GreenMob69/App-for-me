@@ -335,20 +335,41 @@ export default function SpatialCanvasParadigm() {
                     </Text>
                 </View>
 
-                {/* Acțiuni de Top cu Ținte Mari de Atingere (hitSlop) */}
+                {/* Acțiuni de Top cu STIL primul garantat vizibil */}
                 <View style={styles.hudActions}>
-                    {/* Sub-Accent Switcher (CYAN / GOLD / EMERALD) */}
                     <TouchableOpacity
-                        style={[styles.hudActionBtn, { borderColor: activeAccent.primary, backgroundColor: activeAccent.bg }]}
+                        style={[styles.hudActionBtn, { backgroundColor: activeAccent.primary, borderColor: activeAccent.primary }]}
                         onPress={() => {
                             hapticTap();
-                            setSpatialAccentKey(prev => prev === 'CYAN' ? 'GOLD' : prev === 'GOLD' ? 'EMERALD' : 'CYAN');
+                            openExperiencePicker();
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={[styles.hudActionBtnText, { color: activeAccent.primary }]}>
-                            {spatialAccentKey === 'CYAN' ? '🔷 CYAN' : spatialAccentKey === 'GOLD' ? '🟧 GOLD' : '🟩 EMER'}
+                        <Text style={[styles.hudActionBtnText, { color: '#04070D', fontWeight: '900' }]}>
+                            🎨 STIL
                         </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.hudActionBtn}
+                        onPress={() => {
+                            hapticTap();
+                            setUiParadigm('CLASSIC_V2');
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                    >
+                        <Text style={styles.hudActionBtnText}>⮌ CLASIC</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.hudActionBtn, { borderColor: '#FFB800', backgroundColor: '#FFB80018' }]}
+                        onPress={() => {
+                            hapticTap();
+                            openSimulatorModal();
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                    >
+                        <Text style={[styles.hudActionBtnText, { color: '#FFB800' }]}>🎮</Text>
                     </TouchableOpacity>
 
                     {/* Buton Mod X-Ray Powertrain */}
@@ -361,45 +382,24 @@ export default function SpatialCanvasParadigm() {
                             hapticTap();
                             setIsExplodedView(!isExplodedView);
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
                         <Text style={[styles.hudActionBtnText, { color: activeAccent.primary }]}>
-                            {isExplodedView ? '🔬 X-RAY ON' : '🔬 X-RAY'}
+                            {isExplodedView ? '🔬 ON' : '🔬'}
                         </Text>
                     </TouchableOpacity>
 
+                    {/* Sub-Accent Switcher (CYAN / GOLD / EMERALD) */}
                     <TouchableOpacity
-                        style={[styles.hudActionBtn, { borderColor: '#FFB800', backgroundColor: '#FFB80018' }]}
+                        style={[styles.hudActionBtn, { borderColor: activeAccent.primary, backgroundColor: activeAccent.bg }]}
                         onPress={() => {
                             hapticTap();
-                            openSimulatorModal();
+                            setSpatialAccentKey(prev => prev === 'CYAN' ? 'GOLD' : prev === 'GOLD' ? 'EMERALD' : 'CYAN');
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={[styles.hudActionBtnText, { color: '#FFB800' }]}>🎮 DEMO</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={styles.hudActionBtn}
-                        onPress={() => {
-                            hapticTap();
-                            setUiParadigm('CLASSIC_V2');
-                        }}
-                        hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-                    >
-                        <Text style={styles.hudActionBtnText}>⮌ CLASIC</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.hudActionBtn, { backgroundColor: activeAccent.primary, borderColor: activeAccent.primary }]}
-                        onPress={() => {
-                            hapticTap();
-                            openExperiencePicker();
-                        }}
-                        hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-                    >
-                        <Text style={[styles.hudActionBtnText, { color: '#04070D', fontWeight: '900' }]}>
-                            🎨 STIL
+                        <Text style={[styles.hudActionBtnText, { color: activeAccent.primary }]}>
+                            {spatialAccentKey === 'CYAN' ? '🔷' : spatialAccentKey === 'GOLD' ? '🟧' : '🟩'}
                         </Text>
                     </TouchableOpacity>
                 </View>

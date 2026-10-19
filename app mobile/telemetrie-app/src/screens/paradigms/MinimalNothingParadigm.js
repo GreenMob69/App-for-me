@@ -14,7 +14,7 @@ import {
     TextInput,
 } from 'react-native';
 import { useSafeInsets } from '../../hooks/useSafeInsets';
-import Svg, { Path, Line, Defs, LinearGradient, Stop, Circle, Rect, G, Pattern } from 'react-native-svg';
+import Svg, { Path, Line, Defs, LinearGradient, Stop, Circle, Rect, G } from 'react-native-svg';
 import { useNormalizedTelemetry } from '../../hooks/useNormalizedTelemetry';
 import { useParadigmCoreData } from '../../hooks/useParadigmCoreData';
 import { useVehicle } from '../../context/VehicleContext';
@@ -26,6 +26,19 @@ import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MONO_FONT = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 const baseTheme = PARADIGM_THEMES[PARADIGM_KEYS.NOTHING_MINIMAL];
+
+// Pre-computed single SVG path for ambient dot-matrix background (Zero-GC, 100% native SVG compatible)
+const AMBIENT_DOT_GRID_PATH = (() => {
+    let d = '';
+    const step = 20;
+    const r = 1;
+    for (let y = 10; y < 900; y += step) {
+        for (let x = 10; x < 450; x += step) {
+            d += `M ${x - r},${y} a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 -${r * 2},0 `;
+        }
+    }
+    return d;
+})();
 
 // ─── 8. Pre-baked 5x7 Vector Dot Matrix Numbers for SVG ──────────────────────
 const FONT_5X7 = {
@@ -356,12 +369,7 @@ export default function MinimalNothingParadigm() {
 
             {/* Ambient Nothing OS Dot-Matrix Pattern Background */}
             <Svg style={StyleSheet.absoluteFillObject} pointerEvents="none">
-                <Defs>
-                    <Pattern id="nothingDotGrid" width="16" height="16" patternUnits="userSpaceOnUse">
-                        <Circle cx="8" cy="8" r="1" fill={invertedEPaper ? '#E0E0E0' : '#141414'} />
-                    </Pattern>
-                </Defs>
-                <Rect width="100%" height="100%" fill="url(#nothingDotGrid)" />
+                <Path d={AMBIENT_DOT_GRID_PATH} fill={invertedEPaper ? '#E0E0E0' : '#141414'} />
             </Svg>
 
             {/* ── 1. GLYPH INTERFACE MATRIX (7 Segmente Telegraphic) ── */}
@@ -384,27 +392,34 @@ export default function MinimalNothingParadigm() {
                 <View style={styles.brandRow}>
                     <View style={[styles.statusDot, { backgroundColor: isConnected ? '#00FF66' : '#FF3B00' }]} />
                     <Text style={[styles.brandText, { color: currentTheme.textPrimary }]} numberOfLines={1}>
-                        {activeVehicle?.model ? activeVehicle.model.toUpperCase() : 'TELEMETRIE // CALM TECH'}
+                        {activeVehicle?.model ? activeVehicle.model.toUpperCase() : 'CALM TECH'}
                     </Text>
-                    <Text style={[styles.dotSeparator, { color: currentTheme.textDim }]}>·</Text>
-                    <Text style={[styles.rpmLiveBadge, { color: currentTheme.textSecondary }]}>{rpm} RPM</Text>
                 </View>
 
-                {/* Butoane de acțiune */}
+                {/* Butoane de acțiune cu STIL primul garantat vizibil */}
                 <View style={styles.headerActions}>
-                    {/* Inverted E-Paper Daylight Toggle */}
+                    <TouchableOpacity
+                        style={[styles.stylePickerButton, { backgroundColor: currentTheme.textPrimary }]}
+                        onPress={() => {
+                            hapticTap();
+                            openExperiencePicker();
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.stylePickerText, { color: currentTheme.bg }]}>🎨 STIL</Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity
                         style={[styles.v2Button, { borderColor: currentTheme.cardBorder, backgroundColor: currentTheme.cardBg }]}
                         onPress={() => {
                             hapticTap();
-                            setInvertedEPaper(!invertedEPaper);
+                            setUiParadigm('CLASSIC_V2');
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Text style={[styles.v2ButtonText, { color: currentTheme.textPrimary }]}>
-                            {invertedEPaper ? '🌙 OLED' : '☀️ LUX'}
-                        </Text>
+                        <Text style={[styles.v2ButtonText, { color: currentTheme.textSecondary }]}>⮌ V2</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -413,28 +428,24 @@ export default function MinimalNothingParadigm() {
                             hapticTap();
                             openSimulatorModal();
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Text style={[styles.v2ButtonText, { color: '#00F0FF' }]}>🎮 DEMO</Text>
+                        <Text style={[styles.v2ButtonText, { color: '#00F0FF' }]}>🎮</Text>
                     </TouchableOpacity>
 
-                    {/* Ghost Drive Toggle */}
+                    {/* Inverted E-Paper Daylight Toggle */}
                     <TouchableOpacity
-                        style={[
-                            styles.v2Button,
-                            { borderColor: currentTheme.cardBorder, backgroundColor: currentTheme.cardBg },
-                            ghostMode && { backgroundColor: currentTheme.textPrimary },
-                        ]}
+                        style={[styles.v2Button, { borderColor: currentTheme.cardBorder, backgroundColor: currentTheme.cardBg }]}
                         onPress={() => {
                             hapticTap();
-                            setGhostMode(!ghostMode);
+                            setInvertedEPaper(!invertedEPaper);
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Text style={[styles.v2ButtonText, { color: ghostMode ? currentTheme.bg : currentTheme.textSecondary }]}>
-                            {ghostMode ? 'GHOST ON' : 'GHOST'}
+                        <Text style={[styles.v2ButtonText, { color: currentTheme.textPrimary }]}>
+                            {invertedEPaper ? '🌙' : '☀️'}
                         </Text>
                     </TouchableOpacity>
 
@@ -449,11 +460,11 @@ export default function MinimalNothingParadigm() {
                             hapticTap();
                             setMirrorHud(!mirrorHud);
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
                         <Text style={[styles.v2ButtonText, { color: mirrorHud ? currentTheme.bg : currentTheme.textSecondary }]}>
-                            🪞 HUD
+                            🪞
                         </Text>
                     </TouchableOpacity>
 
@@ -467,36 +478,12 @@ export default function MinimalNothingParadigm() {
                             hapticTap();
                             setNothingAccentKey(prev => prev === 'RED' ? 'ACID' : prev === 'ACID' ? 'MONO' : 'RED');
                         }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
                         <Text style={[styles.v2ButtonText, { color: currentTheme.accent }]}>
-                            {nothingAccentKey === 'RED' ? '🔴 RED' : nothingAccentKey === 'ACID' ? '🟢 ACID' : '⚪ MONO'}
+                            {nothingAccentKey === 'RED' ? '🔴' : nothingAccentKey === 'ACID' ? '🟢' : '⚪'}
                         </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.v2Button, { borderColor: currentTheme.cardBorder, backgroundColor: currentTheme.cardBg }]}
-                        onPress={() => {
-                            hapticTap();
-                            setUiParadigm('CLASSIC_V2');
-                        }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={[styles.v2ButtonText, { color: currentTheme.textSecondary }]}>⮌ V2</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.stylePickerButton, { backgroundColor: currentTheme.textPrimary }]}
-                        onPress={() => {
-                            hapticTap();
-                            openExperiencePicker();
-                        }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={[styles.stylePickerText, { color: currentTheme.bg }]}>[ 🎨 STIL ]</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -1191,20 +1178,21 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
         borderBottomWidth: 1,
     },
     brandRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 6,
         flexShrink: 1,
     },
     statusDot: {
         width: 6,
         height: 6,
         borderRadius: 3,
-        marginRight: 8,
+        marginRight: 6,
     },
     brandText: {
         fontFamily: MONO_FONT,
@@ -1225,10 +1213,10 @@ const styles = StyleSheet.create({
     headerActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 4,
     },
     v2Button: {
-        paddingHorizontal: 8,
+        paddingHorizontal: 6,
         paddingVertical: 4,
         borderRadius: 4,
         borderWidth: 1,
@@ -1256,7 +1244,7 @@ const styles = StyleSheet.create({
         paddingTop: 16,
     },
     ghostDimmed: {
-        opacity: 0.06,
+        opacity: 0.40,
     },
     heroSection: {
         marginBottom: 16,

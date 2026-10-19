@@ -221,29 +221,15 @@ export default function F1CyberdeckParadigm() {
 
                 {/* Butoane Tactile Clare cu Zona Minima de 44px */}
                 <View style={styles.actionsGroup}>
-                    {/* Sub-Accent Switcher (CYAN / RED / LIME) */}
                     <TouchableOpacity
-                        style={[styles.actionBtn, { borderColor: primaryAccent, backgroundColor: `${primaryAccent}1A` }]}
+                        style={[styles.actionBtn, styles.stylePickerBtn]}
                         onPress={() => {
                             hapticTap();
-                            setF1AccentKey(prev => prev === 'CYAN' ? 'RED' : prev === 'RED' ? 'LIME' : 'CYAN');
+                            openExperiencePicker();
                         }}
                         hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={[styles.actionBtnText, { color: primaryAccent }]}>
-                            {f1AccentKey === 'CYAN' ? '🔷 MCL' : f1AccentKey === 'RED' ? '🔴 SCU' : '🟢 AST'}
-                        </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.actionBtn, { borderColor: '#00F0FF', backgroundColor: '#00F0FF1A' }]}
-                        onPress={() => {
-                            hapticTap();
-                            openSimulatorModal();
-                        }}
-                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-                    >
-                        <Text style={[styles.actionBtnText, { color: '#00F0FF' }]}>🎮 DEMO</Text>
+                        <Text style={styles.stylePickerText}>🎨 STIL</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -258,14 +244,28 @@ export default function F1CyberdeckParadigm() {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.actionBtn, styles.stylePickerBtn]}
+                        style={[styles.actionBtn, { borderColor: '#00F0FF', backgroundColor: '#00F0FF1A' }]}
                         onPress={() => {
                             hapticTap();
-                            openExperiencePicker();
+                            openSimulatorModal();
                         }}
                         hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={styles.stylePickerText}>🎨 STIL</Text>
+                        <Text style={[styles.actionBtnText, { color: '#00F0FF' }]}>🎮</Text>
+                    </TouchableOpacity>
+
+                    {/* Sub-Accent Switcher (CYAN / RED / LIME) */}
+                    <TouchableOpacity
+                        style={[styles.actionBtn, { borderColor: primaryAccent, backgroundColor: `${primaryAccent}1A` }]}
+                        onPress={() => {
+                            hapticTap();
+                            setF1AccentKey(prev => prev === 'CYAN' ? 'RED' : prev === 'RED' ? 'LIME' : 'CYAN');
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                    >
+                        <Text style={[styles.actionBtnText, { color: primaryAccent }]}>
+                            {f1AccentKey === 'CYAN' ? '🔷' : f1AccentKey === 'RED' ? '🔴' : '🟢'}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
