@@ -1,11 +1,10 @@
-// @ts-check
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, useContext } from 'react';
 import { Linking, Alert, Share, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 import { useNormalizedTelemetry } from './useNormalizedTelemetry';
 import { useVehicle } from '../context/VehicleContext';
-import { useLive } from '../context/LiveContext';
+import { LiveContext, useLive } from '../context/LiveContext';
 import { exportWorkshopDossier } from '../utils/dossierExport';
 import { hapticTap, hapticCriticalWarning } from '../services/hapticFeedback';
 import { audioGong } from '../services/audioGongService';
@@ -113,7 +112,9 @@ const SHARED_PARADIGM_CACHE = {
 export function useParadigmCoreData(isLiveViewActive = true) {
     const telemetry = useNormalizedTelemetry(isLiveViewActive);
     const { activeVehicle, activeVin, vehicleLabel } = useVehicle();
-    const { liveData, isConnected } = useLive();
+    const liveCtx = (useLive && typeof useLive === 'function' ? useLive() : useContext(LiveContext)) || {};
+    const liveData = liveCtx.liveData || {};
+    const isConnected = !!liveCtx.isConnected;
     const currentVin = activeVin || activeVehicle?.vin || 'WVWZZZ1234567890';
 
     // ─────────────────────────────────────────────────────────────────────────

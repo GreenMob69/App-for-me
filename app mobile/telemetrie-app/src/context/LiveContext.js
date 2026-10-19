@@ -177,3 +177,6 @@ export const LiveProvider = ({ children }) => {
         </LiveContext.Provider>
     );
 };
+
+export const useLive = () => useContext(LiveContext) || {};
+export default LiveContext;
