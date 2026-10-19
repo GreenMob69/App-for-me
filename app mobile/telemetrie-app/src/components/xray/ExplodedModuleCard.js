@@ -4,10 +4,11 @@
  * ExplodedModuleCard.js — Card Modular Explodat cu Ilustrație CAD Mare și Plajă de Toleranță (Varianta 3)
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors, typography, radii, spacing } from '../../theme';
 import ExplodedComponentSvg from './ExplodedComponentSvg';
+import RealisticCar3DView from './RealisticCar3DView';
 
 const ExplodedModuleCard = ({
     component,
@@ -17,6 +18,7 @@ const ExplodedModuleCard = ({
 }) => {
     if (!component) return null;
 
+    const [is3DExploded, setIs3DExploded] = useState(true);
     const reading = component.getReading ? component.getReading(liveData) : { val: 'Nominal', status: 'optimal' };
 
     // Calculează poziția acului pe plaja de toleranță OEM
@@ -32,7 +34,7 @@ const ExplodedModuleCard = ({
 
     return (
         <View style={[styles.card, { backgroundColor: theme.cardBg || colors.bg[1], borderColor: theme.border || colors.border.default }]}>
-            {/* Header: Nume piesă & Cod OEM */}
+            {/* Header: Nume piesă & Cod OEM + Buton Explozie 3D */}
             <View style={styles.header}>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.title}>{component.name}</Text>
@@ -40,17 +42,31 @@ const ExplodedModuleCard = ({
                         {component.code}
                     </Text>
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10b981' }]}>
-                    <Text style={styles.statusBadgeText}>OPTIM</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <TouchableOpacity
+                        style={[styles.explodeToggleBtn, is3DExploded && styles.explodeToggleBtnActive]}
+                        onPress={() => setIs3DExploded(!is3DExploded)}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={[styles.explodeToggleText, is3DExploded && styles.explodeToggleTextActive]}>
+                            {is3DExploded ? '🧩 COMPACT' : '💥 EXPLODE 3D'}
+                        </Text>
+                    </TouchableOpacity>
+                    <View style={[styles.statusBadge, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10b981' }]}>
+                        <Text style={styles.statusBadgeText}>OPTIM</Text>
+                    </View>
                 </View>
             </View>
 
-            {/* Ilustrație Explodată CAD Mare (Varianta 3) */}
+            {/* Ilustrație 3D WebGL Three.js Explodată Interactivă */}
             <View style={styles.illustrationWrap}>
-                <ExplodedComponentSvg
-                    componentId={component.id}
-                    height={165}
-                    accentColor={theme.accent || colors.accent.default}
+                <RealisticCar3DView
+                    visualMode="ISOLATED_PART_3D"
+                    selectedPart={component.id}
+                    exploded={is3DExploded}
+                    telemetry={liveData}
+                    height={190}
+                    showOverlayControls={false}
                 />
             </View>
 
@@ -144,15 +160,35 @@ const styles = StyleSheet.create({
         fontWeight: typography.weights.heavy,
         letterSpacing: 0.5,
     },
+    explodeToggleBtn: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: radii.xs,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 240, 255, 0.4)',
+        backgroundColor: 'rgba(0, 240, 255, 0.08)',
+        marginRight: 6,
+    },
+    explodeToggleBtnActive: {
+        borderColor: '#00F0FF',
+        backgroundColor: 'rgba(0, 240, 255, 0.22)',
+    },
+    explodeToggleText: {
+        color: '#94A3B8',
+        fontSize: 10,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.5,
+    },
+    explodeToggleTextActive: {
+        color: '#00F0FF',
+    },
     illustrationWrap: {
         width: '100%',
-        backgroundColor: 'rgba(8, 14, 24, 0.75)',
+        backgroundColor: '#04070D',
         borderRadius: radii.md,
         borderWidth: 1,
         borderColor: 'rgba(56, 189, 248, 0.2)',
-        paddingVertical: spacing[2],
-        alignItems: 'center',
-        justifyContent: 'center',
+        overflow: 'hidden',
         marginVertical: spacing[2],
     },
     toleranceBox: {

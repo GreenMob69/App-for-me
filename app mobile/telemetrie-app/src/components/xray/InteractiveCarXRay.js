@@ -34,6 +34,7 @@ import {
     detectVehicleTopology,
     PERSPECTIVE_PINS,
 } from './xrayConstants';
+import RealisticCar3DView from './RealisticCar3DView';
 import PerspectiveCarSvg from './PerspectiveCarSvg';
 import ExplodedModuleCard from './ExplodedModuleCard';
 
@@ -124,15 +125,19 @@ const InteractiveCarXRay = ({
     }, [topology]);
 
     // Selectare piesă de pe mașină sau din carusel
-    const handleSelectComponent = useCallback((pin) => {
+    const handleSelectComponent = useCallback((pinOrId) => {
+        let pin = pinOrId;
+        if (typeof pinOrId === 'string') {
+            pin = PERSPECTIVE_PINS.find(p => p.id === pinOrId) || PERSPECTIVE_PINS[0];
+        }
         setSelectedPin(pin);
         if (onSelectSubsystem) {
             onSelectSubsystem(pin.subsystem, { key: pin.subsystem, name: pin.name });
         }
     }, [onSelectSubsystem]);
 
-    const handlePreviewPinSelect = useCallback((pin) => {
-        handleSelectComponent(pin);
+    const handlePreviewPinSelect = useCallback((pinOrId) => {
+        handleSelectComponent(pinOrId);
         setIsScannerOpen(true);
     }, [handleSelectComponent]);
 
@@ -215,7 +220,7 @@ const InteractiveCarXRay = ({
                     </Text>
                 </View>
 
-                {/* Switcher Mod Vizual (Opțiunea B: 3D Studio vs. Opțiunea C: Hologramă CAD) */}
+                {/* Switcher Mod Vizual (3D Realist vs. X-Ray vs. Hologramă CAD) */}
                 <View style={styles.visualModeSwitchWrap}>
                     <TouchableOpacity
                         style={[
@@ -226,7 +231,19 @@ const InteractiveCarXRay = ({
                         activeOpacity={0.8}
                     >
                         <Text style={[styles.visualModeText, visualMode === 'studio' && { color: tpl.accent, fontWeight: 'bold' }]}>
-                            📸 3D STUDIO FOTOREALIST
+                            🚗 3D REALIST
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[
+                            styles.visualModePill,
+                            visualMode === 'xray' && [styles.visualModePillActive, { borderColor: tpl.accent, backgroundColor: 'rgba(0, 240, 255, 0.12)' }]
+                        ]}
+                        onPress={() => setVisualMode('xray')}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={[styles.visualModeText, visualMode === 'xray' && { color: tpl.accent, fontWeight: 'bold' }]}>
+                            🔬 X-RAY
                         </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -238,17 +255,25 @@ const InteractiveCarXRay = ({
                         activeOpacity={0.8}
                     >
                         <Text style={[styles.visualModeText, visualMode === 'hologram' && { color: tpl.accent, fontWeight: 'bold' }]}>
-                            🧬 HOLOGRAMĂ CAD
+                            🌐 CAD
                         </Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* Vector Canvas 3D cu Siluetă Top-Down Simetrică */}
+                {/* Motor WebGL2 Three.js Acura CDX 3D Fotorealist */}
                 <View style={styles.previewCanvasWrap}>
-                    <PerspectiveCarSvg
-                        visualMode={visualMode}
-                        selectedPinId={selectedPin?.id}
-                        onSelectPin={handlePreviewPinSelect}
+                    <RealisticCar3DView
+                        visualMode={visualMode === 'studio' ? 'STUDIO_REALISTIC' : visualMode === 'hologram' ? 'HOLOGRAM_WIREFRAME' : 'XRAY_ANATOMY'}
+                        selectedPart={selectedPin?.id}
+                        onSelectPart={handlePreviewPinSelect}
+                        telemetry={combinedTelemetry}
+                        height={240}
+                        showOverlayControls={true}
+                        onChangeVisualMode={(m) => {
+                            if (m === 'STUDIO_REALISTIC') setVisualMode('studio');
+                            else if (m === 'HOLOGRAM_WIREFRAME') setVisualMode('hologram');
+                            else setVisualMode('xray');
+                        }}
                     />
                 </View>
 
@@ -327,7 +352,19 @@ const InteractiveCarXRay = ({
                                 activeOpacity={0.8}
                             >
                                 <Text style={[styles.modalModeText, visualMode === 'studio' && { color: tpl.accent, fontWeight: 'bold' }]}>
-                                    📸 3D STUDIO
+                                    🚗 3D REAL
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.modalModePill,
+                                    visualMode === 'xray' && [styles.modalModePillActive, { borderColor: tpl.accent, backgroundColor: 'rgba(0, 240, 255, 0.14)' }]
+                                ]}
+                                onPress={() => setVisualMode('xray')}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={[styles.modalModeText, visualMode === 'xray' && { color: tpl.accent, fontWeight: 'bold' }]}>
+                                    🔬 X-RAY
                                 </Text>
                             </TouchableOpacity>
                             <TouchableOpacity
@@ -339,18 +376,26 @@ const InteractiveCarXRay = ({
                                 activeOpacity={0.8}
                             >
                                 <Text style={[styles.modalModeText, visualMode === 'hologram' && { color: tpl.accent, fontWeight: 'bold' }]}>
-                                    🧬 HOLO CAD
+                                    🌐 CAD
                                 </Text>
                             </TouchableOpacity>
                         </View>
                     </View>
 
-                    {/* ── SECTIUNEA 1 (VARIANTA 1): Digital Twin 3D Cutaway cu Puncte Interactive ── */}
+                    {/* ── SECTIUNEA 1: Digital Twin 3D WebGL Three.js cu Piese Interactive ── */}
                     <View style={[styles.canvasCard, { backgroundColor: tpl.cardBg, borderColor: tpl.border }]}>
-                        <PerspectiveCarSvg
-                            visualMode={visualMode}
-                            selectedPinId={selectedPin?.id}
-                            onSelectPin={handleSelectComponent}
+                        <RealisticCar3DView
+                            visualMode={visualMode === 'studio' ? 'STUDIO_REALISTIC' : visualMode === 'hologram' ? 'HOLOGRAM_WIREFRAME' : 'XRAY_ANATOMY'}
+                            selectedPart={selectedPin?.id}
+                            onSelectPart={handleSelectComponent}
+                            telemetry={combinedTelemetry}
+                            height={280}
+                            showOverlayControls={true}
+                            onChangeVisualMode={(m) => {
+                                if (m === 'STUDIO_REALISTIC') setVisualMode('studio');
+                                else if (m === 'HOLOGRAM_WIREFRAME') setVisualMode('hologram');
+                                else setVisualMode('xray');
+                            }}
                         />
                     </View>
 

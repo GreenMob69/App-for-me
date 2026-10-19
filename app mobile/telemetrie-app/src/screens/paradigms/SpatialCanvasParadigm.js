@@ -35,6 +35,7 @@ import { useUiParadigm } from '../../context/AppContext';
 import { hapticTap } from '../../services/hapticFeedback';
 import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
 import { safeNum, safeFmt, safeArr, safeCoord } from '../../utils/safeMath';
+import RealisticCar3DView from '../../components/xray/RealisticCar3DView';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
@@ -924,6 +925,7 @@ export default function SpatialCanvasParadigm() {
     // 4 Zone de Cameră: 'OVERVIEW' | 'ENGINE_BAY' | 'CHASSIS_BRAKES' | 'HIGHWAY_CHASE'
     const [cameraZone, setCameraZone] = useState('OVERVIEW');
     const [isExplodedView, setIsExplodedView] = useState(false);
+    const [spatialVisualMode, setSpatialVisualMode] = useState('STUDIO_REALISTIC');
 
     // Unghiuri de rotație 3D
     const [rotY, setRotY] = useState(0.55);
@@ -1243,341 +1245,26 @@ export default function SpatialCanvasParadigm() {
             </View>
 
             {/* ── 2. Zona Centrală: Canvas Tridimensional Interactiv ── */}
-            <View style={styles.canvasContainer} {...panResponder.panHandlers}>
-                <Svg width={SCREEN_WIDTH} height={250} viewBox={`0 0 ${SCREEN_WIDTH} 250`}>
-                    <Defs>
-                        {/* PBR Metal Shading Gradient (Vivid Metallic Contrast) */}
-                        <LinearGradient id="carBodyGrad" x1="0" y1="0" x2="1" y2="1">
-                            <Stop offset="0" stopColor="#2A5384" stopOpacity={isExplodedView ? 0.45 : 1.0} />
-                            <Stop offset="0.4" stopColor="#4A82BF" stopOpacity={isExplodedView ? 0.35 : 1.0} />
-                            <Stop offset="1" stopColor="#183659" stopOpacity={isExplodedView ? 0.45 : 1.0} />
-                        </LinearGradient>
-                        <LinearGradient id="carSideGrad" x1="0" y1="0" x2="0" y2="1">
-                            <Stop offset="0" stopColor="#35669C" stopOpacity={isExplodedView ? 0.4 : 1.0} />
-                            <Stop offset="0.6" stopColor="#1E436B" stopOpacity={isExplodedView ? 0.4 : 1.0} />
-                            <Stop offset="1" stopColor="#11253D" stopOpacity={isExplodedView ? 0.4 : 1.0} />
-                        </LinearGradient>
-                        <LinearGradient id="glassGrad" x1="0" y1="0" x2="0" y2="1">
-                            <Stop offset="0" stopColor="#00F0FF" stopOpacity={isExplodedView ? 0.5 : 0.75} />
-                            <Stop offset="0.5" stopColor="#0284C7" stopOpacity={isExplodedView ? 0.3 : 0.60} />
-                            <Stop offset="1" stopColor="#03254C" stopOpacity={isExplodedView ? 0.2 : 0.50} />
-                        </LinearGradient>
-                        <LinearGradient id="hoodHighlight" x1="0" y1="0" x2="0" y2="1">
-                            <Stop offset="0" stopColor="#5B9DE5" stopOpacity="0.9" />
-                            <Stop offset="1" stopColor="#224872" stopOpacity="0.95" />
-                        </LinearGradient>
-                        {/* Fascicul Faruri 3D Proiectat în Față */}
-                        <LinearGradient id="headlightBeam" x1="0" y1="0" x2="0" y2="1">
-                            <Stop offset="0" stopColor={activeAccent.primary} stopOpacity="0.35" />
-                            <Stop offset="1" stopColor={activeAccent.primary} stopOpacity="0.0" />
-                        </LinearGradient>
-                    </Defs>
-
-                    {/* Grilă Perspective Sol */}
-                    {GROUND_GRID_X.map((lineX, i) => {
-                        const pStart = project3D(lineX, -0.06, -2.5, rotX, rotY, suspensionRoll, suspensionPitch, 0.85, SCREEN_WIDTH / 2, 125);
-                        const pEnd = project3D(lineX, -0.06, 2.8, rotX, rotY, suspensionRoll, suspensionPitch, 0.85, SCREEN_WIDTH / 2, 125);
-                        return (
-                            <Line
-                                key={`grid-${i}`}
-                                x1={pStart.x}
-                                y1={pStart.y}
-                                x2={pEnd.x}
-                                y2={pEnd.y}
-                                stroke={isIceRisk ? 'rgba(0, 240, 255, 0.4)' : 'rgba(0, 240, 255, 0.12)'}
-                                strokeWidth={isIceRisk ? 1.5 : 1}
-                                strokeDasharray="3, 3"
-                            />
-                        );
-                    })}
-
-                    {/* Umbre Sol sub Fiecare Roată */}
-                    {carMesh3D.wheels.map((wh, idx) => (
-                        <Ellipse
-                            key={`shadow-${idx}`}
-                            cx={wh.pos.x}
-                            cy={wh.pos.y + 12}
-                            rx={14}
-                            ry={4}
-                            fill="rgba(0, 0, 0, 0.65)"
-                        />
-                    ))}
-
-                    {/* Fascicul Faruri 3D Proiectat în Față */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.noseL.x},${carMesh3D.noseL.y}
-                            ${carMesh3D.noseR.x},${carMesh3D.noseR.y}
-                            ${project3D(1.6, -0.05, 3.4, rotX, rotY, suspensionRoll, suspensionPitch, 0.85, SCREEN_WIDTH / 2, 125).x},${project3D(1.6, -0.05, 3.4, rotX, rotY, suspensionRoll, suspensionPitch, 0.85, SCREEN_WIDTH / 2, 125).y}
-                            ${project3D(-1.6, -0.05, 3.4, rotX, rotY, suspensionRoll, suspensionPitch, 0.85, SCREEN_WIDTH / 2, 125).x},${project3D(-1.6, -0.05, 3.4, rotX, rotY, suspensionRoll, suspensionPitch, 0.85, SCREEN_WIDTH / 2, 125).y}
-                        `}
-                        fill="url(#headlightBeam)"
-                    />
-
-                    {/* Componente Interne Expuse în X-Ray */}
-                    {isExplodedView && (
-                        <G>
-                            <Circle cx={carMesh3D.engineBlockFront.x} cy={carMesh3D.engineBlockFront.y} r={16} fill="#2A3B4C" stroke={activeAccent.primary} strokeWidth="1.5" />
-                            <Circle cx={carMesh3D.turboCore.x} cy={carMesh3D.turboCore.y} r={10} fill="#FF5500" stroke="#FF2A2A" strokeWidth="2" />
-                            <Line
-                                x1={carMesh3D.turboCore.x}
-                                y1={carMesh3D.turboCore.y}
-                                x2={carMesh3D.exhaustDownpipe.x}
-                                y2={carMesh3D.exhaustDownpipe.y}
-                                stroke="#FF8800"
-                                strokeWidth="3"
-                            />
-                        </G>
-                    )}
-
-                    {/* 1. Flanc Lateral Stânga (Portiere, Aripi, Prag) */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.noseL.x},${carMesh3D.noseL.y}
-                            ${carMesh3D.hoodL.x},${carMesh3D.hoodL.y}
-                            ${carMesh3D.trunkL.x},${carMesh3D.trunkL.y}
-                            ${carMesh3D.tailL.x},${carMesh3D.tailL.y}
-                            ${carMesh3D.bumperRearL.x},${carMesh3D.bumperRearL.y}
-                            ${carMesh3D.sillRearL.x},${carMesh3D.sillRearL.y}
-                            ${carMesh3D.sillFrontL.x},${carMesh3D.sillFrontL.y}
-                            ${carMesh3D.bumperFrontL.x},${carMesh3D.bumperFrontL.y}
-                        `}
-                        fill="url(#carSideGrad)"
-                        stroke={activeAccent.primary}
-                        strokeWidth="1.8"
-                    />
-
-                    {/* 2. Geamuri Laterale Stânga */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.hoodL.x},${carMesh3D.hoodL.y}
-                            ${carMesh3D.roofFrontL.x},${carMesh3D.roofFrontL.y}
-                            ${carMesh3D.roofRearL.x},${carMesh3D.roofRearL.y}
-                            ${carMesh3D.trunkL.x},${carMesh3D.trunkL.y}
-                        `}
-                        fill="url(#glassGrad)"
-                        stroke={activeAccent.primary}
-                        strokeWidth="1"
-                    />
-
-                    {/* 3. Flanc Lateral Dreapta (Portiere, Aripi, Prag) */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.noseR.x},${carMesh3D.noseR.y}
-                            ${carMesh3D.hoodR.x},${carMesh3D.hoodR.y}
-                            ${carMesh3D.trunkR.x},${carMesh3D.trunkR.y}
-                            ${carMesh3D.tailR.x},${carMesh3D.tailR.y}
-                            ${carMesh3D.bumperRearR.x},${carMesh3D.bumperRearR.y}
-                            ${carMesh3D.sillRearR.x},${carMesh3D.sillRearR.y}
-                            ${carMesh3D.sillFrontR.x},${carMesh3D.sillFrontR.y}
-                            ${carMesh3D.bumperFrontR.x},${carMesh3D.bumperFrontR.y}
-                        `}
-                        fill="url(#carSideGrad)"
-                        stroke={activeAccent.primary}
-                        strokeWidth="1.8"
-                    />
-
-                    {/* 4. Geamuri Laterale Dreapta */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.hoodR.x},${carMesh3D.hoodR.y}
-                            ${carMesh3D.roofFrontR.x},${carMesh3D.roofFrontR.y}
-                            ${carMesh3D.roofRearR.x},${carMesh3D.roofRearR.y}
-                            ${carMesh3D.trunkR.x},${carMesh3D.trunkR.y}
-                        `}
-                        fill="url(#glassGrad)"
-                        stroke={activeAccent.primary}
-                        strokeWidth="1"
-                    />
-
-                    {/* 5. Bară Față & Grilă Aerodinamică */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.noseL.x},${carMesh3D.noseL.y}
-                            ${carMesh3D.noseR.x},${carMesh3D.noseR.y}
-                            ${carMesh3D.bumperFrontR.x},${carMesh3D.bumperFrontR.y}
-                            ${carMesh3D.bumperFrontL.x},${carMesh3D.bumperFrontL.y}
-                        `}
-                        fill="#0A1828"
-                        stroke={activeAccent.primary}
-                        strokeWidth="1.5"
-                    />
-
-                    {/* 6. Faruri LED Matrix Neon */}
-                    <Line
-                        x1={carMesh3D.noseL.x}
-                        y1={carMesh3D.noseL.y}
-                        x2={carMesh3D.bumperFrontL.x}
-                        y2={carMesh3D.bumperFrontL.y}
-                        stroke="#FFFFFF"
-                        strokeWidth="2.5"
-                    />
-                    <Line
-                        x1={carMesh3D.noseR.x}
-                        y1={carMesh3D.noseR.y}
-                        x2={carMesh3D.bumperFrontR.x}
-                        y2={carMesh3D.bumperFrontR.y}
-                        stroke="#FFFFFF"
-                        strokeWidth="2.5"
-                    />
-
-                    {/* 7. Fațete Superioare: Capotă */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.noseL.x},${carMesh3D.noseL.y}
-                            ${carMesh3D.noseR.x},${carMesh3D.noseR.y}
-                            ${carMesh3D.hoodR.x},${carMesh3D.hoodR.y}
-                            ${carMesh3D.hoodL.x},${carMesh3D.hoodL.y}
-                        `}
-                        fill="url(#carBodyGrad)"
-                        stroke={activeAccent.primary}
-                        strokeWidth="1.2"
-                    />
-
-                    {/* 8. Parbriz */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.hoodL.x},${carMesh3D.hoodL.y}
-                            ${carMesh3D.hoodR.x},${carMesh3D.hoodR.y}
-                            ${carMesh3D.roofFrontR.x},${carMesh3D.roofFrontR.y}
-                            ${carMesh3D.roofFrontL.x},${carMesh3D.roofFrontL.y}
-                        `}
-                        fill="url(#glassGrad)"
-                        stroke={activeAccent.primary}
-                        strokeWidth="1.5"
-                    />
-
-                    {/* 9. Plafon */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.roofFrontL.x},${carMesh3D.roofFrontL.y}
-                            ${carMesh3D.roofFrontR.x},${carMesh3D.roofFrontR.y}
-                            ${carMesh3D.roofRearR.x},${carMesh3D.roofRearR.y}
-                            ${carMesh3D.roofRearL.x},${carMesh3D.roofRearL.y}
-                        `}
-                        fill="url(#carBodyGrad)"
-                        stroke={activeAccent.primary}
-                        strokeWidth="1"
-                    />
-
-                    {/* 10. Lunetă */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.roofRearL.x},${carMesh3D.roofRearL.y}
-                            ${carMesh3D.roofRearR.x},${carMesh3D.roofRearR.y}
-                            ${carMesh3D.trunkR.x},${carMesh3D.trunkR.y}
-                            ${carMesh3D.trunkL.x},${carMesh3D.trunkL.y}
-                        `}
-                        fill="url(#glassGrad)"
-                        stroke={activeAccent.primary}
-                        strokeWidth="1.2"
-                    />
-
-                    {/* 11. Portbagaj */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.trunkL.x},${carMesh3D.trunkL.y}
-                            ${carMesh3D.trunkR.x},${carMesh3D.trunkR.y}
-                            ${carMesh3D.tailR.x},${carMesh3D.tailR.y}
-                            ${carMesh3D.tailL.x},${carMesh3D.tailL.y}
-                        `}
-                        fill="#0B1524"
-                        stroke="#FF2A2A"
-                        strokeWidth="2"
-                    />
-
-                    {/* 12. Bară Spate & Difuzor */}
-                    <Polygon
-                        points={`
-                            ${carMesh3D.tailL.x},${carMesh3D.tailL.y}
-                            ${carMesh3D.tailR.x},${carMesh3D.tailR.y}
-                            ${carMesh3D.bumperRearR.x},${carMesh3D.bumperRearR.y}
-                            ${carMesh3D.bumperRearL.x},${carMesh3D.bumperRearL.y}
-                        `}
-                        fill="#0A121E"
-                        stroke="#FF2A2A"
-                        strokeWidth="1.5"
-                    />
-
-                    {/* 13. Bandă Stopuri LED Spate Roșie */}
-                    <Line
-                        x1={carMesh3D.tailL.x}
-                        y1={carMesh3D.tailL.y}
-                        x2={carMesh3D.tailR.x}
-                        y2={carMesh3D.tailR.y}
-                        stroke="#FF1744"
-                        strokeWidth="3"
-                    />
-
-                    {/* Linii Aerodinamice CFD animate */}
-                    {activeSpeed > 15 && (
-                        <G>
-                            <Line
-                                x1={carMesh3D.noseL.x + (carMesh3D.noseR.x - carMesh3D.noseL.x) * 0.3}
-                                y1={carMesh3D.noseL.y - 4}
-                                x2={carMesh3D.roofRearL.x + (carMesh3D.roofRearR.x - carMesh3D.roofRearL.x) * 0.3}
-                                y2={carMesh3D.roofRearL.y - 12}
-                                stroke="rgba(0, 240, 255, 0.45)"
-                                strokeWidth="1.2"
-                                strokeDasharray="8, 6"
-                                strokeDashoffset={-aeroOffset}
-                            />
-                            <Line
-                                x1={carMesh3D.noseL.x + (carMesh3D.noseR.x - carMesh3D.noseL.x) * 0.7}
-                                y1={carMesh3D.noseL.y - 4}
-                                x2={carMesh3D.roofRearL.x + (carMesh3D.roofRearR.x - carMesh3D.roofRearL.x) * 0.7}
-                                y2={carMesh3D.roofRearL.y - 12}
-                                stroke="rgba(0, 240, 255, 0.45)"
-                                strokeWidth="1.2"
-                                strokeDasharray="8, 6"
-                                strokeDashoffset={-aeroOffset}
-                            />
-                        </G>
-                    )}
-
-                    {/* 4 Roți 3D Active cu Spițe și Discuri de Frână */}
-                    {carMesh3D.wheels.map((wh, idx) => {
-                        const spokeRad = (wheelAngle * Math.PI) / 180;
-                        const r = 14;
-                        return (
-                            <G key={`wheel-${idx}`}>
-                                <Circle
-                                    cx={wh.pos.x}
-                                    cy={wh.pos.y}
-                                    r={r}
-                                    fill="#060B12"
-                                    stroke="#1E293B"
-                                    strokeWidth="2.5"
-                                />
-                                <Circle
-                                    cx={wh.pos.x}
-                                    cy={wh.pos.y}
-                                    r={r * 0.65}
-                                    fill="#0C1524"
-                                    stroke={brakeColor}
-                                    strokeWidth="1.8"
-                                    strokeDasharray="6, 3"
-                                />
-                                <Line
-                                    x1={wh.pos.x - Math.cos(spokeRad) * (r * 0.7)}
-                                    y1={wh.pos.y - Math.sin(spokeRad) * (r * 0.7)}
-                                    x2={wh.pos.x + Math.cos(spokeRad) * (r * 0.7)}
-                                    y2={wh.pos.y + Math.sin(spokeRad) * (r * 0.7)}
-                                    stroke="#8CA0BA"
-                                    strokeWidth="1.5"
-                                />
-                                <Line
-                                    x1={wh.pos.x - Math.sin(spokeRad) * (r * 0.7)}
-                                    y1={wh.pos.y + Math.cos(spokeRad) * (r * 0.7)}
-                                    x2={wh.pos.x + Math.sin(spokeRad) * (r * 0.7)}
-                                    y2={wh.pos.y - Math.cos(spokeRad) * (r * 0.7)}
-                                    stroke="#8CA0BA"
-                                    strokeWidth="1.5"
-                                />
-                            </G>
-                        );
-                    })}
-                </Svg>
+            <View style={styles.canvasContainer}>
+                <RealisticCar3DView
+                    visualMode={isExplodedView ? 'XRAY_ANATOMY' : spatialVisualMode}
+                    cameraPreset={cameraZone}
+                    autoRotate={autoRotate}
+                    telemetry={telemetry}
+                    height={250}
+                    showOverlayControls={true}
+                    onChangeVisualMode={setSpatialVisualMode}
+                    onSelectPart={(partId) => {
+                        hapticTap();
+                        if (partId === 'engine' || partId === 'turbo' || partId === 'cooling') {
+                            setSpatialSheet('XRAY');
+                        } else if (partId === 'brakes' || partId === 'suspension') {
+                            setSpatialSheet('SERVICE');
+                        } else {
+                            setSpatialSheet('SENTRY');
+                        }
+                    }}
+                />
 
                 {/* Butoane Hotspot Tridimensionale */}
                 <View style={styles.hotspotsLayer} pointerEvents="box-none">

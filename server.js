@@ -20,6 +20,35 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Servire Modele 3D GLB / GLTF pentru WebGL Three.js pe Mobil
+const modelsDir = path.join(__dirname, 'app mobile', 'telemetrie-app', 'assets', 'models');
+app.use('/models', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+    next();
+}, express.static(modelsDir));
+
+app.get(['/models/acura_cdx.glb', '/models/car.glb'], (req, res) => {
+    const optPath = path.join(modelsDir, 'acura_cdx_car.glb');
+    const rawPath = path.join(modelsDir, 'acura_cdx_2016__realistic_3d_car_model.glb');
+    const glbPath = require('fs').existsSync(optPath) ? optPath : rawPath;
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.setHeader('Content-Type', 'model/gltf-binary');
+    res.sendFile(glbPath);
+});
+
+app.get('/models/acura_cdx_raw.glb', (req, res) => {
+    const rawPath = path.join(modelsDir, 'acura_cdx_2016__realistic_3d_car_model.glb');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.setHeader('Content-Type', 'model/gltf-binary');
+    res.sendFile(rawPath);
+});
+
 app.get('/fleet', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'fleet.html'));
 });

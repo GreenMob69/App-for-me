@@ -2,6 +2,7 @@
 
 export { default } from './InteractiveCarXRay';
 export { default as InteractiveCarXRay } from './InteractiveCarXRay';
+export { default as RealisticCar3DView } from './RealisticCar3DView';
 export {
     TOPOLOGIES,
     detectVehicleTopology,
