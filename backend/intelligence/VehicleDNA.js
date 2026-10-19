@@ -1,5 +1,5 @@
 /**
- * VehicleDNA.js — Amprenta unică a sănătății vehiculului[cite: 12]
+ * VehicleDNA.js — Amprenta unică a sănătății vehiculului
  */
 function generateVehicleDNA(health, baselineResult, correlations, confidenceReport) {
     const dna = {
@@ -12,8 +12,10 @@ function generateVehicleDNA(health, baselineResult, correlations, confidenceRepo
             fuel: { score: health?.fuelScore || 100, status: "Injecție optimă" },
             driving_style: { score: health?.drivingScore || 100, label: health?.drivingScore > 85 ? "Economic" : "Agresiv" }
         },
-        correlation_health: correlations?.anomalies?.length === 0 ? "Sincronizare perfectă" : `${correlations.anomalies.length} rupturi detectate`,
-        ai_summary: `Vehiculul operează la ${health?.overallHealth || 100}% capacitate față de propriul ADN istoric[cite: 12].`
+        correlation_health: correlations?.anomalies
+            ? (correlations.anomalies.length === 0 ? "Sincronizare perfectă" : `${correlations.anomalies.length} rupturi detectate`)
+            : "Date insuficiente (<20 eșantioane)",
+        ai_summary: `Vehiculul operează la ${health?.overallHealth || 100}% capacitate față de propriul ADN istoric.`
     };
 
     if (baselineResult?.raw_baseline?.voltage < 13.6) {
