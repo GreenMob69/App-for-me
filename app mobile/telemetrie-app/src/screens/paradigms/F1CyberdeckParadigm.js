@@ -9,7 +9,7 @@ import {
     Dimensions,
     ScrollView,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '../../hooks/useSafeInsets';
 import Svg, {
     Rect,
     Circle,
@@ -31,7 +31,7 @@ const MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 const theme = PARADIGM_THEMES[PARADIGM_KEYS.F1_CYBERDECK];
 
 export default function F1CyberdeckParadigm() {
-    const insets = useSafeAreaInsets();
+    const insets = useSafeInsets();
     const telemetry = useNormalizedTelemetry();
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();

@@ -9,7 +9,7 @@ import {
     Dimensions,
     PanResponder,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '../../hooks/useSafeInsets';
 import Svg, {
     Polygon,
     Polyline,
@@ -61,7 +61,7 @@ function project3D(x, y, z, rotX, rotY, zoom = 1.0, centerX = SCREEN_WIDTH / 2, 
 }
 
 export default function SpatialCanvasParadigm() {
-    const insets = useSafeAreaInsets();
+    const insets = useSafeInsets();
     const telemetry = useNormalizedTelemetry();
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();

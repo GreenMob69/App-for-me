@@ -10,7 +10,7 @@ import {
     Dimensions,
     Animated,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeInsets } from '../../hooks/useSafeInsets';
 import Svg, { Path, Line, Defs, LinearGradient, Stop, Circle, Rect } from 'react-native-svg';
 import { useNormalizedTelemetry } from '../../hooks/useNormalizedTelemetry';
 import { useVehicle } from '../../context/VehicleContext';
@@ -50,7 +50,7 @@ function generatePulsePath(width, height, loadPct = 20, rpm = 800) {
 }
 
 export default function MinimalNothingParadigm() {
-    const insets = useSafeAreaInsets();
+    const insets = useSafeInsets();
     const telemetry = useNormalizedTelemetry();
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();

@@ -8,6 +8,7 @@ LogBox.ignoreLogs([
     'SafeAreaView has been deprecated',
 ]);
 import { SecurityProvider, SecurityContext } from './src/context/SecurityContext';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import LockScreen from './src/screens/LockScreen';
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationContainer } from '@react-navigation/native';
@@ -331,9 +332,11 @@ function AppRoot() {
 
 export default function App() {
     return (
-        <VehicleProvider>
-            <AppRoot />
-        </VehicleProvider>
+        <SafeAreaProvider>
+            <VehicleProvider>
+                <AppRoot />
+            </VehicleProvider>
+        </SafeAreaProvider>
     );
 }
 
