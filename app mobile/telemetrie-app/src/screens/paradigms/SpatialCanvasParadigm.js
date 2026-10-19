@@ -126,6 +126,528 @@ const SPATIAL_ACCENTS = Object.freeze({
 const GROUND_GRID_X = Object.freeze([-1.8, -0.9, 0, 0.9, 1.8]);
 const CYLINDER_ORDER = Object.freeze([1, 2, 4, 5, 3]);
 
+// ─── MEMOIZED SPATIAL SHEET SUB-STATIONS (FRAME ISOLATION & ZERO GC) ──────────
+
+const StationSpatialXRay = React.memo(function StationSpatialXRay({
+    virtualSensors,
+    isExplodedView,
+    setIsExplodedView,
+    activeAccent
+}) {
+    const catLabels = {
+        engine: '01. GRUP PROPULSOR & INJECȚIE',
+        turbo: '02. SUPRAALIMENTARE & ADMISIE',
+        thermal: '03. ECHILIBRU TERMIC & RĂCIRE',
+        dpf: '04. POST-TRATARE EMISII DPF/SCR',
+        electric: '05. REȚEA ELECTRICĂ & BATERIE',
+        safety: '06. DINAMICĂ ȘASIU & SIGURANȚĂ',
+    };
+
+    return (
+        <View>
+            <View style={styles.sheetHeaderRow}>
+                <View>
+                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
+                        3D ANATOMIE VIRTUALĂ · 32 OBSERVATORI FIZICI
+                    </Text>
+                    <Text style={styles.sheetSub}>MOTOR KALMAN FILTER · DIAGNOZĂ TOLERANȚE</Text>
+                </View>
+                <TouchableOpacity
+                    style={[styles.xrayToggleBtn, { borderColor: activeAccent.primary, backgroundColor: activeAccent.bg }]}
+                    onPress={() => {
+                        hapticTap();
+                        setIsExplodedView(!isExplodedView);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                    <Text style={[styles.xrayToggleText, { color: activeAccent.primary }]}>
+                        {isExplodedView ? 'COMPACT' : 'EXPLOZAT'}
+                    </Text>
+                </TouchableOpacity>
+            </View>
+
+            {Object.entries(virtualSensors || {}).map(([catKey, sensors]) => (
+                <View key={catKey} style={styles.spatialCategoryBox}>
+                    <Text style={[styles.categoryTitle, { color: activeAccent.primary }]}>
+                        {catLabels[catKey] || catKey.toUpperCase()}
+                    </Text>
+                    <View style={styles.sensorsGrid}>
+                        {safeArr(sensors).map((s) => {
+                            const isWarn = s.status === 'WARN';
+                            const isAlert = s.status === 'ALERT';
+                            const statusColor = isAlert ? '#FF2A2A' : isWarn ? '#FFB800' : '#00FF66';
+                            return (
+                                <View key={s.id} style={[styles.spatialSensorCard, { borderColor: isAlert ? '#FF2A2A88' : '#162B44' }]}>
+                                    <View style={styles.sensorCardHeader}>
+                                        <Text style={styles.spatialSensorLabel} numberOfLines={1}>{s.label}</Text>
+                                        <View style={[styles.spatialStatusDot, { backgroundColor: statusColor }]} />
+                                    </View>
+                                    <View style={styles.sensorCardFooter}>
+                                        <Text style={[styles.spatialSensorVal, { color: statusColor }]}>{s.val}</Text>
+                                        <Text style={styles.spatialSensorRef}>REF: {s.target}</Text>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                    </View>
+                </View>
+            ))}
+        </View>
+    );
+});
+
+const StationSpatialReplay = React.memo(function StationSpatialReplay({
+    selectedTripId,
+    tripsList,
+    replaySpeed,
+    replayTotalSamples,
+    replayIndex,
+    isReplaying,
+    activeSpeed,
+    activeRpm,
+    activeBoost,
+    activeLatG,
+    togglePlayPause,
+    cycleReplaySpeed,
+    exportTripPdf,
+    exportItpDossier,
+    selectTripForReplay,
+    activeAccent
+}) {
+    const activeTrip = tripsList.find(t => t.id === selectedTripId);
+
+    return (
+        <View>
+            <View style={styles.sheetHeaderRow}>
+                <View>
+                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
+                        3D TELEMETRY REPLAY · CONTROL PAS-CU-PAS
+                    </Text>
+                    <Text style={styles.sheetSub}>MAȘINA 3D DINAMICĂ ÎN TIMP REAL CONFORM TELEMETRIEI</Text>
+                </View>
+                <Text style={[styles.replaySpeedBadge, { color: activeAccent.primary }]}>{replaySpeed}x</Text>
+            </View>
+
+            <View style={styles.replayGlassCard}>
+                <View style={styles.tripGlassHeader}>
+                    <Text style={styles.tripGlassTitle}>
+                        {selectedTripId ? (activeTrip?.title || 'CURSĂ SELECTATĂ') : 'NICIUN TRASEU SELECTAT'}
+                    </Text>
+                    <Text style={styles.tripGlassDate}>
+                        PROBĂ: {replayIndex} / {replayTotalSamples}
+                    </Text>
+                </View>
+
+                {/* Scrubber Bar */}
+                <View style={styles.replayTrack}>
+                    <View style={[styles.replayFill, { width: `${replayTotalSamples > 0 ? (replayIndex / replayTotalSamples) * 100 : 0}%`, backgroundColor: activeAccent.primary }]} />
+                </View>
+
+                {/* Active Replay Metrics */}
+                <View style={styles.replayMetricsGrid}>
+                    <View style={styles.replayMetricCol}>
+                        <Text style={styles.replayMetricKey}>VITEZĂ</Text>
+                        <Text style={styles.replayMetricVal}>{activeSpeed} km/h</Text>
+                    </View>
+                    <View style={styles.replayMetricCol}>
+                        <Text style={styles.replayMetricKey}>TURAȚIE</Text>
+                        <Text style={styles.replayMetricVal}>{activeRpm} RPM</Text>
+                    </View>
+                    <View style={styles.replayMetricCol}>
+                        <Text style={styles.replayMetricKey}>BOOST</Text>
+                        <Text style={styles.replayMetricVal}>{safeFmt(activeBoost, 2, '0.00')} bar</Text>
+                    </View>
+                    <View style={styles.replayMetricCol}>
+                        <Text style={styles.replayMetricKey}>G-LAT</Text>
+                        <Text style={styles.replayMetricVal}>{safeFmt(activeLatG, 2, '0.00')} G</Text>
+                    </View>
+                </View>
+
+                {/* Playback Controls */}
+                <View style={styles.replayBtnsRow}>
+                    <TouchableOpacity
+                        style={[styles.spatialBtn, { backgroundColor: isReplaying ? '#FFB80022' : activeAccent.bg, borderColor: isReplaying ? '#FFB800' : activeAccent.primary }]}
+                        onPress={() => {
+                            hapticTap();
+                            togglePlayPause();
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Text style={[styles.spatialBtnText, { color: isReplaying ? '#FFB800' : activeAccent.primary }]}>
+                            {isReplaying ? '❚❚ PAUZĂ' : '▶ REDĂ'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.spatialBtn, { backgroundColor: '#091322', borderColor: '#16283D' }]}
+                        onPress={() => {
+                            hapticTap();
+                            cycleReplaySpeed();
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Text style={[styles.spatialBtnText, { color: '#8CA0BA' }]}>{replaySpeed}x VITEZĂ</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.spatialBtn, { backgroundColor: '#091322', borderColor: '#16283D' }]}
+                        onPress={() => {
+                            hapticTap();
+                            exportTripPdf(selectedTripId || 'trip_108');
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Text style={[styles.spatialBtnText, { color: '#8CA0BA' }]}>📄 PDF CURSĂ</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.spatialBtn, { backgroundColor: '#091322', borderColor: '#16283D' }]}
+                        onPress={() => {
+                            hapticTap();
+                            exportItpDossier();
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Text style={[styles.spatialBtnText, { color: '#8CA0BA' }]}>📋 DOSAR ITP</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            {/* Previous Trips List */}
+            <Text style={[styles.categoryTitle, { color: activeAccent.primary, marginTop: 10 }]}>
+                CURSE RECENTE ÎNREGISTRATE
+            </Text>
+            {safeArr(tripsList).map((t) => {
+                const isSelected = selectedTripId === t.id;
+                return (
+                    <TouchableOpacity
+                        key={t.id}
+                        style={[styles.tripGlassCard, isSelected && { borderColor: activeAccent.primary, backgroundColor: activeAccent.bg }]}
+                        onPress={() => {
+                            hapticTap();
+                            selectTripForReplay(t.id);
+                        }}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                        <View style={styles.tripGlassHeader}>
+                            <Text style={styles.tripGlassTitle}>{t.title}</Text>
+                            <Text style={styles.tripGlassDate}>{t.date}</Text>
+                        </View>
+                        <View style={styles.tripGlassRow}>
+                            <Text style={styles.tripGlassStat}>DIST: {t.km} km</Text>
+                            <Text style={styles.tripGlassStat}>VMAX: {t.maxSpeed} km/h</Text>
+                            <Text style={styles.tripGlassStat}>CONSUM: {t.avgConsumption} l/100km</Text>
+                            <Text style={styles.tripGlassStat}>ECO: {t.ecoScore}%</Text>
+                        </View>
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
+    );
+});
+
+const StationSpatialService = React.memo(function StationSpatialService({
+    maintenanceItems,
+    legalDocuments,
+    markServiceItemCompleted,
+    activeAccent
+}) {
+    return (
+        <View>
+            <View style={styles.sheetHeaderRow}>
+                <View>
+                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
+                        TESLA SERVICE CENTER · UZURĂ FIZICĂ & ACTE
+                    </Text>
+                    <Text style={styles.sheetSub}>MODELE ARRHENIUS / ARCHARD & TERMENE VALABILITATE</Text>
+                </View>
+            </View>
+
+            {/* CBM Wear List */}
+            <Text style={[styles.categoryTitle, { color: activeAccent.primary }]}>
+                COMPONENTE ȘI UZURĂ FIZICĂ PREDICTIVĂ (CBM)
+            </Text>
+            {safeArr(maintenanceItems).map((item) => {
+                const isWarn = item.status === 'WARN';
+                const isCrit = item.status === 'ALERT';
+                const barColor = isCrit ? '#FF2A2A' : isWarn ? '#FFB800' : '#00FF66';
+                return (
+                    <View key={item.id} style={styles.cbmWearCard}>
+                        <View style={styles.cbmHeader}>
+                            <Text style={styles.cbmTitle}>{item.title.toUpperCase()}</Text>
+                            <Text style={[styles.cbmWearText, { color: barColor }]}>{item.wearPct}% UZURĂ</Text>
+                        </View>
+                        <View style={styles.cbmBarTrack}>
+                            <View style={[styles.cbmBarFill, { width: `${item.wearPct}%`, backgroundColor: barColor }]} />
+                        </View>
+                        <View style={styles.cbmFooter}>
+                            <Text style={styles.cbmKmText}>{item.currentKm} km / max {item.maxKm} km</Text>
+                            <TouchableOpacity
+                                style={[styles.cbmResetBtn, { borderColor: activeAccent.primary }]}
+                                onPress={() => {
+                                    hapticTap();
+                                    markServiceItemCompleted(item.id);
+                                }}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Text style={[styles.cbmResetText, { color: activeAccent.primary }]}>[ ✓ RESET SERVICE ]</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                );
+            })}
+
+            {/* Legal Documents */}
+            <Text style={[styles.categoryTitle, { color: activeAccent.primary, marginTop: 12 }]}>
+                PORTOFEL DIGITAL ACTE LEGALE
+            </Text>
+            <View style={styles.sensorsGrid}>
+                {safeArr(legalDocuments).map((doc, idx) => {
+                    const isExp = doc.daysRemaining < 30;
+                    return (
+                        <View key={idx} style={[styles.docGlassCard, { borderColor: isExp ? '#FF2A2A66' : '#162B44' }]}>
+                            <View style={styles.docGlassHeader}>
+                                <Text style={[styles.docGlassType, { color: activeAccent.primary }]}>{doc.type}</Text>
+                                <View style={[styles.docGlassBadge, { backgroundColor: isExp ? '#FF2A2A22' : '#00FF6622', borderColor: isExp ? '#FF2A2A' : '#00FF66' }]}>
+                                    <Text style={[styles.docGlassBadgeText, { color: isExp ? '#FF2A2A' : '#00FF66' }]}>{doc.status}</Text>
+                                </View>
+                            </View>
+                            <Text style={styles.docGlassIssuer}>EMITENT: {doc.issuer}</Text>
+                            <Text style={styles.docGlassDays}>EXPIRĂ: <Text style={{ color: isExp ? '#FF2A2A' : '#FFFFFF', fontWeight: '900' }}>{doc.daysRemaining} ZILE</Text></Text>
+                        </View>
+                    );
+                })}
+            </View>
+        </View>
+    );
+});
+
+const StationSpatialSentry = React.memo(function StationSpatialSentry({
+    sentryArmed,
+    setSentryArmed,
+    triggerShockSimulation,
+    sentryEvents,
+    valetActive,
+    valetSpeedLimit,
+    valetRpmLimit,
+    toggleValetMode,
+    carGpsCoords,
+    openWalkingDirections,
+    parkingMinutesRemaining,
+    addParkingTime,
+    activeAccent
+}) {
+    return (
+        <View>
+            <View style={styles.sheetHeaderRow}>
+                <View>
+                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
+                        SENTRY ENERGY DOME · SECURITATE & LOCALIZARE
+                    </Text>
+                    <Text style={styles.sheetSub}>RADAR PROTECȚIE PARCARE & MONITORIZARE GPS</Text>
+                </View>
+            </View>
+
+            <View style={styles.sentryBox}>
+                <View style={styles.sentryHeaderRow}>
+                    <View>
+                        <Text style={styles.sentryTitle}>SENTRY GUARD DOME</Text>
+                        <Text style={styles.sentrySub}>STARE: {sentryArmed ? 'ARMAT (RADAR MICROUNDE ON)' : 'DEZARMAT'}</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[styles.sentryToggleBtn, { backgroundColor: sentryArmed ? '#FF2A2A22' : '#00FF6622', borderColor: sentryArmed ? '#FF2A2A' : '#00FF66' }]}
+                        onPress={() => {
+                            hapticTap();
+                            setSentryArmed(!sentryArmed);
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Text style={[styles.sentryToggleText, { color: sentryArmed ? '#FF2A2A' : '#00FF66' }]}>
+                            {sentryArmed ? 'DEZARMEAZĂ' : 'ARMEAZĂ'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Shock Simulation Button */}
+                <TouchableOpacity
+                    style={[styles.shockTestBtn, { backgroundColor: `${activeAccent.primary}18`, borderColor: `${activeAccent.primary}55` }]}
+                    onPress={() => {
+                        hapticTap();
+                        triggerShockSimulation();
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                    <Text style={[styles.shockTestText, { color: activeAccent.primary }]}>
+                        ⚡ SIMULEAZĂ ȘOC / TILT ASUPRA SENZORILOR 3D
+                    </Text>
+                </TouchableOpacity>
+
+                {/* Shock Event Log */}
+                {safeArr(sentryEvents).length > 0 && (
+                    <View style={styles.sentryAlertsList}>
+                        <Text style={styles.sentryAlertTitle}>EVENIMENTE RECENTE DETECTATE</Text>
+                        {safeArr(sentryEvents).slice(0, 2).map((ev) => (
+                            <View key={ev.id} style={styles.sentryAlertRow}>
+                                <Text style={styles.sentryAlertTime}>{ev.time}</Text>
+                                <Text style={styles.sentryAlertDesc}>{ev.desc}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {/* Valet Mode Limiter */}
+                <View style={[styles.sentryHeaderRow, { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#162B44' }]}>
+                    <View>
+                        <Text style={styles.sentryTitle}>MOD VALET (LIMITATOR VITEZĂ/RPM)</Text>
+                        <Text style={styles.sentrySub}>LIMITĂ: {valetSpeedLimit} km/h · {valetRpmLimit} RPM</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[styles.sentryToggleBtn, { backgroundColor: valetActive ? '#FFB80022' : '#091322', borderColor: valetActive ? '#FFB800' : '#16283D' }]}
+                        onPress={() => {
+                            hapticTap();
+                            toggleValetMode();
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Text style={[styles.sentryToggleText, { color: valetActive ? '#FFB800' : '#8CA0BA' }]}>
+                            {valetActive ? 'ACTIV' : 'INACTIV'}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* GPS Navigation Directions */}
+                <View style={[styles.sentryHeaderRow, { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#162B44' }]}>
+                    <View>
+                        <Text style={styles.sentryTitle}>GĂSEȘTE-MI MAȘINA (GPS)</Text>
+                        <Text style={[styles.sentrySub, { color: activeAccent.primary }]}>
+                            {safeFmt(carGpsCoords?.lat, 4, '44.4323')}°N, {safeFmt(carGpsCoords?.lng ?? carGpsCoords?.lon, 4, '26.1063')}°E
+                        </Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[styles.sentryToggleBtn, { backgroundColor: activeAccent.bg, borderColor: activeAccent.primary }]}
+                        onPress={() => {
+                            hapticTap();
+                            openWalkingDirections();
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <Text style={[styles.sentryToggleText, { color: activeAccent.primary }]}>NAVIGHEAZĂ 📍</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Parking Ticket Countdown */}
+                <View style={styles.parkingRow}>
+                    <Text style={styles.parkingLabel}>CRONOMETRU TICHET PARCARE:</Text>
+                    <Text style={[styles.parkingTimeText, { color: parkingMinutesRemaining < 15 ? '#FF2A2A' : '#00FF66' }]}>
+                        {parkingMinutesRemaining} MIN
+                    </Text>
+                    <View style={styles.parkingChipsRow}>
+                        {[15, 30, 60].map((mins) => (
+                            <TouchableOpacity
+                                key={mins}
+                                style={styles.parkingChip}
+                                onPress={() => {
+                                    hapticTap();
+                                    addParkingTime(mins);
+                                }}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                                <Text style={[styles.parkingChipText, { color: activeAccent.primary }]}>+{mins}m</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+            </View>
+        </View>
+    );
+});
+
+const StationSpatialCopilot = React.memo(function StationSpatialCopilot({
+    aiMessages,
+    isAiLoading,
+    sendAiPrompt,
+    activeAccent
+}) {
+    const [localInput, setLocalInput] = useState('');
+
+    const handleSend = useCallback(() => {
+        if (!localInput.trim()) return;
+        hapticTap();
+        sendAiPrompt(localInput);
+        setLocalInput('');
+    }, [localInput, sendAiPrompt]);
+
+    return (
+        <View>
+            <View style={styles.sheetHeaderRow}>
+                <View>
+                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
+                        NEURAL COPILOT · ASISTENT DIAGNOZĂ AI
+                    </Text>
+                    <Text style={styles.sheetSub}>ANALIZĂ PREDICTIVĂ PE BAZA FIZICII 3D & TELEMETRIEI</Text>
+                </View>
+            </View>
+
+            {/* Diagnostic Chips */}
+            <View style={styles.copilotChipsRow}>
+                {[
+                    '🔬 Analizează geometria 3D și telemetria live',
+                    '🛞 Verifică uzura frânelor Archard și riscurile termice',
+                    '🔥 Evaluează starea miezului turbină CHRA',
+                    '📄 Generează raport sintetic pentru ITP',
+                ].map((chip, idx) => (
+                    <TouchableOpacity
+                        key={idx}
+                        style={styles.copilotChip}
+                        onPress={() => {
+                            hapticTap();
+                            sendAiPrompt(chip);
+                        }}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                        <Text style={styles.copilotChipText} numberOfLines={1}>{chip}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            {/* Chat Messages */}
+            <View style={styles.copilotChatBox}>
+                {safeArr(aiMessages).slice(-3).map((m) => (
+                    <View key={m.id} style={styles.copilotMsgRow}>
+                        <Text style={[styles.copilotSender, { color: m.sender === 'user' ? activeAccent.primary : '#FFB800' }]}>
+                            {m.sender === 'user' ? '[PILOT]' : '[COPILOT AI]'}:
+                        </Text>
+                        <Text style={styles.copilotMsgText}>{m.text}</Text>
+                    </View>
+                ))}
+                {isAiLoading && (
+                    <Text style={[styles.copilotMsgText, { color: activeAccent.primary }]}>
+                        🤖 NEURAL COPILOT: Se analizează parametrii telemetriei...
+                    </Text>
+                )}
+            </View>
+
+            {/* Input Row */}
+            <View style={styles.copilotInputRow}>
+                <TextInput
+                    style={styles.copilotTextInput}
+                    placeholder="Întreabă Neural Copilot despre starea mașinii..."
+                    placeholderTextColor="#475569"
+                    value={localInput}
+                    onChangeText={setLocalInput}
+                />
+                <TouchableOpacity
+                    style={[styles.copilotSendBtn, { backgroundColor: activeAccent.primary }]}
+                    onPress={handleSend}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                    <Text style={styles.copilotSendBtnText}>TRIMITE</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+});
+
 export default function SpatialCanvasParadigm() {
     const insets = useSafeInsets();
     // Stări Standalone OS: 'XRAY' | 'REPLAY' | 'SERVICE' | 'SENTRY' | 'COPILOT'
@@ -136,7 +658,6 @@ export default function SpatialCanvasParadigm() {
     const { activeVehicle } = useVehicle();
     const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
     const [spatialAccentKey, setSpatialAccentKey] = useState('CYAN'); // 'CYAN' | 'GOLD' | 'EMERALD'
-    const [copilotInput, setCopilotInput] = useState('');
 
     // 4 Zone de Cameră: 'OVERVIEW' | 'ENGINE_BAY' | 'CHASSIS_BRAKES' | 'HIGHWAY_CHASE'
     const [cameraZone, setCameraZone] = useState('OVERVIEW');
@@ -234,26 +755,51 @@ export default function SpatialCanvasParadigm() {
         }
     }, [cameraZone]);
 
-    // PanResponder cu Inerție Fină și Spring Decay (rotație naturală 1:1)
+    // PanResponder cu Inerție Fină, rAF Throttle (max 1 update/frame) și freeze când un sheet e deschis
     const inertiaTimerRef = useRef(null);
     const lastGestureRef = useRef({ dx: 0, dy: 0 });
+    const rafHandleRef = useRef(null);
+    const pendingDeltaRef = useRef({ dx: 0, dy: 0 });
+
     const panResponder = useMemo(
         () =>
             PanResponder.create({
-                onStartShouldSetPanResponder: () => true,
-                onMoveShouldSetPanResponder: () => true,
+                onStartShouldSetPanResponder: () => isLive3DActive,
+                onMoveShouldSetPanResponder: () => isLive3DActive,
                 onPanResponderGrant: () => {
                     lastGestureRef.current = { dx: 0, dy: 0 };
+                    pendingDeltaRef.current = { dx: 0, dy: 0 };
+                    if (rafHandleRef.current) {
+                        cancelAnimationFrame(rafHandleRef.current);
+                        rafHandleRef.current = null;
+                    }
                     if (inertiaTimerRef.current) clearInterval(inertiaTimerRef.current);
                 },
                 onPanResponderMove: (_, gestureState) => {
+                    if (!isLive3DActive) return;
                     const deltaX = gestureState.dx - lastGestureRef.current.dx;
                     const deltaY = gestureState.dy - lastGestureRef.current.dy;
                     lastGestureRef.current = { dx: gestureState.dx, dy: gestureState.dy };
-                    setRotY((prev) => prev + deltaX * 0.022);
-                    setRotX((prev) => Math.max(0.08, Math.min(1.2, prev - deltaY * 0.012)));
+                    pendingDeltaRef.current.dx += deltaX;
+                    pendingDeltaRef.current.dy += deltaY;
+
+                    if (!rafHandleRef.current) {
+                        rafHandleRef.current = requestAnimationFrame(() => {
+                            const curDx = pendingDeltaRef.current.dx;
+                            const curDy = pendingDeltaRef.current.dy;
+                            pendingDeltaRef.current = { dx: 0, dy: 0 };
+                            rafHandleRef.current = null;
+                            setRotY((prev) => prev + curDx * 0.022);
+                            setRotX((prev) => Math.max(0.08, Math.min(1.2, prev - curDy * 0.012)));
+                        });
+                    }
                 },
                 onPanResponderRelease: (_, gestureState) => {
+                    if (!isLive3DActive) return;
+                    if (rafHandleRef.current) {
+                        cancelAnimationFrame(rafHandleRef.current);
+                        rafHandleRef.current = null;
+                    }
                     let vY = gestureState.vx * 0.14;
                     let vX = -gestureState.vy * 0.04;
                     inertiaTimerRef.current = setInterval(() => {
@@ -267,11 +813,16 @@ export default function SpatialCanvasParadigm() {
                     }, 16);
                 },
             }),
-        []
+        [isLive3DActive]
     );
 
     // ── GEOMETRIE 3D DIGITAL TWIN CU BACK-FACE CULLING & X-RAY VIEW ──────
+    const lastMeshRef = useRef(null);
     const carMesh3D = useMemo(() => {
+        if (!isLive3DActive && lastMeshRef.current) {
+            return lastMeshRef.current;
+        }
+
         const explode = isExplodedView ? 0.35 : 0.0;
         const p = (x, y, z) => project3D(x, y, z, rotX, rotY, suspensionRoll, suspensionPitch, 0.85, SCREEN_WIDTH / 2, 125);
         const V = BASE_CAR_VERTICES;
@@ -316,7 +867,7 @@ export default function SpatialCanvasParadigm() {
         const wheelRL = p(V.wheelRL[0], V.wheelRL[1], V.wheelRL[2]);
         const wheelRR = p(V.wheelRR[0], V.wheelRR[1], V.wheelRR[2]);
 
-        return {
+        const result = {
             noseL, noseR, hoodL, hoodR,
             bumperFrontL, bumperFrontR, bumperRearL, bumperRearR,
             roofFrontL, roofFrontR, roofRearL, roofRearR,
@@ -330,7 +881,9 @@ export default function SpatialCanvasParadigm() {
                 { pos: wheelRR, label: 'RR', isFront: false, steer: 0 },
             ],
         };
-    }, [rotX, rotY, suspensionRoll, suspensionPitch, isExplodedView, activeLatG]);
+        lastMeshRef.current = result;
+        return result;
+    }, [rotX, rotY, suspensionRoll, suspensionPitch, isExplodedView, activeLatG, isLive3DActive]);
 
     // Culoare dinamică frâne în funcție de temperatură
     const brakeColor = brakeFluidTemp > 140 ? '#FF2A2A' : brakeFluidTemp > 105 ? '#FFB800' : activeAccent.primary;
@@ -886,468 +1439,70 @@ export default function SpatialCanvasParadigm() {
             <View style={styles.sheetContainer}>
                 <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
 
-                    {/* ──── FOAIA 1: 3D X-RAY (32 VIRTUAL SENSORS MATRIX) ──── */}
                     {spatialSheet === 'XRAY' && (
-                        <View>
-                            <View style={styles.sheetHeaderRow}>
-                                <View>
-                                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
-                                        3D ANATOMIE VIRTUALĂ · 32 OBSERVATORI FIZICI
-                                    </Text>
-                                    <Text style={styles.sheetSub}>MOTOR KALMAN FILTER · DIAGNOZĂ TOLERANȚE</Text>
-                                </View>
-                                <TouchableOpacity
-                                    style={[styles.xrayToggleBtn, { borderColor: activeAccent.primary, backgroundColor: activeAccent.bg }]}
-                                    onPress={() => {
-                                        hapticTap();
-                                        setIsExplodedView(!isExplodedView);
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                >
-                                    <Text style={[styles.xrayToggleText, { color: activeAccent.primary }]}>
-                                        {isExplodedView ? 'COMPACT' : 'EXPLOZAT'}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            {Object.entries(core.virtualSensors).map(([catKey, sensors]) => {
-                                const catLabels = {
-                                    engine: '01. GRUP PROPULSOR & INJECȚIE',
-                                    turbo: '02. SUPRAALIMENTARE & ADMISIE',
-                                    thermal: '03. ECHILIBRU TERMIC & RĂCIRE',
-                                    dpf: '04. POST-TRATARE EMISII DPF/SCR',
-                                    electric: '05. REȚEA ELECTRICĂ & BATERIE',
-                                    safety: '06. DINAMICĂ ȘASIU & SIGURANȚĂ',
-                                };
-                                return (
-                                    <View key={catKey} style={styles.spatialCategoryBox}>
-                                        <Text style={[styles.categoryTitle, { color: activeAccent.primary }]}>
-                                            {catLabels[catKey] || catKey.toUpperCase()}
-                                        </Text>
-                                        <View style={styles.sensorsGrid}>
-                                            {sensors.map((s) => {
-                                                const isWarn = s.status === 'WARN';
-                                                const isAlert = s.status === 'ALERT';
-                                                const statusColor = isAlert ? '#FF2A2A' : isWarn ? '#FFB800' : '#00FF66';
-                                                return (
-                                                    <View key={s.id} style={[styles.spatialSensorCard, { borderColor: isAlert ? '#FF2A2A88' : '#162B44' }]}>
-                                                        <View style={styles.sensorCardHeader}>
-                                                            <Text style={styles.spatialSensorLabel} numberOfLines={1}>{s.label}</Text>
-                                                            <View style={[styles.spatialStatusDot, { backgroundColor: statusColor }]} />
-                                                        </View>
-                                                        <View style={styles.sensorCardFooter}>
-                                                            <Text style={[styles.spatialSensorVal, { color: statusColor }]}>{s.val}</Text>
-                                                            <Text style={styles.spatialSensorRef}>REF: {s.target}</Text>
-                                                        </View>
-                                                    </View>
-                                                );
-                                            })}
-                                        </View>
-                                    </View>
-                                );
-                            })}
-                        </View>
+                        <StationSpatialXRay
+                            virtualSensors={core.virtualSensors}
+                            isExplodedView={isExplodedView}
+                            setIsExplodedView={setIsExplodedView}
+                            activeAccent={activeAccent}
+                        />
                     )}
 
-                    {/* ──── FOAIA 2: 3D REPLAY PLAYER & EXPORT DOSAR ──── */}
                     {spatialSheet === 'REPLAY' && (
-                        <View>
-                            <View style={styles.sheetHeaderRow}>
-                                <View>
-                                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
-                                        3D TELEMETRY REPLAY · CONTROL PAS-CU-PAS
-                                    </Text>
-                                    <Text style={styles.sheetSub}>MAȘINA 3D DINAMICĂ ÎN TIMP REAL CONFORM TELEMETRIEI</Text>
-                                </View>
-                                <Text style={[styles.replaySpeedBadge, { color: activeAccent.primary }]}>{core.replaySpeed}x</Text>
-                            </View>
-
-                            <View style={styles.replayGlassCard}>
-                                <View style={styles.tripGlassHeader}>
-                                    <Text style={styles.tripGlassTitle}>
-                                        {core.selectedTripId ? core.tripsList.find(t => t.id === core.selectedTripId)?.title || 'CURSĂ SELECTATĂ' : 'NICIUN TRASEU SELECTAT'}
-                                    </Text>
-                                    <Text style={styles.tripGlassDate}>
-                                        PROBĂ: {core.replayIndex} / {core.replayTotalSamples}
-                                    </Text>
-                                </View>
-
-                                {/* Scrubber Bar */}
-                                <View style={styles.replayTrack}>
-                                    <View style={[styles.replayFill, { width: `${core.replayTotalSamples > 0 ? (core.replayIndex / core.replayTotalSamples) * 100 : 0}%`, backgroundColor: activeAccent.primary }]} />
-                                </View>
-
-                                {/* Active Replay Metrics */}
-                                <View style={styles.replayMetricsGrid}>
-                                    <View style={styles.replayMetricCol}>
-                                        <Text style={styles.replayMetricKey}>VITEZĂ</Text>
-                                        <Text style={styles.replayMetricVal}>{activeSpeed} km/h</Text>
-                                    </View>
-                                    <View style={styles.replayMetricCol}>
-                                        <Text style={styles.replayMetricKey}>TURAȚIE</Text>
-                                        <Text style={styles.replayMetricVal}>{activeRpm} RPM</Text>
-                                    </View>
-                                    <View style={styles.replayMetricCol}>
-                                        <Text style={styles.replayMetricKey}>BOOST</Text>
-                                        <Text style={styles.replayMetricVal}>{safeFmt(activeBoost, 2, '0.00')} bar</Text>
-                                    </View>
-                                    <View style={styles.replayMetricCol}>
-                                        <Text style={styles.replayMetricKey}>G-LAT</Text>
-                                        <Text style={styles.replayMetricVal}>{safeFmt(activeLatG, 2, '0.00')} G</Text>
-                                    </View>
-                                </View>
-
-                                {/* Playback Controls */}
-                                <View style={styles.replayBtnsRow}>
-                                    <TouchableOpacity
-                                        style={[styles.spatialBtn, { backgroundColor: core.isReplaying ? '#FFB80022' : activeAccent.bg, borderColor: core.isReplaying ? '#FFB800' : activeAccent.primary }]}
-                                        onPress={() => {
-                                            hapticTap();
-                                            core.togglePlayPause();
-                                        }}
-                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    >
-                                        <Text style={[styles.spatialBtnText, { color: core.isReplaying ? '#FFB800' : activeAccent.primary }]}>
-                                            {core.isReplaying ? '❚❚ PAUZĂ' : '▶ REDĂ'}
-                                        </Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={[styles.spatialBtn, { backgroundColor: '#091322', borderColor: '#16283D' }]}
-                                        onPress={() => {
-                                            hapticTap();
-                                            core.cycleReplaySpeed();
-                                        }}
-                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    >
-                                        <Text style={[styles.spatialBtnText, { color: '#8CA0BA' }]}>{core.replaySpeed}x VITEZĂ</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={[styles.spatialBtn, { backgroundColor: '#091322', borderColor: '#16283D' }]}
-                                        onPress={() => {
-                                            hapticTap();
-                                            core.exportTripPdf(core.selectedTripId || 'trip_108');
-                                        }}
-                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    >
-                                        <Text style={[styles.spatialBtnText, { color: '#8CA0BA' }]}>📄 PDF CURSĂ</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={[styles.spatialBtn, { backgroundColor: '#091322', borderColor: '#16283D' }]}
-                                        onPress={() => {
-                                            hapticTap();
-                                            core.exportItpDossier();
-                                        }}
-                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    >
-                                        <Text style={[styles.spatialBtnText, { color: '#8CA0BA' }]}>📋 DOSAR ITP</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-
-                            {/* Previous Trips List */}
-                            <Text style={[styles.categoryTitle, { color: activeAccent.primary, marginTop: 10 }]}>
-                                CURSE RECENTE ÎNREGISTRATE
-                            </Text>
-                            {safeArr(core.tripsList).map((t) => {
-                                const isSelected = core.selectedTripId === t.id;
-                                return (
-                                    <TouchableOpacity
-                                        key={t.id}
-                                        style={[styles.tripGlassCard, isSelected && { borderColor: activeAccent.primary, backgroundColor: activeAccent.bg }]}
-                                        onPress={() => {
-                                            hapticTap();
-                                            core.selectTripForReplay(t.id);
-                                        }}
-                                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                    >
-                                        <View style={styles.tripGlassHeader}>
-                                            <Text style={styles.tripGlassTitle}>{t.title}</Text>
-                                            <Text style={styles.tripGlassDate}>{t.date}</Text>
-                                        </View>
-                                        <View style={styles.tripGlassRow}>
-                                            <Text style={styles.tripGlassStat}>DIST: {t.km} km</Text>
-                                            <Text style={styles.tripGlassStat}>VMAX: {t.maxSpeed} km/h</Text>
-                                            <Text style={styles.tripGlassStat}>CONSUM: {t.avgConsumption} l/100km</Text>
-                                            <Text style={styles.tripGlassStat}>ECO: {t.ecoScore}%</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
+                        <StationSpatialReplay
+                            selectedTripId={core.selectedTripId}
+                            tripsList={core.tripsList}
+                            replaySpeed={core.replaySpeed}
+                            replayTotalSamples={core.replayTotalSamples}
+                            replayIndex={core.replayIndex}
+                            isReplaying={core.isReplaying}
+                            activeSpeed={activeSpeed}
+                            activeRpm={activeRpm}
+                            activeBoost={activeBoost}
+                            activeLatG={activeLatG}
+                            togglePlayPause={core.togglePlayPause}
+                            cycleReplaySpeed={core.cycleReplaySpeed}
+                            exportTripPdf={core.exportTripPdf}
+                            exportItpDossier={core.exportItpDossier}
+                            selectTripForReplay={core.selectTripForReplay}
+                            activeAccent={activeAccent}
+                        />
                     )}
 
-                    {/* ──── FOAIA 3: TESLA SERVICE CENTER & PORTOFEL ACTE ──── */}
                     {spatialSheet === 'SERVICE' && (
-                        <View>
-                            <View style={styles.sheetHeaderRow}>
-                                <View>
-                                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
-                                        TESLA SERVICE CENTER · UZURĂ FIZICĂ & ACTE
-                                    </Text>
-                                    <Text style={styles.sheetSub}>MODELE ARRHENIUS / ARCHARD & TERMENE VALABILITATE</Text>
-                                </View>
-                            </View>
-
-                            {/* CBM Wear List */}
-                            <Text style={[styles.categoryTitle, { color: activeAccent.primary }]}>
-                                COMPONENTE ȘI UZURĂ FIZICĂ PREDICTIVĂ (CBM)
-                            </Text>
-                            {safeArr(core.maintenanceItems).map((item) => {
-                                const isWarn = item.status === 'WARN';
-                                const isCrit = item.status === 'ALERT';
-                                const barColor = isCrit ? '#FF2A2A' : isWarn ? '#FFB800' : '#00FF66';
-                                return (
-                                    <View key={item.id} style={styles.cbmWearCard}>
-                                        <View style={styles.cbmHeader}>
-                                            <Text style={styles.cbmTitle}>{item.title.toUpperCase()}</Text>
-                                            <Text style={[styles.cbmWearText, { color: barColor }]}>{item.wearPct}% UZURĂ</Text>
-                                        </View>
-                                        <View style={styles.cbmBarTrack}>
-                                            <View style={[styles.cbmBarFill, { width: `${item.wearPct}%`, backgroundColor: barColor }]} />
-                                        </View>
-                                        <View style={styles.cbmFooter}>
-                                            <Text style={styles.cbmKmText}>{item.currentKm} km / max {item.maxKm} km</Text>
-                                            <TouchableOpacity
-                                                style={[styles.cbmResetBtn, { borderColor: activeAccent.primary }]}
-                                                onPress={() => {
-                                                    hapticTap();
-                                                    core.markServiceItemCompleted(item.id);
-                                                }}
-                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                            >
-                                                <Text style={[styles.cbmResetText, { color: activeAccent.primary }]}>[ ✓ RESET SERVICE ]</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                );
-                            })}
-
-                            {/* Legal Documents */}
-                            <Text style={[styles.categoryTitle, { color: activeAccent.primary, marginTop: 12 }]}>
-                                PORTOFEL DIGITAL ACTE LEGALE
-                            </Text>
-                            <View style={styles.sensorsGrid}>
-                                {safeArr(core.legalDocuments).map((doc, idx) => {
-                                    const isExp = doc.daysRemaining < 30;
-                                    return (
-                                        <View key={idx} style={[styles.docGlassCard, { borderColor: isExp ? '#FF2A2A66' : '#162B44' }]}>
-                                            <View style={styles.docGlassHeader}>
-                                                <Text style={[styles.docGlassType, { color: activeAccent.primary }]}>{doc.type}</Text>
-                                                <View style={[styles.docGlassBadge, { backgroundColor: isExp ? '#FF2A2A22' : '#00FF6622', borderColor: isExp ? '#FF2A2A' : '#00FF66' }]}>
-                                                    <Text style={[styles.docGlassBadgeText, { color: isExp ? '#FF2A2A' : '#00FF66' }]}>{doc.status}</Text>
-                                                </View>
-                                            </View>
-                                            <Text style={styles.docGlassIssuer}>EMITENT: {doc.issuer}</Text>
-                                            <Text style={styles.docGlassDays}>EXPIRĂ: <Text style={{ color: isExp ? '#FF2A2A' : '#FFFFFF', fontWeight: '900' }}>{doc.daysRemaining} ZILE</Text></Text>
-                                        </View>
-                                    );
-                                })}
-                            </View>
-                        </View>
+                        <StationSpatialService
+                            maintenanceItems={core.maintenanceItems}
+                            legalDocuments={core.legalDocuments}
+                            markServiceItemCompleted={core.markServiceItemCompleted}
+                            activeAccent={activeAccent}
+                        />
                     )}
 
-                    {/* ──── FOAIA 4: SENTRY GUARD DOME & MOBILITATE SMART ──── */}
                     {spatialSheet === 'SENTRY' && (
-                        <View>
-                            <View style={styles.sheetHeaderRow}>
-                                <View>
-                                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
-                                        SENTRY ENERGY DOME · SECURITATE & LOCALIZARE
-                                    </Text>
-                                    <Text style={styles.sheetSub}>RADAR PROTECȚIE PARCARE & MONITORIZARE GPS</Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.sentryBox}>
-                                <View style={styles.sentryHeaderRow}>
-                                    <View>
-                                        <Text style={styles.sentryTitle}>SENTRY GUARD DOME</Text>
-                                        <Text style={styles.sentrySub}>STARE: {core.sentryArmed ? 'ARMAT (RADAR MICROUNDE ON)' : 'DEZARMAT'}</Text>
-                                    </View>
-                                    <TouchableOpacity
-                                        style={[styles.sentryToggleBtn, { backgroundColor: core.sentryArmed ? '#FF2A2A22' : '#00FF6622', borderColor: core.sentryArmed ? '#FF2A2A' : '#00FF66' }]}
-                                        onPress={() => {
-                                            hapticTap();
-                                            core.setSentryArmed(!core.sentryArmed);
-                                        }}
-                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    >
-                                        <Text style={[styles.sentryToggleText, { color: core.sentryArmed ? '#FF2A2A' : '#00FF66' }]}>
-                                            {core.sentryArmed ? 'DEZARMEAZĂ' : 'ARMEAZĂ'}
-                                        </Text>
-                                    </TouchableOpacity>
-                                </View>
-
-                                {/* Shock Simulation Button */}
-                                <TouchableOpacity
-                                    style={[styles.shockTestBtn, { backgroundColor: `${activeAccent.primary}18`, borderColor: `${activeAccent.primary}55` }]}
-                                    onPress={() => {
-                                        hapticTap();
-                                        core.triggerShockSimulation();
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                >
-                                    <Text style={[styles.shockTestText, { color: activeAccent.primary }]}>
-                                        ⚡ SIMULEAZĂ ȘOC / TILT ASUPRA SENZORILOR 3D
-                                    </Text>
-                                </TouchableOpacity>
-
-                                {/* Shock Event Log */}
-                                {core.sentryEvents?.length > 0 && (
-                                    <View style={styles.sentryAlertsList}>
-                                        <Text style={styles.sentryAlertTitle}>EVENIMENTE RECENTE DETECTATE</Text>
-                                        {core.sentryEvents.slice(0, 2).map((ev) => (
-                                            <View key={ev.id} style={styles.sentryAlertRow}>
-                                                <Text style={styles.sentryAlertTime}>{ev.time}</Text>
-                                                <Text style={styles.sentryAlertDesc}>{ev.desc}</Text>
-                                            </View>
-                                        ))}
-                                    </View>
-                                )}
-
-                                {/* Valet Mode Limiter */}
-                                <View style={[styles.sentryHeaderRow, { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#162B44' }]}>
-                                    <View>
-                                        <Text style={styles.sentryTitle}>MOD VALET (LIMITATOR VITEZĂ/RPM)</Text>
-                                        <Text style={styles.sentrySub}>LIMITĂ: {core.valetSpeedLimit} km/h · {core.valetRpmLimit} RPM</Text>
-                                    </View>
-                                    <TouchableOpacity
-                                        style={[styles.sentryToggleBtn, { backgroundColor: core.valetActive ? '#FFB80022' : '#091322', borderColor: core.valetActive ? '#FFB800' : '#16283D' }]}
-                                        onPress={() => {
-                                            hapticTap();
-                                            core.toggleValetMode();
-                                        }}
-                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    >
-                                        <Text style={[styles.sentryToggleText, { color: core.valetActive ? '#FFB800' : '#8CA0BA' }]}>
-                                            {core.valetActive ? 'ACTIV' : 'INACTIV'}
-                                        </Text>
-                                    </TouchableOpacity>
-                                </View>
-
-                                {/* GPS Navigation Directions */}
-                                <View style={[styles.sentryHeaderRow, { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#162B44' }]}>
-                                    <View>
-                                        <Text style={styles.sentryTitle}>GĂSEȘTE-MI MAȘINA (GPS)</Text>
-                                        <Text style={[styles.sentrySub, { color: activeAccent.primary }]}>
-                                            {safeFmt(core.carGpsCoords?.lat, 4, '44.4323')}°N, {safeFmt(core.carGpsCoords?.lng ?? core.carGpsCoords?.lon, 4, '26.1063')}°E
-                                        </Text>
-                                    </View>
-                                    <TouchableOpacity
-                                        style={[styles.sentryToggleBtn, { backgroundColor: activeAccent.bg, borderColor: activeAccent.primary }]}
-                                        onPress={() => {
-                                            hapticTap();
-                                            core.openWalkingDirections();
-                                        }}
-                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                    >
-                                        <Text style={[styles.sentryToggleText, { color: activeAccent.primary }]}>NAVIGHEAZĂ 📍</Text>
-                                    </TouchableOpacity>
-                                </View>
-
-                                {/* Parking Ticket Countdown */}
-                                <View style={styles.parkingRow}>
-                                    <Text style={styles.parkingLabel}>CRONOMETRU TICHET PARCARE:</Text>
-                                    <Text style={[styles.parkingTimeText, { color: core.parkingMinutesRemaining < 15 ? '#FF2A2A' : '#00FF66' }]}>
-                                        {core.parkingMinutesRemaining} MIN
-                                    </Text>
-                                    <View style={styles.parkingChipsRow}>
-                                        {[15, 30, 60].map((mins) => (
-                                            <TouchableOpacity
-                                                key={mins}
-                                                style={styles.parkingChip}
-                                                onPress={() => {
-                                                    hapticTap();
-                                                    core.addParkingTime(mins);
-                                                }}
-                                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                            >
-                                                <Text style={[styles.parkingChipText, { color: activeAccent.primary }]}>+{mins}m</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
-                                </View>
-                            </View>
-                        </View>
+                        <StationSpatialSentry
+                            sentryArmed={core.sentryArmed}
+                            setSentryArmed={core.setSentryArmed}
+                            triggerShockSimulation={core.triggerShockSimulation}
+                            sentryEvents={core.sentryEvents}
+                            valetActive={core.valetActive}
+                            valetSpeedLimit={core.valetSpeedLimit}
+                            valetRpmLimit={core.valetRpmLimit}
+                            toggleValetMode={core.toggleValetMode}
+                            carGpsCoords={core.carGpsCoords}
+                            openWalkingDirections={core.openWalkingDirections}
+                            parkingMinutesRemaining={core.parkingMinutesRemaining}
+                            addParkingTime={core.addParkingTime}
+                            activeAccent={activeAccent}
+                        />
                     )}
 
-                    {/* ──── FOAIA 5: NEURAL COPILOT AI INGINER ──── */}
                     {spatialSheet === 'COPILOT' && (
-                        <View>
-                            <View style={styles.sheetHeaderRow}>
-                                <View>
-                                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
-                                        NEURAL COPILOT · ASISTENT DIAGNOZĂ AI
-                                    </Text>
-                                    <Text style={styles.sheetSub}>ANALIZĂ PREDICTIVĂ PE BAZA FIZICII 3D & TELEMETRIEI</Text>
-                                </View>
-                            </View>
-
-                            {/* Diagnostic Chips */}
-                            <View style={styles.copilotChipsRow}>
-                                {[
-                                    '🔬 Analizează geometria 3D și telemetria live',
-                                    '🛞 Verifică uzura frânelor Archard și riscurile termice',
-                                    '🔥 Evaluează starea miezului turbină CHRA',
-                                    '📄 Generează raport sintetic pentru ITP',
-                                ].map((chip, idx) => (
-                                    <TouchableOpacity
-                                        key={idx}
-                                        style={styles.copilotChip}
-                                        onPress={() => {
-                                            hapticTap();
-                                            core.sendAiPrompt(chip);
-                                        }}
-                                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                    >
-                                        <Text style={styles.copilotChipText} numberOfLines={1}>{chip}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-
-                            {/* Chat Messages */}
-                            <View style={styles.copilotChatBox}>
-                                {core.aiMessages.slice(-3).map((m) => (
-                                    <View key={m.id} style={styles.copilotMsgRow}>
-                                        <Text style={[styles.copilotSender, { color: m.sender === 'user' ? activeAccent.primary : '#FFB800' }]}>
-                                            {m.sender === 'user' ? '[PILOT]' : '[COPILOT AI]'}:
-                                        </Text>
-                                        <Text style={styles.copilotMsgText}>{m.text}</Text>
-                                    </View>
-                                ))}
-                                {core.isAiLoading && (
-                                    <Text style={[styles.copilotMsgText, { color: activeAccent.primary }]}>
-                                        🤖 NEURAL COPILOT: Se analizează parametrii telemetriei...
-                                    </Text>
-                                )}
-                            </View>
-
-                            {/* Input Row */}
-                            <View style={styles.copilotInputRow}>
-                                <TextInput
-                                    style={styles.copilotTextInput}
-                                    placeholder="Întreabă Neural Copilot despre starea mașinii..."
-                                    placeholderTextColor="#475569"
-                                    value={copilotInput}
-                                    onChangeText={setCopilotInput}
-                                />
-                                <TouchableOpacity
-                                    style={[styles.copilotSendBtn, { backgroundColor: activeAccent.primary }]}
-                                    onPress={() => {
-                                        if (!copilotInput.trim()) return;
-                                        hapticTap();
-                                        core.sendAiPrompt(copilotInput);
-                                        setCopilotInput('');
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                >
-                                    <Text style={styles.copilotSendBtnText}>TRIMITE</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
+                        <StationSpatialCopilot
+                            aiMessages={core.aiMessages}
+                            isAiLoading={core.isAiLoading}
+                            sendAiPrompt={core.sendAiPrompt}
+                            activeAccent={activeAccent}
+                        />
                     )}
 
                 </ScrollView>

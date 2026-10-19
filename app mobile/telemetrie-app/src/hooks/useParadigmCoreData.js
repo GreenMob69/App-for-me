@@ -303,24 +303,32 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         return () => clearInterval(timer);
     }, [isReplaying, replaySpeed]);
 
-    const playReplay = () => { hapticTap(); setIsReplaying(true); };
-    const pauseReplay = () => { hapticTap(); setIsReplaying(false); };
-    const togglePlayPause = () => { if (isReplaying) pauseReplay(); else playReplay(); };
-    const seekReplay = (index) => { hapticTap(); setReplayIndex(Math.max(0, Math.min(replayTotalSamples - 1, index))); };
-    const cycleReplaySpeed = () => {
+    const playReplay = useCallback(() => { hapticTap(); setIsReplaying(true); }, []);
+    const pauseReplay = useCallback(() => { hapticTap(); setIsReplaying(false); }, []);
+    const togglePlayPause = useCallback(() => {
+        setIsReplaying((prev) => {
+            hapticTap();
+            return !prev;
+        });
+    }, []);
+    const seekReplay = useCallback((index) => {
+        hapticTap();
+        setReplayIndex(Math.max(0, Math.min(replayTotalSamples - 1, index)));
+    }, []);
+    const cycleReplaySpeed = useCallback(() => {
         hapticTap();
         setReplaySpeed((prev) => (prev === 1 ? 2 : prev === 2 ? 4 : 1));
-    };
+    }, []);
 
-    const selectTripForReplay = (tripId) => {
+    const selectTripForReplay = useCallback((tripId) => {
         hapticTap();
         setSelectedTripId(tripId);
         SHARED_PARADIGM_CACHE.selectedTripId = tripId;
         setReplayIndex(0);
         setIsReplaying(false);
-    };
+    }, []);
 
-    const exportTripPdf = async (tripId) => {
+    const exportTripPdf = useCallback(async (tripId) => {
         hapticTap();
         try {
             const currentTrip = tripsList.find(t => t.id === tripId) || tripsList[0];
@@ -334,7 +342,11 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         } catch (e) {
             Alert.alert('Partajare', 'Raportul nu a putut fi partajat.');
         }
-    };
+    }, [tripsList]);
+
+    const exportItpDossier = useCallback(() => {
+        return exportWorkshopDossier(telemetry, activeVehicle);
+    }, [telemetry, activeVehicle]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // 3. MENTENANȚĂ (CBM), UZURĂ ARRHENIUS / ARCHARD & PORTOFEL ACTE
@@ -343,7 +355,7 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         return SHARED_PARADIGM_CACHE.maintenanceItems || DEFAULT_MAINTENANCE_ITEMS;
     });
 
-    const markServiceItemCompleted = async (itemId) => {
+    const markServiceItemCompleted = useCallback(async (itemId) => {
         hapticTap();
         setMaintenanceItems((prev) => {
             const updated = safeArr(prev).map((item) =>
@@ -361,7 +373,7 @@ export function useParadigmCoreData(isLiveViewActive = true) {
             return updated;
         });
         Alert.alert('Revizie Înregistrată', `Contorul CBM pentru componenta selectată a fost resetat la 0 km uzură.`);
-    };
+    }, []);
 
     // Portofel Acte Legale
     const legalDocuments = useMemo(() => [
@@ -377,12 +389,12 @@ export function useParadigmCoreData(isLiveViewActive = true) {
     const [sentryArmed, setSentryArmedState] = useState(() => SHARED_PARADIGM_CACHE.sentryArmed ?? true);
     const [sentryEvents, setSentryEvents] = useState(() => SHARED_PARADIGM_CACHE.sentryEvents || DEFAULT_SENTRY_EVENTS);
 
-    const setSentryArmed = (armed) => {
+    const setSentryArmed = useCallback((armed) => {
         setSentryArmedState(armed);
         SHARED_PARADIGM_CACHE.sentryArmed = armed;
-    };
+    }, []);
 
-    const triggerShockSimulation = () => {
+    const triggerShockSimulation = useCallback(() => {
         hapticCriticalWarning();
         audioGong.playGong('critical');
         const newEv = { id: String(Date.now()), time: 'ACUM', type: 'ȘOC SENZOR', desc: 'Impact fizic simulat (0.45G). Foto salvată.', severity: 'crit' };
@@ -392,18 +404,18 @@ export function useParadigmCoreData(isLiveViewActive = true) {
             return updated;
         });
         Alert.alert('🚨 ALARMĂ SENTINELĂ', 'Impact simulat detectat de accelerometrul vehiculului!');
-    };
+    }, []);
 
     // Parcare & Găsește-mi Mașina
-    const carGpsCoords = { lat: 44.4323, lng: 26.1063, lon: 26.1063 };
+    const carGpsCoords = useMemo(() => ({ lat: 44.4323, lng: 26.1063, lon: 26.1063 }), []);
 
     // Calculăm minutele rămase pe baza timestamp-ului absolut din Singleton
-    const computeRemainingParkingMinutes = () => {
+    const computeRemainingParkingMinutes = useCallback(() => {
         if (!SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp) {
             SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp = Date.now() + 45 * 60000;
         }
         return Math.max(0, Math.ceil((SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp - Date.now()) / 60000));
-    };
+    }, []);
 
     const [parkingMinutesRemaining, setParkingMinutesRemaining] = useState(computeRemainingParkingMinutes);
 
@@ -419,19 +431,19 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         return () => clearInterval(interval);
     }, []);
 
-    const addParkingTime = (minutes) => {
+    const addParkingTime = useCallback((minutes) => {
         hapticTap();
         const base = Math.max(Date.now(), SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp || Date.now());
         const newEnd = base + minutes * 60000;
         SHARED_PARADIGM_CACHE.parkingTicketEndTimestamp = newEnd;
         setParkingMinutesRemaining(Math.max(0, Math.ceil((newEnd - Date.now()) / 60000)));
-    };
+    }, []);
 
-    const openWalkingDirections = () => {
+    const openWalkingDirections = useCallback(() => {
         hapticTap();
         const url = `https://www.google.com/maps/dir/?api=1&destination=${carGpsCoords.lat},${carGpsCoords.lng}&travelmode=walking`;
         Linking.openURL(url).catch(() => Alert.alert('Eroare Hărți', 'Nu s-a putut deschide Google Maps.'));
-    };
+    }, [carGpsCoords]);
 
     // Mod Valet
     const [valetActive, setValetActiveState] = useState(() => SHARED_PARADIGM_CACHE.valetActive ?? false);
@@ -439,22 +451,24 @@ export function useParadigmCoreData(isLiveViewActive = true) {
     const valetRpmLimit = 3000;
     const valetViolationsCount = 0;
 
-    const toggleValetMode = () => {
+    const toggleValetMode = useCallback(() => {
         hapticTap();
-        const next = !valetActive;
-        setValetActiveState(next);
-        SHARED_PARADIGM_CACHE.valetActive = next;
-    };
+        setValetActiveState(prev => {
+            const next = !prev;
+            SHARED_PARADIGM_CACHE.valetActive = next;
+            return next;
+        });
+    }, []);
 
     // eCall SOS Test
-    const triggerEcallTest = () => {
+    const triggerEcallTest = useCallback(() => {
         hapticCriticalWarning();
         audioGong.playGong('critical');
         Alert.alert(
             '📡 TEST SIMULARE eCALL SOS',
             `Pachet SOS transmis:\nVIN: ${currentVin}\nLocație: 44.4323 N, 26.1063 E\nStare pasageri: Test manual declanșat cu succes.`
         );
-    };
+    }, [currentVin]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // 5. INGINERUL MECANIC AI CONTEXTUAL (CHAT & DIAGNOSTIC RAPID)
@@ -464,23 +478,26 @@ export function useParadigmCoreData(isLiveViewActive = true) {
     });
     const [isAiLoading, setIsAiLoading] = useState(false);
 
-    const setAiMessages = (msgs) => {
+    const setAiMessages = useCallback((msgs) => {
         setAiMessagesState(msgs);
         SHARED_PARADIGM_CACHE.aiMessages = msgs;
-    };
+    }, []);
 
-    const sendAiPrompt = async (promptText) => {
+    const sendAiPrompt = useCallback(async (promptText) => {
         if (!promptText || !promptText.trim()) return;
         hapticTap();
         const userMsg = { id: String(Date.now()), sender: 'user', text: promptText.trim() };
-        const updatedWithUser = [...aiMessages, userMsg];
-        setAiMessages(updatedWithUser);
+        setAiMessagesState(prev => {
+            const updatedWithUser = [...prev, userMsg];
+            SHARED_PARADIGM_CACHE.aiMessages = updatedWithUser;
+            return updatedWithUser;
+        });
         setIsAiLoading(true);
 
         try {
             const res = await api.post('/ai/chat', { prompt: promptText, vin: currentVin, context: telemetry });
             if (res.data && res.data.reply) {
-                const finalMsgs = [...updatedWithUser, { id: String(Date.now() + 1), sender: 'ai', text: res.data.reply }];
+                const finalMsgs = [...SHARED_PARADIGM_CACHE.aiMessages, { id: String(Date.now() + 1), sender: 'ai', text: res.data.reply }];
                 setAiMessages(finalMsgs);
             } else {
                 throw new Error('Fallback AI');
@@ -497,14 +514,15 @@ export function useParadigmCoreData(isLiveViewActive = true) {
             } else {
                 smartReply += `Toți observatorii fizici funcționează în parametri OEM. Nu există coduri DTC sau deviații raportate de filtrele Kalman.`;
             }
-            const finalMsgs = [...updatedWithUser, { id: String(Date.now() + 1), sender: 'ai', text: smartReply }];
+            const currentCached = SHARED_PARADIGM_CACHE.aiMessages || [];
+            const finalMsgs = [...currentCached, { id: String(Date.now() + 1), sender: 'ai', text: smartReply }];
             setAiMessages(finalMsgs);
         } finally {
             setIsAiLoading(false);
         }
-    };
+    }, [currentVin, telemetry, setAiMessages]);
 
-    return {
+    return useMemo(() => ({
         // Telemetrie & Fizică
         telemetry,
         virtualSensors,
@@ -530,7 +548,7 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         seekReplay,
         cycleReplaySpeed,
         exportTripPdf,
-        exportItpDossier: () => exportWorkshopDossier(telemetry, activeVehicle),
+        exportItpDossier,
 
         // Mentenanță & Acte
         maintenanceItems,
@@ -557,7 +575,47 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         aiMessages,
         isAiLoading,
         sendAiPrompt,
-    };
+    }), [
+        telemetry,
+        virtualSensors,
+        activeVehicle,
+        vehicleLabel,
+        isConnected,
+        tripsList,
+        selectedTripId,
+        selectTripForReplay,
+        isLoadingTrips,
+        loadTrips,
+        isReplaying,
+        replaySpeed,
+        replayIndex,
+        replayTotalSamples,
+        currentReplaySample,
+        playReplay,
+        pauseReplay,
+        togglePlayPause,
+        seekReplay,
+        cycleReplaySpeed,
+        exportTripPdf,
+        exportItpDossier,
+        maintenanceItems,
+        markServiceItemCompleted,
+        legalDocuments,
+        sentryArmed,
+        setSentryArmed,
+        sentryEvents,
+        triggerShockSimulation,
+        carGpsCoords,
+        parkingMinutesRemaining,
+        addParkingTime,
+        openWalkingDirections,
+        valetActive,
+        toggleValetMode,
+        triggerEcallTest,
+        aiMessages,
+        isAiLoading,
+        sendAiPrompt,
+    ]);
 }
 
 export default useParadigmCoreData;

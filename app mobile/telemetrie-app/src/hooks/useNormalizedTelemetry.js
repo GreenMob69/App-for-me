@@ -53,38 +53,39 @@ export function useNormalizedTelemetry(isLiveViewActive = true) {
     const c = data.combustibil || {};
     const v = data.virtual || {};
 
+    // Cuantizare numerică cu deadband filtering pentru eliminarea re-randărilor parazite
     const speed = Math.max(0, Math.round(d.viteza || 0));
-    const rpm = Math.max(0, Math.round(d.turatie || 0));
+    const rpm = Math.max(0, Math.round((d.turatie || 0) / 5) * 5); // Cuantizat la multiplu de 5 RPM
     const throttle = Math.min(100, Math.max(0, Math.round(d.acceleratie || 0)));
     const gear = d.treapta_viteza ? String(d.treapta_viteza) : (speed === 0 && rpm < 500 ? 'P' : rpm < 1000 && speed === 0 ? 'N' : 'D');
 
-    // Temperaturi (°C)
-    const coolantTemp = Math.round(t.coolant || t.antigel || 90);
-    const oilTemp = Math.round(t.ulei || 92);
-    const exhaustTemp = Math.round(t.evacuare || t.egt || 420);
-    const intakeTemp = Math.round(t.admisie || 24);
-    const chraTemp = Math.round(v.chraCoreTempC || (exhaustTemp * 0.72));
+    // Temperaturi rotunjite la 0.1°C
+    const coolantTemp = Math.round((t.coolant || t.antigel || 90) * 10) / 10;
+    const oilTemp = Math.round((t.ulei || 92) * 10) / 10;
+    const exhaustTemp = Math.round((t.evacuare || t.egt || 420) * 10) / 10;
+    const intakeTemp = Math.round((t.admisie || 24) * 10) / 10;
+    const chraTemp = Math.round((v.chraCoreTempC || (exhaustTemp * 0.72)) * 10) / 10;
 
-    // Presiuni (bar)
+    // Presiuni (bar) rotunjite la 0.01 bar / 5 bar rail
     const boostRaw = p.turbo_boost ?? p.boost ?? 0.85;
-    const boost = safeNum(parseFloat(safeFmt(boostRaw, 2, '0.85')), 0.85);
-    const railPressure = Math.round(safeNum(p.rail_bar ?? p.rampa, 780));
-    const oilPressure = safeNum(parseFloat(safeFmt(p.ulei_bar, 1, '3.4')), 3.4);
+    const boost = Math.round(safeNum(boostRaw, 0.85) * 100) / 100;
+    const railPressure = Math.round(safeNum(p.rail_bar ?? p.rampa, 780) / 5) * 5;
+    const oilPressure = Math.round(safeNum(p.ulei_bar, 3.4) * 10) / 10;
 
-    // Electricitate
-    const batteryVoltage = safeNum(parseFloat(safeFmt(e.tensiune, 1, '14.1')), 14.1);
+    // Electricitate rotunjită la 0.01V
+    const batteryVoltage = Math.round(safeNum(e.tensiune, 14.1) * 100) / 100;
     const batterySoH = Math.round(safeNum(v.batterySoH, 92));
 
     // Combustibil & Consum
     const fuelLevel = Math.round(c.nivel_litri ? (safeNum(c.nivel_litri) / 70) * 100 : safeNum(c.procent, 68));
-    const fuelRate = safeNum(parseFloat(safeFmt(c.consum_instant ?? (speed > 10 ? 5.8 : 0.8), 1, '5.8')), 5.8);
-    const fuelBurnedLiters = safeNum(parseFloat(safeFmt(v.fuelBurnedLiters || c.litri_consumati, 2, '1.45')), 1.45);
+    const fuelRate = Math.round(safeNum(c.consum_instant ?? (speed > 10 ? 5.8 : 0.8), 5.8) * 10) / 10;
+    const fuelBurnedLiters = Math.round(safeNum(v.fuelBurnedLiters || c.litri_consumati, 1.45) * 100) / 100;
 
     // Frâne & Dinamică
-    const brakeFluidTemp = Math.round(safeNum(v.brakeFluidTempC, 85));
+    const brakeFluidTemp = Math.round(safeNum(v.brakeFluidTempC, 85) * 10) / 10;
     const brakeEnergyTrip = Math.round(safeNum(v.brakeEnergyJoulesTrip, 0) / 1000); // kJ
-    const gForceLat = safeNum(parseFloat(safeFmt(v.gForceLateral, 2, '0.00')), 0.0);
-    const gForceLong = safeNum(parseFloat(safeFmt(v.gForceLongitudinal, 2, '0.00')), 0.0);
+    const gForceLat = Math.round(safeNum(v.gForceLateral, 0.0) * 50) / 50; // Pas de 0.02G
+    const gForceLong = Math.round(safeNum(v.gForceLongitudinal, 0.0) * 50) / 50; // Pas de 0.02G
 
     // RUL & Fiabilitate Weibull
     const weibullRul = v.weibullRulMatrix || {
@@ -138,6 +139,37 @@ export function useNormalizedTelemetry(isLiveViewActive = true) {
         desc: `Lichid răcire la ${coolantTemp}°C!`,
         severity: 'HIGH',
       });
+    }
+
+    // ── DEADBAND CHECK: Dacă valorile cuantizate sunt identice cu frame-ul anterior,
+    // returnăm exact aceeași referință de obiect (0 re-randări în arborele React).
+    if (lastTelemetryRef.current) {
+      const prev = lastTelemetryRef.current;
+      const isDeadbandEqual =
+        prev.speed === speed &&
+        prev.rpm === rpm &&
+        prev.gear === gear &&
+        prev.throttle === throttle &&
+        prev.coolantTemp === coolantTemp &&
+        prev.oilTemp === oilTemp &&
+        prev.exhaustTemp === exhaustTemp &&
+        prev.boost === boost &&
+        prev.railPressure === railPressure &&
+        prev.oilPressure === oilPressure &&
+        prev.batteryVoltage === batteryVoltage &&
+        prev.fuelLevel === fuelLevel &&
+        prev.fuelRate === fuelRate &&
+        prev.brakeFluidTemp === brakeFluidTemp &&
+        prev.gForceLat === gForceLat &&
+        prev.gForceLong === gForceLong &&
+        prev.isConnected === isConnected &&
+        prev.isReconnecting === isReconnecting &&
+        prev.uiParadigm === uiParadigm &&
+        prev.criticalAlerts.length === criticalAlerts.length;
+
+      if (isDeadbandEqual) {
+        return lastTelemetryRef.current;
+      }
     }
 
     // Cilindri 5 cilindri Audi (1-2-4-5-3)
