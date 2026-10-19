@@ -21,7 +21,10 @@ import LandscapeHudModal from '../components/cockpits/LandscapeHudModal';
 import RecommendationCard from '../components/ui/RecommendationCard';
 import { colors, typography, radii, spacing, layout, TEMPLATES } from '../theme';
 import { useSmoothedTelemetry } from '../hooks/useSmoothedTelemetry';
-import { hapticTap } from '../services/hapticFeedback';
+import { getCachedClockwiseArc } from '../utils/arcLut';
+import { exportWorkshopDossier } from '../utils/dossierExport';
+import { lttbDownsample } from '../utils/lttbDownsample';
+import { audioGong } from '../services/audioGongService';
 import Svg, {
     Path,
     Circle,
@@ -45,14 +48,7 @@ function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
 }
 
 function describeClockwiseArc(x, y, radius, startAngle, endAngle) {
-    if (endAngle <= startAngle) return '';
-    const start = polarToCartesian(x, y, radius, startAngle);
-    const end = polarToCartesian(x, y, radius, endAngle);
-    const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
-    return [
-        'M', start.x.toFixed(2), start.y.toFixed(2),
-        'A', radius, radius, 0, largeArcFlag, 1, end.x.toFixed(2), end.y.toFixed(2)
-    ].join(' ');
+    return getCachedClockwiseArc(x, y, radius, startAngle, endAngle);
 }
 
 // ─── AI assistant ─────────────────────────────────────────────────────────────
@@ -1954,6 +1950,19 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                     accessibilityLabel="Schimbă stilul de afișare"
                 >
                     <Text style={[styles.hudLaunchBtnText, { color: colors.accent.default }]}>🎨 STIL</Text>
+                </TouchableOpacity>
+
+                {/* Buton Export Dosar Tehnic ITP / Service */}
+                <TouchableOpacity
+                    style={[styles.hudLaunchBtn, { borderColor: '#00FF66', backgroundColor: '#00FF6618', marginRight: spacing[1] }]}
+                    onPress={() => {
+                        hapticTap();
+                        exportWorkshopDossier(smoothedData, activeVehicle);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Exportă Dosar Tehnic Diagnoză ITP"
+                >
+                    <Text style={[styles.hudLaunchBtnText, { color: '#00FF66' }]}>📄 DOSAR ITP</Text>
                 </TouchableOpacity>
 
                 {/* Buton HUD Orizontal Bord */}
