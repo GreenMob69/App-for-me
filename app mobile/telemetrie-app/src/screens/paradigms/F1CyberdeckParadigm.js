@@ -549,7 +549,8 @@ export default function F1CyberdeckParadigm() {
     const core = useParadigmCoreData(isLiveViewActive);
     const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
-    const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
+    const { setUiParadigm, openExperiencePicker, openSimulatorModal, appLang, toggleAppLang } = useUiParadigm();
+    const isEn = appLang === 'EN';
     const [f1AccentKey, setF1AccentKey] = useState('CYAN'); // 'CYAN' | 'RED' | 'LIME'
 
     // Stare Tap-to-Maximize: null = 6 micro-monitoare; 1..6 = monitor mărit
@@ -824,11 +825,11 @@ export default function F1CyberdeckParadigm() {
             {/* ── PITWALL PAGES SELECTOR (P1..P5) ── */}
             <View style={styles.pitwallTabBar}>
                 {[
-                    { id: 'P1', label: 'P1 RACE' },
-                    { id: 'P2', label: 'P2 X-RAY' },
-                    { id: 'P3', label: 'P3 STINT' },
-                    { id: 'P4', label: 'P4 SCRUT' },
-                    { id: 'P5', label: 'P5 AI COMMS' },
+                    { id: 'P1', label: isEn ? 'P1·RACE' : 'P1·CURSĂ' },
+                    { id: 'P2', label: isEn ? 'P2·SENSORS' : 'P2·SENZORI' },
+                    { id: 'P3', label: isEn ? 'P3·REPLAY' : 'P3·REPLAY' },
+                    { id: 'P4', label: isEn ? 'P4·SCRUT' : 'P4·VERIF' },
+                    { id: 'P5', label: isEn ? 'P5·PIT RADIO' : 'P5·RADIO PIT' },
                 ].map((tab) => {
                     const isActive = pitwallPage === tab.id;
                     return (
@@ -876,7 +877,7 @@ export default function F1CyberdeckParadigm() {
                             <View style={styles.m1Body}>
                                 <View style={styles.gearBox}>
                                     <Text style={[styles.gearNumber, { color: primaryAccent }]}>{gear}</Text>
-                                    <Text style={styles.gearLabel}>TREAPTĂ</Text>
+                                    <Text style={styles.gearLabel}>{isEn ? 'GEAR' : 'TREAPTĂ'}</Text>
                                 </View>
                                 <View style={styles.speedBox}>
                                     <Text style={styles.speedNumber}>{speed}</Text>
@@ -913,7 +914,7 @@ export default function F1CyberdeckParadigm() {
                         {/* ── M2: 3. ZERO-GC OSCILOSCOP DUAL-CHANNEL ── */}
                         <View style={[styles.monitorCell, { borderColor: borderAccent }]}>
                             <View style={styles.monHeader}>
-                                <Text style={[styles.monTitle, { color: primaryAccent }]}>M2 // OSCILLOSCOPE</Text>
+                                <Text style={[styles.monTitle, { color: primaryAccent }]}>{isEn ? 'M2 // LIVE SCOPE' : 'M2 // OSCILOSCOP LIVE'}</Text>
                                 <TouchableOpacity
                                     style={styles.expandHit}
                                     onPress={() => togglePanel(2)}
@@ -953,7 +954,7 @@ export default function F1CyberdeckParadigm() {
                         {/* ── M3: ENGINE HEALTH HEATMAP (3x3) ── */}
                         <View style={[styles.monitorCell, { borderColor: borderAccent }]}>
                             <View style={styles.monHeader}>
-                                <Text style={[styles.monTitle, { color: primaryAccent }]}>M3 // ENGINE DNA</Text>
+                                <Text style={[styles.monTitle, { color: primaryAccent }]}>{isEn ? 'M3 // SENSOR DNA' : 'M3 // MATRICE SENZORI'}</Text>
                                 <TouchableOpacity
                                     style={styles.expandHit}
                                     onPress={() => togglePanel(3)}
@@ -991,7 +992,7 @@ export default function F1CyberdeckParadigm() {
                         {/* ── M4: 5. 4-ROTOR BRAKE PYROMETER & 6. SANKEY LOSS ── */}
                         <View style={[styles.monitorCell, { borderColor: borderAccent }]}>
                             <View style={styles.monHeader}>
-                                <Text style={[styles.monTitle, { color: primaryAccent }]}>M4 // BRAKES & SANKEY</Text>
+                                <Text style={[styles.monTitle, { color: primaryAccent }]}>{isEn ? 'M4 // BRAKES & SANKEY' : 'M4 // FRÂNE & ENERGIE'}</Text>
                                 <TouchableOpacity
                                     style={styles.expandHit}
                                     onPress={() => togglePanel(4)}
@@ -1031,7 +1032,7 @@ export default function F1CyberdeckParadigm() {
                         {/* ── M5: 7. PITWALL STRATEGY & WEIBULL RUL ── */}
                         <View style={[styles.monitorCell, { borderColor: borderAccent }]}>
                             <View style={styles.monHeader}>
-                                <Text style={[styles.monTitle, { color: primaryAccent }]}>M5 // STRATEGY & RUL</Text>
+                                <Text style={[styles.monTitle, { color: primaryAccent }]}>{isEn ? 'M5 // STRATEGY & RUL' : 'M5 // STRATEGIE & UZURĂ'}</Text>
                                 <TouchableOpacity
                                     style={styles.expandHit}
                                     onPress={() => togglePanel(5)}
@@ -1044,7 +1045,7 @@ export default function F1CyberdeckParadigm() {
                                 <Text style={styles.weibullLine}>RUL MIN: <Text style={{ color: '#00FF66', fontWeight: '900' }}>{minRulKm} KM</Text></Text>
                                 <Text style={styles.weibullLine}>STRAT: <Text style={{ color: '#00F0FF' }}>2.1 L/TUR · 18 TURI</Text></Text>
                                 <Text style={styles.weibullLine}>LIFT&COAST: <Text style={{ color: '#FFB800' }}>-0.2L TARGET</Text></Text>
-                                <Text style={styles.weibullLine}>RISC PANĂ: <Text style={{ color: '#FFB800' }}>{breakdownRisk}%</Text></Text>
+                                <Text style={styles.weibullLine}>{isEn ? 'RISK' : 'RISC PANĂ'}: <Text style={{ color: '#FFB800' }}>{breakdownRisk}%</Text></Text>
                             </View>
                         </View>
 
@@ -1084,7 +1085,7 @@ export default function F1CyberdeckParadigm() {
                                 onPress={() => setExpandedPanel(null)}
                                 activeOpacity={0.8}
                             >
-                                <Text style={styles.closeExpandedText}>◀ ÎNAPOI LA TOATE CELE 6 MONITOARE</Text>
+                                <Text style={styles.closeExpandedText}>{isEn ? '◀ BACK TO ALL 6 MONITORS' : '◀ ÎNAPOI LA TOATE CELE 6 MONITOARE'}</Text>
                             </TouchableOpacity>
                         </View>
 

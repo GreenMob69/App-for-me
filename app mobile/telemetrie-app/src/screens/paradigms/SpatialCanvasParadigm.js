@@ -132,8 +132,10 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
     virtualSensors,
     isExplodedView,
     setIsExplodedView,
-    activeAccent
+    activeAccent,
+    appLang = 'RO',
 }) {
+    const isEn = appLang === 'EN';
     const catLabels = {
         engine: '01. GRUP PROPULSOR & INJECȚIE',
         turbo: '02. SUPRAALIMENTARE & ADMISIE',
@@ -197,6 +199,7 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
 });
 
 const StationSpatialReplay = React.memo(function StationSpatialReplay({
+    appLang = 'RO',
     selectedTripId,
     tripsList,
     replaySpeed,
@@ -347,6 +350,7 @@ const StationSpatialReplay = React.memo(function StationSpatialReplay({
 });
 
 const StationSpatialService = React.memo(function StationSpatialService({
+    appLang = 'RO',
     maintenanceItems,
     legalDocuments,
     markServiceItemCompleted,
@@ -423,6 +427,7 @@ const StationSpatialService = React.memo(function StationSpatialService({
 });
 
 const StationSpatialSentry = React.memo(function StationSpatialSentry({
+    appLang = 'RO',
     sentryArmed,
     setSentryArmed,
     triggerShockSimulation,
@@ -566,8 +571,10 @@ const StationSpatialCopilot = React.memo(function StationSpatialCopilot({
     aiMessages,
     isAiLoading,
     sendAiPrompt,
-    activeAccent
+    activeAccent,
+    appLang = 'RO',
 }) {
+    const isEn = appLang === 'EN';
     const [localInput, setLocalInput] = useState('');
 
     const handleSend = useCallback(() => {
@@ -641,7 +648,7 @@ const StationSpatialCopilot = React.memo(function StationSpatialCopilot({
                     onPress={handleSend}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                    <Text style={styles.copilotSendBtnText}>TRIMITE</Text>
+                    <Text style={styles.copilotSendBtnText}>{isEn ? 'SEND' : 'TRIMITE'}</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -656,7 +663,8 @@ export default function SpatialCanvasParadigm() {
     const core = useParadigmCoreData(isLiveViewActive);
     const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
-    const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
+    const { setUiParadigm, openExperiencePicker, openSimulatorModal, appLang, toggleAppLang } = useUiParadigm();
+    const isEn = appLang === 'EN';
     const [spatialAccentKey, setSpatialAccentKey] = useState('CYAN'); // 'CYAN' | 'GOLD' | 'EMERALD'
 
     // 4 Zone de Cameră: 'OVERVIEW' | 'ENGINE_BAY' | 'CHASSIS_BRAKES' | 'HIGHWAY_CHASE'
@@ -1344,12 +1352,31 @@ export default function SpatialCanvasParadigm() {
                     </TouchableOpacity>
                 </View>
 
-                {/* HUD Plutitor Viteză */}
+                {/* HUD Plutitor Tesla Model S Style */}
                 <View style={styles.floatingSpeedHud} pointerEvents="none">
+                    {/* PRND Gear Selector */}
+                    <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 2 }}>
+                        {['P', 'R', 'N', 'D'].map((g) => {
+                            const isCur = String(gear).toUpperCase() === g || (g === 'D' && typeof gear === 'number' && gear > 0);
+                            return (
+                                <Text
+                                    key={g}
+                                    style={{
+                                        fontFamily: MONO,
+                                        fontSize: 10,
+                                        fontWeight: '900',
+                                        color: isCur ? activeAccent.primary : '#334155',
+                                    }}
+                                >
+                                    {g}
+                                </Text>
+                            );
+                        })}
+                    </View>
                     <Text style={styles.floatingSpeedNumber}>{activeSpeed}</Text>
                     <View style={styles.floatingSpeedMeta}>
                         <Text style={[styles.floatingSpeedUnit, { color: activeAccent.primary }]}>KM/H</Text>
-                        <Text style={styles.floatingRpmMeta}>{activeRpm} RPM · TR. {gear}</Text>
+                        <Text style={styles.floatingRpmMeta}>{activeRpm} RPM · {activeBoost} BAR</Text>
                     </View>
                 </View>
 
@@ -1380,10 +1407,10 @@ export default function SpatialCanvasParadigm() {
             {/* ── 3. Selector Zone de Cameră Cinematică ── */}
             <View style={styles.cameraZonesBar}>
                 {[
-                    { id: 'OVERVIEW', label: '1. GENERAL' },
-                    { id: 'ENGINE_BAY', label: '2. MOTOR' },
-                    { id: 'CHASSIS_BRAKES', label: '3. FRÂNE' },
-                    { id: 'HIGHWAY_CHASE', label: '4. PILOT' },
+                    { id: 'OVERVIEW', label: isEn ? '1. OVERVIEW' : '1. GENERAL' },
+                    { id: 'ENGINE_BAY', label: isEn ? '2. ENGINE' : '2. MOTOR' },
+                    { id: 'CHASSIS_BRAKES', label: isEn ? '3. BRAKES' : '3. FRÂNE' },
+                    { id: 'HIGHWAY_CHASE', label: isEn ? '4. CHASE' : '4. PILOT' },
                 ].map((zone) => (
                     <TouchableOpacity
                         key={zone.id}
@@ -1441,6 +1468,7 @@ export default function SpatialCanvasParadigm() {
 
                     {spatialSheet === 'XRAY' && (
                         <StationSpatialXRay
+                            appLang={appLang}
                             virtualSensors={core.virtualSensors}
                             isExplodedView={isExplodedView}
                             setIsExplodedView={setIsExplodedView}
@@ -1450,6 +1478,7 @@ export default function SpatialCanvasParadigm() {
 
                     {spatialSheet === 'REPLAY' && (
                         <StationSpatialReplay
+                            appLang={appLang}
                             selectedTripId={core.selectedTripId}
                             tripsList={core.tripsList}
                             replaySpeed={core.replaySpeed}
@@ -1471,6 +1500,7 @@ export default function SpatialCanvasParadigm() {
 
                     {spatialSheet === 'SERVICE' && (
                         <StationSpatialService
+                            appLang={appLang}
                             maintenanceItems={core.maintenanceItems}
                             legalDocuments={core.legalDocuments}
                             markServiceItemCompleted={core.markServiceItemCompleted}
@@ -1480,6 +1510,7 @@ export default function SpatialCanvasParadigm() {
 
                     {spatialSheet === 'SENTRY' && (
                         <StationSpatialSentry
+                            appLang={appLang}
                             sentryArmed={core.sentryArmed}
                             setSentryArmed={core.setSentryArmed}
                             triggerShockSimulation={core.triggerShockSimulation}
@@ -1498,6 +1529,7 @@ export default function SpatialCanvasParadigm() {
 
                     {spatialSheet === 'COPILOT' && (
                         <StationSpatialCopilot
+                            appLang={appLang}
                             aiMessages={core.aiMessages}
                             isAiLoading={core.isAiLoading}
                             sendAiPrompt={core.sendAiPrompt}

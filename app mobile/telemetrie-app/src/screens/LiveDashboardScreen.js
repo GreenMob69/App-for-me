@@ -592,7 +592,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
     const { width } = useWindowDimensions();
     const { isConnected, isReconnecting, liveData, chartVersion, getChartHistory } = useContext(LiveContext);
     const { latestAlert, alertsList, unreadCount, markAlertsAsRead } = useContext(AlertContext);
-    const { selectedMetric, setSelectedMetric, activeTemplate, currentTemplate, openExperiencePicker, openSimulatorModal } = useContext(AppContext);
+    const { selectedMetric, setSelectedMetric, activeTemplate, currentTemplate, openExperiencePicker, openSimulatorModal, appLang, toggleAppLang } = useContext(AppContext);
 
     // ── 60 FPS Smoothed Telemetry (Pauză automată când ecranul e în fundal sau pe tab static) ──
     const { animated, numeric } = useSmoothedTelemetry(liveData, isSmoothingActive);
@@ -1939,6 +1939,21 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                     </TouchableOpacity>
                 )}
 
+                {/* Buton Comutare Limbă [ RO | EN ] */}
+                <TouchableOpacity
+                    style={[styles.hudLaunchBtn, { borderColor: '#00E5FF', backgroundColor: '#00E5FF18', marginRight: spacing[1], minWidth: 44 }]}
+                    onPress={() => {
+                        hapticTap();
+                        toggleAppLang();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Comută limba interfeței"
+                >
+                    <Text style={[styles.hudLaunchBtnText, { color: '#00E5FF', fontWeight: '800' }]}>
+                        {appLang === 'EN' ? '🇬🇧 EN' : '🇷🇴 RO'}
+                    </Text>
+                </TouchableOpacity>
+
                 {/* Buton Selector Stil / Paradigmă UI */}
                 <TouchableOpacity
                     style={[styles.hudLaunchBtn, { borderColor: colors.accent.default, backgroundColor: `${colors.accent.default}18`, marginRight: spacing[1] }]}
@@ -1949,7 +1964,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                     accessibilityRole="button"
                     accessibilityLabel="Schimbă stilul de afișare"
                 >
-                    <Text style={[styles.hudLaunchBtnText, { color: colors.accent.default }]}>🎨 STIL</Text>
+                    <Text style={[styles.hudLaunchBtnText, { color: colors.accent.default }]}>🎨 {appLang === 'EN' ? 'STYLE' : 'STIL'}</Text>
                 </TouchableOpacity>
 
                 {/* Buton Export Dosar Tehnic ITP / Service */}

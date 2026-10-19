@@ -11,19 +11,21 @@ export const AppProvider = ({ children }) => {
     const [oledBlackMode, setOledBlackModeState] = useState(false);
     const [tripReport, setTripReport] = useState(null);
     const [uiParadigm, setUiParadigmState] = useState('CLASSIC_V2');
+    const [appLang, setAppLangState] = useState('RO');
     const [showExperiencePicker, setShowExperiencePicker] = useState(false);
     const [skipLauncherPrompt, setSkipLauncherPromptState] = useState(false);
     const [showSimulatorModal, setShowSimulatorModal] = useState(false);
     const navigationRef = useRef(null);
 
-    // Încarcă șablonul, modul OLED și paradigma vizuală din AsyncStorage la pornire
+    // Încarcă șablonul, modul OLED, paradigma vizuală și limba din AsyncStorage la pornire
     useEffect(() => {
         Promise.all([
             AsyncStorage.getItem('@cockpit_template'),
             AsyncStorage.getItem('@oled_black_mode'),
             AsyncStorage.getItem('@ui_paradigm_mode'),
             AsyncStorage.getItem('@ui_paradigm_skip_prompt'),
-        ]).then(([savedTpl, savedOled, savedParadigm, savedSkipPrompt]) => {
+            AsyncStorage.getItem('@app_lang'),
+        ]).then(([savedTpl, savedOled, savedParadigm, savedSkipPrompt, savedLang]) => {
             if (savedTpl && TEMPLATES[savedTpl]) {
                 setActiveTemplateState(savedTpl);
             }
@@ -32,6 +34,9 @@ export const AppProvider = ({ children }) => {
             }
             if (savedParadigm) {
                 setUiParadigmState(savedParadigm);
+            }
+            if (savedLang === 'RO' || savedLang === 'EN') {
+                setAppLangState(savedLang);
             }
             const skip = savedSkipPrompt === 'true';
             setSkipLauncherPromptState(skip);
@@ -62,6 +67,22 @@ export const AppProvider = ({ children }) => {
         try {
             await AsyncStorage.setItem('@ui_paradigm_mode', paradigm);
         } catch {}
+    }, []);
+
+    const setAppLang = useCallback(async (lang) => {
+        const next = lang === 'EN' ? 'EN' : 'RO';
+        setAppLangState(next);
+        try {
+            await AsyncStorage.setItem('@app_lang', next);
+        } catch {}
+    }, []);
+
+    const toggleAppLang = useCallback(() => {
+        setAppLangState((prev) => {
+            const next = prev === 'RO' ? 'EN' : 'RO';
+            AsyncStorage.setItem('@app_lang', next).catch(() => {});
+            return next;
+        });
     }, []);
 
     const setSkipLauncherPrompt = useCallback(async (val) => {
@@ -110,6 +131,7 @@ export const AppProvider = ({ children }) => {
         activeTemplate, setActiveTemplate, currentTemplate,
         oledBlackMode, setOledBlackMode, isOledBlack: oledBlackMode,
         uiParadigm, setUiParadigm,
+        appLang, setAppLang, toggleAppLang,
         showExperiencePicker, setShowExperiencePicker,
         openExperiencePicker, closeExperiencePicker,
         skipLauncherPrompt, setSkipLauncherPrompt,
@@ -121,6 +143,7 @@ export const AppProvider = ({ children }) => {
         viewMode, selectedMetric, activeTemplate, setActiveTemplate, currentTemplate,
         oledBlackMode, setOledBlackMode,
         uiParadigm, setUiParadigm,
+        appLang, setAppLang, toggleAppLang,
         showExperiencePicker, openExperiencePicker, closeExperiencePicker,
         skipLauncherPrompt, setSkipLauncherPrompt,
         showSimulatorModal, openSimulatorModal, closeSimulatorModal,
@@ -144,6 +167,9 @@ export const useUiParadigm = () => {
     return {
         uiParadigm: context?.uiParadigm || 'CLASSIC_V2',
         setUiParadigm: context?.setUiParadigm || (() => {}),
+        appLang: context?.appLang || 'RO',
+        setAppLang: context?.setAppLang || (() => {}),
+        toggleAppLang: context?.toggleAppLang || (() => {}),
         showExperiencePicker: Boolean(context?.showExperiencePicker),
         openExperiencePicker: context?.openExperiencePicker || (() => {}),
         closeExperiencePicker: context?.closeExperiencePicker || (() => {}),
@@ -154,4 +180,14 @@ export const useUiParadigm = () => {
         closeSimulatorModal: context?.closeSimulatorModal || (() => {}),
     };
 };
+
+export const useAppLang = () => {
+    const context = React.useContext(AppContext);
+    return {
+        appLang: context?.appLang || 'RO',
+        setAppLang: context?.setAppLang || (() => {}),
+        toggleAppLang: context?.toggleAppLang || (() => {}),
+    };
+};
+
 

@@ -81,7 +81,7 @@ const AudiTachometerBargraph = React.memo(function AudiTachometerBargraph({ rpm 
     return (
         <View style={styles.tachoWrapper}>
             <View style={styles.tachoHeader}>
-                <Text style={[styles.tachoLabel, { opacity: brightness }]}>DREHZAHL // x1000 min⁻¹</Text>
+                <Text style={[styles.tachoLabel, { opacity: brightness }]}>{isEn ? 'ENGINE RPM // x1000 min⁻¹' : 'TURAȚIE // x1000 RPM'}</Text>
                 <Text style={[styles.tachoValue, { opacity: brightness }]}>
                     {safeFmt(sRpm / 1000, 1, '0.0')} <Text style={styles.tachoUnit}>RPM</Text>
                 </Text>
@@ -182,7 +182,8 @@ function VerticalLedColumn({
 
 // ─── MEMOIZED AUDI RETRO SUB-STATIONS ─────────────────────────────────────────
 
-const StationAudiVag1551 = React.memo(function StationAudiVag1551({ virtualSensors }) {
+const StationAudiVag1551 = React.memo(function StationAudiVag1551({ virtualSensors, appLang = 'RO' }) {
+    const isEn = appLang === 'EN';
     const [selectedMwbGroup, setSelectedMwbGroup] = useState('engine');
 
     return (
@@ -195,22 +196,22 @@ const StationAudiVag1551 = React.memo(function StationAudiVag1551({ virtualSenso
                         <Text style={styles.vagStationLcdBaud}>10400 BAUD · K-LINE</Text>
                     </View>
                     <Text style={styles.vagStationLcdLine1}>
-                        KANAL: {selectedMwbGroup.toUpperCase()} // MWB PRÜFUNG AKTIV
+                        {isEn ? 'CHANNEL' : 'CANAL'}: {selectedMwbGroup.toUpperCase()} // {isEn ? 'ACTIVE DIAGNOSIS' : 'DIAGNOZĂ ACTIVĂ'}
                     </Text>
                     <Text style={styles.vagStationLcdLine2}>
-                        BOSCH MOTRONIC 2.3.2 // STATUS: KOMMUNIKATION OK
+                        BOSCH MOTRONIC 2.3.2 // {isEn ? 'STATUS: COMMUNICATION OK' : 'STARE: COMUNICARE STABILĂ'}
                     </Text>
                 </View>
 
                 {/* Selector Blocuri de Măsură MWB */}
                 <View style={styles.mwbSelectorRow}>
                     {[
-                        { id: 'engine', label: '001-007 MOTOR' },
-                        { id: 'turbo', label: '008-012 TURBO' },
-                        { id: 'thermal', label: '013-017 THERMIK' },
-                        { id: 'emissions', label: '018-020 DPF' },
-                        { id: 'electrical', label: '021-024 ELEKTRIK' },
-                        { id: 'safety', label: '025-032 FAHRWERK' },
+                        { id: 'engine', label: isEn ? '001-007 ENGINE' : '001-007 MOTOR' },
+                        { id: 'turbo', label: isEn ? '008-012 TURBO' : '008-012 TURBO' },
+                        { id: 'thermal', label: isEn ? '013-017 THERMAL' : '013-017 TERMIC' },
+                        { id: 'emissions', label: isEn ? '018-020 DPF' : '018-020 DPF' },
+                        { id: 'electrical', label: isEn ? '021-024 ELECTRIC' : '021-024 ELECTRIC' },
+                        { id: 'safety', label: isEn ? '025-032 CHASSIS' : '025-032 ȘASIU' },
                     ].map((grp) => (
                         <TouchableOpacity
                             key={grp.id}
@@ -278,8 +279,10 @@ const StationAudiFahrtenbuch = React.memo(function StationAudiFahrtenbuch({
     seekReplay,
     exportTripPdf,
     exportItpDossier,
-    setSelectedTripId
+    setSelectedTripId,
+    appLang = 'RO',
 }) {
+    const isEn = appLang === 'EN';
     return (
         <View style={styles.fahrtenbuchContainer}>
             {/* Audi Gamma CC Cassette Deck */}
@@ -299,7 +302,7 @@ const StationAudiFahrtenbuch = React.memo(function StationAudiFahrtenbuch({
                         <View style={[styles.spoolTeeth, isReplaying && styles.spoolRotating]} />
                     </View>
                     <View style={styles.tapeWindow}>
-                        <Text style={styles.tapeLabel}>TAPE 1: FAHRT-REPLAY</Text>
+                        <Text style={styles.tapeLabel}>{isEn ? 'TAPE 1: TRIP REPLAY' : 'CASETA 1: REPLAY CURSĂ'}</Text>
                         <View style={styles.tapeBar}>
                             <View style={[styles.tapeFill, { width: `${currentReplaySample?.progressPct || 0}%` }]} />
                         </View>
@@ -323,7 +326,7 @@ const StationAudiFahrtenbuch = React.memo(function StationAudiFahrtenbuch({
                         onPress={() => seekReplay(0)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                        <Text style={styles.cassetteKeyText}>⏮ RÜCK</Text>
+                        <Text style={styles.cassetteKeyText}>⏮ REW</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.cassetteKey, isReplaying && styles.cassetteKeyActive]}
@@ -331,7 +334,7 @@ const StationAudiFahrtenbuch = React.memo(function StationAudiFahrtenbuch({
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                         <Text style={[styles.cassetteKeyText, isReplaying && { color: '#00FF66' }]}>
-                            {isReplaying ? '⏸ PAUSE' : '▶ WIEDERGABE'}
+                            {isReplaying ? (isEn ? '⏸ PAUSE' : '⏸ PAUZĂ') : (isEn ? '▶ PLAY' : '▶ PORNEȘTE')}
                         </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -339,7 +342,7 @@ const StationAudiFahrtenbuch = React.memo(function StationAudiFahrtenbuch({
                         onPress={cycleReplaySpeed}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                        <Text style={styles.cassetteKeyText}>{replaySpeed}X TEMPO</Text>
+                        <Text style={styles.cassetteKeyText}>{replaySpeed}X {isEn ? 'SPEED' : 'VITEZĂ'}</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -350,20 +353,20 @@ const StationAudiFahrtenbuch = React.memo(function StationAudiFahrtenbuch({
                         onPress={() => exportTripPdf(selectedTripId)}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                        <Text style={styles.cassetteKeyText}>🖨️ DRUCKEN (PDF)</Text>
+                        <Text style={styles.cassetteKeyText}>🖨️ {isEn ? 'EXPORT (PDF)' : 'RAPORT (PDF)'}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.cassetteKey, { flex: 1, borderColor: '#FFAA00' }]}
                         onPress={exportItpDossier}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                        <Text style={[styles.cassetteKeyText, { color: '#FFAA00' }]}>📑 TÜV / ITP DOSAR</Text>
+                        <Text style={[styles.cassetteKeyText, { color: '#FFAA00' }]}>📑 {isEn ? 'ITP / TÜV DOSSIER' : 'DOSAR ITP / TÜV'}</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* Fahrtenbuch Liste */}
-            <Text style={styles.vagSectionHeader}>FAHRTENBUCH // VERZEICHNIS DER FAHRTEN:</Text>
+            {/* Jurnal Curse / Trip Log */}
+            <Text style={styles.vagSectionHeader}>{isEn ? 'ONBOARD LOGBOOK // TRIP ARCHIVE:' : 'JURNAL DE BORD // ARHIVĂ CURSE:'}</Text>
             {safeArr(tripsList).map((t) => {
                 const isSelected = t.id === selectedTripId;
                 return (
@@ -385,10 +388,10 @@ const StationAudiFahrtenbuch = React.memo(function StationAudiFahrtenbuch({
                             <Text style={styles.fahrtenbuchDate}>{t.date}</Text>
                         </View>
                         <View style={styles.fahrtenbuchStats}>
-                            <Text style={styles.fahrtenStat}>DISTANZ: {t.km} km</Text>
+                            <Text style={styles.fahrtenStat}>{isEn ? 'DISTANCE' : 'DISTANȚĂ'}: {t.km} km</Text>
                             <Text style={styles.fahrtenStat}>VMAX: {t.maxSpeed} km/h</Text>
-                            <Text style={styles.fahrtenStat}>VERBRAUCH: {t.avgConsumption} L/100</Text>
-                            <Text style={[styles.fahrtenStat, { color: '#00FF66' }]}>GESUNDHEIT: {t.healthScore}%</Text>
+                            <Text style={styles.fahrtenStat}>{isEn ? 'FUEL' : 'CONSUM'}: {t.avgConsumption} L/100</Text>
+                            <Text style={[styles.fahrtenStat, { color: '#00FF66' }]}>{isEn ? 'HEALTH' : 'SĂNĂTATE'}: {t.healthScore}%</Text>
                         </View>
                     </TouchableOpacity>
                 );
@@ -400,17 +403,19 @@ const StationAudiFahrtenbuch = React.memo(function StationAudiFahrtenbuch({
 const StationAudiServiceheft = React.memo(function StationAudiServiceheft({
     maintenanceItems,
     legalDocuments,
-    markServiceItemCompleted
+    markServiceItemCompleted,
+    appLang = 'RO',
 }) {
+    const isEn = appLang === 'EN';
     return (
         <View style={styles.serviceheftContainer}>
-            <Text style={styles.vagSectionHeader}>AUDI SERVICEHEFT // ZUSTANDSBASIERTE WARTUNG (CBM):</Text>
+            <Text style={styles.vagSectionHeader}>{isEn ? 'AUDI SERVICE BOOK // CONDITION-BASED MAINTENANCE (CBM):' : 'CARNET SERVICE AUDI // MENTENANȚĂ PREDICTIVĂ (CBM):'}</Text>
             {safeArr(maintenanceItems).map((item) => (
                 <View key={item.id} style={styles.serviceheftCard}>
                     <View style={styles.serviceheftHeaderRow}>
                         <Text style={styles.serviceheftName}>{String(item.name || item.title || item.id || '').toUpperCase()}</Text>
                         <Text style={[styles.serviceheftWear, item.status === 'URGENT' && { color: '#FF3300' }]}>
-                            VERSCHLEISS: {item.wearPct}%
+                            {isEn ? 'WEAR' : 'UZURĂ'}: {item.wearPct}%
                         </Text>
                     </View>
                     <View style={styles.serviceheftBarBg}>
@@ -421,35 +426,35 @@ const StationAudiServiceheft = React.memo(function StationAudiServiceheft({
                     </View>
                     <View style={styles.serviceheftFooter}>
                         <Text style={styles.serviceheftKm}>
-                            Restlaufstrecke: {item.remainingKm ?? (item.maxKm ? Math.max(0, item.maxKm - item.currentKm) : 3400)} km / {item.totalKm ?? item.maxKm ?? 15000} km
+                            {isEn ? 'Remaining' : 'Distanță rămasă'}: {item.remainingKm ?? (item.maxKm ? Math.max(0, item.maxKm - item.currentKm) : 3400)} km / {item.totalKm ?? item.maxKm ?? 15000} km
                         </Text>
                         <TouchableOpacity
                             style={styles.werkstattResetBtn}
                             onPress={() => markServiceItemCompleted(item.id)}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
-                            <Text style={styles.werkstattResetBtnText}>[ WERKSTATT-RESET ]</Text>
+                            <Text style={styles.werkstattResetBtnText}>[ {isEn ? 'SERVICE RESET' : 'RESETARE SERVICE'} ]</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             ))}
 
-            <Text style={[styles.vagSectionHeader, { marginTop: 16 }]}>KRAFTFAHRZEUG-PAPIERE // DOKUMENTE:</Text>
+            <Text style={[styles.vagSectionHeader, { marginTop: 16 }]}>{isEn ? 'LEGAL VEHICLE DOCUMENTS // INSURANCE & INSPECTION:' : 'DOCUMENTE LEGALE VEHICUL // RCA · ITP · ROVINIETĂ:'}</Text>
             {safeArr(legalDocuments).map((doc) => (
                 <View key={doc.id} style={styles.papiereCard}>
                     <View style={styles.papiereHeader}>
                         <Text style={styles.papiereName}>{doc.name}</Text>
                         <View style={[styles.papiereBadge, { borderColor: doc.status === 'VALABIL' ? '#00FF66' : '#FF3300' }]}>
                             <Text style={[styles.papiereBadgeText, { color: doc.status === 'VALABIL' ? '#00FF66' : '#FF3300' }]}>
-                                {doc.status === 'VALABIL' ? 'GÜLTIG' : 'FÄLLIG'}
+                                {doc.status === 'VALABIL' ? (isEn ? 'VALID' : 'VALABIL') : (isEn ? 'EXPIRED' : 'EXPIRAT')}
                             </Text>
                         </View>
                     </View>
-                    <Text style={styles.papiereIssuer}>Aussteller: {doc.issuer}</Text>
+                    <Text style={styles.papiereIssuer}>{isEn ? 'Issuer' : 'Emitent'}: {doc.issuer}</Text>
                     <View style={styles.papiereFooter}>
-                        <Text style={styles.papiereDate}>Ablauf: {doc.expiryDate}</Text>
+                        <Text style={styles.papiereDate}>{isEn ? 'Expires' : 'Expiră la'}: {doc.expiryDate}</Text>
                         <Text style={[styles.papiereDays, { color: doc.daysLeft < 45 ? '#FF3300' : '#FFAA00' }]}>
-                            {doc.daysLeft} TAGE VERBLEIBEND
+                            {doc.daysLeft} {isEn ? 'DAYS REMAINING' : 'ZILE RĂMASE'}
                         </Text>
                     </View>
                 </View>
@@ -469,17 +474,19 @@ const StationAudiSafeLock = React.memo(function StationAudiSafeLock({
     addParkingTime,
     valetActive,
     toggleValetMode,
-    triggerEcallTest
+    triggerEcallTest,
+    appLang = 'RO',
 }) {
+    const isEn = appLang === 'EN';
     return (
         <View style={styles.safeLockContainer}>
             {/* Safe-Lock Modul */}
             <View style={styles.safeLockCard}>
                 <View style={styles.safeLockHeader}>
                     <View>
-                        <Text style={styles.safeLockTitle}>AUDI PROCON-TEN // DIEBSTAHLWARN</Text>
+                        <Text style={styles.safeLockTitle}>{isEn ? 'AUDI SAFELOCK // ANTI-THEFT ALARM' : 'AUDI SAFELOCK // ALARMĂ ANTIFURT'}</Text>
                         <Text style={[styles.safeLockStatus, { color: sentryArmed ? '#00FF66' : '#FF3300' }]}>
-                            {sentryArmed ? '● GESICHERT // SAFE-LOCK AKTIV' : '○ ENTSICHERT'}
+                            {sentryArmed ? (isEn ? '● ARMED // SAFELOCK ACTIVE' : '● ARMAT // SAFELOCK ACTIV') : (isEn ? '○ DISARMED' : '○ DEZARMAT')}
                         </Text>
                     </View>
                     <TouchableOpacity
@@ -491,7 +498,7 @@ const StationAudiSafeLock = React.memo(function StationAudiSafeLock({
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                         <Text style={styles.safeLockToggleText}>
-                            {sentryArmed ? 'ENTRIEGELN' : 'VERRIEGELN'}
+                            {sentryArmed ? (isEn ? 'DISARM' : 'DEZARMEAZĂ') : (isEn ? 'ARM' : 'ARMEAZĂ')}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -502,11 +509,11 @@ const StationAudiSafeLock = React.memo(function StationAudiSafeLock({
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                     <Text style={styles.erschutterungBtnText}>
-                        ⚡ ERSCHÜTTERUNGSSENSOR SIMULIEREN
+                        ⚡ {isEn ? 'SIMULATE IMPACT SENSOR' : 'SIMULEAZĂ ȘOC ASUPRA MAȘINII'}
                     </Text>
                 </TouchableOpacity>
 
-                <Text style={styles.ereignisseHeader}>EREIGNISPROTOKOLL (ALARM-LOG):</Text>
+                <Text style={styles.ereignisseHeader}>{isEn ? 'SECURITY ALARM LOG:' : 'JURNAL ALERTE ANTIFURT:'}</Text>
                 {safeArr(sentryEvents).map((ev) => (
                     <View key={ev.id} style={styles.ereignisRow}>
                         <Text style={styles.ereignisTime}>[{ev.time}]</Text>
@@ -519,9 +526,9 @@ const StationAudiSafeLock = React.memo(function StationAudiSafeLock({
 
             {/* Standheizung & Parkuhr */}
             <View style={[styles.safeLockCard, { marginTop: 12 }]}>
-                <Text style={styles.safeLockTitle}>PARKUHR & STANDORT (VDO QUARTZ)</Text>
+                <Text style={styles.safeLockTitle}>{isEn ? 'PARKING & GPS LOCATION (VDO QUARTZ)' : 'PARCARE & LOCALIZARE GPS (VDO QUARTZ)'}</Text>
                 <Text style={styles.standortText}>
-                    KOORDINATEN: {safeFmt(carGpsCoords?.lat, 4, '44.4323')}°N, {safeFmt(carGpsCoords?.lng ?? carGpsCoords?.lon, 4, '26.1063')}°E
+                    {isEn ? 'GPS COORDINATES' : 'COORDONATE GPS'}: {safeFmt(carGpsCoords?.lat, 4, '44.4323')}°N, {safeFmt(carGpsCoords?.lng ?? carGpsCoords?.lon, 4, '26.1063')}°E
                 </Text>
                 <TouchableOpacity
                     style={styles.mapsRetroBtn}
@@ -529,13 +536,13 @@ const StationAudiSafeLock = React.memo(function StationAudiSafeLock({
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                     <Text style={styles.mapsRetroBtnText}>
-                        🧭 ZU DEM FAHRZEUG (GOOGLE MAPS)
+                        🧭 {isEn ? 'DIRECTIONS TO VEHICLE (MAPS)' : 'DIRECȚII CĂTRE VEHICUL (MAPS)'}
                     </Text>
                 </TouchableOpacity>
 
                 <View style={styles.parkuhrFrame}>
-                    <Text style={styles.parkuhrLabel}>VERBLEIBENDE PARKZEIT:</Text>
-                    <Text style={styles.parkuhrTimer}>{parkingMinutesRemaining} MINUTEN</Text>
+                    <Text style={styles.parkuhrLabel}>{isEn ? 'PARKING TIME REMAINING:' : 'TIMP RĂMAS PARCARE:'}</Text>
+                    <Text style={styles.parkuhrTimer}>{parkingMinutesRemaining} {isEn ? 'MINUTES' : 'MINUTE'}</Text>
                     <View style={styles.parkuhrBtnRow}>
                         {[15, 30, 60].map((m) => (
                             <TouchableOpacity
@@ -555,9 +562,9 @@ const StationAudiSafeLock = React.memo(function StationAudiSafeLock({
             <View style={[styles.safeLockCard, { marginTop: 12 }]}>
                 <View style={styles.safeLockHeader}>
                     <View>
-                        <Text style={styles.safeLockTitle}>VALET MODUS (70 KM/H LIMIT)</Text>
+                        <Text style={styles.safeLockTitle}>{isEn ? 'VALET MODE (70 KM/H LIMIT)' : 'MOD VALET (LIMITĂ 70 KM/H)'}</Text>
                         <Text style={[styles.safeLockStatus, { color: valetActive ? '#FFAA00' : '#884422' }]}>
-                            {valetActive ? 'AKTIV // BEGRENZUNG WIRKSAM' : 'INAKTIV'}
+                            {valetActive ? (isEn ? 'ACTIVE // SPEED LIMIT ON' : 'ACTIV // LIMITARE ACTIVĂ') : (isEn ? 'INACTIVE' : 'INACTIV')}
                         </Text>
                     </View>
                     <TouchableOpacity
@@ -586,8 +593,10 @@ const StationAudiSafeLock = React.memo(function StationAudiSafeLock({
 const StationAudiMeisterAi = React.memo(function StationAudiMeisterAi({
     aiMessages,
     isAiLoading,
-    sendAiPrompt
+    sendAiPrompt,
+    appLang = 'RO',
 }) {
+    const isEn = appLang === 'EN';
     const [localInput, setLocalInput] = useState('');
 
     const handleSubmit = useCallback(() => {
@@ -600,17 +609,22 @@ const StationAudiMeisterAi = React.memo(function StationAudiMeisterAi({
     return (
         <View style={styles.meisterContainer}>
             <Text style={styles.vagSectionHeader}>
-                VAG SERVICE MEISTER // AUDI AG INGOLSTADT EXPERTE:
+                {isEn ? 'VAG SERVICE EXPERT // AUDI AI DIAGNOSTICIAN:' : 'INGINER VAG EXPERT // AUDI AI DIAGNOZĂ:'}
             </Text>
 
             {/* Quick Prompt Chips */}
             <View style={styles.meisterChipsRow}>
-                {[
-                    '? INSPEKTION TURBO',
-                    '? DIAGNOSE ÖL',
-                    '? BREMSEN STATUS',
-                    '? FEHLERCODE SCANNEN',
-                ].map((chip) => (
+                {(isEn ? [
+                    '🔍 OIL DIAGNOSIS',
+                    '⚠️ BRAKE CHECK',
+                    '⚡ BATTERY TEST',
+                    '💨 DPF REGEN',
+                ] : [
+                    '🔍 DIAGNOZĂ ULEI',
+                    '⚠️ VERIFICARE FRÂNE',
+                    '⚡ TEST BATERIE',
+                    '💨 REGENERARE DPF',
+                ]).map((chip) => (
                     <TouchableOpacity
                         key={chip}
                         style={styles.meisterChip}
@@ -627,14 +641,14 @@ const StationAudiMeisterAi = React.memo(function StationAudiMeisterAi({
                 <View style={styles.meisterTerminalHeader}>
                     <View style={[styles.meisterDot, { backgroundColor: isAiLoading ? '#FFAA00' : '#00FF66' }]} />
                     <Text style={styles.meisterTerminalTitle}>
-                        AUDI VAG SERVICE MEISTER {isAiLoading ? '· ANALYSIERT...' : '· BEREIT'}
+                        AUDI VAG SERVICE EXPERT {isAiLoading ? (isEn ? '· ANALYZING...' : '· ANALIZEAZĂ...') : (isEn ? '· READY' : '· PREGĂTIT')}
                     </Text>
                 </View>
 
                 {safeArr(aiMessages).map((m) => (
                     <View key={m.id} style={styles.meisterMsgRow}>
                         <Text style={[styles.meisterSender, { color: m.sender === 'ai' ? '#FF8800' : '#00FF66' }]}>
-                            {m.sender === 'ai' ? '▶ MEISTER INGOLSTADT:' : '▶ FAHRER:'}
+                            {m.sender === 'ai' ? (isEn ? '▶ AUDI ENGINEER:' : '▶ INGINER SERVICE:') : (isEn ? '▶ DRIVER:' : '▶ ȘOFER:')}
                         </Text>
                         <Text style={styles.meisterMsgText}>{m.text}</Text>
                     </View>
@@ -645,7 +659,7 @@ const StationAudiMeisterAi = React.memo(function StationAudiMeisterAi({
             <View style={styles.meisterInputRow}>
                 <TextInput
                     style={styles.meisterTextInput}
-                    placeholder="Fehlercode oder Frage eingeben..."
+                    placeholder={isEn ? "Ask a technical question about the vehicle..." : "Adresează o întrebare tehnică inginerului..."}
                     placeholderTextColor="#663300"
                     value={localInput}
                     onChangeText={setLocalInput}
@@ -656,7 +670,7 @@ const StationAudiMeisterAi = React.memo(function StationAudiMeisterAi({
                     onPress={handleSubmit}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                    <Text style={styles.meisterSendBtnText}>SENDEN</Text>
+                    <Text style={styles.meisterSendBtnText}>{isEn ? 'SEND' : 'TRIMITE'}</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -672,7 +686,8 @@ export default function RetroAudi96Paradigm() {
     const core = useParadigmCoreData(isLiveViewActive);
     const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
-    const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
+    const { setUiParadigm, openExperiencePicker, openSimulatorModal, appLang, toggleAppLang } = useUiParadigm();
+    const isEn = appLang === 'EN';
 
     const [retroAccentMode, setRetroAccentMode] = useState('AMBER'); // 'AMBER' | 'RED' | 'GREEN'
 
@@ -718,9 +733,9 @@ export default function RetroAudi96Paradigm() {
     // ─── 3. Authentic Audi Autocheck Self-Test Sequence with Piezo Sound ──────
     const runAutocheckCycle = () => {
         audioGong.playGong('autocheck');
-        setAutocheckState('BREMSE');
-        setTimeout(() => setAutocheckState('OELDRUCK'), 1200);
-        setTimeout(() => setAutocheckState('GENERATOR'), 2400);
+        setAutocheckState(isEn ? 'BRAKES' : 'FRÂNE');
+        setTimeout(() => setAutocheckState(isEn ? 'OIL PRESS' : 'PRESIUNE ULEI'), 1200);
+        setTimeout(() => setAutocheckState(isEn ? 'CHARGING' : 'ALTERNATOR'), 2400);
         setTimeout(() => setAutocheckState('OK'), 3600);
     };
 
@@ -809,11 +824,11 @@ export default function RetroAudi96Paradigm() {
     }, [fuelLevel, fuelRate]);
 
     const bcModes = [
-        { label: 'MOMENTANVERBRAUCH', value: `${fuelRate}`, unit: 'L/100KM' },
-        { label: 'DURCHSCHNITTSVERBR.', value: '6.4', unit: 'L/100KM' },
-        { label: 'REICHWEITE (DTE)', value: `${dteKm}`, unit: 'KM' },
-        { label: 'FAHRZEIT // REISEZEIT', value: '01:42', unit: 'H:M' },
-        { label: 'AUSSENTEMPERATUR', value: `+${ambientTemp}`, unit: '°C' },
+        { label: isEn ? 'INST. FUEL' : 'CONSUM INSTANT', value: `${fuelRate}`, unit: 'L/100KM' },
+        { label: isEn ? 'AVG. CONSUMPTION' : 'CONSUM MEDIU', value: '6.4', unit: 'L/100KM' },
+        { label: isEn ? 'RANGE (DTE)' : 'AUTONOMIE (DTE)', value: `${dteKm}`, unit: 'KM' },
+        { label: isEn ? 'TRIP TIME' : 'DURATĂ CURSĂ', value: '01:42', unit: 'H:M' },
+        { label: isEn ? 'OUTSIDE TEMP' : 'TEMP. EXTERIOARĂ', value: `+${ambientTemp}`, unit: '°C' },
     ];
     const currentBc = bcModes[bcModeIndex % bcModes.length];
 
@@ -840,12 +855,27 @@ export default function RetroAudi96Paradigm() {
                 <View style={styles.audiBadgeRow}>
                     <Text style={[styles.audiRingsText, { color: clusterAccentColor, opacity: dimmerLevel }]}>OOOO</Text>
                     <Text style={[styles.clusterTitle, { color: clusterAccentColor, opacity: dimmerLevel }]} numberOfLines={1}>
-                        DIGIFIZ
+                        DIGIFIZ VFD
                     </Text>
                 </View>
 
                 {/* Acțiuni & Rheostat */}
                 <View style={styles.headerActions}>
+                    {/* Comutator Bilingv [ RO | EN ] */}
+                    <TouchableOpacity
+                        style={[styles.v2Button, { borderColor: clusterAccentColor, backgroundColor: `${clusterAccentColor}18`, minWidth: 42 }]}
+                        onPress={() => {
+                            hapticTap();
+                            toggleAppLang();
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.v2ButtonText, { color: clusterAccentColor, fontWeight: '800' }]}>
+                            {isEn ? '🇬🇧 EN' : '🇷🇴 RO'}
+                        </Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity
                         style={[styles.stylePickerButton, { backgroundColor: clusterAccentColor }]}
                         onPress={() => {
@@ -855,23 +885,11 @@ export default function RetroAudi96Paradigm() {
                         hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Text style={styles.stylePickerText}>🎨 STIL</Text>
+                        <Text style={styles.stylePickerText}>🎨 {isEn ? 'STYLE' : 'STIL'}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={styles.v2Button}
-                        onPress={() => {
-                            hapticTap();
-                            setUiParadigm('CLASSIC_V2');
-                        }}
-                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.v2ButtonText}>⮌ V2</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.v2Button, { borderColor: clusterAccentColor, backgroundColor: '#FF880018' }]}
+                        style={[styles.v2Button, { borderColor: clusterAccentColor, backgroundColor: `${clusterAccentColor}18` }]}
                         onPress={() => {
                             hapticTap();
                             openSimulatorModal();
@@ -922,12 +940,12 @@ export default function RetroAudi96Paradigm() {
                     contentContainerStyle={styles.rockerSwitchBankContent}
                 >
                     {[
-                        { id: '1', label: '1 DIGIFIZ', sub: 'KOMBI' },
-                        { id: '2', label: '2 VAG 1551', sub: 'SCANNER' },
-                        { id: '3', label: '3 FAHRTENBUCH', sub: 'REPLAY' },
-                        { id: '4', label: '4 SERVICEHEFT', sub: 'INSPEKT' },
-                        { id: '5', label: '5 SAFE-LOCK', sub: 'PROCON' },
-                        { id: '6', label: '6 MEISTER AI', sub: 'EXPERT' },
+                        { id: '1', label: isEn ? '1·CLUSTER' : '1·BORD VFD', sub: isEn ? 'DASH' : 'BORD' },
+                        { id: '2', label: isEn ? '2·DIAG 32' : '2·TESTER 32', sub: 'DIAG' },
+                        { id: '3', label: isEn ? '3·TRIPS' : '3·CURSE', sub: 'REPLAY' },
+                        { id: '4', label: isEn ? '4·SERVICE' : '4·REVIZII', sub: isEn ? 'DOCS' : 'ACTE' },
+                        { id: '5', label: '5·SENTRY GPS', sub: isEn ? 'ALARM' : 'ALARMĂ' },
+                        { id: '6', label: isEn ? '6·AI EXPERT' : '6·EXPERT AI', sub: isEn ? 'AI ENG.' : 'AI ING.' },
                     ].map((sw) => {
                         const isActive = activeSwitch === sw.id;
                         return (
@@ -949,16 +967,23 @@ export default function RetroAudi96Paradigm() {
                                     styles.rockerIndicatorSlit,
                                     { backgroundColor: isActive ? clusterAccentColor : '#3D150A' }
                                 ]} />
-                                <Text style={[
-                                    styles.rockerSwitchText,
-                                    { color: isActive ? clusterAccentColor : '#AA5522' }
-                                ]}>
+                                <Text
+                                    style={[
+                                        styles.rockerSwitchText,
+                                        { color: isActive ? clusterAccentColor : '#AA5522' }
+                                    ]}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit
+                                >
                                     {sw.label}
                                 </Text>
-                                <Text style={[
-                                    styles.rockerSwitchSub,
-                                    { color: isActive ? '#FFAA44' : '#662208' }
-                                ]}>
+                                <Text
+                                    style={[
+                                        styles.rockerSwitchSub,
+                                        { color: isActive ? '#FFAA44' : '#662208' }
+                                    ]}
+                                    numberOfLines={1}
+                                >
                                     {sw.sub}
                                 </Text>
                             </TouchableOpacity>
@@ -1001,7 +1026,7 @@ export default function RetroAudi96Paradigm() {
 
                             {/* Vitezometru Central */}
                             <View style={styles.speedDisplayCenter}>
-                                <Text style={[styles.speedGhost, { opacity: 0.07 }]}>888</Text>
+                                <Text style={[styles.speedGhost, { opacity: 0.12 }]}>888</Text>
                                 <Text style={[styles.speedVfdText, { color: clusterAccentColor, opacity: dimmerLevel }]}>
                                     {speed}
                                 </Text>
@@ -1025,11 +1050,11 @@ export default function RetroAudi96Paradigm() {
                         {/* 2.3 4. Odometru Mecanic cu Tamburi & Ceas Quartz */}
                         <View style={styles.odometerFrame}>
                             <View style={styles.odometerRow}>
-                                <Text style={styles.odoLabel}>GESAMT-KM:</Text>
+                                <Text style={styles.odoLabel}>TOTAL KM:</Text>
                                 <View style={styles.drumRollBox}>
                                     <Text style={styles.drumRollText}>{totalKm}</Text>
                                 </View>
-                                <Text style={styles.odoLabel}>TRIP:</Text>
+                                <Text style={styles.odoLabel}>{isEn ? 'TRIP:' : 'CURSĂ:'}</Text>
                                 <View style={styles.drumRollBox}>
                                     <Text style={[styles.drumRollText, { color: '#FFAA00' }]}>{currentTripKm}</Text>
                                 </View>
@@ -1037,11 +1062,11 @@ export default function RetroAudi96Paradigm() {
 
                             {/* Ceas Quartz & 10. Frost Chime Indicator */}
                             <View style={styles.clockRow}>
-                                <Text style={styles.quartzClockText}>ZEIT: {currentTime}</Text>
+                                <Text style={styles.quartzClockText}>{isEn ? 'TIME:' : 'ORĂ:'} {currentTime}</Text>
                                 <View style={styles.tempIceRow}>
                                     {ambientTemp <= 4.0 && <Text style={styles.iceFlakeIcon}>❄️</Text>}
                                     <Text style={[styles.tempIceText, ambientTemp <= 4.0 && { color: '#00F0FF' }]}>
-                                        AUSSEN: +{ambientTemp}°C
+                                        {isEn ? 'OUTSIDE:' : 'EXTERIOR:'} +{ambientTemp}°C
                                     </Text>
                                 </View>
                             </View>
@@ -1057,7 +1082,7 @@ export default function RetroAudi96Paradigm() {
                             activeOpacity={0.8}
                         >
                             <View style={styles.autocheckHeader}>
-                                <Text style={styles.autocheckTitle}>AUTOCHECK SYSTEM // GERÄTEPRÜFUNG</Text>
+                                <Text style={styles.autocheckTitle}>{isEn ? 'AUTO-CHECK SYSTEM // SELF-TEST' : 'VERIFICARE AUTO // AUTO-CHECK'}</Text>
                                 <Text style={[
                                     styles.autocheckBadge,
                                     autocheckState === 'OK' ? { color: '#00FF66' } : { color: '#FF3300' }
@@ -1067,15 +1092,15 @@ export default function RetroAudi96Paradigm() {
                             </View>
                             <Text style={styles.autocheckSub}>
                                 {autocheckState === 'OK'
-                                    ? 'BREMSLICHT / KÜHLMITTEL / ÖLDRUCK: IN ORDNUNG'
-                                    : `SYSTEMTEST LAUFEND: ${autocheckState} WIRD GEPRÜFT... (TAP FÜR NEUSTART)`}
+                                    ? (isEn ? 'ALL MONITORED SYSTEMS: RUNNING NORMALLY' : 'SISTEME VERIFICATE: TOATE SUNT ÎN REGULĂ')
+                                    : (isEn ? `SYSTEM CHECK: ${autocheckState} (TAP TO RESTART)` : `TESTARE ÎN CURS: ${autocheckState} (APASĂ PENTRU RESTART)`)}
                             </Text>
                         </TouchableOpacity>
 
                         {/* 2.5 Coloane Verticale LED VFD (cu 6. Overboost Peak-Hold) */}
                         <View style={styles.columnsRow}>
                             <VerticalLedColumn
-                                label="KÜHLMITTEL"
+                                label={isEn ? "COOLANT" : "TEMP. APĂ"}
                                 value={coolantTemp}
                                 unit="°C"
                                 min={50}
@@ -1086,7 +1111,7 @@ export default function RetroAudi96Paradigm() {
                                 brightness={dimmerLevel}
                             />
                             <VerticalLedColumn
-                                label="ÖL-TEMP"
+                                label={isEn ? "OIL TEMP" : "TEMP. ULEI"}
                                 value={oilTemp}
                                 unit="°C"
                                 min={50}
@@ -1097,7 +1122,7 @@ export default function RetroAudi96Paradigm() {
                                 brightness={dimmerLevel}
                             />
                             <VerticalLedColumn
-                                label="LADEDRUCK"
+                                label={isEn ? "BOOST BAR" : "PRESIUNE TURBO"}
                                 value={boost}
                                 unit="bar"
                                 min={0}
@@ -1109,7 +1134,7 @@ export default function RetroAudi96Paradigm() {
                                 peakHold={peakBoostHold}
                             />
                             <VerticalLedColumn
-                                label="KRAFTSTOFF"
+                                label={isEn ? "FUEL" : "BENZINĂ"}
                                 value={fuelLevel}
                                 unit="%"
                                 min={0}
@@ -1131,8 +1156,8 @@ export default function RetroAudi96Paradigm() {
                             activeOpacity={0.8}
                         >
                             <View style={styles.bcHeader}>
-                                <Text style={styles.bcLabel}>BORDCOMPUTER // {currentBc.label}</Text>
-                                <Text style={styles.bcHint}>[ TAP FÜR WEITER ]</Text>
+                                <Text style={styles.bcLabel}>{isEn ? 'TRIP COMPUTER //' : 'COMPUTER BORD //'} {currentBc.label}</Text>
+                                <Text style={styles.bcHint}>[ {isEn ? 'TAP FOR NEXT' : 'APASĂ PENTRU URMĂTORUL'} ]</Text>
                             </View>
                             <View style={styles.bcValueRow}>
                                 <Text style={[styles.bcValue, { color: clusterAccentColor }]}>{currentBc.value}</Text>
@@ -1143,11 +1168,12 @@ export default function RetroAudi96Paradigm() {
                 )}
 
                 {/* ── 2 VAG 1551: DIAGNOSE & 32 MESSWERTBLÖCKE ── */}
-                {activeSwitch === '2' && <StationAudiVag1551 virtualSensors={core.virtualSensors} />}
+                {activeSwitch === '2' && <StationAudiVag1551 virtualSensors={core.virtualSensors} appLang={appLang} />}
 
                 {/* ── 3 FAHRTENBUCH: JURNAL & REPLAY CASSETE AUDI GAMMA ── */}
                 {activeSwitch === '3' && (
                     <StationAudiFahrtenbuch
+                        appLang={appLang}
                         isReplaying={core.isReplaying}
                         currentReplaySample={core.currentReplaySample}
                         replaySpeed={core.replaySpeed}
@@ -1165,6 +1191,7 @@ export default function RetroAudi96Paradigm() {
                 {/* ── 4 SERVICEHEFT: CBM INSPEKTION & KRAFTFAHRZEUG-PAPIERE ── */}
                 {activeSwitch === '4' && (
                     <StationAudiServiceheft
+                        appLang={appLang}
                         maintenanceItems={core.maintenanceItems}
                         legalDocuments={core.legalDocuments}
                         markServiceItemCompleted={core.markServiceItemCompleted}
@@ -1174,6 +1201,7 @@ export default function RetroAudi96Paradigm() {
                 {/* ── 5 SAFE-LOCK: PROCON-TEN & STANDHEIZUNG ── */}
                 {activeSwitch === '5' && (
                     <StationAudiSafeLock
+                        appLang={appLang}
                         sentryArmed={core.sentryArmed}
                         setSentryArmed={core.setSentryArmed}
                         triggerShockSimulation={core.triggerShockSimulation}
@@ -1191,6 +1219,7 @@ export default function RetroAudi96Paradigm() {
                 {/* ── 6 MEISTER AI: VAG SERVICE MEISTER INGOLSTADT ── */}
                 {activeSwitch === '6' && (
                     <StationAudiMeisterAi
+                        appLang={appLang}
                         aiMessages={core.aiMessages}
                         isAiLoading={core.isAiLoading}
                         sendAiPrompt={core.sendAiPrompt}
@@ -1215,7 +1244,7 @@ export default function RetroAudi96Paradigm() {
                                 <Text style={styles.vagLcdVer}>V3.21 K-LINE</Text>
                             </View>
                             <Text style={styles.vagLcdLine1}>
-                                KANAL {vagChannel}: {vagChannel === '001' ? 'DREHZAHL // ZÜNDUNG' : 'LADEDRUCK // N75'}
+                                {isEn ? 'CHANNEL' : 'CANAL'} {vagChannel}: {vagChannel === '001' ? (isEn ? 'RPM // IGNITION' : 'TURAȚIE // APRINDERE') : (isEn ? 'BOOST // N75' : 'TURBO // N75')}
                             </Text>
                             <Text style={styles.vagLcdLine2}>
                                 {vagChannel === '001'

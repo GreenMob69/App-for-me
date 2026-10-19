@@ -680,7 +680,8 @@ export default function MinimalNothingParadigm() {
     const core = useParadigmCoreData(isLiveViewActive);
     const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
-    const { setUiParadigm, openExperiencePicker, openSimulatorModal } = useUiParadigm();
+    const { setUiParadigm, openExperiencePicker, openSimulatorModal, appLang, toggleAppLang } = useUiParadigm();
+    const isEn = appLang === 'EN';
 
     const [ghostMode, setGhostMode] = useState(false);
     const [mirrorHud, setMirrorHud] = useState(false);
@@ -952,8 +953,22 @@ export default function MinimalNothingParadigm() {
                     </Text>
                 </View>
 
-                {/* Butoane de acțiune cu STIL primul garantat vizibil */}
+                {/* Butoane de acțiune cu comutator RO / EN */}
                 <View style={styles.headerActions}>
+                    <TouchableOpacity
+                        style={[styles.v2Button, { borderColor: currentTheme.cardBorder, backgroundColor: currentTheme.cardBg, minWidth: 42 }]}
+                        onPress={() => {
+                            hapticTap();
+                            toggleAppLang();
+                        }}
+                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={[styles.v2ButtonText, { color: currentTheme.textPrimary, fontWeight: '800' }]}>
+                            {isEn ? '🇬🇧 EN' : '🇷🇴 RO'}
+                        </Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity
                         style={[styles.stylePickerButton, { backgroundColor: currentTheme.textPrimary }]}
                         onPress={() => {
@@ -963,19 +978,7 @@ export default function MinimalNothingParadigm() {
                         hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Text style={[styles.stylePickerText, { color: currentTheme.bg }]}>🎨 STIL</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.v2Button, { borderColor: currentTheme.cardBorder, backgroundColor: currentTheme.cardBg }]}
-                        onPress={() => {
-                            hapticTap();
-                            setUiParadigm('CLASSIC_V2');
-                        }}
-                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={[styles.v2ButtonText, { color: currentTheme.textSecondary }]}>⮌ V2</Text>
+                        <Text style={[styles.stylePickerText, { color: currentTheme.bg }]}>🎨 {isEn ? 'STYLE' : 'STIL'}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -1237,31 +1240,37 @@ export default function MinimalNothingParadigm() {
             {/* ── Jog-Wheel Selector Inferior (01 .. 06) ── */}
             <View style={[styles.jogWheelContainer, { borderTopColor: currentTheme.divider, backgroundColor: currentTheme.bg, zIndex: 2 }]}>
                 {[
-                    { id: '01', label: '01 PULS' },
-                    { id: '02', label: '02 ANAT' },
-                    { id: '03', label: '03 JURN' },
-                    { id: '04', label: '04 SERV' },
-                    { id: '05', label: '05 SENT' },
-                    { id: '06', label: '06 AI' },
-                ].map((item) => (
-                    <TouchableOpacity
-                        key={item.id}
-                        style={[
-                            styles.jogTab,
-                            activeTab === item.id && { backgroundColor: currentTheme.textPrimary },
-                        ]}
-                        onPress={() => {
-                            hapticTap();
-                            setActiveTab(item.id);
-                        }}
-                        hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={[styles.jogTabText, { color: activeTab === item.id ? currentTheme.bg : currentTheme.textDim }]}>
-                            {item.label}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
+                    { id: '01', label: isEn ? '01·PULSE' : '01·PULS' },
+                    { id: '02', label: isEn ? '02·ANAT' : '02·ANAT' },
+                    { id: '03', label: isEn ? '03·TRIPS' : '03·JURN' },
+                    { id: '04', label: isEn ? '04·SERV' : '04·SERV' },
+                    { id: '05', label: isEn ? '05·SENT' : '05·SENT' },
+                    { id: '06', label: isEn ? '06·AI' : '06·AI' },
+                ].map((item) => {
+                    const isActive = activeTab === item.id;
+                    return (
+                        <TouchableOpacity
+                            key={item.id}
+                            style={[
+                                styles.jogTab,
+                                isActive && { backgroundColor: currentTheme.textPrimary },
+                            ]}
+                            onPress={() => {
+                                hapticTap();
+                                setActiveTab(item.id);
+                            }}
+                            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                            activeOpacity={0.7}
+                        >
+                            {isActive && (
+                                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#FF3B00', marginBottom: 2 }} />
+                            )}
+                            <Text style={[styles.jogTabText, { color: isActive ? currentTheme.bg : currentTheme.textDim, fontWeight: isActive ? '900' : '600' }]}>
+                                {item.label}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
             </View>
         </View>
     );

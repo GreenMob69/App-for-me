@@ -97,7 +97,7 @@ const SettingsScreen = () => {
     const navigation = useNavigation();
     const { securityEnabled, lockTimeout, saveSettings } = useContext(SecurityContext);
     const { activeVin, activeVehicle, vehicles, switchVehicle, refreshVehicles } = useVehicle();
-    const { activeTemplate, setActiveTemplate, oledBlackMode, setOledBlackMode, uiParadigm, setUiParadigm, openExperiencePicker, openSimulatorModal } = useContext(AppContext);
+    const { activeTemplate, setActiveTemplate, oledBlackMode, setOledBlackMode, uiParadigm, setUiParadigm, appLang, setAppLang, openExperiencePicker, openSimulatorModal } = useContext(AppContext);
     const cardStyle = useMemo(() => [styles.card, { backgroundColor: tpl.cardBg, borderColor: tpl.border }], [tpl.cardBg, tpl.border]);
 
     // ── Connection
@@ -396,6 +396,61 @@ const SettingsScreen = () => {
                         <Text style={styles.title}>Setări</Text>
                         <Text style={styles.subtitle}>Configurare · Vehicul · Preferințe</Text>
                     </View>
+                </View>
+            </View>
+
+            {/* ── Limbă Aplicație / App Language (RO | EN) ──────────── */}
+            <View style={cardStyle}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[1] }}>
+                    <SectionTitle>🌐 {appLang === 'EN' ? 'Language / Limbă' : 'Limba Aplicației / Language'}</SectionTitle>
+                    <View style={[styles.paradigmBadge, { borderColor: '#00E5FF', backgroundColor: '#00E5FF1A' }]}>
+                        <Text style={[styles.paradigmBadgeText, { color: '#00E5FF' }]}>
+                            {appLang === 'EN' ? '🇬🇧 ENGLISH' : '🇷🇴 ROMÂNĂ'}
+                        </Text>
+                    </View>
+                </View>
+                <Text style={styles.desc}>
+                    {appLang === 'EN'
+                        ? 'Select application interface language across all 5 telemetry paradigms.'
+                        : 'Selectează limba interfeței pentru toate cele 5 stiluri de telemetrie.'}
+                </Text>
+
+                <View style={{ flexDirection: 'row', gap: spacing[2], marginTop: spacing[1] }}>
+                    <TouchableOpacity
+                        style={[
+                            styles.paradigmCard,
+                            { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
+                            appLang === 'RO' && styles.paradigmCardSelected,
+                            { borderColor: appLang === 'RO' ? '#00E5FF' : colors.border.default }
+                        ]}
+                        onPress={() => {
+                            hapticTap();
+                            setAppLang('RO');
+                        }}
+                        activeOpacity={0.75}
+                    >
+                        <Text style={{ fontSize: 20, marginBottom: 4 }}>🇷🇴</Text>
+                        <Text style={[styles.paradigmCardName, appLang === 'RO' && { color: '#00E5FF' }]}>Română (RO)</Text>
+                        <Text style={styles.paradigmCardSub}>Interfață în limba română</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[
+                            styles.paradigmCard,
+                            { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
+                            appLang === 'EN' && styles.paradigmCardSelected,
+                            { borderColor: appLang === 'EN' ? '#00E5FF' : colors.border.default }
+                        ]}
+                        onPress={() => {
+                            hapticTap();
+                            setAppLang('EN');
+                        }}
+                        activeOpacity={0.75}
+                    >
+                        <Text style={{ fontSize: 20, marginBottom: 4 }}>🇬🇧</Text>
+                        <Text style={[styles.paradigmCardName, appLang === 'EN' && { color: '#00E5FF' }]}>English (EN)</Text>
+                        <Text style={styles.paradigmCardSub}>English user interface</Text>
+                    </TouchableOpacity>
                 </View>
             </View>
 
