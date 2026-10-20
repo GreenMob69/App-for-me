@@ -51,6 +51,7 @@ import F1CyberdeckParadigm  from './src/screens/paradigms/F1CyberdeckParadigm';
 import SpatialCanvasParadigm from './src/screens/paradigms/SpatialCanvasParadigm';
 import CloudSimulatorModal  from './src/components/CloudSimulatorModal';
 import LiveSimStrip         from './src/components/LiveSimStrip';
+import PhysicalMechanicModal from './src/components/PhysicalMechanicModal';
 
 const Tab       = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
@@ -284,7 +285,13 @@ function MainContent() {
 }
 
 function AppSecurityAndModals() {
-    const { showSimulatorModal, closeSimulatorModal } = useContext(AppContext);
+    const {
+        showSimulatorModal,
+        closeSimulatorModal,
+        mechanicModalState,
+        closeMechanicGuide,
+        setUiParadigm,
+    } = useContext(AppContext);
     return (
         <SecurityGate>
             <LiveSimStrip />
@@ -292,6 +299,14 @@ function AppSecurityAndModals() {
             <ExperienceLauncherModal />
             <CloudSimulatorModal visible={showSimulatorModal} onClose={closeSimulatorModal} />
             <CrashAlertModal />
+            <PhysicalMechanicModal
+                visible={Boolean(mechanicModalState?.visible)}
+                guideData={mechanicModalState?.guide}
+                onClose={closeMechanicGuide}
+                onNavigateTo3D={(_subsystem) => {
+                    setUiParadigm('SPATIAL_CANVAS');
+                }}
+            />
         </SecurityGate>
     );
 }

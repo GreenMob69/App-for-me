@@ -49,6 +49,10 @@ app.get('/models/acura_cdx_raw.glb', (req, res) => {
     res.sendFile(rawPath);
 });
 
+app.get('/monitor', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'monitor.html'));
+});
+
 app.get('/fleet', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'fleet.html'));
 });

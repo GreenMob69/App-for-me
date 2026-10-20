@@ -11,6 +11,7 @@ import {
     ScrollView,
     TextInput,
     Modal,
+    useWindowDimensions,
 } from 'react-native';
 import { useSafeInsets } from '../../hooks/useSafeInsets';
 import Svg, {
@@ -191,7 +192,8 @@ const StationF1Sensors = React.memo(function StationF1Sensors({
     setSearchQuery,
     matchedDtc = [],
     primaryAccent,
-    appLang = 'RO'
+    appLang = 'RO',
+    onOpenMechanicGuide,
 }) {
     const catLabels = {
         engine: '01. GRUP PROPULSOR & INJECȚIE',
@@ -245,6 +247,29 @@ const StationF1Sensors = React.memo(function StationF1Sensors({
                             <Text style={styles.f1DtcDesc}><Text style={{ color: '#64748B' }}>CAUZĂ: </Text>{item.cause}</Text>
                             <Text style={styles.f1DtcDesc}><Text style={{ color: '#64748B' }}>SIMPTOM: </Text>{item.symptoms}</Text>
                             <Text style={styles.f1DtcCost}><Text style={{ color: '#00FF66' }}>COST EST: </Text>{item.costEst} · {item.action}</Text>
+                            {onOpenMechanicGuide && (
+                                <TouchableOpacity
+                                    style={{
+                                        marginTop: 6,
+                                        paddingVertical: 5,
+                                        paddingHorizontal: 8,
+                                        backgroundColor: '#FF2A2A20',
+                                        borderWidth: 1,
+                                        borderColor: '#FF2A2A',
+                                        borderRadius: 4,
+                                        alignSelf: 'flex-start',
+                                    }}
+                                    onPress={() => {
+                                        hapticTap();
+                                        onOpenMechanicGuide(item.code || item.title);
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={{ fontFamily: MONO, fontSize: 10, color: '#FF6B6B', fontWeight: '900' }}>
+                                        {isEn ? '🔧 PHYSICAL MECHANIC INSPECTION GUIDE' : '🔧 GHID VERIFICARE FIZICĂ MECANICĂ'}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     ))}
                 </View>
@@ -262,16 +287,26 @@ const StationF1Sensors = React.memo(function StationF1Sensors({
                                 const isAlert = s.status === 'ALERT';
                                 const statusColor = isAlert ? '#FF2A2A' : isWarn ? '#FFB800' : '#00FF66';
                                 return (
-                                    <View key={s.id} style={[styles.sensorCellF1, { borderColor: isAlert ? '#FF2A2A88' : '#16263D' }]}>
+                                    <TouchableOpacity
+                                        key={s.id}
+                                        style={[styles.sensorCellF1, { borderColor: isAlert ? '#FF2A2A88' : '#16263D' }]}
+                                        onPress={() => {
+                                            if (isAlert || isWarn) {
+                                                hapticTap();
+                                                onOpenMechanicGuide?.(s.label || s.id);
+                                            }
+                                        }}
+                                        activeOpacity={isAlert || isWarn ? 0.7 : 1}
+                                    >
                                         <View style={styles.sensorCellTop}>
                                             <Text style={styles.sensorLabelF1} numberOfLines={1}>{s.label}</Text>
                                             <View style={[styles.f1StatusDot, { backgroundColor: statusColor }]} />
                                         </View>
                                         <View style={styles.sensorCellBottom}>
                                             <Text style={[styles.sensorValF1, { color: statusColor }]}>{s.val}</Text>
-                                            <Text style={styles.sensorTargetF1}>REF: {s.target}</Text>
+                                            <Text style={styles.sensorTargetF1}>{isAlert || isWarn ? '🔧 GHID' : `REF: ${s.target}`}</Text>
                                         </View>
-                                    </View>
+                                    </TouchableOpacity>
                                 );
                             })}
                         </View>
@@ -465,7 +500,8 @@ const StationF1Scrutineering = React.memo(function StationF1Scrutineering({
     fuelPricePerLiter,
     setFuelPricePerLiter,
     primaryAccent,
-    appLang = 'RO'
+    appLang = 'RO',
+    onOpenMechanicGuide,
 }) {
     const isEn = appLang === 'EN';
     return (
@@ -544,16 +580,30 @@ const StationF1Scrutineering = React.memo(function StationF1Scrutineering({
                             </View>
                             <View style={styles.scrutFooterRow}>
                                 <Text style={styles.scrutKm}>{item.currentKm} km / max {item.maxKm} km</Text>
-                                <TouchableOpacity
-                                    style={[styles.resetComponentBtn, { borderColor: primaryAccent }]}
-                                    onPress={() => {
-                                        hapticTap();
-                                        markServiceItemCompleted(item.id);
-                                    }}
-                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                >
-                                    <Text style={[styles.resetComponentBtnText, { color: primaryAccent }]}>[ ✓ RESETARE FIA ]</Text>
-                                </TouchableOpacity>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    {(isWarn || isCrit) && onOpenMechanicGuide && (
+                                        <TouchableOpacity
+                                            style={[styles.resetComponentBtn, { borderColor: '#FFB800', backgroundColor: '#FFB80018' }]}
+                                            onPress={() => {
+                                                hapticTap();
+                                                onOpenMechanicGuide(item.title);
+                                            }}
+                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                        >
+                                            <Text style={[styles.resetComponentBtnText, { color: '#FFB800' }]}>[ 🔧 GHID ]</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                    <TouchableOpacity
+                                        style={[styles.resetComponentBtn, { borderColor: primaryAccent }]}
+                                        onPress={() => {
+                                            hapticTap();
+                                            markServiceItemCompleted(item.id);
+                                        }}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    >
+                                        <Text style={[styles.resetComponentBtnText, { color: primaryAccent }]}>[ ✓ RESETARE FIA ]</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </View>
                     );
@@ -794,13 +844,23 @@ const StationF1PaddockRadio = React.memo(function StationF1PaddockRadio({
 
 export default function F1CyberdeckParadigm() {
     const insets = useSafeInsets();
+    const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+    const isLandscape = screenWidth > screenHeight;
+
     // Stare Pagini Pitwall: 'P1' | 'P2' | 'P3' | 'P4' | 'P5'
     const [pitwallPage, setPitwallPage] = useState('P1');
     const isLiveViewActive = pitwallPage === 'P1' || pitwallPage === 'P2';
     const core = useParadigmCoreData(isLiveViewActive);
     const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
-    const { setUiParadigm, openExperiencePicker, openSimulatorModal, appLang, toggleAppLang } = useUiParadigm();
+    const {
+        setUiParadigm,
+        openExperiencePicker,
+        openSimulatorModal,
+        appLang,
+        toggleAppLang,
+        openMechanicGuide,
+    } = useUiParadigm();
     const isEn = appLang === 'EN';
     const [f1AccentKey, setF1AccentKey] = useState('CYAN'); // 'CYAN' | 'RED' | 'LIME'
 
@@ -955,6 +1015,10 @@ export default function F1CyberdeckParadigm() {
     const primaryAccent = isQualy ? '#B000FF' : activeAccentSet.primary;
     const borderAccent = isQualy ? '#600099' : activeAccentSet.border;
 
+    const cellWidth = isLandscape ? Math.floor((screenWidth - 36) / 3) : Math.floor((screenWidth - 22) / 2);
+    const cellHeight = isLandscape ? '48%' : '32%';
+    const dynamicCell = { width: cellWidth, height: cellHeight, borderColor: borderAccent };
+
     const safeTop = typeof insets?.top === 'number' && !isNaN(insets.top) ? Math.max(insets.top, 24) : 24;
     const safeBottom = typeof insets?.bottom === 'number' && !isNaN(insets.bottom) ? Math.max(insets.bottom, 12) : 12;
 
@@ -1006,7 +1070,7 @@ export default function F1CyberdeckParadigm() {
                         }}
                         hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={styles.actionBtnText}>⮌ CLASIC</Text>
+                        <Text style={styles.actionBtnText}>◀ CLASIC V2</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -1127,7 +1191,7 @@ export default function F1CyberdeckParadigm() {
                     expandedPanel === null ? (
                         <View style={styles.monitorsGrid}>
                         {/* ── M1: NUCLEU VITEZĂ, TREAPTĂ & 2. KAMM G-RADAR ── */}
-                        <View style={[styles.monitorCell, { borderColor: borderAccent }]}>
+                        <View style={[styles.monitorCell, dynamicCell]}>
                             <View style={styles.monHeader}>
                                 <Text style={[styles.monTitle, { color: primaryAccent }]}>M1 // NUCLEUS & KAMM</Text>
                                 <TouchableOpacity
@@ -1176,7 +1240,7 @@ export default function F1CyberdeckParadigm() {
                         </View>
 
                         {/* ── M2: 3. ZERO-GC OSCILOSCOP DUAL-CHANNEL ── */}
-                        <View style={[styles.monitorCell, { borderColor: borderAccent }]}>
+                        <View style={[styles.monitorCell, dynamicCell]}>
                             <View style={styles.monHeader}>
                                 <Text style={[styles.monTitle, { color: primaryAccent }]}>{isEn ? 'M2 // LIVE SCOPE' : 'M2 // OSCILOSCOP LIVE'}</Text>
                                 <TouchableOpacity
@@ -1188,7 +1252,7 @@ export default function F1CyberdeckParadigm() {
                                 </TouchableOpacity>
                             </View>
                             <View style={styles.oscilloscopeContainer}>
-                                <Svg width={SCREEN_WIDTH * 0.42} height={56} viewBox="0 0 160 56">
+                                <Svg width={Math.max(100, Math.floor(cellWidth - 14))} height={56} viewBox="0 0 160 56">
                                     <Line x1="0" y1="28" x2="160" y2="28" stroke="#112233" strokeDasharray="3, 3" />
                                     {oscilloscopePoints.boostPoints ? (
                                         <Path
@@ -1216,7 +1280,7 @@ export default function F1CyberdeckParadigm() {
                         </View>
 
                         {/* ── M3: ENGINE HEALTH HEATMAP (3x3) ── */}
-                        <View style={[styles.monitorCell, { borderColor: borderAccent }]}>
+                        <View style={[styles.monitorCell, dynamicCell]}>
                             <View style={styles.monHeader}>
                                 <Text style={[styles.monTitle, { color: primaryAccent }]}>{isEn ? 'M3 // SENSOR DNA' : 'M3 // MATRICE SENZORI'}</Text>
                                 <TouchableOpacity
@@ -1254,7 +1318,7 @@ export default function F1CyberdeckParadigm() {
                         </View>
 
                         {/* ── M4: 5. 4-ROTOR BRAKE PYROMETER & 6. SANKEY LOSS ── */}
-                        <View style={[styles.monitorCell, { borderColor: borderAccent }]}>
+                        <View style={[styles.monitorCell, dynamicCell]}>
                             <View style={styles.monHeader}>
                                 <Text style={[styles.monTitle, { color: primaryAccent }]}>{isEn ? 'M4 // BRAKES & SANKEY' : 'M4 // FRÂNE & ENERGIE'}</Text>
                                 <TouchableOpacity
@@ -1294,7 +1358,7 @@ export default function F1CyberdeckParadigm() {
                         </View>
 
                         {/* ── M5: 7. PITWALL STRATEGY & WEIBULL RUL ── */}
-                        <View style={[styles.monitorCell, { borderColor: borderAccent }]}>
+                        <View style={[styles.monitorCell, dynamicCell]}>
                             <View style={styles.monHeader}>
                                 <Text style={[styles.monTitle, { color: primaryAccent }]}>{isEn ? 'M5 // STRATEGY & RUL' : 'M5 // STRATEGIE & UZURĂ'}</Text>
                                 <TouchableOpacity
@@ -1314,7 +1378,7 @@ export default function F1CyberdeckParadigm() {
                         </View>
 
                         {/* ── M6: 8. BOSCH UDS & CAN-BUS TEC/REC MONITOR ── */}
-                        <View style={[styles.monitorCell, { borderColor: borderAccent }]}>
+                        <View style={[styles.monitorCell, dynamicCell]}>
                             <View style={styles.monHeader}>
                                 <Text style={[styles.monTitle, { color: primaryAccent }]}>M6 // CAN & UDS BUS</Text>
                                 <TouchableOpacity
@@ -1330,9 +1394,17 @@ export default function F1CyberdeckParadigm() {
                                 <Text style={styles.udsLog}>[KALMAN] STEADY: {isSteadyState ? 'TRUE' : 'TRANSIENT'}</Text>
                                 <Text style={styles.udsLog}>[CONF] {steadyConfidence}% EXACTITATE</Text>
                                 {criticalAlerts.length > 0 ? (
-                                    <Text style={[styles.udsLog, { color: '#FF2A2A' }]} numberOfLines={1}>
-                                        [DTC] {criticalAlerts[0].title}
-                                    </Text>
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            hapticTap();
+                                            openMechanicGuide(criticalAlerts[0].title || criticalAlerts[0].key);
+                                        }}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text style={[styles.udsLog, { color: '#FF2A2A' }]} numberOfLines={1}>
+                                            [DTC] {criticalAlerts[0].title} 🔧
+                                        </Text>
+                                    </TouchableOpacity>
                                 ) : (
                                     <Text style={[styles.udsLog, { color: '#00FF66' }]}>[BUS-OFF] NICIUN EROR</Text>
                                 )}
@@ -1422,6 +1494,7 @@ export default function F1CyberdeckParadigm() {
                         matchedDtc={core.matchedDtc}
                         primaryAccent={primaryAccent}
                         appLang={appLang}
+                        onOpenMechanicGuide={openMechanicGuide}
                     />
                 )}
 
@@ -1462,6 +1535,7 @@ export default function F1CyberdeckParadigm() {
                         setFuelPricePerLiter={core.setFuelPricePerLiter}
                         primaryAccent={primaryAccent}
                         appLang={appLang}
+                        onOpenMechanicGuide={openMechanicGuide}
                     />
                 )}
 

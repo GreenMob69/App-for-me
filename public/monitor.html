@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Centru Web de Monitorizare Telemetrie & Digital Twin</title>
+    <style>
+        :root {
+            --bg-dark: #04070D;
+            --panel-bg: #0A101DFA;
+            --panel-card: #101726;
+            --border-cyan: #00F0FF44;
+            --accent-cyan: #00F0FF;
+            --accent-green: #00FF66;
+            --accent-amber: #FFB800;
+            --accent-red: #FF2A2A;
+            --accent-purple: #B026FF;
+            --text-main: #FFFFFF;
+            --text-dim: #94A3B8;
+            --font-mono: 'SF Mono', Menlo, Consolas, Monaco, monospace;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        html, body {
+            width: 100%; height: 100%; overflow: hidden;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+
+        /* ── LAYOUT WIDESCREEN 16:9 GRID ───────────────────────────────────────── */
+        #wallboard {
+            display: flex;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* TOP NAVIGATION / CONTROL BAR */
+        header {
+            height: 48px;
+            background: #080D18;
+            border-bottom: 1px solid var(--border-cyan);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            z-index: 100;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-title {
+            font-size: 13px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            color: var(--text-main);
+        }
+
+        .brand-badge {
+            background: #00F0FF1A;
+            border: 1px solid var(--border-cyan);
+            color: var(--accent-cyan);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 800;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-ctrl {
+            background: #141E30;
+            border: 1px solid #1E293B;
+            color: var(--text-dim);
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: var(--font-mono);
+            font-size: 10.5px;
+            font-weight: 800;
+            transition: all 0.2s ease;
+        }
+
+        .btn-ctrl:hover {
+            border-color: var(--accent-cyan);
+            color: #FFF;
+        }
+
+        .btn-autopilot {
+            background: #B026FF24;
+            border: 1px solid #B026FFAA;
+            color: #D8B4FE;
+            box-shadow: 0 0 10px #B026FF44;
+        }
+
+        .btn-autopilot.active {
+            background: #B026FF;
+            color: #FFF;
+            box-shadow: 0 0 16px #B026FF;
+            animation: pulse-glow 1.2s infinite alternate;
+        }
+
+        .btn-stop {
+            background: #FF2A2A20;
+            border-color: #FF2A2A88;
+            color: #FF4D4D;
+        }
+
+        .conn-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #00FF6615;
+            border: 1px solid #00FF6644;
+            color: var(--accent-green);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 800;
+        }
+
+        .conn-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        /* MAIN 3-COLUMN CONTENT GRID */
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 310px 1fr 360px;
+            gap: 8px;
+            padding: 8px;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 50%, #0C1322 0%, #04070D 100%);
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-cyan);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 8px 12px;
+            background: #0C1424;
+            border-bottom: 1px solid #1E293B;
+            font-size: 11px;
+            font-weight: 900;
+            color: var(--accent-cyan);
+            letter-spacing: 0.8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* ── LEFT PANEL METRICS & DIALS ────────────────────────────────────────── */
+        .gauges-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .gauge-card {
+            background: var(--panel-card);
+            border: 1px solid #1E293B;
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+            position: relative;
+        }
+
+        .gauge-label {
+            font-size: 9px;
+            color: var(--text-dim);
+            font-weight: 800;
+            letter-spacing: 0.5px;
+        }
+
+        .gauge-val {
+            font-size: 26px;
+            font-weight: 900;
+            color: #FFF;
+            margin: 4px 0 2px 0;
+        }
+
+        .gauge-unit {
+            font-size: 9.5px;
+            color: var(--accent-cyan);
+            font-weight: 700;
+        }
+
+        .metric-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .metric-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--panel-card);
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid #1E293B;
+        }
+
+        .metric-name { color: var(--text-dim); font-size: 10.5px; }
+        .metric-value { font-weight: 800; color: #FFF; font-size: 11.5px; }
+
+        /* SANKEY BAR */
+        .bar-container {
+            background: var(--panel-card);
+            border: 1px solid #1E293B;
+            border-radius: 6px;
+            padding: 8px;
+        }
+
+        .bar-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9.5px;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+            font-weight: 800;
+        }
+
+        .segmented-bar {
+            height: 10px;
+            display: flex;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+
+        .bar-mech { background: #00FF66; width: 36.5%; }
+        .bar-exh { background: #FFB800; width: 18.3%; }
+        .bar-cool { background: #00F0FF; width: 45.2%; }
+
+        .bar-legend {
+            display: flex;
+            justify-content: space-between;
+            font-size: 8.5px;
+            color: var(--text-dim);
+        }
+
+        /* ── CENTER PANEL 3D SHOWROOM ─────────────────────────────────────────── */
+        #center-viewport {
+            position: relative;
+            background: transparent;
+            border-color: #00F0FF66;
+        }
+
+        #canvas-3d-wrap {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #three-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* 3D Mode Bar Overlay */
+        .viewport-modes {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            display: flex;
+            gap: 6px;
+            z-index: 10;
+        }
+
+        .mode-btn {
+            background: rgba(6, 12, 22, 0.85);
+            border: 1px solid var(--border-cyan);
+            color: var(--text-dim);
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 800;
+        }
+
+        .mode-btn.active {
+            background: #00F0FF26;
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
+        /* AUTOPILOT NARRATIVE BANNER */
+        #autopilot-banner {
+            display: none;
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            background: rgba(13, 20, 36, 0.94);
+            border: 1px solid var(--accent-purple);
+            border-radius: 8px;
+            padding: 10px 14px;
+            z-index: 20;
+            box-shadow: 0 0 16px rgba(176, 38, 255, 0.35);
+        }
+
+        .ap-banner-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .ap-title {
+            color: #FFF;
+            font-size: 12px;
+            font-weight: 900;
+            letter-spacing: 0.5px;
+        }
+
+        .ap-desc {
+            color: #CBD5E1;
+            font-size: 11px;
+            line-height: 15px;
+        }
+
+        /* ── RIGHT PANEL 32 OBSERVERS MATRIX & MECHANIC GUIDE ────────────────── */
+        .observer-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .category-title {
+            font-size: 9px;
+            font-weight: 900;
+            color: var(--accent-cyan);
+            margin-top: 4px;
+            letter-spacing: 0.6px;
+        }
+
+        .obs-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--panel-card);
+            border: 1px solid #1E293B;
+            border-radius: 4px;
+            padding: 5px 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .obs-item:hover {
+            border-color: var(--accent-cyan);
+            background: #141F33;
+        }
+
+        .obs-label {
+            font-size: 10px;
+            color: #E2E8F0;
+            font-weight: 600;
+        }
+
+        .obs-val {
+            font-size: 10.5px;
+            font-weight: 800;
+            color: var(--accent-cyan);
+        }
+
+        .obs-status {
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 8px;
+            font-weight: 900;
+            margin-left: 6px;
+        }
+
+        .status-ok { background: #00FF6622; color: #00FF66; }
+        .status-warn { background: #FFB80022; color: #FFB800; }
+        .status-crit { background: #FF2A2A22; color: #FF2A2A; }
+
+        /* MECHANIC GUIDE CARD RIGHT PANEL */
+        #mechanic-guide-card {
+            display: none;
+            background: #121829;
+            border: 1px solid var(--accent-amber);
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 8px;
+        }
+
+        .guide-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .guide-title {
+            color: var(--accent-amber);
+            font-weight: 900;
+            font-size: 11px;
+        }
+
+        .guide-close {
+            cursor: pointer;
+            color: var(--text-dim);
+            font-weight: bold;
+        }
+
+        .guide-row {
+            font-size: 10px;
+            color: #CBD5E1;
+            margin-bottom: 4px;
+            line-height: 14px;
+        }
+
+        @keyframes pulse-glow {
+            from { box-shadow: 0 0 8px #B026FF44; }
+            to { box-shadow: 0 0 18px #B026FF; }
+        }
+    </style>
+
+    <!-- Three.js r128 Local & Fallback CDN -->
+    <script src="/three.min.js" onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';"></script>
+    <script src="/OrbitControls.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js';"></script>
+    <script src="/GLTFLoader.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div id="wallboard">
+        <!-- TOP NAVIGATION & COMMAND BAR -->
+        <header>
+            <div class="header-brand">
+                <span class="brand-title">AUTONOMOUS VEHICLE TELEMETRY & DIGITAL TWIN</span>
+                <span class="brand-badge">ACURA CDX / AUDI A6 C4 TDI</span>
+            </div>
+
+            <div class="header-controls">
+                <button class="btn-ctrl btn-autopilot" id="btn-autopilot" onclick="toggleAutoPilot()">
+                    🤖 AUTO-PILOT SHOWCASE
+                </button>
+                <button class="btn-ctrl" onclick="setScenario('normal')">🟢 CROAZIERĂ</button>
+                <button class="btn-ctrl" onclick="setScenario('fault_turbo')">🌪️ BOOST LEAK</button>
+                <button class="btn-ctrl" onclick="setScenario('mountain_brakes')">⛰️ FRÂNE MUNTE</button>
+                <button class="btn-ctrl" onclick="setScenario('dpf_regen')">🔥 DPF REGEN</button>
+                <button class="btn-ctrl" onclick="setScenario('black_ice')">❄️ BLACK ICE</button>
+                <button class="btn-ctrl btn-stop" onclick="stopSimulation()">⏹ OPREȘTE</button>
+
+                <div class="conn-pill" id="conn-status">
+                    <div class="conn-dot"></div>
+                    <span id="conn-text">CONECTAT</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN MONITORING GRID -->
+        <main>
+            <!-- ── 1. LEFT PANEL: DIALS, POWERTRAIN & SANKEY ── -->
+            <section class="panel">
+                <div class="panel-header">
+                    <span>POWERTRAIN & TELEMETRIE LIVE</span>
+                    <span id="txt-gear" style="color:var(--accent-green); font-size:12px;">GEAR: D</span>
+                </div>
+                <div class="panel-scroll">
+                    <!-- Speed & RPM Gauges -->
+                    <div class="gauges-row">
+                        <div class="gauge-card">
+                            <div class="gauge-label">VITEZĂ VEHICUL</div>
+                            <div class="gauge-val" id="val-speed">0</div>
+                            <div class="gauge-unit">KM/H</div>
+                        </div>
+                        <div class="gauge-card">
+                            <div class="gauge-label">TURAȚIE MOTOR</div>
+                            <div class="gauge-val" id="val-rpm" style="color:var(--accent-cyan);">0</div>
+                            <div class="gauge-unit">RPM</div>
+                        </div>
+                    </div>
+
+                    <!-- Main Metrics -->
+                    <div class="metric-list">
+                        <div class="metric-row">
+                            <span class="metric-name">Presiune Turbo Relativă</span>
+                            <span class="metric-value" id="val-boost" style="color:#00F0FF;">0.85 bar</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Temperatură Antigel</span>
+                            <span class="metric-value" id="val-coolant">90.0 °C</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Temperatură Ulei Baie</span>
+                            <span class="metric-value" id="val-oil">92.0 °C</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Gaze Evacuare EGT</span>
+                            <span class="metric-value" id="val-egt">420 °C</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Presiune Rampă Comună</span>
+                            <span class="metric-value" id="val-rail">780 bar</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Tensiune Alternator ECU</span>
+                            <span class="metric-value" id="val-volt">14.15 V</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-name">Consum Instantaneu</span>
+                            <span class="metric-value" id="val-fuel">5.8 L/100km</span>
+                        </div>
+                    </div>
+
+                    <!-- Balanță Termodinamică Sankey -->
+                    <div class="bar-container">
+                        <div class="bar-header">
+                            <span>BALANȚĂ TERMODINAMICĂ SANKEY</span>
+                            <span style="color:#00FF66;">100% ENERGIE</span>
+                        </div>
+                        <div class="segmented-bar">
+                            <div class="bar-mech" title="Lucru Mecanic (36.5%)"></div>
+                            <div class="bar-exh" title="Căldură Evacuare (18.3%)"></div>
+                            <div class="bar-cool" title="Răcire & Frecare (45.2%)"></div>
+                        </div>
+                        <div class="bar-legend">
+                            <span>Mecanic: 36.5%</span>
+                            <span>Evacuare: 18.3%</span>
+                            <span>Răcire: 45.2%</span>
+                        </div>
+                    </div>
+
+                    <!-- Fiabilitate Weibull RUL -->
+                    <div class="bar-container">
+                        <div class="bar-header">
+                            <span>PREDICȚIE RUL WEIBULL (KM RĂMAȘI)</span>
+                        </div>
+                        <div class="metric-list" style="gap:4px;">
+                            <div class="metric-row"><span class="metric-name">Ulei Motor</span><span class="metric-value">3,660 km</span></div>
+                            <div class="metric-row"><span class="metric-name">Filtru DPF</span><span class="metric-value">58,650 km</span></div>
+                            <div class="metric-row"><span class="metric-name">Turbină CHRA</span><span class="metric-value">25,000 km</span></div>
+                            <div class="metric-row"><span class="metric-name">Plăcuțe Frână</span><span class="metric-value">18,380 km</span></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ── 2. CENTER PANEL: 3D WEBGL SHOWROOM & DIGITAL TWIN ── -->
+            <section class="panel" id="center-viewport">
+                <!-- Auto-Pilot Narrative Floating Banner -->
+                <div id="autopilot-banner">
+                    <div class="ap-banner-top">
+                        <span style="color:#D8B4FE; font-size:10px; font-weight:900;" id="ap-step-badge">
+                            🤖 REGIE AUTO-PILOT ACTIVĂ (15s)
+                        </span>
+                        <span style="color:#A855F7; font-size:9.5px; font-weight:800;" id="ap-countdown">15s</span>
+                    </div>
+                    <div class="ap-title" id="ap-title">TITLU SCENARIU</div>
+                    <div class="ap-desc" id="ap-narrative">Descriere narativă completă...</div>
+                </div>
+
+                <div id="canvas-3d-wrap">
+                    <div id="webgl-canvas-container" style="width:100%; height:100%;"></div>
+                </div>
+
+                <!-- 3D Display Controls -->
+                <div class="viewport-modes">
+                    <button class="mode-btn active" id="btn-mode-real" onclick="set3DMode('STUDIO_REALISTIC')">🚗 REAL</button>
+                    <button class="mode-btn" id="btn-mode-xray" onclick="set3DMode('XRAY_ANATOMY')">🔬 X-RAY</button>
+                    <button class="mode-btn" id="btn-mode-cad" onclick="set3DMode('HOLOGRAM_WIREFRAME')">🌐 CAD</button>
+                </div>
+            </section>
+
+            <!-- ── 3. RIGHT PANEL: 32 PHYSICAL OBSERVERS & MECHANIC GUIDE ── -->
+            <section class="panel">
+                <div class="panel-header">
+                    <span>32 OBSERVATORI FIZICI & DIAGNOZĂ</span>
+                    <span style="font-size:9.5px; color:#A0AEC0;">KALMAN 1 HZ</span>
+                </div>
+                <div class="panel-scroll">
+                    <!-- Ghid Mecanic Activ -->
+                    <div id="mechanic-guide-card">
+                        <div class="guide-head">
+                            <span class="guide-title" id="gd-title">🔧 GHID FIZIC DE INTERVENȚIE</span>
+                            <span class="guide-close" onclick="closeGuide()">✕</span>
+                        </div>
+                        <div class="guide-row" style="color:#00F0FF; font-weight:800;" id="gd-loc">📍 Localizare: ...</div>
+                        <div class="guide-row" id="gd-steps">🖐️ Verificare: ...</div>
+                        <div class="guide-row" style="color:#00FF66;" id="gd-meta">⏱️ Timp: 15 min | 💰 Cost: ...</div>
+                    </div>
+
+                    <div class="observer-grid" id="observers-list">
+                        <!-- Populat dinamic prin JS -->
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // ── 1. INITIALIZARE THREE.JS SHOWROOM VIEWPORT ──────────────────────────
+        var scene, camera, renderer, controls;
+        var carModelRoot = new THREE.Group();
+        var wheelMeshes = [];
+        var currentSpeed = 0;
+        var visualMode = 'STUDIO_REALISTIC';
+
+        function initThreeJS() {
+            var container = document.getElementById('webgl-canvas-container');
+            var width = container.clientWidth || 800;
+            var height = container.clientHeight || 600;
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+            camera.position.set(3.8, 1.8, 4.2);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setClearColor(0x000000, 0);
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 2.2;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.maxPolarAngle = Math.PI / 2 + 0.02;
+            controls.target.set(0, 0.45, 0);
+
+            // Turntable circular platform
+            var platformGeo = new THREE.CylinderGeometry(2.8, 2.8, 0.04, 64);
+            var platformMat = new THREE.MeshStandardMaterial({ color: 0x1E2536, roughness: 0.75, metalness: 0.35 });
+            var turntable = new THREE.Mesh(platformGeo, platformMat);
+            turntable.position.y = -0.02;
+            turntable.receiveShadow = true;
+            scene.add(turntable);
+
+            // Glowing cyan ring (#00F0FF)
+            var ringGeo = new THREE.RingGeometry(2.74, 2.79, 64);
+            var ringMat = new THREE.MeshBasicMaterial({ color: 0x00F0FF, side: THREE.DoubleSide });
+            var ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.y = 0.005;
+            scene.add(ring);
+
+            // Multi-light Showroom Rig
+            var hemi = new THREE.HemisphereLight(0xFFFFFF, 0x475569, 2.5);
+            scene.add(hemi);
+
+            var keyLight = new THREE.DirectionalLight(0xFFFFFF, 3.0);
+            keyLight.position.set(5, 8, 5);
+            keyLight.castShadow = true;
+            scene.add(keyLight);
+
+            var fill1 = new THREE.DirectionalLight(0xE2E8F0, 2.0);
+            fill1.position.set(-6, 4, -4);
+            scene.add(fill1);
+
+            var fill2 = new THREE.DirectionalLight(0xCBD5E1, 2.0);
+            fill2.position.set(6, 4, -3);
+            scene.add(fill2);
+
+            var rimSpot = new THREE.SpotLight(0x00F0FF, 3.5, 18, Math.PI / 4, 0.4);
+            rimSpot.position.set(0, 5, -5);
+            rimSpot.target.position.set(0, 0.45, 0);
+            scene.add(rimSpot);
+            scene.add(rimSpot.target);
+
+            scene.add(carModelRoot);
+
+            // Load Acura CDX model
+            var loader = new THREE.GLTFLoader();
+            loader.load('/models/acura_cdx.glb', function(gltf) {
+                var carScene = gltf.scene;
+                var bbox = new THREE.Box3().setFromObject(carScene);
+                var size = bbox.getSize(new THREE.Vector3());
+                var maxDim = Math.max(size.x, size.y, size.z);
+                var scaleFactor = 4.2 / maxDim;
+                carScene.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+                var center = bbox.getCenter(new THREE.Vector3());
+                carScene.position.x = -center.x * scaleFactor;
+                carScene.position.y = -bbox.min.y * scaleFactor;
+                carScene.position.z = -center.z * scaleFactor;
+
+                carScene.traverse(function(node) {
+                    if (node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                        var n = (node.name || '').toLowerCase();
+                        if (n.indexOf('wheel') !== -1 || n.indexOf('rim') !== -1 || n.indexOf('tire') !== -1) {
+                            wheelMeshes.push(node);
+                        }
+                    }
+                });
+
+                carModelRoot.add(carScene);
+            }, null, function(err) {
+                console.warn('GLB local fallback:', err);
+            });
+
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        function onWindowResize() {
+            var container = document.getElementById('webgl-canvas-container');
+            if (!container || !renderer || !camera) return;
+            var w = container.clientWidth;
+            var h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        }
+
+        var clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            var delta = clock.getDelta();
+
+            // Rotație roți proporțională cu viteza
+            if (currentSpeed > 0 && wheelMeshes.length > 0) {
+                var rot = currentSpeed * delta * 0.55;
+                for (var i = 0; i < wheelMeshes.length; i++) {
+                    wheelMeshes[i].rotation.x += rot;
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function set3DMode(mode) {
+            visualMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            if (mode === 'STUDIO_REALISTIC') document.getElementById('btn-mode-real').classList.add('active');
+            if (mode === 'XRAY_ANATOMY') document.getElementById('btn-mode-xray').classList.add('active');
+            if (mode === 'HOLOGRAM_WIREFRAME') document.getElementById('btn-mode-cad').classList.add('active');
+
+            carModelRoot.traverse(function(node) {
+                if (node.isMesh && node.material) {
+                    if (mode === 'STUDIO_REALISTIC') {
+                        node.material.transparent = false;
+                        node.material.opacity = 1.0;
+                        node.material.wireframe = false;
+                    } else if (mode === 'XRAY_ANATOMY') {
+                        node.material.transparent = true;
+                        node.material.opacity = 0.28;
+                        node.material.wireframe = false;
+                    } else if (mode === 'HOLOGRAM_WIREFRAME') {
+                        node.material.transparent = true;
+                        node.material.opacity = 0.6;
+                        node.material.wireframe = true;
+                    }
+                }
+            });
+        }
+
+        // ── 2. COMUNICARE WEBSOCKET LIVE ────────────────────────────────────────
+        var socket = io();
+        socket.on('connect', function() {
+            document.getElementById('conn-status').style.borderColor = '#00FF6644';
+            document.getElementById('conn-text').innerText = 'CONECTAT';
+        });
+
+        socket.on('disconnect', function() {
+            document.getElementById('conn-status').style.borderColor = '#FF2A2A44';
+            document.getElementById('conn-text').innerText = 'DECONECTAT';
+        });
+
+        socket.on('telemetrie_live', function(pkt) {
+            updateDashboard(pkt);
+        });
+
+        function updateDashboard(pkt) {
+            var m = pkt.motor || {};
+            var gps = pkt.gps || {};
+            var t = pkt.temperaturi || {};
+            var a = pkt.aer || {};
+            var c = pkt.combustibil || {};
+            var bat = pkt.baterie || {};
+            var v = pkt.virtual || {};
+            var trans = pkt.transmisie || {};
+
+            var spd = Math.round(m.speed ?? gps.speed_kmh ?? pkt.viteza_kmh ?? 0);
+            var rpm = Math.round(m.rpm ?? pkt.rpm ?? 0);
+            var gear = trans.gear ?? m.treapta_viteza ?? pkt.gear ?? 'D';
+            var boost = +(a.boost_actual ?? pkt.boost_bar ?? 0.85).toFixed(2);
+            var coolant = +(t.coolant ?? pkt.temp_apa_c ?? 90).toFixed(1);
+            var oil = +(t.oil ?? pkt.temp_ulei_c ?? 92).toFixed(1);
+            var egt = Math.round(t.cat1 ?? pkt.temperaturi?.cat1 ?? 420);
+            var rail = Math.round(c.rail_press_bar ?? 780);
+            var volt = +(bat.ecu_volt ?? pkt.voltaj_v ?? 14.15).toFixed(2);
+            var fuel = +(c.inst_cons ?? pkt.consum_lh ?? 5.8).toFixed(1);
+
+            currentSpeed = spd;
+
+            document.getElementById('val-speed').innerText = spd;
+            document.getElementById('val-rpm').innerText = rpm;
+            document.getElementById('txt-gear').innerText = 'GEAR: ' + gear;
+            document.getElementById('val-boost').innerText = boost + ' bar';
+            document.getElementById('val-coolant').innerText = coolant + ' °C';
+            document.getElementById('val-oil').innerText = oil + ' °C';
+            document.getElementById('val-egt').innerText = egt + ' °C';
+            document.getElementById('val-rail').innerText = rail + ' bar';
+            document.getElementById('val-volt').innerText = volt + ' V';
+            document.getElementById('val-fuel').innerText = fuel + ' L/100km';
+        }
+
+        // ── 3. CEI 32 DE OBSERVATORI FIZICI ────────────────────────────────────
+        var OBSERVERS = [
+            { cat: 'MOTOR & INJECȚIE', id: 've', label: 'Eficiență Volumetrică (VE)', val: '88.4%', status: 'OK' },
+            { cat: 'MOTOR & INJECȚIE', id: 'sae_hp', label: 'Putere Corectată SAE', val: '142 CP', status: 'OK' },
+            { cat: 'MOTOR & INJECȚIE', id: 'torque', label: 'Cuplu Efectiv Arbore', val: '310 Nm', status: 'OK' },
+            { cat: 'MOTOR & INJECȚIE', id: 'bsfc', label: 'Consum Specific BSFC', val: '218 g/kWh', status: 'OK' },
+            { cat: 'MOTOR & INJECȚIE', id: 'lambda', label: 'Amestec Lambda / AFR', val: '16.8:1', status: 'OK' },
+            { cat: 'MOTOR & INJECȚIE', id: 'inj_drift', label: 'Derivă Injecție Ralanti', val: '0.4 mg', status: 'OK', guide: 'NOZZLE_COKING_OR_PUMP_WEAR' },
+            { cat: 'MOTOR & INJECȚIE', id: 'dmf', label: 'Echilibru Volantă DMF', val: 'STABIL', status: 'OK' },
+
+            { cat: 'TURBO & ADMISIE', id: 'boost_leak', label: 'Etanșeitate Intercooler / MAP', val: 'NOMINAL', status: 'OK', guide: 'INTERCOOLER_BOOST_LEAK' },
+            { cat: 'TURBO & ADMISIE', id: 'vnt_n75', label: 'Tijă Geometrie N75', val: 'LIBER (11mm)', status: 'OK', guide: 'VNT_N75_SPIKE' },
+            { cat: 'TURBO & ADMISIE', id: 'chra_temp', label: 'Temperatură Miez CHRA', val: '215 °C', status: 'OK' },
+            { cat: 'TURBO & ADMISIE', id: 'intercooler', label: 'Eficiență Intercooler', val: '82%', status: 'OK' },
+            { cat: 'TURBO & ADMISIE', id: 'maf', label: 'Debitmetru Aer MAF', val: 'NOMINAL', status: 'OK' },
+
+            { cat: 'TERMIC & RĂCIRE', id: 'thermostat', label: 'Termostat Circuit Mare', val: '87°C DESCHIS', status: 'OK', guide: 'THERMOSTAT_STUCK_OPEN' },
+            { cat: 'TERMIC & RĂCIRE', id: 'rad_flow', label: 'Schimb Termic Radiator', val: 'CURAT / EFICIENT', status: 'OK', guide: 'RESTRICTED_HEAT_EXCHANGE' },
+            { cat: 'TERMIC & RĂCIRE', id: 'pump_ua', label: 'Conductanță Pompă Apă', val: '0.44 kW/K', status: 'OK' },
+            { cat: 'TERMIC & RĂCIRE', id: 'head_shock', label: 'Stres Termic Chiulasă', val: 'OPTIM', status: 'OK' },
+
+            { cat: 'EMISII & DPF', id: 'soot', label: 'Încărcare Funingine DPF', val: '34%', status: 'OK' },
+            { cat: 'EMISII & DPF', id: 'regen', label: 'Regenerare Filtru Particule', val: 'PASIVĂ', status: 'OK' },
+            { cat: 'EMISII & DPF', id: 'co_hazard', label: 'Pericol CO în Habitaclu', val: '0 ppm (SIGUR)', status: 'OK' },
+
+            { cat: 'ELECTRICĂ & BATERIE', id: 'diode', label: 'Punte Diode Alternator', val: '0.04V AC (OPTIM)', status: 'OK', guide: 'ALTERNATOR_DIODE_FAULT' },
+            { cat: 'ELECTRICĂ & BATERIE', id: 'ground', label: 'Cădere Tensiune Masă', val: '0.04V (BUN)', status: 'OK', guide: 'GROUND_WIRING_DROP' },
+            { cat: 'ELECTRICĂ & BATERIE', id: 'soh', label: 'Sănătate Baterie SoH', val: '92%', status: 'OK' },
+            { cat: 'ELECTRICĂ & BATERIE', id: 'parasitic', label: 'Consum Parazit Parcare', val: '42 mA', status: 'OK' },
+
+            { cat: 'ȘASIU & FRÂNE', id: 'caliper', label: 'Frecare Etrier / Rulare', val: 'LIBER', status: 'OK', guide: 'BRAKE_CALIPER_OR_BEARING_DRAG' },
+            { cat: 'ȘASIU & FRÂNE', id: 'brake_fade', label: 'Risc Fierbere Frâne (Fade)', val: 'SIGUR (85°C)', status: 'OK' },
+            { cat: 'ȘASIU & FRÂNE', id: 'shocks', label: 'Amortizoare / Contact Asfalt', val: 'OPTIM (ζ=0.28)', status: 'OK', guide: 'WORN_SHOCK_ABSORBERS' },
+            { cat: 'ȘASIU & FRÂNE', id: 'tpms', label: 'Presiune Anvelope TPMS', val: '2.3 BAR (OK)', status: 'OK', guide: 'LOW_TIRE_PRESSURE_DETECTED' },
+            { cat: 'ȘASIU & FRÂNE', id: 'road_grip', label: 'Aderență / Risc Polei', val: 'USCAT', status: 'OK' },
+            { cat: 'ȘASIU & FRÂNE', id: 'fatigue', label: 'Atenție Șofer / Somn', val: '92/100', status: 'OK' }
+        ];
+
+        var MECHANIC_GUIDES = {
+            INTERCOOLER_BOOST_LEAK: {
+                title: '🌪️ Furtun Intercooler Fisurat / Boost Leak (P0299)',
+                loc: '📍 Traseul inferior de admisie (baza intercooler dreapta-jos)',
+                steps: '🖐️ 1. Strânge furtunul cu mâna. 2. Caută stropi de ulei pe curbura inferioară. 3. Verifică colierul de 7mm.',
+                meta: '⏱️ Durată: 15 min | 💰 Cost: 120-250 RON | 🔧 Șurubelniță 7mm, mănuși'
+            },
+            VNT_N75_SPIKE: {
+                title: '🌪️ Suprapresiune Turbo / Supapă N75 Blocată (P0234)',
+                loc: '📍 Electrovana N75 pe peretele de foc + tija actuator VNT turbină',
+                steps: '🖐️ 1. Verifică furtunașul de vacuum de 4mm. 2. Mișcă tija VNT (trebuie să alunece 10-12mm). 3. Curăță mufa N75.',
+                meta: '⏱️ Durată: 20 min | 💰 Cost: 180-320 RON | 🔧 Seringă vacuum, spray contacte'
+            },
+            THERMOSTAT_STUCK_OPEN: {
+                title: '❄️ Termostat Blocat Deschis / Răcire Excesivă (P0128)',
+                loc: '📍 Carcasa termostatului la baza furtunului inferior radiator',
+                steps: '🖐️ 1. Pornește motorul rece. 2. Furtunul de sus trebuie să fie rece până la 87°C. 3. Dacă se încălzește de la 40°C, e blocat.',
+                meta: '⏱️ Durată: 15 min | 💰 Cost: 65-140 RON | 🔧 Mănuși, termometru IR'
+            },
+            RESTRICTED_HEAT_EXCHANGE: {
+                title: '🔥 Fagure Radiator Înfundat / Schimb Termic Redus',
+                loc: '📍 Spațiul de 1-2 cm dintre radiatorul AC și cel de apă',
+                steps: '🖐️ 1. Privește cu lanterna între radiatoare. 2. Îndepărtează puful de plop și frunzele. 3. Spală cu apă la presiune joasă.',
+                meta: '⏱️ Durată: 20 min | 💰 Cost: 0 RON curățare | 🔧 Pensulă moale, lanternă'
+            },
+            ALTERNATOR_DIODE_FAULT: {
+                title: '⚡ Punte Diode Străpunsă / Ondulație Tensiune Alternator',
+                loc: '📍 Alternator pe cureaua de accesorii, borna B+ de 13mm',
+                steps: '🖐️ 1. Măsoară tensiunea DC (13.8V-14.4V). 2. Comută pe VAC: dacă e >0.35V AC, o diodă e arsă. 3. Strânge piulița B+.',
+                meta: '⏱️ Durată: 10 min | 💰 Cost: 140-240 RON | 🔧 Multimetru digital'
+            },
+            GROUND_WIRING_DROP: {
+                title: '⚡ Cădere Masă Motor / Caroserie Corodată',
+                loc: '📍 Tresa de cupru dintre lonjeronul stâng și cutia de viteze',
+                steps: '🖐️ 1. Măsoară între borna (-) și chiulasă. 2. Valoarea trebuie să fie <0.08V. 3. Curăță contactul cu șmirghel și unge cu vaselină cupru.',
+                meta: '⏱️ Durată: 10 min | 💰 Cost: 25-45 RON | 🔧 Multimetru, șmirghel, cheie 10/13'
+            },
+            BRAKE_CALIPER_OR_BEARING_DRAG: {
+                title: '🛑 Etrier Frână Gripant / Culise Blocate',
+                loc: '📍 Etrierul de pe roata încinsă (culise și piston)',
+                steps: '🖐️ 1. Apropie mâna de jantă după 10km (fără atingere). 2. Ridică pe cric: roata trebuie să se învârtă 2 ture liber. 3. Curăță culisele.',
+                meta: '⏱️ Durată: 15 min | 💰 Cost: 45-90 RON kit culise | 🔧 Cric, cheie roți'
+            },
+            NOZZLE_COKING_OR_PUMP_WEAR: {
+                title: '🛢️ Calamină Duză Injector / Șaibă Cupru Arsă',
+                loc: '📍 Baza injectoarelor diesel pe chiulasă',
+                steps: '🖐️ 1. Atinge conductele metalice: pulsul trebuie să fie egal. 2. Caută smoală neagră ("Black Death") la baza injectorului. 3. Înlocuiește șaiba.',
+                meta: '⏱️ Durată: 15 min | 💰 Cost: 15-30 RON șaibă | 🔧 Lanternă, cheie 17'
+            },
+            WORN_SHOCK_ABSORBERS: {
+                title: '🚗 Amortizoare Uzate / Pierdere Contact Asfalt',
+                loc: '📍 Corpul amortizorului în pasajul roții',
+                steps: '🖐️ 1. Apasă ferm pe aripă: mașina trebuie să se oprească instantaneu din prima oscilație. 2. Caută scurgeri de ulei pe tijă.',
+                meta: '⏱️ Durată: 10 min | 💰 Cost: 280-480 RON/pereche | 🔧 Lanternă'
+            },
+            LOW_TIRE_PRESSURE_DETECTED: {
+                title: '⚠️ Presiune Anvelopă Scăzută / Pierdere Aer Ventil',
+                loc: '📍 Valva și suprafața de rulare a anvelopei semnalate',
+                steps: '🖐️ 1. Măsoară presiunea la rece cu manometrul. 2. Pune apă cu săpun pe ventil (verifică bule). 3. Caută șuruburi înflăcărate în profil.',
+                meta: '⏱️ Durată: 5 min | 💰 Cost: 5-35 RON | 🔧 Manometru digital, pompă'
+            }
+        };
+
+        function renderObservers() {
+            var container = document.getElementById('observers-list');
+            container.innerHTML = '';
+            var lastCat = '';
+
+            OBSERVERS.forEach(function(obs) {
+                if (obs.cat !== lastCat) {
+                    var cTitle = document.createElement('div');
+                    cTitle.className = 'category-title';
+                    cTitle.innerText = obs.cat;
+                    container.appendChild(cTitle);
+                    lastCat = obs.cat;
+                }
+
+                var item = document.createElement('div');
+                item.className = 'obs-item';
+                item.onclick = function() {
+                    if (obs.guide && MECHANIC_GUIDES[obs.guide]) {
+                        showGuide(obs.guide);
+                    }
+                };
+
+                var stClass = obs.status === 'OK' ? 'status-ok' : obs.status === 'WARN' ? 'status-warn' : 'status-crit';
+
+                item.innerHTML = `
+                    <span class="obs-label">${obs.label}</span>
+                    <div style="display:flex; align-items:center;">
+                        <span class="obs-val" id="obs-val-${obs.id}">${obs.val}</span>
+                        <span class="obs-status ${stClass}" id="obs-st-${obs.id}">${obs.status}</span>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function showGuide(guideId) {
+            var g = MECHANIC_GUIDES[guideId];
+            if (!g) return;
+            document.getElementById('gd-title').innerText = g.title;
+            document.getElementById('gd-loc').innerText = g.loc;
+            document.getElementById('gd-steps').innerText = g.steps;
+            document.getElementById('gd-meta').innerText = g.meta;
+            document.getElementById('mechanic-guide-card').style.display = 'block';
+        }
+
+        function closeGuide() {
+            document.getElementById('mechanic-guide-card').style.display = 'none';
+        }
+
+        // ── 4. CONTROL SCENARII & REGIE AUTO-PILOT ──────────────────────────────
+        function setScenario(sc) {
+            fetch('/api/simulator/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scenario: sc, durationSec: 180 })
+            }).then(r => r.json()).catch(console.error);
+        }
+
+        function stopSimulation() {
+            stopAutoPilot();
+            fetch('/api/simulator/stop', { method: 'POST' }).then(r => r.json()).catch(console.error);
+        }
+
+        var isAutoPilot = false;
+        var autoPilotTimer = null;
+        var apIndex = 0;
+        var apSec = 15;
+
+        var AP_STEPS = [
+            {
+                scenario: 'normal',
+                title: '🟢 CROAZIERĂ NORMALĂ OPTIMĂ (100% NOMINAL)',
+                desc: 'Viteză 88 km/h, 2100 RPM. Eficiență termică TDI: 36.5%. Toate subsistemele în parametri nominali.',
+                camPreset: 'OVERVIEW',
+                guide: null
+            },
+            {
+                scenario: 'fault_turbo',
+                title: '🌪️ DETECȚIE BOOST LEAK / FURTUN INTERCOOLER FISURAT',
+                desc: 'Presiunea MAP a scăzut la 140 kPa (față de 215 kPa cerut). Sistemul a prevenit supraturarea turbinei și limp mode.',
+                camPreset: 'ENGINE_BAY',
+                guide: 'INTERCOOLER_BOOST_LEAK'
+            },
+            {
+                scenario: 'mountain_brakes',
+                title: '⛰️ COBORÂRE MUNTE / PREVENȚIE FIERBERE LICHID FRÂNĂ',
+                desc: 'Pantă -7.5%, lichid frână la 162°C! Sistemul activează alerta de Brake Fade și recomandă comutarea în frână de motor.',
+                camPreset: 'CHASSIS_BRAKES',
+                guide: 'BRAKE_CALIPER_OR_BEARING_DRAG'
+            },
+            {
+                scenario: 'dpf_regen',
+                title: '🔥 REGENERARE ACTIVĂ DPF ÎN CURS (625°C)',
+                desc: 'Post-injecție activă pentru arderea funinginii. Gazele de evacuare au atins 625°C. Nu opriți motorul timp de 3 minute.',
+                camPreset: 'OVERVIEW',
+                guide: null
+            },
+            {
+                scenario: 'black_ice',
+                title: '❄️ PIERDERE ADERENȚĂ / ALERTĂ POLEI (BLACK ICE)',
+                desc: 'Diferență viteză roți de 8 km/h la 0°C. Sistemul a identificat polei pe carosabil și a amortizat accelerația pentru a preveni derapajul.',
+                camPreset: 'HIGHWAY_CHASE',
+                guide: 'LOW_TIRE_PRESSURE_DETECTED'
+            }
+        ];
+
+        function toggleAutoPilot() {
+            if (isAutoPilot) {
+                stopAutoPilot();
+            } else {
+                startAutoPilot();
+            }
+        }
+
+        function startAutoPilot() {
+            isAutoPilot = true;
+            apIndex = 0;
+            apSec = 15;
+            document.getElementById('btn-autopilot').classList.add('active');
+            document.getElementById('autopilot-banner').style.display = 'block';
+
+            runAutoPilotStep(0);
+
+            autoPilotTimer = setInterval(function() {
+                apSec--;
+                if (apSec <= 0) {
+                    apSec = 15;
+                    apIndex = (apIndex + 1) % AP_STEPS.length;
+                    runAutoPilotStep(apIndex);
+                }
+                document.getElementById('ap-countdown').innerText = apSec + 's';
+            }, 1000);
+        }
+
+        function runAutoPilotStep(idx) {
+            var step = AP_STEPS[idx];
+            setScenario(step.scenario);
+            document.getElementById('ap-step-badge').innerText = `🤖 REGIE AUTO-PILOT [${idx + 1}/5]`;
+            document.getElementById('ap-title').innerText = step.title;
+            document.getElementById('ap-narrative').innerText = step.desc;
+
+            if (step.guide) {
+                showGuide(step.guide);
+            } else {
+                closeGuide();
+            }
+
+            // Pivot cameră 3D
+            if (step.camPreset === 'ENGINE_BAY') {
+                camera.position.set(0, 1.4, 2.2);
+                controls.target.set(0, 0.5, 1.05);
+            } else if (step.camPreset === 'CHASSIS_BRAKES') {
+                camera.position.set(1.6, 0.7, 1.8);
+                controls.target.set(0.78, 0.32, 1.35);
+            } else if (step.camPreset === 'HIGHWAY_CHASE') {
+                camera.position.set(0, 1.2, -4.5);
+                controls.target.set(0, 0.45, 0);
+            } else {
+                camera.position.set(3.8, 1.8, 4.2);
+                controls.target.set(0, 0.45, 0);
+            }
+        }
+
+        function stopAutoPilot() {
+            isAutoPilot = false;
+            if (autoPilotTimer) clearInterval(autoPilotTimer);
+            document.getElementById('btn-autopilot').classList.remove('active');
+            document.getElementById('autopilot-banner').style.display = 'none';
+        }
+
+        // Start everything on DOM load
+        window.onload = function() {
+            initThreeJS();
+            renderObservers();
+        };
+    </script>
+</body>
+</html>

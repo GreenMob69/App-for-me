@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import {
     Modal,
     View,
@@ -11,6 +11,7 @@ import {
     Platform,
 } from 'react-native';
 import api from '../services/api';
+import { AppContext } from '../context/AppContext';
 import { hapticTap, hapticCriticalWarning } from '../services/hapticFeedback';
 import { colors, typography, spacing, radii } from '../theme';
 
@@ -73,6 +74,7 @@ export default function CloudSimulatorModal({ visible, onClose }) {
     const [durationSec, setDurationSec] = useState(180);
     const [loading, setLoading] = useState(false);
     const pollRef = useRef(null);
+    const { isAutoPilotActive, toggleAutoPilot, autoPilotData } = useContext(AppContext) || {};
 
     const checkStatus = async () => {
         try {
@@ -194,6 +196,32 @@ export default function CloudSimulatorModal({ visible, onClose }) {
                     <Text style={styles.introDesc}>
                         Apasă pe oricare dintre scenariile de mai jos pentru a genera telemetrie live la 1 Hz direct pe server. Poți observa reacția fizică pe oricare dintre cele 5 stiluri de bord:
                     </Text>
+
+                    {/* AUTO-PILOT SHOWCASE HERO CARD */}
+                    <TouchableOpacity
+                        style={[
+                            styles.autoPilotHeroCard,
+                            isAutoPilotActive && styles.autoPilotHeroCardActive,
+                        ]}
+                        onPress={() => {
+                            hapticTap();
+                            toggleAutoPilot?.();
+                        }}
+                        activeOpacity={0.8}
+                    >
+                        <View style={styles.autoPilotHeroHeader}>
+                            <Text style={styles.autoPilotHeroBadge}>
+                                {isAutoPilotActive ? `🤖 AUTO-PILOT ACTIV (${autoPilotData?.secondsRemaining}s)` : '🤖 MOD AUTO-PILOT SHOWCASE'}
+                            </Text>
+                            <View style={[styles.autoPilotStatusDot, isAutoPilotActive && styles.autoPilotStatusDotActive]} />
+                        </View>
+                        <Text style={styles.autoPilotHeroTitle}>
+                            {isAutoPilotActive ? 'Demonstrație Activă (Regie Automată)' : 'Demonstrație 100% Autonomă (Zero-Touch)'}
+                        </Text>
+                        <Text style={styles.autoPilotHeroDesc}>
+                            Comută automat la fiecare 15 secunde prin scenariile cheie, orientează camera 3D și evidențiază anomaliile fără să atingi ecranul.
+                        </Text>
+                    </TouchableOpacity>
 
                     {/* List of Scenarios */}
                     <ScrollView
@@ -418,6 +446,59 @@ const styles = StyleSheet.create({
     },
     cardDesc: {
         color: '#718096',
+        fontSize: 10.5,
+        lineHeight: 14,
+    },
+    autoPilotHeroCard: {
+        backgroundColor: '#161930',
+        borderRadius: 10,
+        padding: 12,
+        marginBottom: 12,
+        borderWidth: 1.5,
+        borderColor: '#B026FF66',
+    },
+    autoPilotHeroCardActive: {
+        backgroundColor: '#26123D',
+        borderColor: '#B026FF',
+        shadowColor: '#B026FF',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.5,
+        shadowRadius: 8,
+    },
+    autoPilotHeroHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 4,
+    },
+    autoPilotHeroBadge: {
+        color: '#D8B4FE',
+        fontSize: 10,
+        fontWeight: '900',
+        letterSpacing: 0.6,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    autoPilotStatusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#6B7280',
+    },
+    autoPilotStatusDotActive: {
+        backgroundColor: '#B026FF',
+        shadowColor: '#B026FF',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.9,
+        shadowRadius: 4,
+    },
+    autoPilotHeroTitle: {
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: 'bold',
+        marginBottom: 2,
+    },
+    autoPilotHeroDesc: {
+        color: '#94A3B8',
         fontSize: 10.5,
         lineHeight: 14,
     },

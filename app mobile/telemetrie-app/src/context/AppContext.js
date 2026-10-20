@@ -1,8 +1,68 @@
 import React, { createContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TEMPLATES } from '../theme/templates';
+import api from '../services/api';
+import { getMechanicGuide } from '../utils/physicalMechanicGuide';
 
 export const AppContext = createContext();
+
+export const AUTOPILOT_STEPS = [
+    {
+        scenario: 'normal',
+        cameraPreset: 'OVERVIEW',
+        selectedPart: null,
+        subsystem: null,
+        mechanicGuideId: null,
+        titleRo: '🟢 CROAZIERĂ NORMALĂ OPTIMĂ (100% NOMINAL)',
+        titleEn: '🟢 NOMINAL HIGHWAY CRUISE (100% NOMINAL)',
+        narrativeRo: 'Viteză 88 km/h, 2100 RPM. Eficiență termică motor 36.5%, amestec stoichiometric lambda optim. Nicio anomalie prezentă.',
+        narrativeEn: 'Cruising at 88 km/h, 2100 RPM. Engine thermal efficiency 36.5%, optimal lambda stoichiometry. Zero anomalies detected.',
+    },
+    {
+        scenario: 'fault_turbo',
+        cameraPreset: 'ENGINE_BAY',
+        selectedPart: 'turbo',
+        subsystem: 'turbo',
+        mechanicGuideId: 'INTERCOOLER_BOOST_LEAK',
+        titleRo: '🌪️ DETECȚIE BOOST LEAK / FURTUN FISURAT',
+        titleEn: '🌪️ BOOST LEAK DETECTED / CRACKED INTERCOOLER HOSE',
+        narrativeRo: 'Presiunea MAP a scăzut la 140 kPa (sub comanda de 215 kPa). Algoritmul a identificat pierdere pe traseul intercooler și a prevenit supraturarea turbinei.',
+        narrativeEn: 'MAP pressure dropped to 140 kPa (below 215 kPa cmd). Observer detected boost leak and prevented turbo overspeed failure.',
+    },
+    {
+        scenario: 'mountain_brakes',
+        cameraPreset: 'CHASSIS_BRAKES',
+        selectedPart: 'brakes',
+        subsystem: 'brakes',
+        mechanicGuideId: 'BRAKE_CALIPER_OR_BEARING_DRAG',
+        titleRo: '⛰️ COBORÂRE MUNTE / PREVENȚIE FIERBERE LICHID FRÂNĂ',
+        titleEn: '⛰️ MOUNTAIN DESCENT / BRAKE FLUID BOILING PREVENTION',
+        narrativeRo: 'Pantă -7.5%, temp lichid frână: 162°C! Sistemul activează alerta de Brake Fade și recomandă comutarea în frână de motor treapta a 3-a.',
+        narrativeEn: 'Steep grade -7.5%, fluid temp: 162°C! System triggered Brake Fade hazard, advising engine braking downshift to 3rd gear.',
+    },
+    {
+        scenario: 'dpf_regen',
+        cameraPreset: 'OVERVIEW',
+        selectedPart: 'dpf',
+        subsystem: 'dpf',
+        mechanicGuideId: null,
+        titleRo: '🔥 REGENERARE ACTIVĂ DPF ÎN CURS (625°C)',
+        titleEn: '🔥 ACTIVE DPF SOOT REGENERATION (625°C)',
+        narrativeRo: 'Post-injecție activă pentru arderea funinginii. Gazele de evacuare au atins 625°C. Protocolul notifică șoferul să nu oprească motorul timp de 3 minute.',
+        narrativeEn: 'Post-injection burning soot. Exhaust EGT reached 625°C. System advises keeping engine running for 3 mins to finish cycle.',
+    },
+    {
+        scenario: 'black_ice',
+        cameraPreset: 'HIGHWAY_CHASE',
+        selectedPart: 'suspension',
+        subsystem: 'suspension',
+        mechanicGuideId: 'LOW_TIRE_PRESSURE_DETECTED',
+        titleRo: '❄️ PIERDERE ADERENȚĂ / ALERTĂ POLEI (BLACK ICE)',
+        titleEn: '❄️ GRIP LOSS / BLACK ICE SLIP WARNING',
+        narrativeRo: 'Diferență viteză roți motrice de 8 km/h la 0°C. Sistemul a identificat polei pe carosabil și a amortizat comanda accelerației pentru a preveni derapajul.',
+        narrativeEn: '8 km/h wheel slip delta at 0°C. System identified black ice patch and damped throttle mapping to prevent spin-out.',
+    },
+];
 
 export const AppProvider = ({ children }) => {
     const [viewMode, setViewMode] = useState('COCKPIT');
@@ -17,7 +77,20 @@ export const AppProvider = ({ children }) => {
     const [showSimulatorModal, setShowSimulatorModal] = useState(false);
     const navigationRef = useRef(null);
 
-    // Încarcă șablonul, modul OLED, paradigma vizuală și limba din AsyncStorage la pornire
+    // ── AUTO-PILOT SHOWCASE STATE ────────────────────────────────────────────
+    const [isAutoPilotActive, setIsAutoPilotActive] = useState(false);
+    const [autoPilotStepIndex, setAutoPilotStepIndex] = useState(0);
+    const [autoPilotCountdown, setAutoPilotCountdown] = useState(15);
+    const autoPilotTimerRef = useRef(null);
+    const autoPilotIntervalRef = useRef(null);
+
+    // ── GHID MECANIC FIZIC MODAL STATE ───────────────────────────────────────
+    const [mechanicModalState, setMechanicModalState] = useState({
+        visible: false,
+        guide: null,
+    });
+
+    // Încarcă setările persistate din AsyncStorage
     useEffect(() => {
         Promise.all([
             AsyncStorage.getItem('@cockpit_template'),
@@ -40,11 +113,96 @@ export const AppProvider = ({ children }) => {
             }
             const skip = savedSkipPrompt === 'true';
             setSkipLauncherPromptState(skip);
-            // Dacă utilizatorul nu a bifat "Nu mai afișa la pornire", afișăm selectorul la primul boot
             if (!skip && !savedParadigm) {
                 setShowExperiencePicker(true);
             }
         }).catch(() => {});
+    }, []);
+
+    // ── AUTO-PILOT SHOWCASE ENGINE ────────────────────────────────────────────
+    const executeAutoPilotStep = useCallback(async (index) => {
+        const step = AUTOPILOT_STEPS[index % AUTOPILOT_STEPS.length];
+        try {
+            await api.post('/simulator/start', {
+                scenario: step.scenario,
+                durationSec: 180,
+            });
+        } catch (err) {
+            console.warn('[AUTOPILOT START ERROR]', err?.message);
+        }
+    }, []);
+
+    const stopAutoPilot = useCallback(async () => {
+        setIsAutoPilotActive(false);
+        if (autoPilotTimerRef.current) clearInterval(autoPilotTimerRef.current);
+        if (autoPilotIntervalRef.current) clearInterval(autoPilotIntervalRef.current);
+        try {
+            await api.post('/simulator/stop');
+        } catch (_) {}
+    }, []);
+
+    const startAutoPilot = useCallback(() => {
+        setIsAutoPilotActive(true);
+        setAutoPilotStepIndex(0);
+        setAutoPilotCountdown(15);
+        executeAutoPilotStep(0);
+
+        if (autoPilotTimerRef.current) clearInterval(autoPilotTimerRef.current);
+        if (autoPilotIntervalRef.current) clearInterval(autoPilotIntervalRef.current);
+
+        let currentStep = 0;
+        let secondsLeft = 15;
+
+        // Ticker de secunde pentru afișaj dinamic în banner
+        autoPilotTimerRef.current = setInterval(() => {
+            secondsLeft--;
+            if (secondsLeft <= 0) {
+                secondsLeft = 15;
+                currentStep = (currentStep + 1) % AUTOPILOT_STEPS.length;
+                setAutoPilotStepIndex(currentStep);
+                executeAutoPilotStep(currentStep);
+            }
+            setAutoPilotCountdown(secondsLeft);
+        }, 1000);
+    }, [executeAutoPilotStep]);
+
+    const toggleAutoPilot = useCallback(() => {
+        if (isAutoPilotActive) {
+            stopAutoPilot();
+        } else {
+            startAutoPilot();
+        }
+    }, [isAutoPilotActive, startAutoPilot, stopAutoPilot]);
+
+    // Curățare la unmount
+    useEffect(() => {
+        return () => {
+            if (autoPilotTimerRef.current) clearInterval(autoPilotTimerRef.current);
+            if (autoPilotIntervalRef.current) clearInterval(autoPilotIntervalRef.current);
+        };
+    }, []);
+
+    // Datele pasului curent de Auto-Pilot
+    const currentAutoPilotData = useMemo(() => {
+        const step = AUTOPILOT_STEPS[autoPilotStepIndex % AUTOPILOT_STEPS.length];
+        return {
+            ...step,
+            active: isAutoPilotActive,
+            stepIndex: autoPilotStepIndex,
+            secondsRemaining: autoPilotCountdown,
+        };
+    }, [isAutoPilotActive, autoPilotStepIndex, autoPilotCountdown]);
+
+    // ── GHID MECANIC FIZIC HELPERS ───────────────────────────────────────────
+    const openMechanicGuide = useCallback((keyOrDtc) => {
+        const guide = getMechanicGuide(keyOrDtc);
+        if (guide) {
+            setMechanicModalState({ visible: true, guide });
+        }
+    }, []);
+
+    const closeMechanicGuide = useCallback(() => {
+        setMechanicModalState(prev => ({ ...prev, visible: false }));
     }, []);
 
     const setActiveTemplate = useCallback(async (tplId) => {
@@ -139,6 +297,18 @@ export const AppProvider = ({ children }) => {
         openSimulatorModal, closeSimulatorModal,
         tripReport, setTripReport, dismissTripReport,
         navigationRef, setNavigationRef,
+        // Auto-Pilot Showcase
+        isAutoPilotActive,
+        autoPilotStepIndex,
+        autoPilotCountdown,
+        autoPilotData: currentAutoPilotData,
+        startAutoPilot,
+        stopAutoPilot,
+        toggleAutoPilot,
+        // Ghid Mecanic Fizic
+        mechanicModalState,
+        openMechanicGuide,
+        closeMechanicGuide,
     }), [
         viewMode, selectedMetric, activeTemplate, setActiveTemplate, currentTemplate,
         oledBlackMode, setOledBlackMode,
@@ -147,7 +317,10 @@ export const AppProvider = ({ children }) => {
         showExperiencePicker, openExperiencePicker, closeExperiencePicker,
         skipLauncherPrompt, setSkipLauncherPrompt,
         showSimulatorModal, openSimulatorModal, closeSimulatorModal,
-        tripReport, dismissTripReport, setNavigationRef
+        tripReport, dismissTripReport, setNavigationRef,
+        isAutoPilotActive, autoPilotStepIndex, autoPilotCountdown, currentAutoPilotData,
+        startAutoPilot, stopAutoPilot, toggleAutoPilot,
+        mechanicModalState, openMechanicGuide, closeMechanicGuide
     ]);
 
     return (
@@ -178,6 +351,14 @@ export const useUiParadigm = () => {
         showSimulatorModal: Boolean(context?.showSimulatorModal),
         openSimulatorModal: context?.openSimulatorModal || (() => {}),
         closeSimulatorModal: context?.closeSimulatorModal || (() => {}),
+        // Auto-Pilot
+        isAutoPilotActive: Boolean(context?.isAutoPilotActive),
+        autoPilotData: context?.autoPilotData,
+        startAutoPilot: context?.startAutoPilot || (() => {}),
+        stopAutoPilot: context?.stopAutoPilot || (() => {}),
+        toggleAutoPilot: context?.toggleAutoPilot || (() => {}),
+        // Ghid Mecanic
+        openMechanicGuide: context?.openMechanicGuide || (() => {}),
     };
 };
 
@@ -189,5 +370,3 @@ export const useAppLang = () => {
         toggleAppLang: context?.toggleAppLang || (() => {}),
     };
 };
-
-

@@ -13,6 +13,7 @@ import {
     ScrollView,
     TextInput,
     Modal,
+    useWindowDimensions,
 } from 'react-native';
 import { useSafeInsets } from '../../hooks/useSafeInsets';
 import Svg, {
@@ -295,6 +296,7 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
     setIsExplodedView,
     activeAccent,
     appLang = 'RO',
+    onOpenMechanicGuide,
 }) {
     const isEn = appLang === 'EN';
     const catLabels = {
@@ -353,7 +355,15 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
                         {isEn ? '// DTC DATABASE HOLOGRAPHIC MATCHES:' : '// ANOMALII DTC IDENTIFICATE:'}
                     </Text>
                     {matchedDtc.map(item => (
-                        <View key={item.code} style={styles.spatialDtcCard}>
+                        <TouchableOpacity
+                            key={item.code}
+                            style={styles.spatialDtcCard}
+                            onPress={() => {
+                                hapticTap();
+                                onOpenMechanicGuide?.(item.code);
+                            }}
+                            activeOpacity={0.8}
+                        >
                             <View style={styles.spatialDtcCardHead}>
                                 <Text style={[styles.spatialDtcCode, { color: activeAccent.primary }]}>{item.code} / VAG {item.vagCode}</Text>
                                 <Text style={[styles.spatialDtcSev, { color: item.severity === 'CRIT' ? '#FF2A2A' : '#FFB800' }]}>{item.severity}</Text>
@@ -361,8 +371,8 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
                             <Text style={styles.spatialDtcCardTitle}>{item.title}</Text>
                             <Text style={styles.spatialDtcDesc}><Text style={{ color: '#64748B' }}>CAUZĂ: </Text>{item.cause}</Text>
                             <Text style={styles.spatialDtcDesc}><Text style={{ color: '#64748B' }}>SIMPTOM: </Text>{item.symptoms}</Text>
-                            <Text style={styles.spatialDtcCost}><Text style={{ color: '#00FF66' }}>COST EST: </Text>{item.costEst} · {item.action}</Text>
-                        </View>
+                            <Text style={styles.spatialDtcCost}><Text style={{ color: '#00FF66' }}>COST EST: </Text>{item.costEst} · 🔧 {isEn ? 'PHYSICAL GUIDE' : 'GHID MECANIC'}</Text>
+                        </TouchableOpacity>
                     ))}
                 </View>
             )}
@@ -378,7 +388,15 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
                             const isAlert = s.status === 'ALERT';
                             const statusColor = isAlert ? '#FF2A2A' : isWarn ? '#FFB800' : '#00FF66';
                             return (
-                                <View key={s.id} style={[styles.spatialSensorCard, { borderColor: isAlert ? '#FF2A2A88' : '#162B44' }]}>
+                                <TouchableOpacity
+                                    key={s.id}
+                                    style={[styles.spatialSensorCard, { borderColor: isAlert ? '#FF2A2A88' : '#162B44' }]}
+                                    onPress={() => {
+                                        hapticTap();
+                                        onOpenMechanicGuide?.(s.id || s.label);
+                                    }}
+                                    activeOpacity={0.7}
+                                >
                                     <View style={styles.sensorCardHeader}>
                                         <Text style={styles.spatialSensorLabel} numberOfLines={1}>{s.label}</Text>
                                         <View style={[styles.spatialStatusDot, { backgroundColor: statusColor }]} />
@@ -387,7 +405,7 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
                                         <Text style={[styles.spatialSensorVal, { color: statusColor }]}>{s.val}</Text>
                                         <Text style={styles.spatialSensorRef}>REF: {s.target}</Text>
                                     </View>
-                                </View>
+                                </TouchableOpacity>
                             );
                         })}
                     </View>
@@ -912,13 +930,24 @@ const StationSpatialCopilot = React.memo(function StationSpatialCopilot({
 
 export default function SpatialCanvasParadigm() {
     const insets = useSafeInsets();
+    const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+    const isLandscape = screenWidth > screenHeight;
     // Stări Standalone OS: 'XRAY' | 'REPLAY' | 'SERVICE' | 'SENTRY' | 'COPILOT'
     const [spatialSheet, setSpatialSheet] = useState('XRAY');
     const isLiveViewActive = spatialSheet === 'XRAY';
     const core = useParadigmCoreData(isLiveViewActive);
     const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
-    const { setUiParadigm, openExperiencePicker, openSimulatorModal, appLang, toggleAppLang } = useUiParadigm();
+    const {
+        setUiParadigm,
+        openExperiencePicker,
+        openSimulatorModal,
+        appLang,
+        toggleAppLang,
+        isAutoPilotActive,
+        autoPilotData,
+        openMechanicGuide,
+    } = useUiParadigm();
     const isEn = appLang === 'EN';
     const [spatialAccentKey, setSpatialAccentKey] = useState('CYAN'); // 'CYAN' | 'GOLD' | 'EMERALD'
 
@@ -1244,27 +1273,30 @@ export default function SpatialCanvasParadigm() {
                 </View>
             </View>
 
-            {/* ── 2. Zona Centrală: Canvas Tridimensional Interactiv ── */}
-            <View style={styles.canvasContainer}>
-                <RealisticCar3DView
-                    visualMode={isExplodedView ? 'XRAY_ANATOMY' : spatialVisualMode}
-                    cameraPreset={cameraZone}
-                    autoRotate={autoRotate}
-                    telemetry={telemetry}
-                    height={250}
-                    showOverlayControls={true}
-                    onChangeVisualMode={setSpatialVisualMode}
-                    onSelectPart={(partId) => {
-                        hapticTap();
-                        if (partId === 'engine' || partId === 'turbo' || partId === 'cooling') {
-                            setSpatialSheet('XRAY');
-                        } else if (partId === 'brakes' || partId === 'suspension') {
-                            setSpatialSheet('SERVICE');
-                        } else {
-                            setSpatialSheet('SENTRY');
-                        }
-                    }}
-                />
+            {/* ── 2. Zona Centrală: Canvas Tridimensional Interactiv (Split-View în Landscape) ── */}
+            <View style={isLandscape ? styles.landscapeContainer : { flex: 1 }}>
+                <View style={isLandscape ? styles.landscapeLeftCol : null}>
+                    <View style={[styles.canvasContainer, isLandscape && { height: Math.max(220, screenHeight - 110), marginBottom: 4 }]}>
+                        <RealisticCar3DView
+                            visualMode={isExplodedView ? 'XRAY_ANATOMY' : spatialVisualMode}
+                            cameraPreset={isAutoPilotActive ? (autoPilotData?.cameraPreset || 'OVERVIEW') : cameraZone}
+                            selectedPart={isAutoPilotActive ? autoPilotData?.selectedPart : null}
+                            autoRotate={autoRotate}
+                            telemetry={telemetry}
+                            height={isLandscape ? Math.max(220, screenHeight - 110) : 250}
+                            showOverlayControls={true}
+                            onChangeVisualMode={setSpatialVisualMode}
+                            onSelectPart={(partId) => {
+                                hapticTap();
+                                if (partId === 'engine' || partId === 'turbo' || partId === 'cooling') {
+                                    setSpatialSheet('XRAY');
+                                } else if (partId === 'brakes' || partId === 'suspension') {
+                                    setSpatialSheet('SERVICE');
+                                } else {
+                                    setSpatialSheet('SENTRY');
+                                }
+                            }}
+                        />
 
                 {/* Butoane Hotspot Tridimensionale */}
                 <View style={styles.hotspotsLayer} pointerEvents="box-none">
@@ -1390,7 +1422,10 @@ export default function SpatialCanvasParadigm() {
                     </Text>
                 </TouchableOpacity>
             </View>
+            </View>
 
+            {/* Coloana Dreaptă în Landscape / Continuitate în Portrait */}
+            <View style={isLandscape ? styles.landscapeRightCol : { flex: 1 }}>
             {/* ── 4. BARA TABS PENTRU CELE 6 FOI DE STICLĂ SPATIALE ── */}
             <View style={styles.spatialTabBar}>
                 {[
@@ -1444,6 +1479,7 @@ export default function SpatialCanvasParadigm() {
                             isExplodedView={isExplodedView}
                             setIsExplodedView={setIsExplodedView}
                             activeAccent={activeAccent}
+                            onOpenMechanicGuide={openMechanicGuide}
                         />
                     )}
 
@@ -1466,6 +1502,7 @@ export default function SpatialCanvasParadigm() {
                             exportItpDossier={core.exportItpDossier}
                             selectTripForReplay={core.selectTripForReplay}
                             activeAccent={activeAccent}
+                            onOpenMechanicGuide={openMechanicGuide}
                         />
                     )}
 
@@ -1482,6 +1519,7 @@ export default function SpatialCanvasParadigm() {
                             fuelPricePerLiter={core.fuelPricePerLiter}
                             setFuelPricePerLiter={core.setFuelPricePerLiter}
                             activeAccent={activeAccent}
+                            onOpenMechanicGuide={openMechanicGuide}
                         />
                     )}
 
@@ -1510,6 +1548,7 @@ export default function SpatialCanvasParadigm() {
                             parkingMinutesRemaining={core.parkingMinutesRemaining}
                             addParkingTime={core.addParkingTime}
                             activeAccent={activeAccent}
+                            onOpenMechanicGuide={openMechanicGuide}
                         />
                     )}
 
@@ -1520,11 +1559,14 @@ export default function SpatialCanvasParadigm() {
                             isAiLoading={core.isAiLoading}
                             sendAiPrompt={core.sendAiPrompt}
                             activeAccent={activeAccent}
+                            onOpenMechanicGuide={openMechanicGuide}
                         />
                     )}
 
                 </ScrollView>
             </View>
+        </View>
+    </View>
 
             {/* ── HOLOGRAPHIC FLOATING GLASS CAPSULE DEBRIEF ── */}
             <Modal
@@ -1962,6 +2004,20 @@ const styles = StyleSheet.create({
         fontSize: 9,
         color: '#8EADC8',
         fontWeight: '700',
+    },
+    landscapeContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        paddingHorizontal: 8,
+        gap: 8,
+    },
+    landscapeLeftCol: {
+        width: '46%',
+        flexDirection: 'column',
+    },
+    landscapeRightCol: {
+        flex: 1,
+        flexDirection: 'column',
     },
     canvasContainer: {
         height: 250,

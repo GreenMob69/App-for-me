@@ -12,6 +12,7 @@ import {
     Animated,
     Modal,
     TextInput,
+    useWindowDimensions,
 } from 'react-native';
 import { useSafeInsets } from '../../hooks/useSafeInsets';
 import Svg, { Rect, Path, Circle, Line, Defs, LinearGradient, Stop, G, Text as SvgText } from 'react-native-svg';
@@ -191,7 +192,8 @@ const StationAudiVag1551 = React.memo(function StationAudiVag1551({
     setSearchQuery,
     matchedDtc,
     accentColor,
-    appLang = 'RO'
+    appLang = 'RO',
+    onOpenMechanicGuide,
 }) {
     const isEn = appLang === 'EN';
     const [vagToolMode, setVagToolMode] = useState('SENSORS'); // 'SENSORS' | 'TDI_TIMING' | 'KLIMA_60'
@@ -343,7 +345,15 @@ const StationAudiVag1551 = React.memo(function StationAudiVag1551({
                 <View style={styles.dtcResultsBox}>
                     <Text style={styles.dtcResultsTitle}>{isEn ? 'DTC DATABASE MATCHES:' : 'REZULTATE BAZĂ DATE DTC:'}</Text>
                     {matchedDtc.map(item => (
-                        <View key={item.code} style={styles.dtcCard}>
+                        <TouchableOpacity
+                            key={item.code}
+                            style={styles.dtcCard}
+                            onPress={() => {
+                                hapticTap();
+                                onOpenMechanicGuide?.(item.code);
+                            }}
+                            activeOpacity={0.8}
+                        >
                             <View style={styles.dtcCardHead}>
                                 <Text style={styles.dtcCode}>{item.code} / VAG {item.vagCode}</Text>
                                 <Text style={[styles.dtcSeverity, { color: item.severity === 'CRIT' ? '#FF3300' : '#FFAA00' }]}>{item.severity}</Text>
@@ -351,8 +361,8 @@ const StationAudiVag1551 = React.memo(function StationAudiVag1551({
                             <Text style={styles.dtcTitle}>{item.title}</Text>
                             <Text style={styles.dtcCause}><Text style={{ color: '#FFAA00' }}>CAUZĂ:</Text> {item.cause}</Text>
                             <Text style={styles.dtcSymptoms}><Text style={{ color: '#FF3300' }}>SIMPTOM:</Text> {item.symptoms}</Text>
-                            <Text style={styles.dtcCost}><Text style={{ color: '#00FF66' }}>COST EST:</Text> {item.costEst} · {item.action}</Text>
-                        </View>
+                            <Text style={styles.dtcCost}><Text style={{ color: '#00FF66' }}>COST EST:</Text> {item.costEst} · 🔧 {isEn ? 'PHYSICAL GUIDE' : 'GHID MECANIC'}</Text>
+                        </TouchableOpacity>
                     ))}
                 </View>
             )}
@@ -903,6 +913,8 @@ const StationAudiMeisterAi = React.memo(function StationAudiMeisterAi({
 
 export default function RetroAudi96Paradigm() {
     const insets = useSafeInsets();
+    const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+    const isLandscape = screenWidth > screenHeight;
 
     // 6 Taste Basculante: '1' DIGIFIZ | '2' VAG 1551 | '3' FAHRTENBUCH | '4' SERVICEHEFT | '5' SAFE-LOCK | '6' MEISTER AI
     const [activeSwitch, setActiveSwitch] = useState('1');
@@ -910,7 +922,14 @@ export default function RetroAudi96Paradigm() {
     const core = useParadigmCoreData(isLiveViewActive);
     const telemetry = core.telemetry;
     const { activeVehicle } = useVehicle();
-    const { setUiParadigm, openExperiencePicker, openSimulatorModal, appLang, toggleAppLang } = useUiParadigm();
+    const {
+        setUiParadigm,
+        openExperiencePicker,
+        openSimulatorModal,
+        appLang,
+        toggleAppLang,
+        openMechanicGuide,
+    } = useUiParadigm();
     const isEn = appLang === 'EN';
 
     const [retroAccentMode, setRetroAccentMode] = useState('AMBER'); // 'AMBER' | 'RED' | 'GREEN'
@@ -1237,6 +1256,161 @@ export default function RetroAudi96Paradigm() {
             >
                 {/* ── 1 DIGIFIZ: KOMBIINSTRUMENT ── */}
                 {activeSwitch === '1' && (
+                    isLandscape ? (
+                        <View style={styles.audiLandscapeRow}>
+                            <View style={styles.audiLandscapeCol}>
+                                <AudiTachometerBargraph
+                                    rpm={rpm}
+                                    maxRpm={6000}
+                                    brightness={dimmerLevel}
+                                    phosphorTrailRpm={phosphorTrailRpm}
+                                    appLang={appLang}
+                                    width={Math.round(screenWidth * 0.48 - 20)}
+                                />
+                                <View style={styles.speedClusterFrame}>
+                                    <TouchableOpacity
+                                        style={styles.pushPinLeft}
+                                        onPress={() => {
+                                            hapticTap();
+                                            setTripKmOffset(0.0);
+                                        }}
+                                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                                    >
+                                        <View style={styles.pushPinHead} />
+                                        <Text style={styles.pushPinText}>RESET</Text>
+                                    </TouchableOpacity>
+                                    <View style={styles.speedDisplayCenter}>
+                                        <Text style={[styles.speedGhost, { opacity: 0.12 }]}>888</Text>
+                                        <Text style={[styles.speedVfdText, { color: clusterAccentColor, opacity: dimmerLevel }]}>
+                                            {speed}
+                                        </Text>
+                                        <Text style={[styles.speedUnitVfd, { opacity: dimmerLevel }]}>km/h</Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.pushPinRight}
+                                        onPress={() => {
+                                            hapticTap();
+                                            setBcModeIndex(prev => prev + 1);
+                                        }}
+                                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                                    >
+                                        <View style={styles.pushPinHead} />
+                                        <Text style={styles.pushPinText}>MODE</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                <TouchableOpacity
+                                    style={styles.autocheckScreen}
+                                    onPress={() => {
+                                        hapticTap();
+                                        runAutocheckCycle();
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={styles.autocheckHeader}>
+                                        <Text style={styles.autocheckTitle}>{isEn ? 'AUTO-CHECK SYSTEM' : 'VERIFICARE AUTO'}</Text>
+                                        <Text style={[
+                                            styles.autocheckBadge,
+                                            autocheckState === 'OK' ? { color: '#00FF66' } : { color: '#FF3300' }
+                                        ]}>
+                                            [ {autocheckState} ]
+                                        </Text>
+                                    </View>
+                                    <Text style={styles.autocheckSub}>
+                                        {autocheckState === 'OK'
+                                            ? (isEn ? 'ALL SYSTEMS: RUNNING NORMALLY' : 'SISTEME VERIFICATE: TOATE SUNT OK')
+                                            : (isEn ? `SYSTEM CHECK: ${autocheckState}` : `TESTARE: ${autocheckState}`)}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                            <View style={styles.audiLandscapeCol}>
+                                <View style={styles.odometerFrame}>
+                                    <View style={styles.odometerRow}>
+                                        <Text style={styles.odoLabel}>TOTAL KM:</Text>
+                                        <View style={styles.drumRollBox}>
+                                            <Text style={styles.drumRollText}>{totalKm}</Text>
+                                        </View>
+                                        <Text style={styles.odoLabel}>{isEn ? 'TRIP:' : 'CURSĂ:'}</Text>
+                                        <View style={styles.drumRollBox}>
+                                            <Text style={[styles.drumRollText, { color: '#FFAA00' }]}>{currentTripKm}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.clockRow}>
+                                        <Text style={styles.quartzClockText}>{isEn ? 'TIME:' : 'ORĂ:'} {currentTime}</Text>
+                                        <View style={styles.tempIceRow}>
+                                            {ambientTemp <= 4.0 && <Text style={styles.iceFlakeIcon}>❄️</Text>}
+                                            <Text style={[styles.tempIceText, ambientTemp <= 4.0 && { color: '#00F0FF' }]}>
+                                                {isEn ? 'OUTSIDE:' : 'EXTERIOR:'} +{ambientTemp}°C
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+                                <View style={styles.columnsRow}>
+                                    <VerticalLedColumn
+                                        label={isEn ? "COOLANT" : "TEMP. APĂ"}
+                                        value={coolantTemp}
+                                        unit="°C"
+                                        min={50}
+                                        max={120}
+                                        warnThreshold={100}
+                                        critThreshold={108}
+                                        color={clusterAccentColor}
+                                        brightness={dimmerLevel}
+                                    />
+                                    <VerticalLedColumn
+                                        label={isEn ? "OIL TEMP" : "TEMP. ULEI"}
+                                        value={oilTemp}
+                                        unit="°C"
+                                        min={50}
+                                        max={150}
+                                        warnThreshold={125}
+                                        critThreshold={138}
+                                        color={clusterAccentColor}
+                                        brightness={dimmerLevel}
+                                    />
+                                    <VerticalLedColumn
+                                        label={isEn ? "BOOST BAR" : "PRESIUNE TURBO"}
+                                        value={boost}
+                                        unit="bar"
+                                        min={0}
+                                        max={2.5}
+                                        warnThreshold={1.8}
+                                        critThreshold={2.2}
+                                        color={clusterAccentColor}
+                                        brightness={dimmerLevel}
+                                        peakHold={peakBoostHold}
+                                    />
+                                    <VerticalLedColumn
+                                        label={isEn ? "FUEL" : "BENZINĂ"}
+                                        value={fuelLevel}
+                                        unit="%"
+                                        min={0}
+                                        max={100}
+                                        warnThreshold={15}
+                                        critThreshold={8}
+                                        color="#00FF66"
+                                        brightness={dimmerLevel}
+                                    />
+                                </View>
+                                <TouchableOpacity
+                                    style={styles.bordcomputerBox}
+                                    onPress={() => {
+                                        hapticTap();
+                                        setBcModeIndex(prev => prev + 1);
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={styles.bcHeader}>
+                                        <Text style={styles.bcLabel}>{isEn ? 'TRIP COMPUTER //' : 'COMPUTER BORD //'} {currentBc.label}</Text>
+                                        <Text style={styles.bcHint}>[ {isEn ? 'NEXT' : 'URMĂTORUL'} ]</Text>
+                                    </View>
+                                    <View style={styles.bcValueRow}>
+                                        <Text style={[styles.bcValue, { color: clusterAccentColor }]}>{currentBc.value}</Text>
+                                        <Text style={styles.bcUnit}>{currentBc.unit}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    ) : (
                     <View>
                         {/* 2.1 Turometru VFD Stepped (Bitmask Vector + Phosphor Decay) */}
                         <AudiTachometerBargraph
@@ -1403,6 +1577,7 @@ export default function RetroAudi96Paradigm() {
                             </View>
                         </TouchableOpacity>
                     </View>
+                    )
                 )}
 
                 {/* ── 2 VAG 1551: DIAGNOSE & 32 MESSWERTBLÖCKE ── */}
@@ -1415,6 +1590,7 @@ export default function RetroAudi96Paradigm() {
                         matchedDtc={core.matchedDtc}
                         accentColor={clusterAccentColor}
                         appLang={appLang}
+                        onOpenMechanicGuide={openMechanicGuide}
                     />}
 
                 {/* ── 3 FAHRTENBUCH: JURNAL & REPLAY CASSETE AUDI GAMMA ── */}
@@ -2118,6 +2294,15 @@ const styles = StyleSheet.create({
         color: '#884422',
         fontWeight: '700',
         marginTop: -6,
+    },
+    audiLandscapeRow: {
+        flexDirection: 'row',
+        gap: 12,
+        paddingHorizontal: 8,
+    },
+    audiLandscapeCol: {
+        flex: 1,
+        flexDirection: 'column',
     },
     odometerFrame: {
         backgroundColor: '#0F0401',
