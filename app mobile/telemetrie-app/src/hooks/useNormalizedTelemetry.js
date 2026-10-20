@@ -9,11 +9,8 @@ import { safeNum, safeFmt } from '../utils/safeMath';
  * toate cele 5 stiluri vizuale (Classic, Nothing, Audi '96, F1, Spatial 3D)
  * primesc date curate, sigure (fara null-pointer exceptions) si normalizate,
  * indiferent daca datele vin prin MQTT real, socket sau simulator.
- * 
- * @param {boolean} [isLiveViewActive=true] - Cand este false, ingheata re-randarile la 1Hz/60FPS
- * ale ceasurilor statice, pastrand in fundal doar verificarea alertelor critice.
  */
-export function useNormalizedTelemetry(isLiveViewActive = true) {
+export function useNormalizedTelemetry(_isLiveViewActive = true) {
   const liveCtx = useContext(LiveContext) || {};
   const appCtx = useContext(AppContext) || {};
   const lastTelemetryRef = useRef(null);
@@ -32,62 +29,85 @@ export function useNormalizedTelemetry(isLiveViewActive = true) {
   } = appCtx;
 
   return useMemo(() => {
-    // Daca vizualizarea Live nu este activa (ex: utilizatorul este pe Curse, Service, Sentry sau AI),
-    // si avem deja un snapshot precedent, inghetam valorile numerice pentru a preveni re-randarile parazite.
-    if (!isLiveViewActive && lastTelemetryRef.current) {
-      const v = (liveData && liveData.virtual) || {};
-      const t = (liveData && liveData.temperaturi) || {};
-      const coolant = Math.round(t.coolant || t.antigel || 90);
-      const hasCritical = Boolean(v.dieselRunawayRisk || v.mountainBrakeFadeRisk || v.roadGripStatus === 'BLACK_ICE_GRIP_LOSS_WARNING' || coolant > 105);
-      const prevHadCritical = lastTelemetryRef.current.criticalAlerts && lastTelemetryRef.current.criticalAlerts.length > 0;
-      
-      if (!hasCritical && !prevHadCritical) {
-        return lastTelemetryRef.current;
-      }
-    }
     const data = liveData || {};
+    const motor = data.motor || {};
+    const gps = data.gps || {};
     const d = data.dinamica || {};
     const t = data.temperaturi || {};
+    const a = data.aer || {};
     const p = data.presiuni || {};
     const e = data.electric || {};
+    const bat = data.baterie || {};
     const c = data.combustibil || {};
+    const trans = data.transmisie || {};
+    const acc = data.accelerometru || {};
     const v = data.virtual || {};
 
-    // Cuantizare numerică cu deadband filtering pentru eliminarea re-randărilor parazite
-    const speed = Math.max(0, Math.round(d.viteza || 0));
-    const rpm = Math.max(0, Math.round((d.turatie || 0) / 5) * 5); // Cuantizat la multiplu de 5 RPM
-    const throttle = Math.min(100, Math.max(0, Math.round(d.acceleratie || 0)));
-    const gear = d.treapta_viteza ? String(d.treapta_viteza) : (speed === 0 && rpm < 500 ? 'P' : rpm < 1000 && speed === 0 ? 'N' : 'D');
+    // ── 1. DINAMICĂ & VITEZĂ (EXTRAGERE DEFENSIVĂ MULTI-CANAL) ─────────────────
+    const rawSpeed = motor.speed ?? gps.speed_kmh ?? data.viteza_kmh ?? d.viteza ?? data.speed ?? 0;
+    const speed = Math.max(0, Math.round(safeNum(rawSpeed, 0)));
 
-    // Temperaturi rotunjite la 0.1°C
-    const coolantTemp = Math.round((t.coolant || t.antigel || 90) * 10) / 10;
-    const oilTemp = Math.round((t.ulei || 92) * 10) / 10;
-    const exhaustTemp = Math.round((t.evacuare || t.egt || 420) * 10) / 10;
-    const intakeTemp = Math.round((t.admisie || 24) * 10) / 10;
+    const rawRpm = motor.rpm ?? data.rpm ?? d.turatie ?? 0;
+    const rpm = Math.max(0, Math.round(safeNum(rawRpm, 0) / 5) * 5); // Cuantizat la multiplu de 5 RPM
+
+    const rawThrottle = motor.throttle_pos ?? motor.load ?? data.throttle ?? data.sarcina_pct ?? d.acceleratie ?? 0;
+    const throttle = Math.min(100, Math.max(0, Math.round(safeNum(rawThrottle, 0))));
+
+    const rawLoad = motor.load ?? data.sarcina_pct ?? motor.throttle_pos ?? 0;
+    const engineLoad = Math.min(100, Math.max(0, Math.round(safeNum(rawLoad, 0))));
+
+    const rawGear = motor.treapta_viteza ?? trans.gear ?? data.gear ?? d.treapta_viteza;
+    const gear = (rawGear !== undefined && rawGear !== null && rawGear !== '')
+      ? String(rawGear)
+      : (speed === 0 && rpm < 500 ? 'P' : rpm < 1000 && speed === 0 ? 'N' : 'D');
+
+    // ── 2. TEMPERATURI ROTUNJITE LA 0.1°C ────────────────────────────────────
+    const rawCoolant = t.coolant ?? t.antigel ?? data.temp_apa_c ?? d.temp_apa ?? 90;
+    const coolantTemp = Math.round(safeNum(rawCoolant, 90) * 10) / 10;
+
+    const rawOil = t.oil ?? t.ulei ?? data.temp_ulei_c ?? 92;
+    const oilTemp = Math.round(safeNum(rawOil, 92) * 10) / 10;
+
+    const rawExhaust = t.cat1 ?? t.cat2 ?? t.evacuare ?? t.egt ?? data.dpf?.egt1 ?? 420;
+    const exhaustTemp = Math.round(safeNum(rawExhaust, 420) * 10) / 10;
+
+    const rawIntake = t.admisie ?? t.ambient ?? data.temperaturi?.ambient ?? 24;
+    const intakeTemp = Math.round(safeNum(rawIntake, 24) * 10) / 10;
+
     const chraTemp = Math.round((v.chraCoreTempC || (exhaustTemp * 0.72)) * 10) / 10;
 
-    // Presiuni (bar) rotunjite la 0.01 bar / 5 bar rail
-    const boostRaw = p.turbo_boost ?? p.boost ?? 0.85;
+    // ── 3. PRESIUNI (BAR) ROTUNJITE LA 0.01 BAR / 5 BAR RAIL ─────────────────
+    const boostRaw = a.boost_actual ?? data.boost_bar ?? p.turbo_boost ?? p.boost ?? v.boostBar ?? 0.85;
     const boost = Math.round(safeNum(boostRaw, 0.85) * 100) / 100;
-    const railPressure = Math.round(safeNum(p.rail_bar ?? p.rampa, 780) / 5) * 5;
-    const oilPressure = Math.round(safeNum(p.ulei_bar, 3.4) * 10) / 10;
 
-    // Electricitate rotunjită la 0.01V
-    const batteryVoltage = Math.round(safeNum(e.tensiune, 14.1) * 100) / 100;
+    const rawRail = c.rail_press_bar ?? p.rail_bar ?? p.rampa ?? 780;
+    const railPressure = Math.round(safeNum(rawRail, 780) / 5) * 5;
+
+    const rawOilPress = p.ulei_bar ?? v.oilPressureBar ?? 3.4;
+    const oilPressure = Math.round(safeNum(rawOilPress, 3.4) * 10) / 10;
+
+    // ── 4. ELECTRICITATE ROTUNJITĂ LA 0.01V ──────────────────────────────────
+    const rawVolt = bat.ecu_volt ?? bat.bat_volt ?? data.voltaj_v ?? e.tensiune ?? 14.1;
+    const batteryVoltage = Math.round(safeNum(rawVolt, 14.1) * 100) / 100;
     const batterySoH = Math.round(safeNum(v.batterySoH, 92));
 
-    // Combustibil & Consum
+    // ── 5. COMBUSTIBIL & CONSUM ──────────────────────────────────────────────
     const fuelLevel = Math.round(c.nivel_litri ? (safeNum(c.nivel_litri) / 70) * 100 : safeNum(c.procent, 68));
-    const fuelRate = Math.round(safeNum(c.consum_instant ?? (speed > 10 ? 5.8 : 0.8), 5.8) * 10) / 10;
+    const rawFuelRate = c.inst_cons ?? data.consum_lh ?? c.consum_instant ?? (speed > 10 ? 5.8 : 0.8);
+    const fuelRate = Math.round(safeNum(rawFuelRate, 5.8) * 10) / 10;
     const fuelBurnedLiters = Math.round(safeNum(v.fuelBurnedLiters || c.litri_consumati, 1.45) * 100) / 100;
 
-    // Frâne & Dinamică
+    // ── 6. FRÂNE & DINAMICĂ G-FORCE ──────────────────────────────────────────
     const brakeFluidTemp = Math.round(safeNum(v.brakeFluidTempC, 85) * 10) / 10;
     const brakeEnergyTrip = Math.round(safeNum(v.brakeEnergyJoulesTrip, 0) / 1000); // kJ
-    const gForceLat = Math.round(safeNum(v.gForceLateral, 0.0) * 50) / 50; // Pas de 0.02G
-    const gForceLong = Math.round(safeNum(v.gForceLongitudinal, 0.0) * 50) / 50; // Pas de 0.02G
+    const gForceLat = Math.round(safeNum(v.gForceLateral ?? acc.accel_y, 0.0) * 50) / 50; // Pas de 0.02G
+    const gForceLong = Math.round(safeNum(motor.accel_g ?? acc.accel_x ?? data.accel_g ?? v.gForceLongitudinal, 0.0) * 50) / 50; // Pas de 0.02G
 
-    // RUL & Fiabilitate Weibull
+    // ── 7. PUTERE & CUPLU VIRTUAL ────────────────────────────────────────────
+    const powerHp = Math.round(safeNum(v.powerHp ?? v.saeCorrectedPowerHp, (rpm > 500 && throttle > 0) ? ((rpm * throttle) / 100) * 0.035 : 0));
+    const torqueNm = Math.round(safeNum(v.torqueNm ?? motor.torque_actual ?? data.torque_nm, (throttle > 0) ? (throttle / 100) * 310 : 0));
+
+    // ── 8. RUL & FIABILITATE WEIBULL ─────────────────────────────────────────
     const weibullRul = v.weibullRulMatrix || {
       oil: 3660,
       dpf: 58650,
@@ -99,14 +119,14 @@ export function useNormalizedTelemetry(isLiveViewActive = true) {
     const breakdownRisk = Math.round(v.roadsideBreakdownRiskPct || 12);
     const b2bRoi = Math.round(v.b2bEconomicRoiEuro || 1689);
 
-    // Balanță Sankey
+    // ── 9. BALANȚĂ SANKEY ────────────────────────────────────────────────────
     const sankey = v.sankeyEnergyBalance || {
       mechanicalPct: 36.5,
       exhaustHeatPct: 18.3,
       coolingFrictionPct: 45.2,
     };
 
-    // Alerte critice
+    // ── 10. ALERTE CRITICE ───────────────────────────────────────────────────
     const criticalAlerts = [];
     if (v.dieselRunawayRisk) {
       criticalAlerts.push({
@@ -150,6 +170,9 @@ export function useNormalizedTelemetry(isLiveViewActive = true) {
         prev.rpm === rpm &&
         prev.gear === gear &&
         prev.throttle === throttle &&
+        prev.engineLoad === engineLoad &&
+        prev.powerHp === powerHp &&
+        prev.torqueNm === torqueNm &&
         prev.coolantTemp === coolantTemp &&
         prev.oilTemp === oilTemp &&
         prev.exhaustTemp === exhaustTemp &&
@@ -184,6 +207,9 @@ export function useNormalizedTelemetry(isLiveViewActive = true) {
       rpm,
       gear,
       throttle,
+      engineLoad,
+      powerHp,
+      torqueNm,
       // Termic
       coolantTemp,
       oilTemp,
@@ -231,5 +257,5 @@ export function useNormalizedTelemetry(isLiveViewActive = true) {
     };
     lastTelemetryRef.current = result;
     return result;
-  }, [liveData, isConnected, isReconnecting, openSimulatorModal, uiParadigm, setUiParadigm, getChartHistory, isLiveViewActive]);
+  }, [liveData, isConnected, isReconnecting, openSimulatorModal, uiParadigm, setUiParadigm, getChartHistory]);
 }

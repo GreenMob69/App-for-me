@@ -50,6 +50,7 @@ import RetroAudi96Paradigm  from './src/screens/paradigms/RetroAudi96Paradigm';
 import F1CyberdeckParadigm  from './src/screens/paradigms/F1CyberdeckParadigm';
 import SpatialCanvasParadigm from './src/screens/paradigms/SpatialCanvasParadigm';
 import CloudSimulatorModal  from './src/components/CloudSimulatorModal';
+import LiveSimStrip         from './src/components/LiveSimStrip';
 
 const Tab       = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
@@ -286,6 +287,7 @@ function AppSecurityAndModals() {
     const { showSimulatorModal, closeSimulatorModal } = useContext(AppContext);
     return (
         <SecurityGate>
+            <LiveSimStrip />
             <MainContent />
             <ExperienceLauncherModal />
             <CloudSimulatorModal visible={showSimulatorModal} onClose={closeSimulatorModal} />

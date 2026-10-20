@@ -309,11 +309,11 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
     return (
         <View>
             <View style={styles.sheetHeaderRow}>
-                <View>
-                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]}>
-                        {isEn ? '3D VIRTUAL ANATOMY · 32 PHYSICAL OBSERVERS' : '3D ANATOMIE VIRTUALĂ · 32 OBSERVATORI FIZICI'}
+                <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={[styles.sheetTitle, { color: activeAccent.primary }]} numberOfLines={1}>
+                        {isEn ? '3D VIRTUAL ANATOMY · 32 OBSERVERS' : '3D ANATOMIE VIRTUALĂ · 32 OBSERVATORI'}
                     </Text>
-                    <Text style={styles.sheetSub}>MOTOR KALMAN FILTER · DIAGNOZĂ TOLERANȚE</Text>
+                    <Text style={styles.sheetSub} numberOfLines={1}>MOTOR KALMAN FILTER · DIAGNOZĂ TOLERANȚE</Text>
                 </View>
                 <TouchableOpacity
                     style={[styles.xrayToggleBtn, { borderColor: activeAccent.primary, backgroundColor: activeAccent.bg }]}
@@ -1185,7 +1185,7 @@ export default function SpatialCanvasParadigm() {
                         }}
                         hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                     >
-                        <Text style={styles.hudActionBtnText}>⮌ CLASIC</Text>
+                        <Text style={styles.hudActionBtnText}>◀ CLASIC V2</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -1428,7 +1428,11 @@ export default function SpatialCanvasParadigm() {
 
             {/* ── 5. CORPUL CENTRAL: FOAIA DE STICLĂ ACTIVĂ (FLOATING GLASS SHEET) ── */}
             <View style={styles.sheetContainer}>
-                <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
+                <ScrollView
+                    style={styles.sheetScroll}
+                    contentContainerStyle={{ paddingBottom: 80 }}
+                    showsVerticalScrollIndicator={false}
+                >
 
                     {spatialSheet === 'XRAY' && (
                         <StationSpatialXRay
@@ -2145,15 +2149,20 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     xrayToggleBtn: {
-        paddingHorizontal: 8,
-        paddingVertical: 3,
+        flexShrink: 0,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
         borderRadius: 4,
         borderWidth: 1,
+        minWidth: 72,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     xrayToggleText: {
         fontFamily: MONO,
-        fontSize: 8,
+        fontSize: 9,
         fontWeight: '900',
+        letterSpacing: 0.5,
     },
     spatialCategoryBox: {
         marginBottom: 10,

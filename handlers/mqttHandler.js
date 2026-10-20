@@ -370,6 +370,23 @@ async function handleIncomingTelemetry(db, io, pachet) {
             return;
         }
 
+        // Fallback: Daca motorul este in MERS dar sesiunea de calatorie inca nu e initializata in DB,
+        // emitem totusi pachetul complet live cu senzorii virtuali calculati pentru a nu ingheta UI-ul!
+        if (eveniment_motor === 'MERS' && !calatoriiActive[vin]) {
+            const activePhysics = resolveVehiclePhysics({ vin }, vin);
+            pachet.virtual = {
+                ...(pachet.virtual || {}),
+                ...computeVirtualSensors(pachet, activePhysics),
+            };
+            io.emit('telemetrie_live', {
+                id_calatorie: null,
+                km_parcursi: '0.00',
+                scor_eco: 100,
+                ...pachet,
+            });
+            return;
+        }
+
         // ── OPRIRE ───────────────────────────────────────────────────────────
         if (eveniment_motor === 'OPRIRE' && calatoriiActive[vin]) {
             const trip       = calatoriiActive[vin];
