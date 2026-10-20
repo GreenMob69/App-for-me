@@ -101,6 +101,7 @@ const SettingsScreen = () => {
     const cardStyle = useMemo(() => [styles.card, { backgroundColor: tpl.cardBg, borderColor: tpl.border }], [tpl.cardBg, tpl.border]);
 
     // ── Connection
+    const [showLabArchive, setShowLabArchive] = useState(false);
     const [connStatus, setConnStatus]   = useState('checking');
     const [pingMs,     setPingMs]       = useState(null);
     const pingRef = useRef(null);
@@ -402,24 +403,26 @@ const SettingsScreen = () => {
             {/* ── Limbă Aplicație / App Language (RO | EN) ──────────── */}
             <View style={cardStyle}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[1] }}>
-                    <SectionTitle>🌐 {appLang === 'EN' ? 'Language / Limbă' : 'Limba Aplicației / Language'}</SectionTitle>
+                    <SectionTitle>🌐 {appLang === 'RU' ? 'Язык интерфейса / Language' : appLang === 'EN' ? 'Language / Limba' : 'Limba Aplicației / Language'}</SectionTitle>
                     <View style={[styles.paradigmBadge, { borderColor: '#00E5FF', backgroundColor: '#00E5FF1A' }]}>
                         <Text style={[styles.paradigmBadgeText, { color: '#00E5FF' }]}>
-                            {appLang === 'EN' ? '🇬🇧 ENGLISH' : '🇷🇴 ROMÂNĂ'}
+                            {appLang === 'RU' ? '🇷🇺 РУССКИЙ' : appLang === 'EN' ? '🇬🇧 ENGLISH' : '🇷🇴 ROMÂNĂ'}
                         </Text>
                     </View>
                 </View>
                 <Text style={styles.desc}>
-                    {appLang === 'EN'
-                        ? 'Select application interface language across all 5 telemetry paradigms.'
-                        : 'Selectează limba interfeței pentru toate cele 5 stiluri de telemetrie.'}
+                    {appLang === 'RU'
+                        ? 'Выберите язык интерфейса приложения для всех стилей телеметрии.'
+                        : appLang === 'EN'
+                        ? 'Select application interface language across all telemetry paradigms.'
+                        : 'Selectează limba interfeței pentru toate stilurile de telemetrie.'}
                 </Text>
 
                 <View style={{ flexDirection: 'row', gap: spacing[2], marginTop: spacing[1] }}>
                     <TouchableOpacity
                         style={[
                             styles.paradigmCard,
-                            { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
+                            { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10 },
                             appLang === 'RO' && styles.paradigmCardSelected,
                             { borderColor: appLang === 'RO' ? '#00E5FF' : colors.border.default }
                         ]}
@@ -429,15 +432,15 @@ const SettingsScreen = () => {
                         }}
                         activeOpacity={0.75}
                     >
-                        <Text style={{ fontSize: 20, marginBottom: 4 }}>🇷🇴</Text>
-                        <Text style={[styles.paradigmCardName, appLang === 'RO' && { color: '#00E5FF' }]}>Română (RO)</Text>
-                        <Text style={styles.paradigmCardSub}>Interfață în limba română</Text>
+                        <Text style={{ fontSize: 18, marginBottom: 2 }}>🇷🇴</Text>
+                        <Text style={[styles.paradigmCardName, appLang === 'RO' && { color: '#00E5FF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>Română</Text>
+                        <Text style={styles.paradigmCardSub} numberOfLines={1}>RO</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                         style={[
                             styles.paradigmCard,
-                            { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
+                            { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10 },
                             appLang === 'EN' && styles.paradigmCardSelected,
                             { borderColor: appLang === 'EN' ? '#00E5FF' : colors.border.default }
                         ]}
@@ -447,646 +450,28 @@ const SettingsScreen = () => {
                         }}
                         activeOpacity={0.75}
                     >
-                        <Text style={{ fontSize: 20, marginBottom: 4 }}>🇬🇧</Text>
-                        <Text style={[styles.paradigmCardName, appLang === 'EN' && { color: '#00E5FF' }]}>English (EN)</Text>
-                        <Text style={styles.paradigmCardSub}>English user interface</Text>
+                        <Text style={{ fontSize: 18, marginBottom: 2 }}>🇬🇧</Text>
+                        <Text style={[styles.paradigmCardName, appLang === 'EN' && { color: '#00E5FF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>English</Text>
+                        <Text style={styles.paradigmCardSub} numberOfLines={1}>EN</Text>
                     </TouchableOpacity>
-                </View>
-            </View>
 
-            {/* ── Paradigmă Vizuală (Stilul Aplicației) ──────────── */}
-            <View style={cardStyle}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[1] }}>
-                    <SectionTitle>🎨 Paradigmă Vizuală (Stilul Aplicației)</SectionTitle>
-                    <View style={[styles.paradigmBadge, {
-                        borderColor: uiParadigm === 'NOTHING_MINIMAL' ? '#FF3B00' : uiParadigm === 'RETRO_AUDI_96' ? '#FF8800' : colors.accent.default,
-                        backgroundColor: (uiParadigm === 'NOTHING_MINIMAL' ? '#FF3B00' : uiParadigm === 'RETRO_AUDI_96' ? '#FF8800' : colors.accent.default) + '22'
-                    }]}>
-                        <Text style={[styles.paradigmBadgeText, {
-                            color: uiParadigm === 'NOTHING_MINIMAL' ? '#FF3B00' : uiParadigm === 'RETRO_AUDI_96' ? '#FF8800' : colors.accent.default
-                        }]}>
-                            {uiParadigm === 'NOTHING_MINIMAL' ? 'NOTHING OS' : uiParadigm === 'RETRO_AUDI_96' ? 'AUDI 1996' : 'CLASIC V2'}
-                        </Text>
-                    </View>
-                </View>
-                <Text style={styles.desc}>
-                    Alege cum este afișată telemetria în timp real. Poți comuta oricând între bordul clasic complet, minimalismul Nothing OS sau clusterul retro Audi Digifiz.
-                </Text>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing[2], paddingVertical: 4 }}>
-                    {/* Clasic V2 */}
                     <TouchableOpacity
                         style={[
                             styles.paradigmCard,
-                            { minWidth: 120 },
-                            uiParadigm === 'CLASSIC_V2' && styles.paradigmCardSelected,
-                            { borderColor: uiParadigm === 'CLASSIC_V2' ? '#00E5FF' : colors.border.default }
+                            { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10 },
+                            appLang === 'RU' && styles.paradigmCardSelected,
+                            { borderColor: appLang === 'RU' ? '#00E5FF' : colors.border.default }
                         ]}
                         onPress={() => {
                             hapticTap();
-                            setUiParadigm('CLASSIC_V2');
+                            setAppLang('RU');
                         }}
                         activeOpacity={0.75}
                     >
-                        <View style={styles.paradigmTopRow}>
-                            <View style={[styles.paradigmDot, { backgroundColor: '#00E5FF' }]} />
-                            <Text style={[styles.paradigmCardName, uiParadigm === 'CLASSIC_V2' && { color: '#00E5FF' }]}>CLASIC V2</Text>
-                        </View>
-                        <Text style={styles.paradigmCardSub}>Bord Multi-Tab & HMI</Text>
-                        {uiParadigm === 'CLASSIC_V2' && (
-                            <View style={[styles.paradigmActiveTag, { backgroundColor: '#00E5FF' }]}>
-                                <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
-                            </View>
-                        )}
+                        <Text style={{ fontSize: 18, marginBottom: 2 }}>🇷🇺</Text>
+                        <Text style={[styles.paradigmCardName, appLang === 'RU' && { color: '#00E5FF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>Русский</Text>
+                        <Text style={styles.paradigmCardSub} numberOfLines={1}>RU</Text>
                     </TouchableOpacity>
-
-                    {/* Nothing Minimal */}
-                    <TouchableOpacity
-                        style={[
-                            styles.paradigmCard,
-                            { minWidth: 120 },
-                            uiParadigm === 'NOTHING_MINIMAL' && styles.paradigmCardSelected,
-                            { borderColor: uiParadigm === 'NOTHING_MINIMAL' ? '#FF3B00' : colors.border.default }
-                        ]}
-                        onPress={() => {
-                            hapticTap();
-                            setUiParadigm('NOTHING_MINIMAL');
-                        }}
-                        activeOpacity={0.75}
-                    >
-                        <View style={styles.paradigmTopRow}>
-                            <View style={[styles.paradigmDot, { backgroundColor: '#FF3B00' }]} />
-                            <Text style={[styles.paradigmCardName, uiParadigm === 'NOTHING_MINIMAL' && { color: '#FF3B00' }]}>NOTHING OS</Text>
-                        </View>
-                        <Text style={styles.paradigmCardSub}>Calm Tech & 128px</Text>
-                        {uiParadigm === 'NOTHING_MINIMAL' && (
-                            <View style={[styles.paradigmActiveTag, { backgroundColor: '#FF3B00' }]}>
-                                <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-
-                    {/* Retro Audi 96 */}
-                    <TouchableOpacity
-                        style={[
-                            styles.paradigmCard,
-                            { minWidth: 120 },
-                            uiParadigm === 'RETRO_AUDI_96' && styles.paradigmCardSelected,
-                            { borderColor: uiParadigm === 'RETRO_AUDI_96' ? '#FF8800' : colors.border.default }
-                        ]}
-                        onPress={() => {
-                            hapticTap();
-                            setUiParadigm('RETRO_AUDI_96');
-                        }}
-                        activeOpacity={0.75}
-                    >
-                        <View style={styles.paradigmTopRow}>
-                            <View style={[styles.paradigmDot, { backgroundColor: '#FF8800' }]} />
-                            <Text style={[styles.paradigmCardName, uiParadigm === 'RETRO_AUDI_96' && { color: '#FF8800' }]}>AUDI 1996</Text>
-                        </View>
-                        <Text style={styles.paradigmCardSub}>Digifiz VFD 25 LED</Text>
-                        {uiParadigm === 'RETRO_AUDI_96' && (
-                            <View style={[styles.paradigmActiveTag, { backgroundColor: '#FF8800' }]}>
-                                <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-
-                    {/* F1 Cyberdeck */}
-                    <TouchableOpacity
-                        style={[
-                            styles.paradigmCard,
-                            { minWidth: 120 },
-                            uiParadigm === 'F1_CYBERDECK' && styles.paradigmCardSelected,
-                            { borderColor: uiParadigm === 'F1_CYBERDECK' ? '#00FF66' : colors.border.default }
-                        ]}
-                        onPress={() => {
-                            hapticTap();
-                            setUiParadigm('F1_CYBERDECK');
-                        }}
-                        activeOpacity={0.75}
-                    >
-                        <View style={styles.paradigmTopRow}>
-                            <View style={[styles.paradigmDot, { backgroundColor: '#00FF66' }]} />
-                            <Text style={[styles.paradigmCardName, uiParadigm === 'F1_CYBERDECK' && { color: '#00FF66' }]}>F1 CYBER</Text>
-                        </View>
-                        <Text style={styles.paradigmCardSub}>F1/WEC 6-Deck</Text>
-                        {uiParadigm === 'F1_CYBERDECK' && (
-                            <View style={[styles.paradigmActiveTag, { backgroundColor: '#00FF66' }]}>
-                                <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-
-                    {/* Spatial Canvas */}
-                    <TouchableOpacity
-                        style={[
-                            styles.paradigmCard,
-                            { minWidth: 120 },
-                            uiParadigm === 'SPATIAL_CANVAS' && styles.paradigmCardSelected,
-                            { borderColor: uiParadigm === 'SPATIAL_CANVAS' ? '#B026FF' : colors.border.default }
-                        ]}
-                        onPress={() => {
-                            hapticTap();
-                            setUiParadigm('SPATIAL_CANVAS');
-                        }}
-                        activeOpacity={0.75}
-                    >
-                        <View style={styles.paradigmTopRow}>
-                            <View style={[styles.paradigmDot, { backgroundColor: '#B026FF' }]} />
-                            <Text style={[styles.paradigmCardName, uiParadigm === 'SPATIAL_CANVAS' && { color: '#B026FF' }]}>SPATIAL 3D</Text>
-                        </View>
-                        <Text style={styles.paradigmCardSub}>4 Camere & Orbită</Text>
-                        {uiParadigm === 'SPATIAL_CANVAS' && (
-                            <View style={[styles.paradigmActiveTag, { backgroundColor: '#B026FF' }]}>
-                                <Text style={styles.paradigmActiveTagText}>✓ ACTIV</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                </ScrollView>
-
-                {/* Buton Deschide Selectorul Complet */}
-                <TouchableOpacity
-                    style={[styles.outlineBtn, { marginTop: spacing[3], borderColor: colors.accent.default }]}
-                    onPress={() => {
-                        hapticTap();
-                        openExperiencePicker();
-                    }}
-                    activeOpacity={0.75}
-                >
-                    <Text style={[styles.outlineBtnText, { color: colors.accent.default }]}>
-                        🎨 Deschide Selectorul Vizual de Experiențe ➜
-                    </Text>
-                </TouchableOpacity>
-
-                {/* Buton Deschide Telecomanda de Simulare */}
-                <TouchableOpacity
-                    style={[styles.outlineBtn, { marginTop: spacing[2], borderColor: '#00F0FF', backgroundColor: '#00F0FF12' }]}
-                    onPress={() => {
-                        hapticTap();
-                        openSimulatorModal();
-                    }}
-                    activeOpacity={0.75}
-                >
-                    <Text style={[styles.outlineBtnText, { color: '#00F0FF' }]}>
-                        🎮 Deschide Telecomanda de Simulare Live (Server Cloud) ➜
-                    </Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* ── Profil Vehicul ─────────────────────────────────────────── */}
-            <View style={cardStyle}>
-                <SectionTitle>Profil Vehicul</SectionTitle>
-                <Row label="Model" value={activeVehicle?.model || '—'} />
-
-                {/* VIN — editabil cu validare */}
-                {editVin ? (
-                    <View style={styles.vinEditContainer}>
-                        <View style={styles.vinInputRow}>
-                            <TextInput
-                                style={styles.vinInput}
-                                value={vinInputVal}
-                                onChangeText={t => setVinInputVal(
-                                    t.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/gi, '').slice(0, 17)
-                                )}
-                                autoCapitalize="characters"
-                                autoCorrect={false}
-                                maxLength={17}
-                                placeholder="ex: WAUZZZ4A1RN000000"
-                                placeholderTextColor={colors.text.disabled}
-                                autoFocus
-                            />
-                            <Text style={styles.vinCounter}>{vinInputVal.length}/17</Text>
-                        </View>
-                        {vinInputVal.length > 0 && (() => {
-                            const s = getVinStatus(vinInputVal);
-                            const color = s.level === 'ok'      ? colors.status.good
-                                        : s.level === 'warn'    ? colors.status.monitor
-                                        : s.level === 'bad'     ? colors.status.critical
-                                        : colors.text.secondary;
-                            return <Text style={[styles.vinStatusMsg, { color }]}>{s.msg}</Text>;
-                        })()}
-                        <View style={styles.vinBtnRow}>
-                            <TouchableOpacity style={styles.outlineSmBtn} onPress={() => setEditVin(false)}>
-                                <Text style={styles.outlineSmBtnText}>Anulează</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.solidBtn, (!getVinStatus(vinInputVal).ok || savingVin) && styles.solidBtnDisabled]}
-                                onPress={handleSaveVin}
-                                disabled={!getVinStatus(vinInputVal).ok || savingVin}
-                            >
-                                <Text style={styles.solidBtnText}>{savingVin ? '...' : 'Salvează'}</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                ) : (
-                    <TouchableOpacity
-                        style={styles.row}
-                        onPress={() => { setVinInputVal(activeVehicle?.vin || activeVin || ''); setEditVin(true); }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.rowLabel}>VIN</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Text style={[styles.rowValue, { fontSize: typography.sizes.caption }]}>
-                                {activeVehicle?.vin || activeVin || 'Introdu ✎'}
-                            </Text>
-                            <Text style={styles.editHint}>✎</Text>
-                        </View>
-                    </TouchableOpacity>
-                )}
-
-                {/* Rezervor — editabil */}
-                {editTankCap ? (
-                    <View style={styles.row}>
-                        <Text style={styles.rowLabel}>Rezervor</Text>
-                        <View style={styles.thrEditRow}>
-                            <TextInput
-                                style={styles.thrInput}
-                                value={tankCapVal}
-                                onChangeText={setTankCapVal}
-                                keyboardType="numeric"
-                                autoFocus
-                                onBlur={async () => {
-                                    await handleSaveVehicleField('capacitate_rezervor_l', tankCapVal);
-                                    setEditTankCap(false);
-                                }}
-                            />
-                            <Text style={styles.thrUnit}>L</Text>
-                        </View>
-                    </View>
-                ) : (
-                    <TouchableOpacity
-                        style={styles.row}
-                        onPress={() => { setTankCapVal(String(activeVehicle?.capacitate_rezervor_l || 80)); setEditTankCap(true); }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.rowLabel}>Rezervor</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Text style={styles.rowValue}>{activeVehicle?.capacitate_rezervor_l || 80} L</Text>
-                            <Text style={styles.editHint}>✎</Text>
-                        </View>
-                    </TouchableOpacity>
-                )}
-
-                <Row label="Combustibil" value={activeVehicle?.tip_combustibil
-                    ? activeVehicle.tip_combustibil.charAt(0).toUpperCase() + activeVehicle.tip_combustibil.slice(1)
-                    : 'Diesel'} />
-
-                {/* Odometru calibrat — editabil */}
-                {editOdo ? (
-                    <View style={[styles.row, styles.rowLast]}>
-                        <Text style={styles.rowLabel}>Odometru calibrat</Text>
-                        <View style={styles.thrEditRow}>
-                            <TextInput
-                                style={[styles.thrInput, { width: 90 }]}
-                                value={odoVal}
-                                onChangeText={setOdoVal}
-                                keyboardType="numeric"
-                                autoFocus
-                                onBlur={async () => {
-                                    await handleSaveVehicleField('odometru_calibrat_km', odoVal);
-                                    setEditOdo(false);
-                                }}
-                            />
-                            <Text style={styles.thrUnit}>km</Text>
-                        </View>
-                    </View>
-                ) : (
-                    <TouchableOpacity
-                        style={[styles.row, styles.rowLast]}
-                        onPress={() => { setOdoVal(String(activeVehicle?.odometru_calibrat_km > 0 ? activeVehicle.odometru_calibrat_km : '')); setEditOdo(true); }}
-                        activeOpacity={0.7}
-                    >
-                        <Text style={styles.rowLabel}>Odometru calibrat</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Text style={activeVehicle?.odometru_calibrat_km > 0 ? styles.rowValue : styles.editHintMain}>
-                                {activeVehicle?.odometru_calibrat_km > 0
-                                    ? `${activeVehicle.odometru_calibrat_km.toLocaleString('ro-RO')} km`
-                                    : 'Introdu ✎'}
-                            </Text>
-                            {activeVehicle?.odometru_calibrat_km > 0 && <Text style={styles.editHint}>✎</Text>}
-                        </View>
-                    </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                    style={styles.outlineBtn}
-                    onPress={() => navigation.navigate('VehicleProfile')}
-                    accessibilityRole="button"
-                >
-                    <Text style={styles.outlineBtnText}>Deschide dosarul complet →</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* ── Statistici ─────────────────────────────────────────────── */}
-            <View style={cardStyle}>
-                <SectionTitle>Statistici cumulate</SectionTitle>
-                <View style={styles.statsGrid}>
-                    <View style={styles.statCell}>
-                        <Text style={styles.statValue}>{Math.round(stats?.total_km || 0).toLocaleString('ro-RO')}</Text>
-                        <Text style={styles.statLabel}>km total</Text>
-                    </View>
-                    <View style={[styles.statCell, styles.statCellBorder]}>
-                        <Text style={styles.statValue}>{(stats?.total_combustibil || 0).toFixed(1)}</Text>
-                        <Text style={styles.statLabel}>litri consum</Text>
-                    </View>
-                    <View style={[styles.statCell, styles.statCellBorder]}>
-                        <Text style={[styles.statValue, { color: colors.status.monitor }]}>{totalCost.toFixed(0)}</Text>
-                        <Text style={styles.statLabel}>RON cost est.</Text>
-                    </View>
-                </View>
-                {(stats?.total_calatorii > 0 || stats?.scor_mediu > 0) && (
-                    <View style={styles.statFooter}>
-                        <Text style={styles.statFooterText}>
-                            {stats?.total_calatorii > 0 ? `${stats.total_calatorii} curse` : ''}
-                            {stats?.scor_mediu > 0 ? `  ·  eco mediu ${Math.round(stats.scor_mediu)}/100` : ''}
-                            {avgCons ? `  ·  ${avgCons} L/100km` : ''}
-                        </Text>
-                    </View>
-                )}
-            </View>
-
-            {/* ── Vehicule înregistrate ──────────────────────────────────── */}
-            {vehicles.length > 1 && (
-                <View style={cardStyle}>
-                    <SectionTitle>Vehicule înregistrate</SectionTitle>
-                    <Text style={styles.desc}>Apasă „Activează" pentru a schimba vehiculul monitorizat.</Text>
-                    {vehicles.map((v, i) => {
-                        const isActive = v.vin === activeVin;
-                        return (
-                            <View key={v.vin} style={[styles.vehicleRow, i === vehicles.length - 1 && styles.rowLast]}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.vehicleModel}>{v.model || 'Vehicul'}</Text>
-                                    <Text style={styles.vehicleVin}>{v.vin}</Text>
-                                </View>
-                                {isActive ? (
-                                    <View style={styles.activePill}><Text style={styles.activePillText}>Activ</Text></View>
-                                ) : (
-                                    <TouchableOpacity style={styles.switchBtn} onPress={() => handleSwitchVehicle(v.vin)}>
-                                        <Text style={styles.switchBtnText}>Activează</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        );
-                    })}
-                </View>
-            )}
-
-            {/* ── Șabloane Cockpit & Design HMI ─────────────────────── */}
-            <View style={cardStyle}>
-                <SectionTitle>Șabloane Cockpit (Design Templates)</SectionTitle>
-                <Text style={styles.desc}>
-                    Alege stilul vizual și structura preferată pentru bord, inspirate de cele mai bune interfețe din motorsport și mașini electrice:
-                </Text>
-
-                <View style={styles.templateGrid}>
-                    {Object.values(TEMPLATES).map(tpl => {
-                        const isSelected = activeTemplate === tpl.id;
-                        return (
-                            <TouchableOpacity
-                                key={tpl.id}
-                                style={[
-                                    styles.templateCard,
-                                    { borderColor: isSelected ? tpl.accent : colors.border.default },
-                                    isSelected && styles.templateCardSelected,
-                                ]}
-                                onPress={() => setActiveTemplate(tpl.id)}
-                                activeOpacity={0.75}
-                                accessibilityRole="button"
-                                accessibilityLabel={`Alege șablonul ${tpl.name}`}
-                            >
-                                <CockpitVisualPreview
-                                    templateId={tpl.id}
-                                    isSelected={isSelected}
-                                    width={138}
-                                    height={68}
-                                />
-                                <View style={styles.templateHeader}>
-                                    <View style={[styles.templateColorDot, { backgroundColor: tpl.accent }]} />
-                                    <View style={[styles.templateBadge, { backgroundColor: tpl.tagBg }]}>
-                                        <Text style={[styles.templateBadgeText, { color: tpl.accent }]}>{tpl.badge}</Text>
-                                    </View>
-                                </View>
-                                <Text style={[styles.templateName, isSelected && { color: tpl.accent }]}>{tpl.name}</Text>
-                                <Text style={styles.templateSub}>{tpl.subtitle}</Text>
-                                {isSelected && (
-                                    <View style={[styles.templateActiveIndicator, { backgroundColor: tpl.accent }]}>
-                                        <Text style={styles.templateActiveText}>✓ ACTIV</Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-
-                {/* ── Toggle Mod OLED True Black (#000000) ── */}
-                <View style={[styles.switchRow, { marginTop: spacing[4], paddingTop: spacing[4], borderTopWidth: 1, borderTopColor: colors.border.subtle }]}>
-                    <View style={{ flex: 1, paddingRight: spacing[2] }}>
-                        <Text style={styles.switchLabel}>🌑 Mod OLED True Black (#000000)</Text>
-                        <Text style={styles.switchDesc}>
-                            Forțează fundalul pe negru absolut (#000000) pe orice șablon, stingând pixelii ecranelor OLED pentru a economisi baterie și a preveni reflexiile de noapte.
-                        </Text>
-                    </View>
-                    <Switch
-                        value={Boolean(oledBlackMode)}
-                        onValueChange={setOledBlackMode}
-                        trackColor={{ false: colors.border.default, true: colors.accent.default }}
-                        thumbColor={oledBlackMode ? '#FFFFFF' : colors.text.secondary}
-                    />
-                </View>
-            </View>
-
-            {/* ── Economie ───────────────────────────────────────────────── */}
-            <View style={cardStyle}>
-                <SectionTitle>Economie</SectionTitle>
-                <Text style={styles.desc}>Prețul per litru pentru calculul costurilor per cursă.</Text>
-                <View style={styles.inputRow}>
-                    <TextInput
-                        style={styles.input}
-                        value={fuelPrice}
-                        onChangeText={setFuelPrice}
-                        keyboardType="numeric"
-                        placeholder="24.50"
-                        placeholderTextColor={colors.text.disabled}
-                        accessibilityLabel="Preț motorină RON per litru"
-                    />
-                    <Text style={styles.inputUnit}>RON/L</Text>
-                    <TouchableOpacity
-                        style={[styles.solidBtn, isSaving && styles.solidBtnDisabled]}
-                        onPress={handleSavePrice}
-                        disabled={isSaving}
-                    >
-                        <Text style={styles.solidBtnText}>{isSaving ? '...' : 'Salvează'}</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            {/* ── Praguri de alertă ──────────────────────────────────────── */}
-            <View style={cardStyle}>
-                <View style={styles.cardHeaderRow}>
-                    <SectionTitle>Praguri de alertă</SectionTitle>
-                    <TouchableOpacity
-                        style={[styles.solidBtn, thrSaved && { backgroundColor: colors.status.good }]}
-                        onPress={handleSaveThresholds}
-                    >
-                        <Text style={styles.solidBtnText}>{thrSaved ? '✓ Salvat' : 'Salvează'}</Text>
-                    </TouchableOpacity>
-                </View>
-                <Text style={styles.desc}>
-                    Valorile de mai jos controlează când aplicația afișează avertizări și alerte critice în ecranul Live.
-                </Text>
-                {THRESHOLD_FIELDS.map((f, i) => (
-                    <View key={f.key} style={[styles.thrRow, i === THRESHOLD_FIELDS.length - 1 && styles.rowLast]}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.thrLabel}>{f.label}</Text>
-                            <Text style={styles.thrRange}>min {f.min} · max {f.max} {f.unit}</Text>
-                        </View>
-                        {editingKey === f.key ? (
-                            <View style={styles.thrEditRow}>
-                                <TextInput
-                                    style={styles.thrInput}
-                                    value={editVal}
-                                    onChangeText={setEditVal}
-                                    keyboardType="numeric"
-                                    autoFocus
-                                    onBlur={() => {
-                                        const n = parseFloat(editVal);
-                                        if (!isNaN(n) && n >= f.min && n <= f.max) {
-                                            setThresholds(prev => ({ ...prev, [f.key]: n }));
-                                        }
-                                        setEditingKey(null);
-                                    }}
-                                    accessibilityLabel={`Prag ${f.label}`}
-                                />
-                                <Text style={styles.thrUnit}>{f.unit}</Text>
-                            </View>
-                        ) : (
-                            <TouchableOpacity
-                                style={styles.thrValueBtn}
-                                onPress={() => { setEditingKey(f.key); setEditVal(String(thresholds[f.key])); }}
-                            >
-                                <Text style={styles.thrValue}>{thresholds[f.key]}</Text>
-                                <Text style={styles.thrUnit}>{f.unit}</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                ))}
-                <TouchableOpacity style={styles.resetThreshBtn} onPress={handleResetThresholds}>
-                    <Text style={styles.resetThreshText}>Resetează la valorile implicite</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* ── Notificări ─────────────────────────────────────────────── */}
-            <View style={cardStyle}>
-                <SectionTitle>Notificări</SectionTitle>
-                <View style={styles.switchRow}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.switchLabel}>Alerte critice (DTC, supraîncălzire)</Text>
-                        <Text style={styles.switchDesc}>
-                            Notificare nativă când apar coduri DTC sau depășiri critice de prag.
-                        </Text>
-                    </View>
-                    <Switch
-                        value={notifsEnabled}
-                        onValueChange={async (v) => {
-                            setNotifsEnabled(v);
-                            await AsyncStorage.setItem('@notifs_enabled', String(v));
-                        }}
-                        trackColor={{ false: colors.border.default, true: colors.accent.default }}
-                        thumbColor={notifsEnabled ? '#FFFFFF' : colors.text.secondary}
-                    />
-                </View>
-            </View>
-
-            {/* ── Sinteză Vocală & Haptice la Volan ─────────────────────── */}
-            <View style={cardStyle}>
-                <SectionTitle>Sinteză Vocală & Vibrații la Volan</SectionTitle>
-                <Text style={styles.desc}>
-                    Citește pe difuzor alertele tehnice și de siguranță, eliminând nevoia de a privi ecranul în timpul condusului.
-                </Text>
-
-                <View style={styles.switchRow}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.switchLabel}>Voce Asistent Auto (Text-to-Speech)</Text>
-                        <Text style={styles.switchDesc}>
-                            Rostește în limba română alertele și mesajele de urgență.
-                        </Text>
-                    </View>
-                    <Switch
-                        value={voiceSettings.enabled}
-                        onValueChange={handleVoiceToggle}
-                        trackColor={{ false: colors.border.default, true: colors.accent.default }}
-                        thumbColor={voiceSettings.enabled ? '#FFFFFF' : colors.text.secondary}
-                    />
-                </View>
-
-                {voiceSettings.enabled && (
-                    <View style={{ marginTop: spacing[3], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
-                        <Text style={[styles.switchLabel, { marginBottom: spacing[2] }]}>Mod Filtrare Voce:</Text>
-                        <View style={styles.voiceModeRow}>
-                            {[
-                                { id: 'CRITICAL_ONLY', label: '🚨 Doar Critice (Siguranță)' },
-                                { id: 'ALL',           label: '📢 Toate Alertele' },
-                                { id: 'OFF',           label: '🔇 Fără Voce' },
-                            ].map(m => {
-                                const active = voiceSettings.mode === m.id;
-                                return (
-                                    <TouchableOpacity
-                                        key={m.id}
-                                        style={[styles.voiceModeBtn, active && styles.voiceModeBtnActive]}
-                                        onPress={() => handleVoiceMode(m.id)}
-                                        activeOpacity={0.8}
-                                    >
-                                        <Text style={[styles.voiceModeText, active && styles.voiceModeTextActive]}>
-                                            {m.label}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-                    </View>
-                )}
-
-                <View style={[styles.switchRow, { marginTop: spacing[3], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.border.subtle }]}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.switchLabel}>Vibrații Haptice la Alertă</Text>
-                        <Text style={styles.switchDesc}>
-                            Impulsuri tactile proporționale cu severitatea anomaliei.
-                        </Text>
-                    </View>
-                    <Switch
-                        value={voiceSettings.haptics}
-                        onValueChange={handleHapticsToggle}
-                        trackColor={{ false: colors.border.default, true: colors.status.good }}
-                        thumbColor={voiceSettings.haptics ? '#FFFFFF' : colors.text.secondary}
-                    />
-                </View>
-
-                {/* Opțiuni Dezvoltator pentru Testare */}
-                <View style={{ marginTop: spacing[3], paddingTop: spacing[3], borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
-                    <Text style={[styles.switchDesc, { marginBottom: spacing[2], color: colors.text.tertiary, fontWeight: '700' }]}>
-                        OPȚIUNI DEZVOLTATOR PENTRU TESTARE:
-                    </Text>
-                    <View style={{ flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap' }}>
-                        <TouchableOpacity
-                            style={styles.voiceTestBtn}
-                            onPress={() => testVoiceAlert('CRITICAL')}
-                        >
-                            <Text style={styles.voiceTestBtnText}>🔊 Test Alertă Critică</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.voiceTestBtn}
-                            onPress={() => testVoiceAlert('NORMAL')}
-                        >
-                            <Text style={styles.voiceTestBtnText}>🔊 Test Voce Normală</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.voiceTestBtn, { borderColor: colors.status.critical }]}
-                            onPress={stopSpeech}
-                        >
-                            <Text style={[styles.voiceTestBtnText, { color: colors.status.critical }]}>🛑 Stop</Text>
-                        </TouchableOpacity>
-                    </View>
                 </View>
             </View>
 

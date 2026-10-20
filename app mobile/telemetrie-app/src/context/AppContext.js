@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TEMPLATES } from '../theme/templates';
 import api from '../services/api';
 import { getMechanicGuide } from '../utils/physicalMechanicGuide';
+import { setVoiceLanguage } from '../services/voiceAlertService';
 
 export const AppContext = createContext();
 
@@ -13,10 +14,12 @@ export const AUTOPILOT_STEPS = [
         selectedPart: null,
         subsystem: null,
         mechanicGuideId: null,
-        titleRo: '🟢 CROAZIERĂ NORMALĂ OPTIMĂ (100% NOMINAL)',
+                titleRo: '🟢 CROAZIERĂ NORMALĂ OPTIMĂ (100% NOMINAL)',
         titleEn: '🟢 NOMINAL HIGHWAY CRUISE (100% NOMINAL)',
+        titleRu: '🟢 НОМИНАЛЬНЫЙ ТРАССОВЫЙ РЕЖИМ (100% НОРМА)',
         narrativeRo: 'Viteză 88 km/h, 2100 RPM. Eficiență termică motor 36.5%, amestec stoichiometric lambda optim. Nicio anomalie prezentă.',
         narrativeEn: 'Cruising at 88 km/h, 2100 RPM. Engine thermal efficiency 36.5%, optimal lambda stoichiometry. Zero anomalies detected.',
+        narrativeRu: 'Скорость 88 км/ч, 2100 об/мин. Тепловой КПД ДВС 36.5%, оптимальная стехиометрия смеси lambda. Ошибок и сбоев нет.',
     },
     {
         scenario: 'fault_turbo',
@@ -24,10 +27,12 @@ export const AUTOPILOT_STEPS = [
         selectedPart: 'turbo',
         subsystem: 'turbo',
         mechanicGuideId: 'INTERCOOLER_BOOST_LEAK',
-        titleRo: '🌪️ DETECȚIE BOOST LEAK / FURTUN FISURAT',
+                titleRo: '🌪️ DETECȚIE BOOST LEAK / FURTUN FISURAT',
         titleEn: '🌪️ BOOST LEAK DETECTED / CRACKED INTERCOOLER HOSE',
+        titleRu: '🌪️ УТЕЧКА НАДДУВА / ТРЕЩИНА ПАТРУБКА',
         narrativeRo: 'Presiunea MAP a scăzut la 140 kPa (sub comanda de 215 kPa). Algoritmul a identificat pierdere pe traseul intercooler și a prevenit supraturarea turbinei.',
         narrativeEn: 'MAP pressure dropped to 140 kPa (below 215 kPa cmd). Observer detected boost leak and prevented turbo overspeed failure.',
+        narrativeRu: 'Давление во впуске упало до 140 кПа (ниже команды 215 кПа). Наблюдатель зафиксировал утечку и предотвратил разрушение турбины.',
     },
     {
         scenario: 'mountain_brakes',
@@ -35,10 +40,12 @@ export const AUTOPILOT_STEPS = [
         selectedPart: 'brakes',
         subsystem: 'brakes',
         mechanicGuideId: 'BRAKE_CALIPER_OR_BEARING_DRAG',
-        titleRo: '⛰️ COBORÂRE MUNTE / PREVENȚIE FIERBERE LICHID FRÂNĂ',
+                titleRo: '⛰️ COBORÂRE MUNTE / PREVENȚIE FIERBERE LICHID FRÂNĂ',
         titleEn: '⛰️ MOUNTAIN DESCENT / BRAKE FLUID BOILING PREVENTION',
+        titleRu: '⛰️ СПУСК С ГОРЫ / РИСК ЗАКИПАНИЯ ТОРМОЗОВ',
         narrativeRo: 'Pantă -7.5%, temp lichid frână: 162°C! Sistemul activează alerta de Brake Fade și recomandă comutarea în frână de motor treapta a 3-a.',
         narrativeEn: 'Steep grade -7.5%, fluid temp: 162°C! System triggered Brake Fade hazard, advising engine braking downshift to 3rd gear.',
+        narrativeRu: 'Уклон -7.5%, температура жидкости: 162°C! Система активировала предупреждение о перегреве и советует торможение двигателем на 3-й передаче.',
     },
     {
         scenario: 'dpf_regen',
@@ -46,10 +53,12 @@ export const AUTOPILOT_STEPS = [
         selectedPart: 'dpf',
         subsystem: 'dpf',
         mechanicGuideId: null,
-        titleRo: '🔥 REGENERARE ACTIVĂ DPF ÎN CURS (625°C)',
+                titleRo: '🔥 REGENERARE ACTIVĂ DPF ÎN CURS (625°C)',
         titleEn: '🔥 ACTIVE DPF SOOT REGENERATION (625°C)',
+        titleRu: '🔥 АКТИВНАЯ РЕГЕНЕРАЦИЯ САЖЕВОГО ФИЛЬТРА (625°C)',
         narrativeRo: 'Post-injecție activă pentru arderea funinginii. Gazele de evacuare au atins 625°C. Protocolul notifică șoferul să nu oprească motorul timp de 3 minute.',
         narrativeEn: 'Post-injection burning soot. Exhaust EGT reached 625°C. System advises keeping engine running for 3 mins to finish cycle.',
+        narrativeRu: 'Идет послевпрыск для выжигания сажи. Температура выхлопа достигла 625°C. Рекомендуется не глушить мотор в течение 3 минут.',
     },
     {
         scenario: 'black_ice',
@@ -57,10 +66,12 @@ export const AUTOPILOT_STEPS = [
         selectedPart: 'suspension',
         subsystem: 'suspension',
         mechanicGuideId: 'LOW_TIRE_PRESSURE_DETECTED',
-        titleRo: '❄️ PIERDERE ADERENȚĂ / ALERTĂ POLEI (BLACK ICE)',
+                titleRo: '❄️ PIERDERE ADERENȚĂ / ALERTĂ POLEI (BLACK ICE)',
         titleEn: '❄️ GRIP LOSS / BLACK ICE SLIP WARNING',
+        titleRu: '❄️ ПОТЕРЯ СЦЕПЛЕНИЯ / ГОЛОЛЁД (BLACK ICE)',
         narrativeRo: 'Diferență viteză roți motrice de 8 km/h la 0°C. Sistemul a identificat polei pe carosabil și a amortizat comanda accelerației pentru a preveni derapajul.',
         narrativeEn: '8 km/h wheel slip delta at 0°C. System identified black ice patch and damped throttle mapping to prevent spin-out.',
+        narrativeRu: 'Разница скорости ведущих колес 8 км/ч при 0°C. Система распознала ледяной участок и сгладила реакцию на газ для защиты от заноса.',
     },
 ];
 
@@ -97,19 +108,25 @@ export const AppProvider = ({ children }) => {
             AsyncStorage.getItem('@oled_black_mode'),
             AsyncStorage.getItem('@ui_paradigm_mode'),
             AsyncStorage.getItem('@ui_paradigm_skip_prompt'),
+            AsyncStorage.getItem('@app_language'),
             AsyncStorage.getItem('@app_lang'),
-        ]).then(([savedTpl, savedOled, savedParadigm, savedSkipPrompt, savedLang]) => {
+        ]).then(([savedTpl, savedOled, savedParadigm, savedSkipPrompt, savedLangFull, savedLangShort]) => {
+            const savedLang = savedLangFull || savedLangShort;
             if (savedTpl && TEMPLATES[savedTpl]) {
                 setActiveTemplateState(savedTpl);
             }
             if (savedOled !== null) {
                 setOledBlackModeState(savedOled === 'true');
             }
-            if (savedParadigm) {
+            if (savedParadigm === 'F1_CYBERDECK' || savedParadigm === 'SPATIAL_CANVAS') {
+                setUiParadigmState('CLASSIC_V2');
+                AsyncStorage.setItem('@ui_paradigm_mode', 'CLASSIC_V2').catch(() => {});
+            } else if (savedParadigm) {
                 setUiParadigmState(savedParadigm);
             }
-            if (savedLang === 'RO' || savedLang === 'EN') {
+            if (savedLang === 'RO' || savedLang === 'EN' || savedLang === 'RU') {
                 setAppLangState(savedLang);
+                setVoiceLanguage(savedLang);
             }
             const skip = savedSkipPrompt === 'true';
             setSkipLauncherPromptState(skip);
@@ -228,17 +245,21 @@ export const AppProvider = ({ children }) => {
     }, []);
 
     const setAppLang = useCallback(async (lang) => {
-        const next = lang === 'EN' ? 'EN' : 'RO';
+        const next = (lang === 'EN' || lang === 'RU') ? lang : 'RO';
         setAppLangState(next);
+        setVoiceLanguage(next);
         try {
+            await AsyncStorage.setItem('@app_language', next);
             await AsyncStorage.setItem('@app_lang', next);
         } catch {}
     }, []);
 
     const toggleAppLang = useCallback(() => {
         setAppLangState((prev) => {
-            const next = prev === 'RO' ? 'EN' : 'RO';
+            const next = prev === 'RO' ? 'EN' : prev === 'EN' ? 'RU' : 'RO';
+            AsyncStorage.setItem('@app_language', next).catch(() => {});
             AsyncStorage.setItem('@app_lang', next).catch(() => {});
+            setVoiceLanguage(next);
             return next;
         });
     }, []);

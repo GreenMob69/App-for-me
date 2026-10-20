@@ -45,7 +45,8 @@ export function useNormalizedTelemetry(_isLiveViewActive = true) {
 
     // ── 1. DINAMICĂ & VITEZĂ (EXTRAGERE DEFENSIVĂ MULTI-CANAL) ─────────────────
     const rawSpeed = motor.speed ?? gps.speed_kmh ?? data.viteza_kmh ?? d.viteza ?? data.speed ?? 0;
-    const speed = Math.max(0, Math.round(safeNum(rawSpeed, 0)));
+    const isEngineOff = data.stare_motor === 'OPRIRE' || data.simulator_running === false || (Number(rawSpeed || 0) === 0 && Number(rawRpm || 0) === 0);
+    const speed = isEngineOff ? 0 : Math.max(0, Math.round(safeNum(rawSpeed, 0)));
 
     const rawRpm = motor.rpm ?? data.rpm ?? d.turatie ?? 0;
     const rpm = Math.max(0, Math.round(safeNum(rawRpm, 0) / 5) * 5); // Cuantizat la multiplu de 5 RPM
@@ -57,9 +58,7 @@ export function useNormalizedTelemetry(_isLiveViewActive = true) {
     const engineLoad = Math.min(100, Math.max(0, Math.round(safeNum(rawLoad, 0))));
 
     const rawGear = motor.treapta_viteza ?? trans.gear ?? data.gear ?? d.treapta_viteza;
-    const gear = (rawGear !== undefined && rawGear !== null && rawGear !== '')
-      ? String(rawGear)
-      : (speed === 0 && rpm < 500 ? 'P' : rpm < 1000 && speed === 0 ? 'N' : 'D');
+    const gear = isEngineOff ? 'P' : ((rawGear !== undefined && rawGear !== null && rawGear !== '') ? String(rawGear) : (speed === 0 && rpm < 500 ? 'P' : rpm < 1000 && speed === 0 ? 'N' : 'D'));
 
     // ── 2. TEMPERATURI ROTUNJITE LA 0.1°C ────────────────────────────────────
     const rawCoolant = t.coolant ?? t.antigel ?? data.temp_apa_c ?? d.temp_apa ?? 90;
@@ -77,11 +76,11 @@ export function useNormalizedTelemetry(_isLiveViewActive = true) {
     const chraTemp = Math.round((v.chraCoreTempC || (exhaustTemp * 0.72)) * 10) / 10;
 
     // ── 3. PRESIUNI (BAR) ROTUNJITE LA 0.01 BAR / 5 BAR RAIL ─────────────────
-    const boostRaw = a.boost_actual ?? data.boost_bar ?? p.turbo_boost ?? p.boost ?? v.boostBar ?? 0.85;
-    const boost = Math.round(safeNum(boostRaw, 0.85) * 100) / 100;
+    const boostRaw = isEngineOff ? 0 : (a.boost_actual ?? data.boost_bar ?? p.turbo_boost ?? p.boost ?? v.boostBar ?? 0.85);
+    const boost = isEngineOff ? 0 : Math.round(safeNum(boostRaw, 0.85) * 100) / 100;
 
-    const rawRail = c.rail_press_bar ?? p.rail_bar ?? p.rampa ?? 780;
-    const railPressure = Math.round(safeNum(rawRail, 780) / 5) * 5;
+    const rawRail = isEngineOff ? 0 : (c.rail_press_bar ?? p.rail_bar ?? p.rampa ?? 780);
+    const railPressure = isEngineOff ? 0 : Math.round(safeNum(rawRail, 780) / 5) * 5;
 
     const rawOilPress = p.ulei_bar ?? v.oilPressureBar ?? 3.4;
     const oilPressure = Math.round(safeNum(rawOilPress, 3.4) * 10) / 10;
@@ -93,19 +92,19 @@ export function useNormalizedTelemetry(_isLiveViewActive = true) {
 
     // ── 5. COMBUSTIBIL & CONSUM ──────────────────────────────────────────────
     const fuelLevel = Math.round(c.nivel_litri ? (safeNum(c.nivel_litri) / 70) * 100 : safeNum(c.procent, 68));
-    const rawFuelRate = c.inst_cons ?? data.consum_lh ?? c.consum_instant ?? (speed > 10 ? 5.8 : 0.8);
-    const fuelRate = Math.round(safeNum(rawFuelRate, 5.8) * 10) / 10;
+    const rawFuelRate = isEngineOff ? 0 : (c.inst_cons ?? data.consum_lh ?? c.consum_instant ?? (speed > 10 ? 5.8 : 0.8));
+    const fuelRate = isEngineOff ? 0 : Math.round(safeNum(rawFuelRate, 5.8) * 10) / 10;
     const fuelBurnedLiters = Math.round(safeNum(v.fuelBurnedLiters || c.litri_consumati, 1.45) * 100) / 100;
 
     // ── 6. FRÂNE & DINAMICĂ G-FORCE ──────────────────────────────────────────
     const brakeFluidTemp = Math.round(safeNum(v.brakeFluidTempC, 85) * 10) / 10;
     const brakeEnergyTrip = Math.round(safeNum(v.brakeEnergyJoulesTrip, 0) / 1000); // kJ
-    const gForceLat = Math.round(safeNum(v.gForceLateral ?? acc.accel_y, 0.0) * 50) / 50; // Pas de 0.02G
-    const gForceLong = Math.round(safeNum(motor.accel_g ?? acc.accel_x ?? data.accel_g ?? v.gForceLongitudinal, 0.0) * 50) / 50; // Pas de 0.02G
+    const gForceLat = isEngineOff ? 0 : Math.round(safeNum(v.gForceLateral ?? acc.accel_y, 0.0) * 50) / 50; // Pas de 0.02G
+    const gForceLong = isEngineOff ? 0 : Math.round(safeNum(motor.accel_g ?? acc.accel_x ?? data.accel_g ?? v.gForceLongitudinal, 0.0) * 50) / 50; // Pas de 0.02G
 
     // ── 7. PUTERE & CUPLU VIRTUAL ────────────────────────────────────────────
-    const powerHp = Math.round(safeNum(v.powerHp ?? v.saeCorrectedPowerHp, (rpm > 500 && throttle > 0) ? ((rpm * throttle) / 100) * 0.035 : 0));
-    const torqueNm = Math.round(safeNum(v.torqueNm ?? motor.torque_actual ?? data.torque_nm, (throttle > 0) ? (throttle / 100) * 310 : 0));
+    const powerHp = isEngineOff ? 0 : Math.round(safeNum(v.powerHp ?? v.saeCorrectedPowerHp, (rpm > 500 && throttle > 0) ? ((rpm * throttle) / 100) * 0.035 : 0));
+    const torqueNm = isEngineOff ? 0 : Math.round(safeNum(v.torqueNm ?? motor.torque_actual ?? data.torque_nm, (throttle > 0) ? (throttle / 100) * 310 : 0));
 
     // ── 8. RUL & FIABILITATE WEIBULL ─────────────────────────────────────────
     const weibullRul = v.weibullRulMatrix || {

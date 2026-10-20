@@ -40,21 +40,22 @@ export function useSmoothedTelemetry(liveData, enabled = true) {
         const targetCoolant = Number(liveData.temperaturi?.coolant || 88);
 
         // Optimizare de fundal: dacă ecranul este în background sau pe tab static, oprim bucla 60FPS
-        if (!enabled) {
+        const isStopped = (targetSpeed === 0 && targetRpm === 0) || liveData?.stare_motor === 'OPRIRE' || liveData?.simulator_running === false;
+        if (!enabled || isStopped) {
             animRpm.setValue(targetRpm);
             animSpeed.setValue(targetSpeed);
-            animPowerHp.setValue(targetPowerHp);
-            animBoost.setValue(targetBoost);
-            animTargetBoost.setValue(targetCmdBoost);
-            animLoad.setValue(targetLoad);
+            animPowerHp.setValue(isStopped ? 0 : targetPowerHp);
+            animBoost.setValue(isStopped ? 0 : targetBoost);
+            animTargetBoost.setValue(isStopped ? 0 : targetCmdBoost);
+            animLoad.setValue(isStopped ? 0 : targetLoad);
             animCoolant.setValue(targetCoolant);
             setSmoothNumbers({
                 rpm: targetRpm,
                 speed: targetSpeed,
-                powerHp: targetPowerHp,
-                boost: targetBoost,
-                targetBoost: targetCmdBoost,
-                load: targetLoad,
+                powerHp: isStopped ? 0 : targetPowerHp,
+                boost: isStopped ? 0 : targetBoost,
+                targetBoost: isStopped ? 0 : targetCmdBoost,
+                load: isStopped ? 0 : targetLoad,
                 coolant: targetCoolant
             });
             return;

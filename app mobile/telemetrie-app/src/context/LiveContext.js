@@ -24,6 +24,8 @@ export const LiveProvider = ({ children }) => {
     const appStateRef = useRef(AppState.currentState);
     const lastUiUpdateRef = useRef(0);
     const lastCacheSaveRef = useRef(0);
+    const lastPacketTimeRef = useRef(Date.now());
+    const wasSimOrMovingRef = useRef(false);
 
     // Cache offline la pornire (Stale-While-Revalidate)
     useEffect(() => {
@@ -73,7 +75,58 @@ export const LiveProvider = ({ children }) => {
         const onReconnect  = () => { setIsConnected(true);  setIsReconnecting(false); };
         const onReconnectFailed = () => setIsReconnecting(false);
 
+        const zeroizeLiveData = () => {
+            setLiveData(prev => ({
+                ...prev,
+                stare_motor: 'OPRIRE',
+                simulator_running: false,
+                viteza_kmh: 0,
+                rpm: 0,
+                gear: 'P',
+                sarcina_pct: 0,
+                throttle: 0,
+                boost_bar: 0,
+                torque_nm: 0,
+                consum_lh: 0,
+                dinamica: { ...(prev?.dinamica || {}), viteza: 0, turatie: 0, acceleratie: 0, treapta_viteza: 'P' },
+                motor: { ...(prev?.motor || {}), speed: 0, rpm: 0, load: 0, throttle_pos: 0, accel_g: 0, torque_actual: 0, treapta_viteza: 'P' },
+                aer: { ...(prev?.aer || {}), boost_actual: 0, map: 101, maf: 0 },
+                combustibil: { ...(prev?.combustibil || {}), inst_cons: 0, rail_press_bar: 0 },
+                transmisie: { ...(prev?.transmisie || {}), gear: 'P', slip: 0 },
+                accelerometru: { ...(prev?.accelerometru || {}), accel_x: 0, accel_y: 0, accel_z: 1.0 },
+                virtual: {
+                    ...(prev?.virtual || {}),
+                    powerHp: 0,
+                    saeCorrectedPowerHp: 0,
+                    torqueNm: 0,
+                    gForceLateral: 0,
+                    gForceLongitudinal: 0,
+                    brakeFluidTempC: 85,
+                    roadGripStatus: 'NORMAL',
+                    mountainBrakeFadeRisk: false,
+                    dieselRunawayRisk: false,
+                }
+            }));
+        };
+
+        const onSimulatorStatus = (statusData) => {
+            if (statusData && statusData.running === false) {
+                wasSimOrMovingRef.current = false;
+                zeroizeLiveData();
+            }
+        };
+
         const onTelemetrie = (data) => {
+            lastPacketTimeRef.current = Date.now();
+            const isStop = data?.stare_motor === 'OPRIRE' || data?.simulator_running === false;
+            if (isStop) {
+                wasSimOrMovingRef.current = false;
+                zeroizeLiveData();
+                return;
+            }
+            if (data?.stare_motor === 'MERS' || (data?.motor?.speed > 0 || data?.motor?.rpm > 500)) {
+                wasSimOrMovingRef.current = true;
+            }
             const now = Date.now();
             const isForeground = appStateRef.current === 'active';
 
@@ -151,6 +204,15 @@ export const LiveProvider = ({ children }) => {
         socket.on('reconnect_failed',  onReconnectFailed);
         socket.on('telemetrie_live',   onTelemetrie);
         socket.on('status_trip',       onStatusTrip);
+        socket.on('simulator_status',  onSimulatorStatus);
+
+        // 4.5s Inactivity Watchdog to prevent freeze if packets stop abruptly
+        const watchdogTimer = setInterval(() => {
+            if (wasSimOrMovingRef.current && (Date.now() - lastPacketTimeRef.current >= 4500)) {
+                wasSimOrMovingRef.current = false;
+                zeroizeLiveData();
+            }
+        }, 1000);
 
         return () => {
             socket.off('connect',          onConnect);
@@ -159,6 +221,8 @@ export const LiveProvider = ({ children }) => {
             socket.off('reconnect_failed', onReconnectFailed);
             socket.off('telemetrie_live',  onTelemetrie);
             socket.off('status_trip',      onStatusTrip);
+            socket.off('simulator_status',  onSimulatorStatus);
+            clearInterval(watchdogTimer);
         };
     }, []);
 

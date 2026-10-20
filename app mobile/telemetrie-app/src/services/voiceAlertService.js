@@ -17,6 +17,11 @@ let currentSettings = {
 };
 
 let isInitialized = false;
+let currentVoiceLang = 'RO';
+
+export const setVoiceLanguage = (lang) => {
+    currentVoiceLang = lang || 'RO';
+};
 const lastSpokenMap = new Map();
 const COOLDOWN_MS = 15000; // 15 secunde minim între repetarea aceleiași alerte
 
@@ -93,7 +98,35 @@ export const triggerHapticAlert = (priority = 'normal') => {
  * @param {'critical' | 'serious' | 'warning' | 'info' | 'normal'} priority Nivelul de severitate
  * @param {string} alertKey Identificator unic pentru cooldown (ex: 'BLACK_ICE', 'RUNAWAY')
  */
-export const speakAlert = (rawText, priority = 'normal', alertKey = '') => {
+
+const SPOKEN_TRANSLATIONS = {
+    RO: {
+        BLACK_ICE: 'Atenție! Risc de polei și pierdere aderență!',
+        COOLANT: 'Atenție! Temperatura lichidului de răcire a depășit limita admisă!',
+        BRAKE_FADE: 'Pericol! Risc de fierbere lichid frână și fading termic!',
+        RUNAWAY: 'Pericol critic! Autoturare motor identificată!',
+        CRASH: 'Alertă de urgență! Impact sever detectat!',
+        BATTERY: 'Avertizare: tensiune scăzută pe circuitul electric!',
+    },
+    EN: {
+        BLACK_ICE: 'Warning! Black ice risk and road grip loss detected!',
+        COOLANT: 'Warning! Engine coolant temperature exceeds safe limit!',
+        BRAKE_FADE: 'Danger! Brake fluid boiling hazard and thermal fade risk!',
+        RUNAWAY: 'Critical hazard! Diesel engine runaway condition detected!',
+        CRASH: 'Emergency alert! Severe vehicle collision detected!',
+        BATTERY: 'Warning: low electrical system voltage detected!',
+    },
+    RU: {
+        BLACK_ICE: 'Внимание! Опасность гололеда и потеря сцепления с трассой!',
+        COOLANT: 'Внимание! Перегрев охлаждающей жидкости двигателя!',
+        BRAKE_FADE: 'Опасность! Риск закипания тормозной жидкости и перегрев тормозов!',
+        RUNAWAY: 'Критическая опасность! Зафиксирован разнос дизельного мотора!',
+        CRASH: 'Экстренное предупреждение! Зафиксирован сильный удар или столкновение!',
+        BATTERY: 'Внимание: низкое напряжение бортовой сети!',
+    }
+};
+
+export const speakAlert = (rawText, priority = 'normal', alertKey = '', lang = null) => {
     if (!rawText) return;
     if (!currentSettings.enabled || currentSettings.mode === 'OFF') return;
 
@@ -125,8 +158,12 @@ export const speakAlert = (rawText, priority = 'normal', alertKey = '') => {
 
     try {
         Speech.stop(); // Oprește vorbirea anterioară dacă era în curs
-        Speech.speak(cleanText, {
-            language: 'ro-RO',
+        const activeLang = lang || currentVoiceLang || 'RO';
+        const ttsLocale = activeLang === 'RU' ? 'ru-RU' : activeLang === 'EN' ? 'en-US' : 'ro-RO';
+        const localizedText = (key && SPOKEN_TRANSLATIONS[activeLang]?.[key]) || cleanText;
+
+        Speech.speak(localizedText, {
+            language: ttsLocale,
             pitch: 1.05,
             rate: 0.95,
             onDone: () => {},

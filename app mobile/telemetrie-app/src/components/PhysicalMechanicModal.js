@@ -1,3 +1,4 @@
+'use strict';
 import React, { useContext } from 'react';
 import {
     Modal,
@@ -11,6 +12,7 @@ import {
 } from 'react-native';
 import { AppContext } from '../context/AppContext';
 import { hapticTap } from '../services/hapticFeedback';
+import { exportWorkshopDossier } from '../utils/dossierExport';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MONO = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
@@ -20,19 +22,27 @@ export default function PhysicalMechanicModal({
     guideData,
     onClose,
     onNavigateTo3D,
+    freezeFrameTelemetry = null,
+    activeVehicle = null,
 }) {
     const { appLang } = useContext(AppContext) || {};
+    const isRu = appLang === 'RU';
     const isEn = appLang === 'EN';
 
     if (!guideData) return null;
 
-    const title = isEn ? guideData.titleEn : guideData.titleRo;
-    const location = isEn ? guideData.locationEn : guideData.locationRo;
-    const steps = isEn ? guideData.stepsEn : guideData.stepsRo;
-    const symptoms = isEn ? guideData.symptomsEn : guideData.symptomsRo;
+    const title = isRu ? (guideData.titleRu || guideData.titleRo) : isEn ? (guideData.titleEn || guideData.titleRo) : guideData.titleRo;
+    const location = isRu ? (guideData.locationRu || guideData.locationRo) : isEn ? (guideData.locationEn || guideData.locationRo) : guideData.locationRo;
+    const steps = isRu ? (guideData.stepsRu || guideData.stepsRo) : isEn ? (guideData.stepsEn || guideData.stepsRo) : guideData.stepsRo;
+    const symptoms = isRu ? (guideData.symptomsRu || guideData.symptomsRo) : isEn ? (guideData.symptomsEn || guideData.symptomsRo) : guideData.symptomsRo;
     const cost = isEn ? guideData.estimatedCostEur : guideData.estimatedCostRon;
 
     const isCritical = guideData.diyLevel === 'CRITIC';
+
+    const handleExportItp = () => {
+        hapticTap();
+        exportWorkshopDossier(freezeFrameTelemetry || {}, activeVehicle || {});
+    };
 
     return (
         <Modal
@@ -56,6 +66,7 @@ export default function PhysicalMechanicModal({
                                         styles.diyBadge,
                                         isCritical ? styles.diyBadgeCrit : styles.diyBadgeNormal,
                                     ]}
+                                    numberOfLines={1}
                                 >
                                     {guideData.diyLevel}
                                 </Text>
@@ -85,19 +96,19 @@ export default function PhysicalMechanicModal({
                         <View style={styles.card}>
                             <View style={styles.cardHeaderRow}>
                                 <Text style={styles.cardIcon}>📍</Text>
-                                <Text style={styles.cardTitle}>
-                                    {isEn ? 'PHYSICAL LOCATION ON VEHICLE' : 'LOCALIZARE FIZICĂ PE MAȘINĂ'}
+                                <Text style={styles.cardTitle} numberOfLines={1}>
+                                    {isRu ? 'ЛОКАЛИЗАЦИЯ ДЕТАЛИ НА АВТО' : isEn ? 'PHYSICAL LOCATION ON VEHICLE' : 'LOCALIZARE FIZICĂ PE MAȘINĂ'}
                                 </Text>
                             </View>
                             <Text style={styles.cardBodyText}>{location}</Text>
                         </View>
 
-                        {/* 2. Verificare rapidă 3 pași */}
+                        {/* 2. Verificare rapidă pași */}
                         <View style={styles.card}>
                             <View style={styles.cardHeaderRow}>
                                 <Text style={styles.cardIcon}>🖐️</Text>
-                                <Text style={styles.cardTitle}>
-                                    {isEn ? 'QUICK 2-MINUTE PHYSICAL CHECK (3 STEPS)' : 'VERIFICARE FIZICĂ RAPIDĂ ÎN 2 MINUTE'}
+                                <Text style={styles.cardTitle} numberOfLines={1}>
+                                    {isRu ? 'ШАГИ ТАКТИЛЬНОЙ ПРОВЕРКИ' : isEn ? 'TACTILE INSPECTION STEPS (HANDS-ON)' : 'VERIFICARE FIZICĂ RAPIDĂ LA MAȘINĂ'}
                                 </Text>
                             </View>
                             {steps.map((st, idx) => (
@@ -114,21 +125,21 @@ export default function PhysicalMechanicModal({
                         <View style={styles.card}>
                             <View style={styles.cardHeaderRow}>
                                 <Text style={styles.cardIcon}>⚠️</Text>
-                                <Text style={styles.cardTitle}>
-                                    {isEn ? 'DRIVER SYMPTOMS' : 'SIMPTOME RESIMȚITE DE ȘOFER'}
+                                <Text style={styles.cardTitle} numberOfLines={1}>
+                                    {isRu ? 'СИМПТОМЫ ДЛЯ ВОДИТЕЛЯ' : isEn ? 'DRIVER WARNING SYMPTOMS' : 'SIMPTOME RESIMȚITE DE ȘOFER'}
                                 </Text>
                             </View>
                             <Text style={styles.cardBodyText}>{symptoms}</Text>
                         </View>
 
-                        {/* 4. Scule, Durată & Cost */}
+                        {/* 4. Durată & Cost */}
                         <View style={styles.kpiGrid}>
                             <View style={styles.kpiBox}>
-                                <Text style={styles.kpiLabel}>{isEn ? 'ESTIMATED TIME' : 'DURATĂ'}</Text>
+                                <Text style={styles.kpiLabel}>{isRu ? 'ВРЕМЯ РЕМОНТА' : isEn ? 'ESTIMATED TIME' : 'DURATĂ'}</Text>
                                 <Text style={styles.kpiVal}>{guideData.durationMin} min</Text>
                             </View>
                             <View style={styles.kpiBox}>
-                                <Text style={styles.kpiLabel}>{isEn ? 'ESTIMATED COST' : 'COST ESTIMAT'}</Text>
+                                <Text style={styles.kpiLabel}>{isRu ? 'СТОИМОСТЬ ДЕТАЛЕЙ' : isEn ? 'PARTS BUDGET' : 'COST ESTIMAT'}</Text>
                                 <Text style={[styles.kpiVal, { color: '#00FF66' }]}>{cost}</Text>
                             </View>
                         </View>
@@ -137,8 +148,8 @@ export default function PhysicalMechanicModal({
                         <View style={styles.card}>
                             <View style={styles.cardHeaderRow}>
                                 <Text style={styles.cardIcon}>🔧</Text>
-                                <Text style={styles.cardTitle}>
-                                    {isEn ? 'REQUIRED TOOLS' : 'SCULE NECESARE'}
+                                <Text style={styles.cardTitle} numberOfLines={1}>
+                                    {isRu ? 'НЕОБХОДИМЫЙ ИНСТРУМЕНТ' : isEn ? 'REQUIRED TOOLS' : 'SCULE NECESARE'}
                                 </Text>
                             </View>
                             <View style={styles.toolsWrap}>
@@ -151,16 +162,56 @@ export default function PhysicalMechanicModal({
                             {guideData.partNumberRef && (
                                 <View style={styles.partRefBox}>
                                     <Text style={styles.partRefLabel}>
-                                        {isEn ? 'REF / OEM PART NUMBER:' : 'REFERINȚĂ COD PIESĂ:'}
+                                        {isRu ? 'OEM НОМЕР ДЕТАЛИ:' : isEn ? 'REF / OEM PART NUMBER:' : 'REFERINȚĂ COD PIESĂ:'}
                                     </Text>
                                     <Text style={styles.partRefVal}>{guideData.partNumberRef}</Text>
                                 </View>
                             )}
                         </View>
+
+                        {/* 5. Freeze-Frame Snapshot Telemetry */}
+                        {freezeFrameTelemetry && (
+                            <View style={styles.card}>
+                                <View style={styles.cardHeaderRow}>
+                                    <Text style={styles.cardIcon}>⏱️</Text>
+                                    <Text style={styles.cardTitle} numberOfLines={1}>
+                                        {isRu ? 'СТОП-КАДР ТЕЛЕМЕТРИИ В МОМЕНТ СБОЯ' : isEn ? 'FREEZE-FRAME ANOMALY TELEMETRY' : 'DATE FREEZE-FRAME ÎNREGISTRATE'}
+                                    </Text>
+                                </View>
+                                <View style={styles.freezeGrid}>
+                                    <View style={styles.freezeCell}>
+                                        <Text style={styles.freezeCellLabel}>SPEED</Text>
+                                        <Text style={styles.freezeCellVal}>{freezeFrameTelemetry.speed || 0} km/h</Text>
+                                    </View>
+                                    <View style={styles.freezeCell}>
+                                        <Text style={styles.freezeCellLabel}>RPM</Text>
+                                        <Text style={styles.freezeCellVal}>{freezeFrameTelemetry.rpm || 0}</Text>
+                                    </View>
+                                    <View style={styles.freezeCell}>
+                                        <Text style={styles.freezeCellLabel}>BOOST</Text>
+                                        <Text style={styles.freezeCellVal}>{freezeFrameTelemetry.boost || 0} bar</Text>
+                                    </View>
+                                    <View style={styles.freezeCell}>
+                                        <Text style={styles.freezeCellLabel}>COOLANT</Text>
+                                        <Text style={styles.freezeCellVal}>{freezeFrameTelemetry.coolantTemp || 90}°C</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        )}
                     </ScrollView>
 
                     {/* Footer Actions */}
                     <View style={styles.footer}>
+                        <TouchableOpacity
+                            style={styles.itpExportBtn}
+                            onPress={handleExportItp}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.itpExportBtnText} numberOfLines={1}>
+                                {isRu ? '📄 ЭКСПОРТ ДОСЬЕ ТЕХОСМОТРА' : isEn ? '📄 EXPORT ITP DOSSIER' : '📄 EXPORTĂ DOSAR TEHNIC ITP'}
+                            </Text>
+                        </TouchableOpacity>
+
                         {onNavigateTo3D && guideData.subsystem && (
                             <TouchableOpacity
                                 style={styles.xrayBtn}
@@ -170,11 +221,12 @@ export default function PhysicalMechanicModal({
                                     onClose?.();
                                 }}
                             >
-                                <Text style={styles.xrayBtnText}>
-                                    {isEn ? '🔬 VIEW SUBSYSTEM IN 3D' : '🔬 VEZI PIESA ÎN 3D X-RAY'}
+                                <Text style={styles.xrayBtnText} numberOfLines={1}>
+                                    {isRu ? '🔬 3D X-RAY' : isEn ? '🔬 VIEW IN 3D' : '🔬 VEZI PIESA ÎN 3D'}
                                 </Text>
                             </TouchableOpacity>
                         )}
+
                         <TouchableOpacity
                             style={styles.doneBtn}
                             onPress={() => {
@@ -182,8 +234,8 @@ export default function PhysicalMechanicModal({
                                 onClose?.();
                             }}
                         >
-                            <Text style={styles.doneBtnText}>
-                                {isEn ? 'DISMISS' : 'AM ÎNȚELES'}
+                            <Text style={styles.doneBtnText} numberOfLines={1}>
+                                {isRu ? 'ЗАКРЫТЬ' : isEn ? 'DISMISS' : 'AM ÎNȚELES'}
                             </Text>
                         </TouchableOpacity>
                     </View>
@@ -205,7 +257,7 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 18,
         borderWidth: 1,
         borderColor: '#00F0FF44',
-        maxHeight: SCREEN_HEIGHT * 0.88,
+        maxHeight: SCREEN_HEIGHT * 0.90,
         paddingBottom: Platform.OS === 'ios' ? 24 : 12,
         shadowColor: '#00F0FF',
         shadowOffset: { width: 0, height: -3 },
@@ -219,119 +271,110 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 14,
         borderBottomWidth: 1,
-        borderBottomColor: '#1E293B',
+        borderBottomColor: '#1A233A',
     },
     headerCritical: {
-        backgroundColor: '#FF2A2A14',
-        borderBottomColor: '#FF2A2A44',
+        backgroundColor: '#2A0E12',
+        borderBottomColor: '#EF444466',
     },
     headerLeft: {
         flex: 1,
-        marginRight: 10,
+        paddingRight: 10,
     },
     tagRow: {
         flexDirection: 'row',
-        alignItems: 'center',
         gap: 6,
-        marginBottom: 6,
+        marginBottom: 4,
+        alignItems: 'center',
     },
     systemBadge: {
-        fontFamily: MONO,
         fontSize: 9,
-        fontWeight: '900',
+        fontFamily: MONO,
         color: '#00F0FF',
-        backgroundColor: '#00F0FF1A',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
+        fontWeight: '900',
     },
     codeBadge: {
-        fontFamily: MONO,
         fontSize: 9,
+        fontFamily: MONO,
+        color: '#F59E0B',
         fontWeight: '900',
-        color: '#FFB800',
-        backgroundColor: '#FFB8001A',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
     },
     diyBadge: {
+        fontSize: 8,
         fontFamily: MONO,
-        fontSize: 9,
-        fontWeight: '900',
         paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: 4,
+        fontWeight: '900',
     },
     diyBadgeNormal: {
-        color: '#10B981',
-        backgroundColor: '#10B9811A',
+        backgroundColor: '#1E293B',
+        color: '#94A3B8',
     },
     diyBadgeCrit: {
-        color: '#FF2A2A',
-        backgroundColor: '#FF2A2A2A',
+        backgroundColor: '#EF4444',
+        color: '#FFFFFF',
     },
     titleText: {
-        fontFamily: MONO,
         fontSize: 14,
         fontWeight: '900',
         color: '#FFFFFF',
-        letterSpacing: 0.5,
+        lineHeight: 18,
     },
     closeBtn: {
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: '#162235',
+        backgroundColor: '#1E293B',
         alignItems: 'center',
         justifyContent: 'center',
     },
     closeBtnText: {
         color: '#94A3B8',
-        fontSize: 16,
-        fontWeight: '700',
+        fontSize: 14,
+        fontWeight: 'bold',
     },
     scrollArea: {
-        maxHeight: SCREEN_HEIGHT * 0.65,
+        paddingHorizontal: 14,
     },
     scrollContent: {
-        padding: 16,
-        gap: 12,
+        paddingVertical: 12,
+        gap: 10,
     },
     card: {
-        backgroundColor: '#101726',
-        borderRadius: 8,
+        backgroundColor: '#0F172A',
+        borderRadius: 10,
+        padding: 12,
         borderWidth: 1,
         borderColor: '#1E293B',
-        padding: 12,
     },
     cardHeaderRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
         marginBottom: 8,
     },
     cardIcon: {
         fontSize: 14,
     },
     cardTitle: {
-        fontFamily: MONO,
         fontSize: 10,
+        fontFamily: MONO,
         fontWeight: '900',
         color: '#00F0FF',
-        letterSpacing: 0.8,
+        letterSpacing: 0.5,
+        flex: 1,
     },
     cardBodyText: {
-        fontFamily: MONO,
-        fontSize: 11,
+        fontSize: 12,
+        lineHeight: 17,
         color: '#CBD5E1',
-        lineHeight: 16,
     },
     stepRow: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
         gap: 10,
-        marginTop: 8,
+        marginBottom: 8,
+        alignItems: 'flex-start',
     },
     stepNumberBadge: {
         width: 20,
@@ -345,17 +388,16 @@ const styles = StyleSheet.create({
         marginTop: 1,
     },
     stepNumberText: {
-        fontFamily: MONO,
         fontSize: 10,
+        fontFamily: MONO,
         fontWeight: '900',
         color: '#00F0FF',
     },
     stepText: {
-        flex: 1,
-        fontFamily: MONO,
-        fontSize: 11,
-        color: '#E2E8F0',
+        fontSize: 11.5,
         lineHeight: 16,
+        color: '#E2E8F0',
+        flex: 1,
     },
     kpiGrid: {
         flexDirection: 'row',
@@ -363,25 +405,24 @@ const styles = StyleSheet.create({
     },
     kpiBox: {
         flex: 1,
-        backgroundColor: '#101726',
+        backgroundColor: '#0F172A',
         borderRadius: 8,
+        padding: 10,
         borderWidth: 1,
         borderColor: '#1E293B',
-        padding: 10,
         alignItems: 'center',
     },
     kpiLabel: {
+        fontSize: 8,
         fontFamily: MONO,
-        fontSize: 9,
-        fontWeight: '800',
         color: '#64748B',
+        marginBottom: 2,
     },
     kpiVal: {
+        fontSize: 13,
         fontFamily: MONO,
-        fontSize: 14,
         fontWeight: '900',
-        color: '#00F0FF',
-        marginTop: 4,
+        color: '#FFFFFF',
     },
     toolsWrap: {
         flexDirection: 'row',
@@ -389,15 +430,15 @@ const styles = StyleSheet.create({
         gap: 6,
     },
     toolPill: {
-        backgroundColor: '#1A2333',
+        backgroundColor: '#1E293B',
         paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 4,
+        paddingVertical: 4,
+        borderRadius: 6,
     },
     toolPillText: {
-        fontFamily: MONO,
         fontSize: 10,
-        color: '#94A3B8',
+        fontFamily: MONO,
+        color: '#E2E8F0',
     },
     partRefBox: {
         marginTop: 10,
@@ -406,27 +447,67 @@ const styles = StyleSheet.create({
         borderTopColor: '#1E293B',
     },
     partRefLabel: {
-        fontFamily: MONO,
         fontSize: 8,
-        fontWeight: '800',
+        fontFamily: MONO,
         color: '#64748B',
     },
     partRefVal: {
+        fontSize: 11,
         fontFamily: MONO,
-        fontSize: 10,
+        fontWeight: '800',
+        color: '#F59E0B',
+        marginTop: 2,
+    },
+    freezeGrid: {
+        flexDirection: 'row',
+        gap: 6,
+    },
+    freezeCell: {
+        flex: 1,
+        backgroundColor: '#0A101D',
+        borderRadius: 6,
+        padding: 6,
+        alignItems: 'center',
+    },
+    freezeCellLabel: {
+        fontSize: 7,
+        fontFamily: MONO,
+        color: '#64748B',
+    },
+    freezeCellVal: {
+        fontSize: 11,
+        fontFamily: MONO,
         fontWeight: '900',
-        color: '#FFB800',
+        color: '#00F0FF',
         marginTop: 2,
     },
     footer: {
+        paddingHorizontal: 14,
+        paddingTop: 8,
         flexDirection: 'row',
-        paddingHorizontal: 16,
-        paddingTop: 10,
-        gap: 10,
+        gap: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#1A233A',
+    },
+    itpExportBtn: {
+        flex: 1.2,
+        backgroundColor: '#00FF6622',
+        borderWidth: 1,
+        borderColor: '#00FF66',
+        paddingVertical: 10,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    itpExportBtnText: {
+        fontSize: 10,
+        fontFamily: MONO,
+        fontWeight: '900',
+        color: '#00FF66',
     },
     xrayBtn: {
-        flex: 1,
-        backgroundColor: '#00F0FF1A',
+        flex: 0.9,
+        backgroundColor: '#00F0FF22',
         borderWidth: 1,
         borderColor: '#00F0FF',
         paddingVertical: 10,
@@ -435,13 +516,13 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     xrayBtnText: {
-        fontFamily: MONO,
         fontSize: 10,
+        fontFamily: MONO,
         fontWeight: '900',
         color: '#00F0FF',
     },
     doneBtn: {
-        flex: 1,
+        flex: 0.9,
         backgroundColor: '#1E293B',
         paddingVertical: 10,
         borderRadius: 8,
@@ -449,8 +530,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     doneBtnText: {
-        fontFamily: MONO,
         fontSize: 10,
+        fontFamily: MONO,
         fontWeight: '900',
         color: '#FFFFFF',
     },

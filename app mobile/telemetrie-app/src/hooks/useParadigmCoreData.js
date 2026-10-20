@@ -290,6 +290,29 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         };
     }, [telemetry.speed]);
 
+    // ── Signature Feature: Sankey Thermodynamic Balance ──────────────
+    const sankeyData = useMemo(() => {
+        const v = liveData?.virtual || {};
+        return {
+            mechanicalPct: Math.max(25, Math.min(48, Math.round(safeNum(v.mechanicalEfficiencyPct, 38)))),
+            exhaustHeatPct: Math.max(20, Math.min(45, Math.round(safeNum(v.exhaustHeatLossPct, 35)))),
+            coolingFrictionPct: Math.max(15, Math.min(40, Math.round(safeNum(v.coolingFrictionLossPct, 27)))),
+        };
+    }, [liveData]);
+
+    // ── Signature Feature: 4-Corner Brake Heat Pyrometer ──────────────
+    const brakePyrometer = useMemo(() => {
+        const base = safeNum(telemetry.brakeFluidTemp, 90);
+        const gLong = safeNum(telemetry.gForceLong, 0.0);
+        const gLat = safeNum(telemetry.gForceLat, 0.0);
+        return {
+            fl: Math.round(base + Math.abs(gLong) * 45 + (gLat > 0 ? 15 : 0)),
+            fr: Math.round(base + Math.abs(gLong) * 45 + (gLat < 0 ? 15 : 0)),
+            rl: Math.round(base * 0.85 + Math.abs(gLong) * 20),
+            rr: Math.round(base * 0.85 + Math.abs(gLong) * 20),
+        };
+    }, [telemetry.brakeFluidTemp, telemetry.gForceLong, telemetry.gForceLat]);
+
     // ─────────────────────────────────────────────────────────────────────────
     // 1. TELEMETRIE & CEI 32 DE OBSERVATORI FIZICI STRUCTURAȚI PE CATEGORII
     // ─────────────────────────────────────────────────────────────────────────
@@ -834,6 +857,8 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         dynoData,
         dragBox,
         cfdData,
+        sankeyData,
+        brakePyrometer,
     }), [
         telemetry,
         virtualSensors,
@@ -893,6 +918,8 @@ export function useParadigmCoreData(isLiveViewActive = true) {
         dynoData,
         dragBox,
         cfdData,
+        sankeyData,
+        brakePyrometer,
     ]);
 }
 

@@ -24,6 +24,10 @@ import { hapticTap, hapticShiftAlert } from '../../services/hapticFeedback';
 import { audioGong } from '../../services/audioGongService';
 import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
 import { safeNum, safeFmt, safeArr, sanitizeSvgPath } from '../../utils/safeMath';
+import WeibullTimeMachineCard from '../../components/innovations/WeibullTimeMachineCard';
+import VirtualDynoDragCard from '../../components/innovations/VirtualDynoDragCard';
+import SankeyThermalCard from '../../components/innovations/SankeyThermalCard';
+import KammBrakeRadarCard from '../../components/innovations/KammBrakeRadarCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RETRO_FONT = Platform.OS === 'ios' ? 'Courier' : 'monospace';
@@ -83,7 +87,7 @@ const AudiTachometerBargraph = React.memo(function AudiTachometerBargraph({ rpm 
     return (
         <View style={styles.tachoWrapper}>
             <View style={styles.tachoHeader}>
-                <Text style={[styles.tachoLabel, { opacity: brightness }]}>{isEn ? 'ENGINE RPM // x1000 min⁻¹' : 'TURAȚIE // x1000 RPM'}</Text>
+                <Text style={[styles.tachoLabel, { opacity: brightness }]}>{appLang === 'RU' ? 'ОБОРОТЫ // x1000 ОБ/МИН' : isEn ? 'ENGINE RPM // x1000 min⁻¹' : 'TURAȚIE // x1000 RPM'}</Text>
                 <Text style={[styles.tachoValue, { opacity: brightness }]}>
                     {safeFmt(sRpm / 1000, 1, '0.0')} <Text style={styles.tachoUnit}>RPM</Text>
                 </Text>
@@ -567,7 +571,7 @@ const StationAudiFahrtenbuch = React.memo(function StationAudiFahrtenbuch({
                             <Text style={styles.fahrtenbuchDate}>{t.date}</Text>
                         </View>
                         <View style={styles.fahrtenbuchStats}>
-                            <Text style={styles.fahrtenStat}>{isEn ? 'DISTANCE' : 'DISTANȚĂ'}: {t.km} km</Text>
+                            <Text style={styles.fahrtenStat}>{appLang === 'RU' ? 'ДИСТАНЦИЯ:' : isEn ? 'DISTANCE:' : 'DISTANȚĂ:'} {t.km} km</Text>
                             <Text style={styles.fahrtenStat}>VMAX: {t.maxSpeed} km/h</Text>
                             <Text style={styles.fahrtenStat}>{isEn ? 'FUEL' : 'CONSUM'}: {t.avgConsumption} L/100</Text>
                             <Text style={[styles.fahrtenStat, { color: '#00FF66' }]}>{isEn ? 'HEALTH' : 'SĂNĂTATE'}: {t.healthScore}%</Text>
@@ -1066,12 +1070,13 @@ export default function RetroAudi96Paradigm() {
         return Math.round((availableLiters / Math.max(1, effectiveRate)) * 100);
     }, [fuelLevel, fuelRate]);
 
+    const isRu = appLang === 'RU';
     const bcModes = [
-        { label: isEn ? 'INST. FUEL' : 'CONSUM INSTANT', value: `${fuelRate}`, unit: 'L/100KM' },
-        { label: isEn ? 'AVG. CONSUMPTION' : 'CONSUM MEDIU', value: '6.4', unit: 'L/100KM' },
-        { label: isEn ? 'RANGE (DTE)' : 'AUTONOMIE (DTE)', value: `${dteKm}`, unit: 'KM' },
-        { label: isEn ? 'TRIP TIME' : 'DURATĂ CURSĂ', value: '01:42', unit: 'H:M' },
-        { label: isEn ? 'OUTSIDE TEMP' : 'TEMP. EXTERIOARĂ', value: `+${ambientTemp}`, unit: '°C' },
+        { label: isRu ? 'МОГН. РАСХОД' : isEn ? 'INST. FUEL' : 'CONSUM INSTANT', value: `${fuelRate}`, unit: isRu ? 'Л/100КМ' : 'L/100KM' },
+        { label: isRu ? 'СРЕД. РАСХОД' : isEn ? 'AVG. CONSUMPTION' : 'CONSUM MEDIU', value: '6.4', unit: isRu ? 'Л/100КМ' : 'L/100KM' },
+        { label: isRu ? 'ЗАПАС ХОДА' : isEn ? 'RANGE (DTE)' : 'AUTONOMIE (DTE)', value: `${dteKm}`, unit: isRu ? 'КМ' : 'KM' },
+        { label: isRu ? 'ВРЕМЯ ПОЕЗДКИ' : isEn ? 'TRIP TIME' : 'DURATĂ CURSĂ', value: '01:42', unit: isRu ? 'Ч:М' : 'H:M' },
+        { label: isRu ? 'ТЕМП. ЗА БОРТОМ' : isEn ? 'OUTSIDE TEMP' : 'TEMP. EXTERIOARĂ', value: `+${ambientTemp}`, unit: '°C' },
     ];
     const currentBc = bcModes[bcModeIndex % bcModes.length];
 
@@ -1115,7 +1120,7 @@ export default function RetroAudi96Paradigm() {
                         activeOpacity={0.7}
                     >
                         <Text style={[styles.v2ButtonText, { color: clusterAccentColor, fontWeight: '800' }]}>
-                            {isEn ? '🇬🇧 EN' : '🇷🇴 RO'}
+                            {appLang === 'RU' ? '🇷🇺 RU' : isEn ? '🇬🇧 EN' : '🇷🇴 RO'}
                         </Text>
                     </TouchableOpacity>
 
@@ -1128,7 +1133,7 @@ export default function RetroAudi96Paradigm() {
                         hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Text style={styles.stylePickerText}>🎨 {isEn ? 'STYLE' : 'STIL'}</Text>
+                        <Text style={styles.stylePickerText}>🎨 {appLang === 'RU' ? 'СТИЛЬ' : isEn ? 'STYLE' : 'STIL'}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -1196,12 +1201,12 @@ export default function RetroAudi96Paradigm() {
                     contentContainerStyle={styles.rockerSwitchBankContent}
                 >
                     {[
-                        { id: '1', label: isEn ? '1·CLUSTER' : '1·BORD VFD', sub: isEn ? 'DASH' : 'BORD' },
-                        { id: '2', label: isEn ? '2·DIAG 32' : '2·TESTER 32', sub: 'DIAG' },
-                        { id: '3', label: isEn ? '3·TRIPS' : '3·CURSE', sub: 'REPLAY' },
-                        { id: '4', label: isEn ? '4·SERVICE' : '4·REVIZII', sub: isEn ? 'DOCS' : 'ACTE' },
-                        { id: '5', label: '5·SENTRY GPS', sub: isEn ? 'ALARM' : 'ALARMĂ' },
-                        { id: '6', label: isEn ? '6·AI EXPERT' : '6·EXPERT AI', sub: isEn ? 'AI ENG.' : 'AI ING.' },
+                        { id: '1', label: appLang === 'RU' ? '1·ПРИБОРЫ' : isEn ? '1·CLUSTER' : '1·BORD VFD', sub: appLang === 'RU' ? 'БОРД' : isEn ? 'DASH' : 'BORD' },
+                        { id: '2', label: appLang === 'RU' ? '2·ДИАГНОЗ 32' : isEn ? '2·DIAG 32' : '2·TESTER 32', sub: 'DIAG' },
+                        { id: '3', label: appLang === 'RU' ? '3·ПОЕЗДКИ' : isEn ? '3·TRIPS' : '3·CURSE', sub: 'REPLAY' },
+                        { id: '4', label: appLang === 'RU' ? '4·СЕРВИС' : isEn ? '4·SERVICE' : '4·REVIZII', sub: appLang === 'RU' ? 'АКТЫ' : isEn ? 'DOCS' : 'ACTE' },
+                        { id: '5', label: appLang === 'RU' ? '5·ОХРАНА GPS' : '5·SENTRY GPS', sub: appLang === 'RU' ? 'СЕНТРИ' : isEn ? 'ALARM' : 'ALARMĂ' },
+                        { id: '6', label: appLang === 'RU' ? '6·ИИ МАСТЕР' : isEn ? '6·AI EXPERT' : '6·EXPERT AI', sub: appLang === 'RU' ? 'ИИ ИНЖ.' : isEn ? 'AI ENG.' : 'AI ING.' },
                     ].map((sw) => {
                         const isActive = activeSwitch === sw.id;
                         return (
@@ -1256,6 +1261,7 @@ export default function RetroAudi96Paradigm() {
             >
                 {/* ── 1 DIGIFIZ: KOMBIINSTRUMENT ── */}
                 {activeSwitch === '1' && (
+                    <View>
                     isLandscape ? (
                         <View style={styles.audiLandscapeRow}>
                             <View style={styles.audiLandscapeCol}>
@@ -1346,7 +1352,7 @@ export default function RetroAudi96Paradigm() {
                                 </View>
                                 <View style={styles.columnsRow}>
                                     <VerticalLedColumn
-                                        label={isEn ? "COOLANT" : "TEMP. APĂ"}
+                                        label={appLang === "RU" ? "ОХЛ. ЖИДК." : isEn ? "COOLANT" : "TEMP. APĂ"}
                                         value={coolantTemp}
                                         unit="°C"
                                         min={50}
@@ -1357,7 +1363,7 @@ export default function RetroAudi96Paradigm() {
                                         brightness={dimmerLevel}
                                     />
                                     <VerticalLedColumn
-                                        label={isEn ? "OIL TEMP" : "TEMP. ULEI"}
+                                        label={appLang === "RU" ? "Т° МАСЛА" : isEn ? "OIL TEMP" : "TEMP. ULEI"}
                                         value={oilTemp}
                                         unit="°C"
                                         min={50}
@@ -1368,7 +1374,7 @@ export default function RetroAudi96Paradigm() {
                                         brightness={dimmerLevel}
                                     />
                                     <VerticalLedColumn
-                                        label={isEn ? "BOOST BAR" : "PRESIUNE TURBO"}
+                                        label={appLang === "RU" ? "НАДДУВ" : isEn ? "BOOST BAR" : "PRESIUNE TURBO"}
                                         value={boost}
                                         unit="bar"
                                         min={0}
@@ -1380,7 +1386,7 @@ export default function RetroAudi96Paradigm() {
                                         peakHold={peakBoostHold}
                                     />
                                     <VerticalLedColumn
-                                        label={isEn ? "FUEL" : "BENZINĂ"}
+                                        label={appLang === "RU" ? "ТОПЛИВО" : isEn ? "FUEL" : "BENZINĂ"}
                                         value={fuelLevel}
                                         unit="%"
                                         min={0}
@@ -1512,7 +1518,7 @@ export default function RetroAudi96Paradigm() {
                         {/* 2.5 Coloane Verticale LED VFD (cu 6. Overboost Peak-Hold) */}
                         <View style={styles.columnsRow}>
                             <VerticalLedColumn
-                                label={isEn ? "COOLANT" : "TEMP. APĂ"}
+                                label={appLang === "RU" ? "ОХЛ. ЖИДК." : isEn ? "COOLANT" : "TEMP. APĂ"}
                                 value={coolantTemp}
                                 unit="°C"
                                 min={50}
@@ -1523,7 +1529,7 @@ export default function RetroAudi96Paradigm() {
                                 brightness={dimmerLevel}
                             />
                             <VerticalLedColumn
-                                label={isEn ? "OIL TEMP" : "TEMP. ULEI"}
+                                label={appLang === "RU" ? "Т° МАСЛА" : isEn ? "OIL TEMP" : "TEMP. ULEI"}
                                 value={oilTemp}
                                 unit="°C"
                                 min={50}
@@ -1534,7 +1540,7 @@ export default function RetroAudi96Paradigm() {
                                 brightness={dimmerLevel}
                             />
                             <VerticalLedColumn
-                                label={isEn ? "BOOST BAR" : "PRESIUNE TURBO"}
+                                label={appLang === "RU" ? "НАДДУВ" : isEn ? "BOOST BAR" : "PRESIUNE TURBO"}
                                 value={boost}
                                 unit="bar"
                                 min={0}
@@ -1546,7 +1552,7 @@ export default function RetroAudi96Paradigm() {
                                 peakHold={peakBoostHold}
                             />
                             <VerticalLedColumn
-                                label={isEn ? "FUEL" : "BENZINĂ"}
+                                label={appLang === "RU" ? "ТОПЛИВО" : isEn ? "FUEL" : "BENZINĂ"}
                                 value={fuelLevel}
                                 unit="%"
                                 min={0}
@@ -1578,6 +1584,27 @@ export default function RetroAudi96Paradigm() {
                         </TouchableOpacity>
                     </View>
                     )
+                        {/* ── 3 TOP INNOVATIONS: DYNO/DRAG + SANKEY THERMAL + KAMM & BRAKE PYROMETER ── */}
+                        <VirtualDynoDragCard
+                            variant="audi"
+                            appLang={appLang}
+                            dynoData={core.dynoData}
+                            dragBox={core.dragBox}
+                            telemetry={telemetry}
+                        />
+                        <SankeyThermalCard
+                            variant="audi"
+                            appLang={appLang}
+                            sankeyData={core.sankeyData}
+                            telemetry={telemetry}
+                        />
+                        <KammBrakeRadarCard
+                            variant="audi"
+                            appLang={appLang}
+                            brakePyrometer={core.brakePyrometer}
+                            telemetry={telemetry}
+                        />
+                    </View>
                 )}
 
                 {/* ── 2 VAG 1551: DIAGNOSE & 32 MESSWERTBLÖCKE ── */}
@@ -1613,6 +1640,15 @@ export default function RetroAudi96Paradigm() {
 
                 {/* ── 4 SERVICEHEFT: CBM INSPEKTION & KRAFTFAHRZEUG-PAPIERE ── */}
                 {activeSwitch === '4' && (
+                    <View>
+                        {/* ── WEIBULL TIME MACHINE AUDI VDO ── */}
+                        <WeibullTimeMachineCard
+                            variant="audi"
+                            appLang={appLang}
+                            baseMaintenanceItems={core.maintenanceItems}
+                            telemetry={telemetry}
+                            onOpenGuide={openMechanicGuide}
+                        />
                     <StationAudiServiceheft
                         appLang={appLang}
                         maintenanceItems={core.maintenanceItems}
@@ -1625,6 +1661,7 @@ export default function RetroAudi96Paradigm() {
                         fuelPricePerLiter={core.fuelPricePerLiter}
                         setFuelPricePerLiter={core.setFuelPricePerLiter}
                     />
+                    </View>
                 )}
 
                 {/* ── 5 SAFE-LOCK: PROCON-TEN & STANDHEIZUNG ── */}
@@ -1721,7 +1758,7 @@ export default function RetroAudi96Paradigm() {
                     <View style={styles.debriefPaper}>
                         <Text style={styles.debriefHead}>═════ VAG 1551 // DRUCK-BERICHT ═════</Text>
                         <Text style={styles.debriefTitle}>
-                            {isEn ? 'POST-TRIP TELEMETRY DEBRIEF' : 'BILANȚ TELEMETRIC POST-CURSĂ'}
+                            {appLang === 'RU' ? 'ОТЧЕТ ПОЕЗДКИ VAG 1551' : isEn ? 'POST-TRIP TELEMETRY DEBRIEF' : 'BILANȚ TELEMETRIC POST-CURSĂ'}
                         </Text>
                         <Text style={styles.debriefSub}>AUDI A6 C4 2.5 TDI · VDO EEPROM LOG</Text>
                         <View style={styles.debriefDivider} />
@@ -1731,27 +1768,27 @@ export default function RetroAudi96Paradigm() {
                             <Text style={styles.debriefVal}>{core.lastTripDebrief?.km} KM</Text>
                         </View>
                         <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'DURATION' : 'DURATĂ'}:</Text>
+                            <Text style={styles.debriefLabel}>{appLang === 'RU' ? 'ДЛИТЕЛЬНОСТЬ:' : isEn ? 'DURATION:' : 'DURATĂ:'}</Text>
                             <Text style={styles.debriefVal}>{core.lastTripDebrief?.durationMin} MIN (MED. {core.lastTripDebrief?.avgSpeed} KM/H)</Text>
                         </View>
                         <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'AVG CONSUMPTION' : 'CONSUM MEDIU'}:</Text>
+                            <Text style={styles.debriefLabel}>{appLang === 'RU' ? 'СРЕД. РАСХОД:' : isEn ? 'AVG CONSUMPTION:' : 'CONSUM MEDIU:'}</Text>
                             <Text style={styles.debriefVal}>{core.lastTripDebrief?.avgConsumption} L/100KM ({core.lastTripDebrief?.fuelBurnedLiters} L)</Text>
                         </View>
                         <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'FUEL EXPENSE' : 'COST ESTIMAT'}:</Text>
+                            <Text style={styles.debriefLabel}>{appLang === 'RU' ? 'СТОИМОСТЬ:' : isEn ? 'FUEL EXPENSE:' : 'COST ESTIMAT:'}</Text>
                             <Text style={[styles.debriefVal, { color: '#FFAA00' }]}>{core.lastTripDebrief?.costRon} RON</Text>
                         </View>
                         <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'PEAK BOOST' : 'PRESIUNE TURBO MAX'}:</Text>
+                            <Text style={styles.debriefLabel}>{appLang === 'RU' ? 'МАКС. НАДДУВ:' : isEn ? 'PEAK BOOST:' : 'PRESIUNE TURBO MAX:'}</Text>
                             <Text style={styles.debriefVal}>{core.lastTripDebrief?.peakBoost} BAR</Text>
                         </View>
                         <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'PEAK G-FORCE' : 'FORȚĂ G MAXIMĂ'}:</Text>
+                            <Text style={styles.debriefLabel}>{appLang === 'RU' ? 'МАКС. G-СИЛА:' : isEn ? 'PEAK G-FORCE:' : 'FORȚĂ G MAXIMĂ:'}</Text>
                             <Text style={styles.debriefVal}>{core.lastTripDebrief?.peakLatG} G</Text>
                         </View>
                         <View style={styles.debriefRow}>
-                            <Text style={styles.debriefLabel}>{isEn ? 'ECO SCORE' : 'SCOR EFICIENȚĂ'}:</Text>
+                            <Text style={styles.debriefLabel}>{appLang === 'RU' ? 'ЭКО-БАЛЛ:' : isEn ? 'ECO SCORE:' : 'SCOR EFICIENȚĂ:'}</Text>
                             <Text style={[styles.debriefVal, { color: '#00FF66' }]}>{core.lastTripDebrief?.ecoScore} / 100</Text>
                         </View>
 
@@ -1765,13 +1802,13 @@ export default function RetroAudi96Paradigm() {
                                     core.exportTripPdf(core.selectedTripId);
                                 }}
                             >
-                                <Text style={[styles.cassetteKeyText, { color: '#090403' }]}>🖨️ {isEn ? 'PRINT (PDF)' : 'TIPĂREȘTE (PDF)'}</Text>
+                                <Text style={[styles.cassetteKeyText, { color: '#090403' }]}>🖨️ {appLang === 'RU' ? 'ПЕЧАТЬ (PDF)' : isEn ? 'PRINT (PDF)' : 'TIPĂREȘTE (PDF)'}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.cassetteKey, { flex: 1 }]}
                                 onPress={core.closeTripDebrief}
                             >
-                                <Text style={styles.cassetteKeyText}>✕ {isEn ? 'CLOSE' : 'ÎNCHIDE'}</Text>
+                                <Text style={styles.cassetteKeyText}>✕ {appLang === 'RU' ? 'ЗАКРЫТЬ' : isEn ? 'CLOSE' : 'ÎNCHIDE'}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

@@ -239,6 +239,15 @@ client.on('connect', () => {
                 client.publish(TOPIC, JSON.stringify({
                     ecu: { vin: VIN, model: 'Audi A6 C4 2.5 TDI AEL' },
                     stare_motor: "OPRIRE",
+                    simulator_running: false,
+                    viteza_kmh: 0,
+                    rpm: 0,
+                    gear: "P",
+                    boost_bar: 0,
+                    motor: { rpm: 0, speed: 0, load: 0, throttle_pos: 0, accel_g: 0, torque_actual: 0, treapta_viteza: "P" },
+                    aer: { maf: 0, map: 101, map_cmd: 101, boost_actual: 0, baro: 101 },
+                    combustibil: { inst_cons: 0, inj_qty_mg: 0, rail_press_bar: 0 },
+                    transmisie: { gear: "P", slip: 0 },
                     gps: { lat: +gps_lat.toFixed(6), lon: +gps_lon.toFixed(6), alt: gps_alt, heading: gps_heading },
                     timestamp: simStartTimestamp + (DURATA * 1000)
                 }));

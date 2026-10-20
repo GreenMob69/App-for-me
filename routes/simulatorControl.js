@@ -236,6 +236,44 @@ module.exports = function (db, io) {
         };
     }
 
+    function buildZeroizePacket(vin, model) {
+        return {
+            ecu: { vin: vin || simState.vin, model: model || simState.model },
+            stare_motor: 'OPRIRE',
+            simulator_running: false,
+            timestamp: Date.now(),
+            viteza_kmh: 0,
+            rpm: 0,
+            sarcina_pct: 0,
+            throttle: 0,
+            temp_apa_c: 85,
+            temp_ulei_c: 85,
+            voltaj_v: 12.4,
+            consum_lh: 0,
+            gear: 'P',
+            boost_bar: 0,
+            torque_nm: 0,
+            dinamica: { viteza: 0, turatie: 0, acceleratie: 0, treapta_viteza: 'P' },
+            motor: { rpm: 0, speed: 0, load: 0, throttle_pos: 0, accel_g: 0, torque_actual: 0, treapta_viteza: 'P' },
+            aer: { maf: 0, map: 101, map_cmd: 101, boost_actual: 0, boost_cmd: 0, baro: 101 },
+            combustibil: { inst_cons: 0, inj_qty_mg: 0, rail_press_bar: 0 },
+            transmisie: { gear: 'P', slip: 0 },
+            accelerometru: { accel_x: 0, accel_y: 0, accel_z: 1.0, tilt_pitch: 0, tilt_roll: 0 },
+            virtual: {
+                powerHp: 0,
+                saeCorrectedPowerHp: 0,
+                torqueNm: 0,
+                gForceLateral: 0,
+                gForceLongitudinal: 0,
+                brakeFluidTempC: 85,
+                roadGripStatus: 'NORMAL',
+                mountainBrakeFadeRisk: false,
+                dieselRunawayRisk: false,
+            },
+            dtc: [],
+        };
+    }
+
     // ── POST /api/simulator/start ─────────────────────────────────────────────
     router.post('/simulator/start', async (req, res) => {
         try {
@@ -269,15 +307,14 @@ module.exports = function (db, io) {
                 simState.elapsedSec++;
 
                 if (simState.elapsedSec >= simState.durationSec) {
-                    // Auto-oprire la finalul duratei
+                    // Auto-oprire la finalul duratei: zeroizare completă
                     clearInterval(simState.timer);
                     simState.timer = null;
-                    await handleIncomingTelemetry(db, io, {
-                        ecu: { vin: targetVin, model: simState.model },
-                        stare_motor: 'OPRIRE',
-                        timestamp: Date.now(),
-                    });
-                    console.log(`[SIMULATOR CLOUD] Scenariul "${scenario}" s-a finalizat automat.`);
+                    const zeroPacket = buildZeroizePacket(targetVin, simState.model);
+                    await handleIncomingTelemetry(db, io, zeroPacket);
+                    io.emit('telemetrie_live', zeroPacket);
+                    io.emit('simulator_status', { running: false, scenario: 'none' });
+                    console.log(`[SIMULATOR CLOUD] Scenariul "${scenario}" s-a finalizat automat (Zeroize Emis).`);
                     return;
                 }
 
@@ -306,14 +343,13 @@ module.exports = function (db, io) {
                 simState.timer = null;
             }
 
-            // Trimite pachetul de oprire contact
-            await handleIncomingTelemetry(db, io, {
-                ecu: { vin: simState.vin, model: simState.model },
-                stare_motor: 'OPRIRE',
-                timestamp: Date.now(),
-            });
+            // Trimite pachetul de oprire contact și zeroizare completă
+            const zeroPacket = buildZeroizePacket(simState.vin, simState.model);
+            await handleIncomingTelemetry(db, io, zeroPacket);
+            io.emit('telemetrie_live', zeroPacket);
+            io.emit('simulator_status', { running: false, scenario: 'none' });
 
-            console.log(`[SIMULATOR CLOUD] Oprit manual pentru ${simState.vin}.`);
+            console.log(`[SIMULATOR CLOUD] Oprit manual pentru ${simState.vin} (Zeroize Emis).`);
             simState.scenario = 'idle';
             simState.elapsedSec = 0;
 

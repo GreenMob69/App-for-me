@@ -24,6 +24,10 @@ import { hapticTap, hapticCriticalWarning, hapticShiftAlert } from '../../servic
 import { audioGong } from '../../services/audioGongService';
 import { PARADIGM_THEMES, PARADIGM_KEYS } from '../../theme/paradigmThemes';
 import { safeNum, safeFmt, safeArr, sanitizeSvgPath } from '../../utils/safeMath';
+import WeibullTimeMachineCard from '../../components/innovations/WeibullTimeMachineCard';
+import VirtualDynoDragCard from '../../components/innovations/VirtualDynoDragCard';
+import SankeyThermalCard from '../../components/innovations/SankeyThermalCard';
+import KammBrakeRadarCard from '../../components/innovations/KammBrakeRadarCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MONO_FONT = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
@@ -120,7 +124,11 @@ const StationNothingPulse = React.memo(function StationNothingPulse({
     tp7Anomalies,
     zenDriveScore,
     currentTheme,
-    appLang = 'RO'
+    appLang = 'RO',
+    dynoData = null,
+    dragBox = null,
+    sankeyData = null,
+    brakePyrometer = null,
 }) {
     const isEn = appLang === 'EN';
     const [pulseSubMode, setPulseSubMode] = useState('PULSE'); // 'PULSE' | 'TP7' | 'ZEN'
@@ -199,6 +207,29 @@ const StationNothingPulse = React.memo(function StationNothingPulse({
                             <Text style={[styles.metricValue, { color: currentTheme.textPrimary }]}>{gTotal} <Text style={styles.metricUnit}>G</Text></Text>
                         </View>
                     </View>
+
+                    {/* ── Transfer Inovații F1 & 3D în Nothing OS ── */}
+                    <VirtualDynoDragCard
+                        variant="nothing"
+                        appLang={appLang}
+                        dynoData={dynoData}
+                        dragBox={dragBox}
+                        telemetry={telemetry}
+                    />
+
+                    <SankeyThermalCard
+                        variant="nothing"
+                        appLang={appLang}
+                        sankeyData={sankeyData}
+                        telemetry={telemetry}
+                    />
+
+                    <KammBrakeRadarCard
+                        variant="nothing"
+                        appLang={appLang}
+                        telemetry={telemetry}
+                        brakePyrometer={brakePyrometer}
+                    />
                 </>
             )}
 
@@ -644,6 +675,14 @@ const StationNothingService = React.memo(function StationNothingService({
                     ))}
                 </View>
             </View>
+
+            {/* ── Transfer Inovații F1 & 3D: Weibull Time-Machine Slider ── */}
+            <WeibullTimeMachineCard
+                variant="nothing"
+                appLang={appLang}
+                baseMaintenanceItems={maintenanceItems}
+                telemetry={telemetry}
+            />
 
             <Text style={[styles.sectionHeader, { color: currentTheme.textDim }]}>
                 // 04 · CONDITION-BASED MAINTENANCE & PORTOFEL ACTE
@@ -1244,9 +1283,7 @@ export default function MinimalNothingParadigm() {
                         hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                         activeOpacity={0.7}
                     >
-                        <Text style={[styles.v2ButtonText, { color: currentTheme.textPrimary, fontWeight: '800' }]}>
-                            {isEn ? '🇬🇧 EN' : '🇷🇴 RO'}
-                        </Text>
+                        <Text style={[styles.v2ButtonText, { color: currentTheme.textPrimary, fontWeight: '800' }]} numberOfLines={1}>{appLang === 'RU' ? '🇷🇺 RU' : isEn ? '🇬🇧 EN' : '🇷🇴 RO'}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -1473,6 +1510,10 @@ export default function MinimalNothingParadigm() {
                         zenDriveScore={core.zenDriveScore}
                         currentTheme={currentTheme}
                         appLang={appLang}
+                        dynoData={core.dynoData}
+                        dragBox={core.dragBox}
+                        sankeyData={core.sankeyData}
+                        brakePyrometer={core.brakePyrometer}
                     />
                 )}
 

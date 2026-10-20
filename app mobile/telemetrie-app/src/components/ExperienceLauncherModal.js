@@ -1,4 +1,5 @@
-import React from 'react';
+'use strict';
+import React, { useContext } from 'react';
 import {
     Modal,
     View,
@@ -8,62 +9,56 @@ import {
     ScrollView,
     Switch,
     Platform,
-    Alert,
 } from 'react-native';
 import Svg, { Rect, Path, Circle, Line, Text as SvgText } from 'react-native-svg';
-import { useUiParadigm } from '../context/AppContext';
+import { AppContext } from '../context/AppContext';
 import { hapticTap } from '../services/hapticFeedback';
 import { colors, typography, spacing, radii } from '../theme';
+import { getTranslation } from '../i18n/translations';
 
-const PARADIGMS = [
+const PRODUCTION_PARADIGMS = [
     {
         id: 'CLASSIC_V2',
-        title: 'CLASIC HMI & COCKPIT',
-        subtitle: 'Bord complet multi-tab (Stare, Live, Curse, Vehicul), instrumente rotunde, telemetrie 1Hz și acces la toate cele 32 de modele fizice.',
+        title: '⚡ CLASSIC V2 PRO',
+        subtitleRo: 'Centrul de Comandă & Scanner 3D. Instrumente rotunde, telemetrie 1Hz, osciloscop dublu și acces direct la toți cei 32 de observatori fizici.',
+        subtitleEn: 'Mission Control & 3D Scanner. Circular gauges, 1Hz telemetry, dual scope and direct access to all 32 physical observers.',
+        subtitleRu: 'Командный центр и 3D сканер. Круглые приборы, телеметрия 1Гц, 2-канальный осциллограф и 32 физических датчика.',
         accent: '#00E5FF',
-        badge: 'STANDARD ACTIV',
+        badgeRo: 'PRODUCȚIE ACTIV',
+        badgeEn: 'CORE PRODUCTION',
+        badgeRu: 'ОСНОВНОЙ РЕЖИМ',
         isAvailable: true,
         previewType: 'classic',
     },
     {
         id: 'NOTHING_MINIMAL',
-        title: 'NOTHING OS // CALM TECH',
-        subtitle: 'Design prin absență, vitezometru monumental de 128px, negru OLED pur (#000000), linie bio-mecanică de puls și alertare doar prin excepție.',
+        title: '⚪ NOTHING OS MINIMAL',
+        subtitleRo: 'Calm Tech & Dot-Matrix. Design prin absență, vitezometru monumental de 128px, negru OLED pur (#000000) și linie bio-mecanică de puls.',
+        subtitleEn: 'Calm Tech & Dot-Matrix. Design by absence, monumental 128px speedometer, true OLED black (#000000) and bio-pulse strip.',
+        subtitleRu: 'Calm Tech и Dot-Matrix. Монументальный спидометр 128px, глубокий черный OLED (#000000) и линия био-механического пульса.',
         accent: '#FF3B00',
-        badge: 'ULTRA-MINIMALIST',
+        badgeRo: 'ULTRA-MINIMALIST',
+        badgeEn: 'ULTRA-MINIMAL',
+        badgeRu: 'УЛЬТРА-МИНИМАЛИЗМ',
         isAvailable: true,
         previewType: 'nothing',
     },
     {
         id: 'RETRO_AUDI_96',
-        title: 'AUDI 1996 DIGIFIZ VFD',
-        subtitle: 'Cluster digital retro-futurist Audi A6 C4, sticlă fumurie (#080302), turometru 25 blocuri LED în trepte, 7-segmente și Audi Auto-Check.',
+        title: '🟧 RETRO AUDI 1996',
+        subtitleRo: 'Digifiz VFD & Tester VAG 1551. Cluster retro-futurist Audi A6 C4, sticlă fumurie (#080302), turometru 25 blocuri LED și Audi Auto-Check.',
+        subtitleEn: 'Digifiz VFD & VAG 1551 Tester. Retro-futuristic Audi A6 C4 cluster, smoked glass (#080302), 25-block LED tachometer and Auto-Check.',
+        subtitleRu: 'Digifiz VFD и тестер VAG 1551. Ретро-футуристичный щиток Audi A6 C4, дымчатое стекло (#080302), 25 LED блоков и Auto-Check.',
         accent: '#FF8800',
-        badge: 'RETRO-FUTURIST',
+        badgeRo: 'RETRO-FUTURIST',
+        badgeEn: 'RETRO-DIGIFIZ',
+        badgeRu: 'РЕТРО-ДИГИФИЗ',
         isAvailable: true,
         previewType: 'audi',
     },
-    {
-        id: 'F1_CYBERDECK',
-        title: 'F1 TELEMETRY CYBERDECK',
-        subtitle: 'Display dens inspirat din motorsport de vârf, canale multiple split-screen, G-Force radial și telemetrie pe ferestre modulare.',
-        accent: '#00FF66',
-        badge: 'TELEMETRIE F1/WEC',
-        isAvailable: true,
-        previewType: 'f1',
-    },
-    {
-        id: 'SPATIAL_CANVAS',
-        title: 'SPATIAL 3D CANVAS',
-        subtitle: 'Mașină exploded 3D cu noduri fizice plutitoare conectate de senzori, particule de flux și interacțiune spațială liberă.',
-        accent: '#B026FF',
-        badge: 'CANVAS SPAȚIAL 3D',
-        isAvailable: true,
-        previewType: 'spatial',
-    },
 ];
 
-// Mini-ilustrații SVG distinctive pentru fiecare stil de bord
+// Mini-ilustrații SVG distinctive pentru cele 3 stiluri de bord
 function ParadigmMiniPreview({ type, accent }) {
     switch (type) {
         case 'classic':
@@ -85,7 +80,6 @@ function ParadigmMiniPreview({ type, accent }) {
                     <SvgText x="40" y="36" fill="#F5F5F7" fontSize="24" fontFamily={Platform.OS === 'ios' ? 'Menlo' : 'monospace'} fontWeight="bold">92</SvgText>
                     <SvgText x="82" y="28" fill="#666666" fontSize="8" fontFamily={Platform.OS === 'ios' ? 'Menlo' : 'monospace'}>KM/H</SvgText>
                     <SvgText x="82" y="40" fill={accent} fontSize="9" fontFamily={Platform.OS === 'ios' ? 'Menlo' : 'monospace'} fontWeight="bold">G4</SvgText>
-                    {/* Bio Pulse Line */}
                     <Path d="M 6 48 L 40 48 L 48 42 L 56 52 L 64 45 L 72 48 L 114 48" fill="none" stroke={accent} strokeWidth="1.5" />
                 </Svg>
             );
@@ -93,44 +87,16 @@ function ParadigmMiniPreview({ type, accent }) {
             return (
                 <Svg width={120} height={56} viewBox="0 0 120 56">
                     <Rect x="2" y="2" width="116" height="52" rx="4" fill="#080302" stroke="#2A0E08" strokeWidth="1.5" />
-                    {/* Stepped LED tachometer preview */}
                     <Path d="M 10 14 L 20 14" stroke="#00FF66" strokeWidth="3" />
                     <Path d="M 23 13 L 33 13" stroke="#00FF66" strokeWidth="3" />
                     <Path d="M 36 12 L 46 12" stroke="#FF8800" strokeWidth="3" />
                     <Path d="M 49 11 L 59 11" stroke="#FF8800" strokeWidth="3" />
                     <Path d="M 62 10 L 72 10" stroke="#FF3300" strokeWidth="3" />
-                    {/* 7 Segment style speed */}
                     <SvgText x="38" y="38" fill="#FF8800" fontSize="18" fontFamily={Platform.OS === 'ios' ? 'Courier' : 'monospace'} fontWeight="bold">110</SvgText>
                     <Rect x="78" y="18" width="34" height="26" fill="#150800" stroke="#FF8800" strokeWidth="1" rx="2" />
                     <Circle cx="95" cy="27" r="6" fill="none" stroke="#FF8800" strokeWidth="1.5" />
                     <SvgText x="95" y="30" fill="#FF8800" fontSize="7" fontWeight="bold" textAnchor="middle">OK</SvgText>
                     <SvgText x="95" y="41" fill="#FF8800" fontSize="5" textAnchor="middle">AUTO-CHECK</SvgText>
-                </Svg>
-            );
-        case 'f1':
-            return (
-                <Svg width={120} height={56} viewBox="0 0 120 56">
-                    <Rect x="2" y="2" width="116" height="52" rx="4" fill="#050C08" stroke="#0D2E1A" strokeWidth="1" />
-                    <Rect x="10" y="8" width="6" height="4" fill="#00FF66" />
-                    <Rect x="18" y="8" width="6" height="4" fill="#00FF66" />
-                    <Rect x="26" y="8" width="6" height="4" fill="#FFD700" />
-                    <Rect x="34" y="8" width="6" height="4" fill="#FF3300" />
-                    <Rect x="42" y="8" width="6" height="4" fill="#00E5FF" />
-                    <Path d="M 10 35 L 30 25 L 50 38 L 70 20 L 90 30" fill="none" stroke="#00FF66" strokeWidth="1.5" />
-                    <SvgText x="100" y="28" fill="#00FF66" fontSize="12" fontWeight="bold">F1</SvgText>
-                </Svg>
-            );
-        case 'spatial':
-            return (
-                <Svg width={120} height={56} viewBox="0 0 120 56">
-                    <Rect x="2" y="2" width="116" height="52" rx="4" fill="#090411" stroke="#260E45" strokeWidth="1" />
-                    <Circle cx="60" cy="28" r="14" fill="none" stroke="#B026FF" strokeWidth="1" strokeDasharray="3, 3" />
-                    <Circle cx="45" cy="22" r="3" fill="#B026FF" />
-                    <Circle cx="75" cy="22" r="3" fill="#B026FF" />
-                    <Circle cx="60" cy="36" r="3" fill="#00E5FF" />
-                    <Line x1="45" y1="22" x2="75" y2="22" stroke="#B026FF" strokeWidth="0.8" />
-                    <Line x1="45" y1="22" x2="60" y2="36" stroke="#B026FF" strokeWidth="0.8" />
-                    <Line x1="75" y1="22" x2="60" y2="36" stroke="#B026FF" strokeWidth="0.8" />
                 </Svg>
             );
         default:
@@ -146,9 +112,11 @@ export default function ExperienceLauncherModal() {
         closeExperiencePicker,
         skipLauncherPrompt,
         setSkipLauncherPrompt,
-    } = useUiParadigm();
+        appLang,
+        setAppLang,
+    } = useContext(AppContext);
 
-    if (!showExperiencePicker) return null;
+    const t = getTranslation(appLang);
 
     const handleSelectParadigm = (p) => {
         hapticTap();
@@ -165,12 +133,36 @@ export default function ExperienceLauncherModal() {
         >
             <View style={styles.overlay}>
                 <View style={styles.container}>
-                    {/* Header */}
+                    {/* Header cu Switcher Limba [ RO | EN | RU ] */}
                     <View style={styles.header}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.superTitle}>MOTOR MULTI-PARADIGMĂ UI</Text>
-                            <Text style={styles.mainTitle}>Alege Experiența Vizuală</Text>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                            <Text style={styles.superTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>
+                                {appLang === 'RU' ? 'РЕЖИМЫ ТЕЛЕМЕТРИИ' : 'MOTOR MULTI-PARADIGMĂ UI'}
+                            </Text>
+                            <Text style={styles.mainTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>
+                                {t.modals?.experienceTitle || 'Alege Experiența Vizuală'}
+                            </Text>
                         </View>
+
+                        {/* Tri-Lingual Quick Switcher */}
+                        <View style={styles.langSwitchBar}>
+                            {['RO', 'EN', 'RU'].map((l) => (
+                                <TouchableOpacity
+                                    key={l}
+                                    style={[styles.langSwitchPill, appLang === l && styles.langSwitchPillActive]}
+                                    onPress={() => {
+                                        hapticTap();
+                                        setAppLang(l);
+                                    }}
+                                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                                >
+                                    <Text style={[styles.langSwitchText, appLang === l && styles.langSwitchTextActive]} numberOfLines={1}>
+                                        {l === 'RO' ? '🇷🇴 RO' : l === 'EN' ? '🇬🇧 EN' : '🇷🇺 RU'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
                         <TouchableOpacity
                             style={styles.closeBtn}
                             onPress={closeExperiencePicker}
@@ -183,18 +175,27 @@ export default function ExperienceLauncherModal() {
                     </View>
 
                     <Text style={styles.introText}>
-                        Fiecare paradigmă oferă o interpretare unică a celor 32 de modele din motorul fizic. Poți comuta oricând din butonul [ 🎨 STIL ] sau din Setări.
+                        {appLang === 'RU'
+                            ? 'Каждый из 3 основных стилей полностью автономен и оптимизирован под 60 кадров/сек. Вы можете сменить стиль в любой момент.'
+                            : appLang === 'EN'
+                            ? 'Each of the 3 main styles is 100% standalone and 60 FPS optimized. You can switch anytime from the [ 🎨 STYLE ] button.'
+                            : 'Fiecare dintre cele 3 stiluri principale este 100% de sine stătător și optimizat 60 FPS. Poți comuta oricând din butonul [ 🎨 STIL ].'}
                     </Text>
 
-                    {/* Lista cardurilor de paradigme */}
+                    {/* Lista celor 3 stiluri de producție */}
                     <ScrollView
                         style={styles.scrollList}
                         contentContainerStyle={styles.scrollContent}
                         showsVerticalScrollIndicator={true}
                         bounces={true}
                     >
-                        {PARADIGMS.map((p) => {
+                        {PRODUCTION_PARADIGMS.map((p) => {
                             const isSelected = uiParadigm === p.id;
+                            const badge = isSelected
+                                ? (appLang === 'RU' ? '✓ АКТИВЕН' : appLang === 'EN' ? '✓ ACTIVE' : '✓ ACTIV')
+                                : (appLang === 'RU' ? p.badgeRu : appLang === 'EN' ? p.badgeEn : p.badgeRo);
+                            const subtitle = appLang === 'RU' ? p.subtitleRu : appLang === 'EN' ? p.subtitleEn : p.subtitleRo;
+
                             return (
                                 <TouchableOpacity
                                     key={p.id}
@@ -202,10 +203,9 @@ export default function ExperienceLauncherModal() {
                                         styles.card,
                                         { borderColor: isSelected ? p.accent : colors.border.default },
                                         isSelected && { backgroundColor: `${p.accent}12` },
-                                        !p.isAvailable && styles.cardDisabled,
                                     ]}
                                     onPress={() => handleSelectParadigm(p)}
-                                    activeOpacity={p.isAvailable ? 0.75 : 0.9}
+                                    activeOpacity={0.75}
                                     accessibilityRole="button"
                                 >
                                     <View style={styles.cardTopRow}>
@@ -214,25 +214,23 @@ export default function ExperienceLauncherModal() {
                                         </View>
                                         <View style={styles.cardHeaderInfo}>
                                             <View style={[styles.badge, { borderColor: p.accent, backgroundColor: `${p.accent}20` }]}>
-                                                <Text style={[styles.badgeText, { color: p.accent }]}>
-                                                    {isSelected ? '✓ ACTIV ACUM' : p.badge}
+                                                <Text style={[styles.badgeText, { color: p.accent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>
+                                                    {badge}
                                                 </Text>
                                             </View>
-                                            <Text style={[styles.cardTitle, isSelected && { color: p.accent }]} numberOfLines={1}>
+                                            <Text style={[styles.cardTitle, isSelected && { color: p.accent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>
                                                 {p.title}
                                             </Text>
                                         </View>
                                     </View>
 
-                                    <Text style={styles.cardSubtitle} numberOfLines={2}>{p.subtitle}</Text>
+                                    <Text style={styles.cardSubtitle} numberOfLines={2}>{subtitle}</Text>
 
                                     <View style={styles.cardFooter}>
-                                        <Text style={[styles.statusHint, { color: p.isAvailable ? p.accent : colors.text.disabled }]}>
+                                        <Text style={[styles.statusHint, { color: p.accent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>
                                             {isSelected
-                                                ? 'Experiență curentă'
-                                                : p.isAvailable
-                                                ? 'Apasă pentru activare →'
-                                                : 'Disponibil curând'}
+                                                ? (appLang === 'RU' ? 'Текущий активный режим' : appLang === 'EN' ? 'Current Active Paradigm' : 'Experiență curentă')
+                                                : (appLang === 'RU' ? 'Нажмите для переключения →' : appLang === 'EN' ? 'Tap to activate →' : 'Apasă pentru activare →')}
                                         </Text>
                                     </View>
                                 </TouchableOpacity>
@@ -244,8 +242,12 @@ export default function ExperienceLauncherModal() {
                     <View style={styles.footer}>
                         <View style={styles.switchRow}>
                             <View style={{ flex: 1, paddingRight: spacing[2] }}>
-                                <Text style={styles.switchLabel}>Nu mai afișa acest ecran la pornire</Text>
-                                <Text style={styles.switchDesc}>Poți redeschide oricând din Setări sau din butonul [ 🎨 STIL ].</Text>
+                                <Text style={styles.switchLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>
+                                    {appLang === 'RU' ? 'Не показывать при запуске' : appLang === 'EN' ? 'Do not show on app startup' : 'Nu mai afișa la pornire'}
+                                </Text>
+                                <Text style={styles.switchDesc} numberOfLines={1}>
+                                    {appLang === 'RU' ? 'Доступно из меню Настройки или кнопки [ 🎨 СТИЛЬ ].' : appLang === 'EN' ? 'Reopen anytime from Settings or [ 🎨 STYLE ].' : 'Poți redeschide oricând din Setări sau [ 🎨 STIL ].'}
+                                </Text>
                             </View>
                             <Switch
                                 value={skipLauncherPrompt}
@@ -260,7 +262,9 @@ export default function ExperienceLauncherModal() {
                             onPress={closeExperiencePicker}
                             activeOpacity={0.8}
                         >
-                            <Text style={styles.confirmBtnText}>Gata / Închide</Text>
+                            <Text style={styles.confirmBtnText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>
+                                {appLang === 'RU' ? 'ПРОДОЛЖИТЬ В ТЕКУЩЕМ СТИЛЕ' : appLang === 'EN' ? 'CONTINUE IN ACTIVE PARADIGM' : 'CONTINUĂ ÎN STILUL ACTIV'}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -272,166 +276,193 @@ export default function ExperienceLauncherModal() {
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.88)',
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: spacing[3],
     },
     container: {
         width: '100%',
+        maxWidth: 520,
         maxHeight: '92%',
-        backgroundColor: '#07090E',
+        backgroundColor: '#070B12',
         borderRadius: radii.xl,
         borderWidth: 1,
-        borderColor: '#1E2536',
-        padding: spacing[3],
+        borderColor: '#1E293B',
+        padding: spacing[4],
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.6,
-        shadowRadius: 20,
-        elevation: 20,
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.5,
+        shadowRadius: 24,
+        elevation: 16,
     },
     header: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: spacing[1],
+        marginBottom: spacing[2],
+        gap: 6,
     },
     superTitle: {
-        color: colors.accent.default,
         fontSize: 10,
-        fontWeight: typography.weights.bold,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        color: colors.accent.default,
         letterSpacing: 1.5,
+        fontWeight: typography.weights.heavy,
         textTransform: 'uppercase',
     },
     mainTitle: {
-        color: '#FFFFFF',
         fontSize: 18,
         fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
         letterSpacing: 0.3,
         marginTop: 2,
+    },
+    langSwitchBar: {
+        flexDirection: 'row',
+        backgroundColor: '#0E1726',
+        borderRadius: radii.full,
+        padding: 2,
+        borderWidth: 1,
+        borderColor: '#1E293B',
+    },
+    langSwitchPill: {
+        paddingHorizontal: 6,
+        paddingVertical: 4,
+        borderRadius: radii.full,
+    },
+    langSwitchPillActive: {
+        backgroundColor: '#00E5FF22',
+    },
+    langSwitchText: {
+        fontSize: 9,
+        fontWeight: typography.weights.bold,
+        color: colors.text.disabled,
+    },
+    langSwitchTextActive: {
+        color: '#00E5FF',
     },
     closeBtn: {
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: '#151924',
-        justifyContent: 'center',
-        alignItems: 'center',
+        backgroundColor: '#111827',
         borderWidth: 1,
-        borderColor: '#262D40',
+        borderColor: '#1F2937',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     closeBtnText: {
-        color: '#A0AEC0',
+        color: colors.text.secondary,
         fontSize: 14,
         fontWeight: typography.weights.bold,
     },
     introText: {
-        color: '#8A94A6',
         fontSize: 11,
-        lineHeight: 15,
-        marginBottom: spacing[2],
+        lineHeight: 16,
+        color: colors.text.secondary,
+        marginBottom: spacing[3],
     },
     scrollList: {
-        flexGrow: 0,
-        flexShrink: 1,
-        maxHeight: 420,
+        maxHeight: 400,
     },
     scrollContent: {
-        gap: spacing[2],
         paddingBottom: spacing[2],
+        gap: spacing[2] + 2,
     },
     card: {
-        backgroundColor: '#0D111A',
+        backgroundColor: '#0C121D',
         borderRadius: radii.lg,
         borderWidth: 1.5,
-        padding: spacing[2] + 2,
-    },
-    cardDisabled: {
-        opacity: 0.55,
+        padding: spacing[3],
     },
     cardTopRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        marginBottom: spacing[2],
         gap: spacing[3],
     },
     previewContainer: {
         borderRadius: radii.md,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: '#1E2536',
+        borderColor: '#1E293B',
     },
     cardHeaderInfo: {
         flex: 1,
     },
     badge: {
         alignSelf: 'flex-start',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: radii.xs,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: radii.full,
         borderWidth: 1,
         marginBottom: 4,
     },
     badgeText: {
-        fontSize: 9,
+        fontSize: 8,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
         fontWeight: typography.weights.heavy,
-        letterSpacing: 0.5,
+        letterSpacing: 0.8,
     },
     cardTitle: {
-        color: '#FFFFFF',
-        fontSize: 13,
-        fontWeight: typography.weights.bold,
+        fontSize: 14,
+        fontWeight: typography.weights.heavy,
+        color: colors.text.primary,
         letterSpacing: 0.4,
     },
     cardSubtitle: {
-        color: '#8A94A6',
         fontSize: 11,
-        lineHeight: 15,
-        marginTop: spacing[2],
+        lineHeight: 16,
+        color: colors.text.secondary,
+        marginBottom: spacing[2],
     },
     cardFooter: {
-        marginTop: spacing[2],
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'flex-end',
+        borderTopWidth: 1,
+        borderTopColor: '#151D2A',
+        paddingTop: spacing[1],
     },
     statusHint: {
         fontSize: 10,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
         fontWeight: typography.weights.bold,
-        letterSpacing: 0.3,
     },
     footer: {
+        marginTop: spacing[3],
+        paddingTop: spacing[3],
         borderTopWidth: 1,
-        borderTopColor: '#1A2130',
-        paddingTop: spacing[2],
-        marginTop: spacing[1],
+        borderTopColor: '#1E293B',
     },
     switchRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: spacing[2],
+        justifyContent: 'space-between',
+        marginBottom: spacing[3],
     },
     switchLabel: {
-        color: '#CBD5E1',
         fontSize: 12,
-        fontWeight: typography.weights.medium,
+        fontWeight: typography.weights.bold,
+        color: colors.text.primary,
     },
     switchDesc: {
-        color: '#64748B',
         fontSize: 10,
-        marginTop: 1,
+        color: colors.text.disabled,
+        marginTop: 2,
     },
     confirmBtn: {
         backgroundColor: colors.accent.default,
+        paddingVertical: 12,
         borderRadius: radii.md,
-        paddingVertical: 10,
         alignItems: 'center',
         justifyContent: 'center',
     },
     confirmBtnText: {
         color: '#000000',
-        fontSize: 13,
-        fontWeight: typography.weights.bold,
-        letterSpacing: 0.5,
-        textTransform: 'uppercase',
+        fontSize: 12,
+        fontWeight: typography.weights.heavy,
+        letterSpacing: 0.8,
     },
 });

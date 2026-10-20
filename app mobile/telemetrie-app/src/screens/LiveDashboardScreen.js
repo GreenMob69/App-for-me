@@ -23,6 +23,11 @@ import { colors, typography, radii, spacing, layout, TEMPLATES } from '../theme'
 import { useSmoothedTelemetry } from '../hooks/useSmoothedTelemetry';
 import { getCachedClockwiseArc } from '../utils/arcLut';
 import { exportWorkshopDossier } from '../utils/dossierExport';
+import WeibullTimeMachineCard from '../components/innovations/WeibullTimeMachineCard';
+import VirtualDynoDragCard from '../components/innovations/VirtualDynoDragCard';
+import SankeyThermalCard from '../components/innovations/SankeyThermalCard';
+import KammBrakeRadarCard from '../components/innovations/KammBrakeRadarCard';
+import { useParadigmCoreData } from '../hooks/useParadigmCoreData';
 import { lttbDownsample } from '../utils/lttbDownsample';
 import { audioGong } from '../services/audioGongService';
 import { hapticTap } from '../services/hapticFeedback';
@@ -593,7 +598,8 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
     const { width } = useWindowDimensions();
     const { isConnected, isReconnecting, liveData, chartVersion, getChartHistory } = useContext(LiveContext);
     const { latestAlert, alertsList, unreadCount, markAlertsAsRead } = useContext(AlertContext);
-    const { selectedMetric, setSelectedMetric, activeTemplate, currentTemplate, openExperiencePicker, openSimulatorModal, appLang, toggleAppLang } = useContext(AppContext);
+    const { selectedMetric, setSelectedMetric, activeTemplate, currentTemplate, openExperiencePicker, openSimulatorModal, appLang, toggleAppLang, openMechanicGuide } = useContext(AppContext);
+    const core = useParadigmCoreData(isSmoothingActive);
 
     // ── 60 FPS Smoothed Telemetry (Pauză automată când ecranul e în fundal sau pe tab static) ──
     const { animated, numeric } = useSmoothedTelemetry(liveData, isSmoothingActive);
@@ -1257,6 +1263,29 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                         )}
                     </>
                 )}
+
+                {/* ── Transfer Inovații F1 & 3D: Dyno Curve, Sankey Balance & Kamm Radar ── */}
+                <VirtualDynoDragCard
+                    variant="classic"
+                    appLang={appLang}
+                    dynoData={core.dynoData}
+                    dragBox={core.dragBox}
+                    telemetry={core.telemetry}
+                />
+
+                <SankeyThermalCard
+                    variant="classic"
+                    appLang={appLang}
+                    sankeyData={core.sankeyData}
+                    telemetry={core.telemetry}
+                />
+
+                <KammBrakeRadarCard
+                    variant="classic"
+                    appLang={appLang}
+                    telemetry={core.telemetry}
+                    brakePyrometer={core.brakePyrometer}
+                />
             </View>
         );
     };
@@ -1265,6 +1294,15 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
 
     const renderParams = () => (
         <View style={styles.paramsContainer}>
+            {/* ── Transfer Inovații F1 & 3D: Weibull Time-Machine Slider ── */}
+            <WeibullTimeMachineCard
+                variant="classic"
+                appLang={appLang}
+                baseMaintenanceItems={core.maintenanceItems}
+                telemetry={core.telemetry}
+                onOpenGuide={openMechanicGuide}
+            />
+
             <View style={styles.paramsHintCard}>
                 <Text style={styles.paramsHintIcon}>💡</Text>
                 <Text style={styles.paramsHintText}>
@@ -1936,7 +1974,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                         accessibilityRole="button"
                         accessibilityLabel="Deschide Telecomanda de Simulare Live"
                     >
-                        <Text style={[styles.hudLaunchBtnText, { color: '#00F0FF' }]}>🎮 DEMO</Text>
+                        <Text style={[styles.hudLaunchBtnText, { color: '#00F0FF' }]} numberOfLines={1}>🎮 {appLang === 'RU' ? 'ДЕМО' : 'DEMO'}</Text>
                     </TouchableOpacity>
                 )}
 
@@ -1965,7 +2003,7 @@ const LiveDashboardScreen = ({ navigation: propNav } = {}) => {
                     accessibilityRole="button"
                     accessibilityLabel="Schimbă stilul de afișare"
                 >
-                    <Text style={[styles.hudLaunchBtnText, { color: colors.accent.default }]}>🎨 {appLang === 'EN' ? 'STYLE' : 'STIL'}</Text>
+                    <Text style={[styles.hudLaunchBtnText, { color: colors.accent.default }]} numberOfLines={1}>🎨 {appLang === 'RU' ? 'СТИЛЬ' : appLang === 'EN' ? 'STYLE' : 'STIL'}</Text>
                 </TouchableOpacity>
 
                 {/* Buton Export Dosar Tehnic ITP / Service */}
