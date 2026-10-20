@@ -295,52 +295,96 @@ export function useParadigmCoreData(isLiveViewActive = true) {
     // ─────────────────────────────────────────────────────────────────────────
     const baseVirtualSensors = useMemo(() => {
         const v = liveData?.virtual || {};
+
+        // Evaluare dinamică strictă conform specificațiilor de referință fizică (REF)
+        const veVal = Number(v.volumetricEfficiencyPct ?? 88.4);
+        const veStatus = veVal < 60 ? 'CRIT' : veVal < 80 ? 'WARN' : 'OK';
+
+        const bsfcVal = Math.round(safeNum(v.bsfcGPerKwh, 218));
+        const bsfcStatus = bsfcVal > 300 ? 'CRIT' : bsfcVal > 245 ? 'WARN' : 'OK';
+
+        const afrVal = Number(v.afr ?? 16.8);
+        const afrStatus = afrVal < 13.0 ? 'CRIT' : afrVal < 14.7 ? 'WARN' : 'OK';
+
+        const chraTempVal = safeNum(telemetry.chraTemp, 210);
+        const chraStatus = chraTempVal >= 290 ? 'CRIT' : chraTempVal >= 250 ? 'WARN' : 'OK';
+
+        const cooldownSec = safeNum(telemetry.chraCooldownSec, 0);
+        const cooldownStatus = cooldownSec >= 60 ? 'CRIT' : cooldownSec > 0 ? 'WARN' : 'OK';
+
+        const boostVal = safeNum(telemetry.boost, 0);
+        const boostStatus = boostVal > 2.2 ? 'CRIT' : boostVal > 1.8 ? 'WARN' : 'OK';
+
+        const icVal = Number(v.intercoolerEfficiencyPct ?? 82);
+        const icStatus = icVal < 50 ? 'CRIT' : icVal < 70 ? 'WARN' : 'OK';
+
+        const coolVal = safeNum(telemetry.coolantTemp, 90);
+        const coolStatus = (coolVal > 108 || coolVal < 60) ? 'CRIT' : (coolVal > 98 || coolVal < 75) ? 'WARN' : 'OK';
+
+        const oilVal = safeNum(telemetry.oilTemp, 95);
+        const oilStatus = oilVal > 128 ? 'CRIT' : oilVal > 115 ? 'WARN' : 'OK';
+
+        const egtVal = safeNum(telemetry.exhaustTemp, 450);
+        const egtStatus = egtVal > 840 ? 'CRIT' : egtVal > 720 ? 'WARN' : 'OK';
+
+        const voltVal = safeNum(telemetry.batteryVoltage, 14.1);
+        const voltStatus = voltVal < 12.8 ? 'CRIT' : (voltVal < 13.6 || voltVal > 14.9) ? 'WARN' : 'OK';
+
+        const sohVal = safeNum(telemetry.batterySoH, 92);
+        const sohStatus = sohVal < 65 ? 'CRIT' : sohVal < 80 ? 'WARN' : 'OK';
+
+        const drainVal = safeNum(v.parasiticDrainMa, 42);
+        const drainStatus = drainVal > 120 ? 'CRIT' : drainVal > 60 ? 'WARN' : 'OK';
+
+        const sootVal = safeNum(liveData?.dpf?.soot_load_pct, 34);
+        const sootStatus = sootVal > 80 ? 'CRIT' : sootVal > 60 ? 'WARN' : 'OK';
+
         return {
             // Grupul 1: Motor & Injecție
             engine: [
-                { id: 've', label: 'Eficiență Volumetrică (VE)', val: `${v.volumetricEfficiencyPct ?? 88.4}%`, status: 'OK', target: '85-95%' },
+                { id: 've', label: 'Eficiență Volumetrică (VE)', val: `${veVal}%`, status: veStatus, target: '85-95%' },
                 { id: 'power', label: 'Putere Corectată SAE', val: `${Math.round(v.saeCorrectedPowerHp ?? 142)} CP`, status: 'OK', target: 'OEM' },
                 { id: 'torque', label: 'Cuplu Efectiv Arbore', val: `${Math.round(v.torqueNm ?? 310)} Nm`, status: 'OK', target: 'OEM' },
-                { id: 'bsfc', label: 'Consum Specific BSFC', val: `${Math.round(safeNum(v.bsfcGPerKwh, 218))} g/kWh`, status: 'OK', target: '< 240' },
-                { id: 'lambda', label: 'Amestec Lambda / AFR', val: `${safeFmt(v.afr ?? 16.8, 1, '16.8')}:1`, status: 'OK', target: '14.7-22' },
+                { id: 'bsfc', label: 'Consum Specific BSFC', val: `${bsfcVal} g/kWh`, status: bsfcStatus, target: '< 240' },
+                { id: 'lambda', label: 'Amestec Lambda / AFR', val: `${safeFmt(afrVal, 1, '16.8')}:1`, status: afrStatus, target: '14.7-22' },
                 { id: 'injector_drift', label: 'Derivă Injecție Ralanti', val: `${safeFmt(v.warmIdleDriftMg ?? 0.4, 1, '0.4')} mg`, status: v.cokedInjectorRisk ? 'WARN' : 'OK', target: '< 1.5 mg' },
                 { id: 'dmf_balance', label: 'Echilibru Volantă DMF', val: v.dmfImbalanceWarning ? 'VIBRAȚIE' : 'STABIL', status: v.dmfImbalanceWarning ? 'WARN' : 'OK', target: 'Stabil' },
             ],
             // Grupul 2: Turbo & Admisie
             turbo: [
-                { id: 'boost', label: 'Presiune Turbo Relativă', val: `${telemetry.boost} bar`, status: 'OK', target: '< 1.8 bar' },
-                { id: 'chra_temp', label: 'Temperatură Miez CHRA', val: `${telemetry.chraTemp}°C`, status: telemetry.chraTemp > 280 ? 'WARN' : 'OK', target: '< 250°C' },
-                { id: 'chra_cooldown', label: 'Răcire la Ralanti Necesară', val: `${telemetry.chraCooldownSec}s`, status: telemetry.chraCooldownSec > 0 ? 'WARN' : 'OK', target: '0s' },
-                { id: 'intercooler', label: 'Eficiență Termică Intercooler', val: `${v.intercoolerEfficiencyPct ?? 82}%`, status: 'OK', target: '> 70%' },
-                { id: 'maf_triage', label: 'Stare Debitmetru MAF', val: v.mafVsTurboTriage ?? 'NOMINAL', status: 'OK', target: 'OK' },
+                { id: 'boost', label: 'Presiune Turbo Relativă', val: `${telemetry.boost} bar`, status: boostStatus, target: '< 1.8 bar' },
+                { id: 'chra_temp', label: 'Temperatură Miez CHRA', val: `${telemetry.chraTemp}°C`, status: chraStatus, target: '< 250°C' },
+                { id: 'chra_cooldown', label: 'Răcire la Ralanti Necesară', val: `${telemetry.chraCooldownSec}s`, status: cooldownStatus, target: '0s' },
+                { id: 'intercooler', label: 'Eficiență Termică Intercooler', val: `${icVal}%`, status: icStatus, target: '> 70%' },
+                { id: 'maf_triage', label: 'Stare Debitmetru MAF', val: v.mafVsTurboTriage ?? 'NOMINAL', status: v.mafVsTurboTriage && v.mafVsTurboTriage !== 'NOMINAL' ? 'WARN' : 'OK', target: 'OK' },
             ],
             // Grupul 3: Termic & Răcire
             thermal: [
-                { id: 'coolant', label: 'Antigel Chiulasă', val: `${telemetry.coolantTemp}°C`, status: telemetry.coolantTemp > 100 ? 'WARN' : 'OK', target: '85-95°C' },
-                { id: 'oil', label: 'Temperatură Ulei Baie', val: `${telemetry.oilTemp}°C`, status: telemetry.oilTemp > 120 ? 'WARN' : 'OK', target: '90-110°C' },
-                { id: 'egt', label: 'Gaze Evacuare EGT', val: `${telemetry.exhaustTemp}°C`, status: telemetry.exhaustTemp > 750 ? 'WARN' : 'OK', target: '< 700°C' },
-                { id: 'conductance', label: 'Conductanță Pompă Apă', val: `${v.coolingConductanceKwPerK ?? 0.44} kW/K`, status: 'OK', target: '> 0.35' },
-                { id: 'head_fatigue', label: 'Stres Termic Chiulasă', val: v.headFatigueStatus ?? 'OPTIM', status: 'OK', target: 'Fără șoc' },
+                { id: 'coolant', label: 'Antigel Chiulasă', val: `${telemetry.coolantTemp}°C`, status: coolStatus, target: '85-95°C' },
+                { id: 'oil', label: 'Temperatură Ulei Baie', val: `${telemetry.oilTemp}°C`, status: oilStatus, target: '90-110°C' },
+                { id: 'egt', label: 'Gaze Evacuare EGT', val: `${telemetry.exhaustTemp}°C`, status: egtStatus, target: '< 700°C' },
+                { id: 'conductance', label: 'Conductanță Pompă Apă', val: `${v.coolingConductanceKwPerK ?? 0.44} kW/K`, status: (v.coolingConductanceKwPerK ?? 0.44) < 0.35 ? 'WARN' : 'OK', target: '> 0.35' },
+                { id: 'head_fatigue', label: 'Stres Termic Chiulasă', val: v.headFatigueStatus ?? 'OPTIM', status: v.headFatigueStatus === 'CRIT' ? 'CRIT' : v.headFatigueStatus === 'WARN' ? 'WARN' : 'OK', target: 'Fără șoc' },
             ],
             // Grupul 4: DPF & Emisii
             emissions: [
-                { id: 'dpf_soot', label: 'Încărcare Funingine DPF', val: `${liveData?.dpf?.soot_load_pct ?? 34}%`, status: 'OK', target: '< 80%' },
+                { id: 'dpf_soot', label: 'Încărcare Funingine DPF', val: `${sootVal}%`, status: sootStatus, target: '< 80%' },
                 { id: 'dpf_regen', label: 'Status Regenerare', val: v.dpfRegenActive ? 'ACTIVĂ (620°C)' : 'PASIVĂ', status: v.dpfRegenActive ? 'WARN' : 'OK', target: 'Auto' },
                 { id: 'co_hazard', label: 'Pericol CO în Habitaclu', val: v.cabinExhaustHazardAlert ? 'PERICOL' : 'SIGUR', status: v.cabinExhaustHazardAlert ? 'CRIT' : 'OK', target: '0 ppm' },
             ],
             // Grupul 5: Electrică & Baterie
             electrical: [
-                { id: 'voltage', label: 'Tensiune Alternator ECU', val: `${telemetry.batteryVoltage} V`, status: telemetry.batteryVoltage < 13.2 ? 'WARN' : 'OK', target: '13.8-14.5V' },
-                { id: 'soh', label: 'Stare Sănătate Baterie (SoH)', val: `${telemetry.batterySoH}%`, status: telemetry.batterySoH < 75 ? 'WARN' : 'OK', target: '> 80%' },
-                { id: 'crank_triage', label: 'Diagnoză Demaror / Pornire', val: v.crankingTriageStatus ?? 'NOMINAL', status: 'OK', target: 'OK' },
-                { id: 'parasitic_drain', label: 'Consumator Parazit Parcare', val: `${v.parasiticDrainMa ?? 42} mA`, status: (v.parasiticDrainMa ?? 42) > 120 ? 'WARN' : 'OK', target: '< 60 mA' },
+                { id: 'voltage', label: 'Tensiune Alternator ECU', val: `${telemetry.batteryVoltage} V`, status: voltStatus, target: '13.8-14.5V' },
+                { id: 'soh', label: 'Stare Sănătate Baterie (SoH)', val: `${telemetry.batterySoH}%`, status: sohStatus, target: '> 80%' },
+                { id: 'crank_triage', label: 'Diagnoză Demaror / Pornire', val: v.crankingTriageStatus ?? 'NOMINAL', status: v.crankingTriageStatus && v.crankingTriageStatus !== 'NOMINAL' ? 'WARN' : 'OK', target: 'OK' },
+                { id: 'parasitic_drain', label: 'Consumator Parazit Parcare', val: `${drainVal} mA`, status: drainStatus, target: '< 60 mA' },
             ],
             // Grupul 6: Șasiu, Frâne & Siguranță
             safety: [
-                { id: 'road_grip', label: 'Aderență / Polei (Black Ice)', val: v.roadGripStatus ?? 'USCAT / OPTIM', status: v.roadGripStatus ? 'CRIT' : 'OK', target: 'Normal' },
+                { id: 'road_grip', label: 'Aderență / Polei (Black Ice)', val: v.roadGripStatus ?? 'USCAT / OPTIM', status: v.roadGripStatus && v.roadGripStatus !== 'USCAT / OPTIM' ? 'CRIT' : 'OK', target: 'Normal' },
                 { id: 'brake_fade', label: 'Risc Fierbere Frâne (Fade)', val: v.mountainBrakeFadeRisk ? 'RISC RIDICAT' : 'SIGUR', status: v.mountainBrakeFadeRisk ? 'CRIT' : 'OK', target: 'OK' },
                 { id: 'driver_fatigue', label: 'Atenție Șofer / Micro-somn', val: `${v.driverFatigueScore ?? 88}/100`, status: (v.driverFatigueScore ?? 88) < 50 ? 'WARN' : 'OK', target: '> 70' },
-                { id: 'tpms', label: 'TPMS Indirect (Deviație Rază)', val: v.tirePressureStatus ?? 'PRESIUNE OK', status: 'OK', target: 'OK' },
+                { id: 'tpms', label: 'TPMS Indirect (Deviație Rază)', val: v.tirePressureStatus ?? 'PRESIUNE OK', status: v.tirePressureStatus && v.tirePressureStatus !== 'PRESIUNE OK' ? 'WARN' : 'OK', target: 'OK' },
                 { id: 'caliper_drag', label: 'Rezistență Etrier / Rulare', val: v.rollingDragAnomaly ? 'FRECARE ANORMALĂ' : 'LIBER', status: v.rollingDragAnomaly ? 'WARN' : 'OK', target: 'Liber' },
             ],
         };

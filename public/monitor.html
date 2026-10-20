@@ -657,35 +657,42 @@
 
             // Turntable circular platform
             var platformGeo = new THREE.CylinderGeometry(2.8, 2.8, 0.04, 64);
-            var platformMat = new THREE.MeshStandardMaterial({ color: 0x1E2536, roughness: 0.75, metalness: 0.35 });
+            var platformMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, roughness: 0.65, metalness: 0.45 });
             var turntable = new THREE.Mesh(platformGeo, platformMat);
             turntable.position.y = -0.02;
             turntable.receiveShadow = true;
             scene.add(turntable);
 
-            // Glowing cyan ring (#00F0FF)
-            var ringGeo = new THREE.RingGeometry(2.74, 2.79, 64);
-            var ringMat = new THREE.MeshBasicMaterial({ color: 0x00F0FF, side: THREE.DoubleSide });
+            // Glowing cyan concentric rings (#38BDF8)
+            var ringGeo = new THREE.RingGeometry(2.73, 2.78, 64);
+            var ringMat = new THREE.MeshBasicMaterial({ color: 0x38BDF8, side: THREE.DoubleSide });
             var ring = new THREE.Mesh(ringGeo, ringMat);
             ring.rotation.x = -Math.PI / 2;
             ring.position.y = 0.005;
             scene.add(ring);
 
+            var innerRingGeo = new THREE.RingGeometry(1.78, 1.82, 48);
+            var innerRingMat = new THREE.MeshBasicMaterial({ color: 0x38BDF8, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+            var innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
+            innerRing.rotation.x = -Math.PI / 2;
+            innerRing.position.y = 0.004;
+            scene.add(innerRing);
+
             // Multi-light Showroom Rig
-            var hemi = new THREE.HemisphereLight(0xFFFFFF, 0x475569, 2.5);
+            var hemi = new THREE.HemisphereLight(0xF1F5F9, 0x1E293B, 1.0);
             scene.add(hemi);
 
-            var keyLight = new THREE.DirectionalLight(0xFFFFFF, 3.0);
-            keyLight.position.set(5, 8, 5);
+            var keyLight = new THREE.DirectionalLight(0xFFFFFF, 1.85);
+            keyLight.position.set(5, 7, 5);
             keyLight.castShadow = true;
             scene.add(keyLight);
 
-            var fill1 = new THREE.DirectionalLight(0xE2E8F0, 2.0);
-            fill1.position.set(-6, 4, -4);
+            var fill1 = new THREE.DirectionalLight(0x94A3B8, 0.85);
+            fill1.position.set(-5, 4, -3);
             scene.add(fill1);
 
-            var fill2 = new THREE.DirectionalLight(0xCBD5E1, 2.0);
-            fill2.position.set(6, 4, -3);
+            var fill2 = new THREE.DirectionalLight(0xCBD5E1, 0.85);
+            fill2.position.set(5, 4, -3);
             scene.add(fill2);
 
             var rimSpot = new THREE.SpotLight(0x00F0FF, 3.5, 18, Math.PI / 4, 0.4);
@@ -717,7 +724,11 @@
                         node.receiveShadow = true;
                         var n = (node.name || '').toLowerCase();
                         if (n.indexOf('wheel') !== -1 || n.indexOf('rim') !== -1 || n.indexOf('tire') !== -1) {
-                            wheelMeshes.push(node);
+                            var bBox = new THREE.Box3().setFromObject(node);
+                            var bSize = bBox.getSize(new THREE.Vector3());
+                            if (bSize.x < 0.65 && bSize.z < 0.65 && bSize.y < 0.85) {
+                                wheelMeshes.push(node);
+                            }
                         }
                     }
                 });

@@ -165,7 +165,7 @@ export default function RealisticCar3DView({
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(0x000000, 0);
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 2.2;
+        renderer.toneMappingExposure = 1.15;
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
@@ -179,38 +179,46 @@ export default function RealisticCar3DView({
         controls.target.set(0, 0.45, 0);
 
         // ── 2. PLATFORMA CIRCULARĂ TURNTABLE & INEL LUMINESCENT CYAN ───────────
-        // Placa turnantă studio
+        // Placa turnantă studio - Gri-Ardezie Metalic de Showroom (#1E293B)
         var platformGeo = new THREE.CylinderGeometry(2.8, 2.8, 0.04, 64);
         var platformMat = new THREE.MeshStandardMaterial({
-            color: 0x1E2536,
-            roughness: 0.75,
-            metalness: 0.35
+            color: 0x1E293B,
+            roughness: 0.65,
+            metalness: 0.45
         });
         var turntable = new THREE.Mesh(platformGeo, platformMat);
         turntable.position.y = -0.02;
         turntable.receiveShadow = true;
         scene.add(turntable);
 
-        // Inel exterior neon cyan (#00F0FF)
-        var outerRingGeo = new THREE.RingGeometry(2.74, 2.79, 64);
-        var outerRingMat = new THREE.MeshBasicMaterial({ color: 0x00F0FF, side: THREE.DoubleSide });
+        // Inel exterior neon cyan (#38BDF8)
+        var outerRingGeo = new THREE.RingGeometry(2.73, 2.78, 64);
+        var outerRingMat = new THREE.MeshBasicMaterial({ color: 0x38BDF8, side: THREE.DoubleSide });
         var outerRing = new THREE.Mesh(outerRingGeo, outerRingMat);
         outerRing.rotation.x = -Math.PI / 2;
         outerRing.position.y = 0.005;
         scene.add(outerRing);
 
-        // Inel interior discret
-        var innerRingGeo = new THREE.RingGeometry(1.8, 1.83, 48);
-        var innerRingMat = new THREE.MeshBasicMaterial({ color: 0x00F0FF, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
+        // Inel concentric interior discret
+        var innerRingGeo = new THREE.RingGeometry(1.78, 1.82, 48);
+        var innerRingMat = new THREE.MeshBasicMaterial({ color: 0x38BDF8, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
         var innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
         innerRing.rotation.x = -Math.PI / 2;
         innerRing.position.y = 0.004;
         scene.add(innerRing);
 
+        // Inel concentric central
+        var centerRingGeo = new THREE.RingGeometry(0.88, 0.91, 36);
+        var centerRingMat = new THREE.MeshBasicMaterial({ color: 0x38BDF8, transparent: true, opacity: 0.20, side: THREE.DoubleSide });
+        var centerRing = new THREE.Mesh(centerRingGeo, centerRingMat);
+        centerRing.rotation.x = -Math.PI / 2;
+        centerRing.position.y = 0.003;
+        scene.add(centerRing);
+
         // Contact shadow discret
         var shadowPlane = new THREE.Mesh(
             new THREE.PlaneGeometry(5.6, 5.6),
-            new THREE.ShadowMaterial({ opacity: 0.48 })
+            new THREE.ShadowMaterial({ opacity: 0.38 })
         );
         shadowPlane.rotation.x = -Math.PI / 2;
         shadowPlane.position.y = 0.006;
@@ -218,13 +226,13 @@ export default function RealisticCar3DView({
         scene.add(shadowPlane);
 
         // ── 3. ILUMINARE DE SHOWROOM FOTOREALISTĂ (MULTI-LIGHT STUDIO RIG) ────
-        // 1. Lumină ambientală bogată sus-jos
-        var hemiLight = new THREE.HemisphereLight(0xFFFFFF, 0x475569, 2.5);
+        // 1. Lumină ambientală echilibrată sus-jos
+        var hemiLight = new THREE.HemisphereLight(0xF1F5F9, 0x1E293B, 0.95);
         scene.add(hemiLight);
 
         // 2. Key Light (față-sus-dreapta)
-        var keyLight = new THREE.DirectionalLight(0xFFFFFF, 3.0);
-        keyLight.position.set(5, 8, 5);
+        var keyLight = new THREE.DirectionalLight(0xFFFFFF, 1.85);
+        keyLight.position.set(5, 7, 5);
         keyLight.castShadow = true;
         keyLight.shadow.mapSize.width = 1024;
         keyLight.shadow.mapSize.height = 1024;
@@ -232,18 +240,18 @@ export default function RealisticCar3DView({
         scene.add(keyLight);
 
         // 3. Fill Light 1 (stânga-lateral)
-        var fillLight1 = new THREE.DirectionalLight(0xE2E8F0, 2.0);
-        fillLight1.position.set(-6, 4, -4);
+        var fillLight1 = new THREE.DirectionalLight(0x94A3B8, 0.85);
+        fillLight1.position.set(-5, 4, -3);
         scene.add(fillLight1);
 
         // 4. Fill Light 2 (dreapta-lateral)
-        var fillLight2 = new THREE.DirectionalLight(0xCBD5E1, 2.0);
-        fillLight2.position.set(6, 4, -3);
+        var fillLight2 = new THREE.DirectionalLight(0xCBD5E1, 0.85);
+        fillLight2.position.set(5, 4, -3);
         scene.add(fillLight2);
 
         // 5. Rim / Contour Spotlight din spate-sus (cyan accent contur)
-        var rimSpot = new THREE.SpotLight(0x00F0FF, 3.5, 18, Math.PI / 4, 0.4);
-        rimSpot.position.set(0, 5, -5);
+        var rimSpot = new THREE.SpotLight(0x38BDF8, 2.2, 16, Math.PI / 4, 0.4);
+        rimSpot.position.set(0, 4.5, -4.5);
         rimSpot.target.position.set(0, 0.45, 0);
         scene.add(rimSpot);
         scene.add(rimSpot.target);
@@ -267,27 +275,82 @@ export default function RealisticCar3DView({
         // Limite caroserie Acura CDX: Y_MAX <= 0.65 (capotă), Z_FRONT <= 1.45 (grilă radiator)
         var organs = {};
 
-        // 1. MOTOR (ENGINE) — Y max 0.62, Z 1.05 (strict sub capotă)
+        // 1. MOTOR (ENGINE) — Y max 0.62, Z 1.05 (ansamblu mecanic fotorealist CNC, fara capac turcoaz)
         var engineGroup = new THREE.Group();
-        var blockMat = new THREE.MeshStandardMaterial({ color: 0x1F2937, metalness: 0.85, roughness: 0.3 });
-        var blockMesh = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.28, 0.75), blockMat);
-        blockMesh.position.set(0, 0.44, 1.05);
+
+        // Bloc motor din fonta / aluminiu structural inchis cu striatii laterale
+        var blockMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, metalness: 0.92, roughness: 0.28 });
+        var blockMesh = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.24, 0.66), blockMat);
+        blockMesh.position.set(0, 0.40, 1.05);
         engineGroup.add(blockMesh);
 
-        var headMat = new THREE.MeshStandardMaterial({ color: 0x00E5FF, emissive: 0x003344, metalness: 0.9, roughness: 0.2 });
-        var headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.12, 0.70), headMat);
-        headMesh.position.set(0, 0.60, 1.05);
+        // Baie de ulei inferioara metalica
+        var oilPanMat = new THREE.MeshStandardMaterial({ color: 0x0F172A, metalness: 0.85, roughness: 0.4 });
+        var oilPan = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.08, 0.58), oilPanMat);
+        oilPan.position.set(0, 0.26, 1.05);
+        engineGroup.add(oilPan);
+
+        // Chiulasa din aluminiu frezat CNC
+        var headMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.88, roughness: 0.22 });
+        var headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.10, 0.64), headMat);
+        headMesh.position.set(0, 0.54, 1.05);
         engineGroup.add(headMesh);
 
+        // Capac culbutori / axe cu came din magneziu texturat antracit (fara paralelipiped turcoaz!)
+        var valveCoverMat = new THREE.MeshStandardMaterial({ color: 0x1E2533, metalness: 0.80, roughness: 0.35 });
+        var valveCover = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.60), valveCoverMat);
+        valveCover.position.set(0, 0.60, 1.05);
+        engineGroup.add(valveCover);
+
+        // 4 Bobine de inductie individuale cu piulite hexagonale argintii
+        var coilMat = new THREE.MeshStandardMaterial({ color: 0x090D16, roughness: 0.7 });
+        var boltMat = new THREE.MeshStandardMaterial({ color: 0xCBD5E1, metalness: 0.95, roughness: 0.15 });
+        for (var c = 0; c < 4; c++) {
+            var zPos = 0.84 + c * 0.14;
+            var coil = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.08), coilMat);
+            coil.position.set(0, 0.635, zPos);
+            engineGroup.add(coil);
+
+            var bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.02, 6), boltMat);
+            bolt.position.set(0, 0.645, zPos);
+            engineGroup.add(bolt);
+        }
+
+        // Galeria de admisie cu 4 tevi curbate din aluminiu
+        var intakePlenumMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.75, roughness: 0.35 });
+        var intakePlenum = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.54, 16), intakePlenumMat);
+        intakePlenum.position.set(-0.24, 0.52, 1.05);
+        intakePlenum.rotation.x = Math.PI / 2;
+        engineGroup.add(intakePlenum);
+
+        for (var r = 0; r < 4; r++) {
+            var runnerZ = 0.84 + r * 0.14;
+            var runnerCurve = new THREE.QuadraticBezierCurve3(
+                new THREE.Vector3(-0.24, 0.52, runnerZ),
+                new THREE.Vector3(-0.16, 0.58, runnerZ),
+                new THREE.Vector3(-0.08, 0.54, runnerZ)
+            );
+            var runner = new THREE.Mesh(new THREE.TubeGeometry(runnerCurve, 12, 0.018, 8, false), intakePlenumMat);
+            engineGroup.add(runner);
+        }
+
+        // Galeria de evacuare metalica spre turbina
+        var exhaustManifoldMat = new THREE.MeshStandardMaterial({ color: 0x64748B, metalness: 0.9, roughness: 0.25 });
+        var exhaustLog = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.48, 16), exhaustManifoldMat);
+        exhaustLog.position.set(0.24, 0.48, 1.05);
+        exhaustLog.rotation.x = Math.PI / 2;
+        engineGroup.add(exhaustLog);
+
+        // 4 Pistoane articulate din otel forjat
         var pistons = [];
         var pistonMat = new THREE.MeshStandardMaterial({ color: 0xE2E8F0, metalness: 0.95, roughness: 0.15 });
-        for (var i = 0; i < 5; i++) {
-            var pMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.09, 16), pistonMat);
-            pMesh.position.set(0, 0.48, 0.75 + i * 0.15);
+        for (var i = 0; i < 4; i++) {
+            var pMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.08, 16), pistonMat);
+            pMesh.position.set(0, 0.44, 0.84 + i * 0.14);
             engineGroup.add(pMesh);
             pistons.push(pMesh);
         }
-        organs['engine'] = { group: engineGroup, center: new THREE.Vector3(0, 0.50, 1.05), glbContainer: new THREE.Group() };
+        organs['engine'] = { group: engineGroup, center: new THREE.Vector3(0, 0.48, 1.05), glbContainer: new THREE.Group() };
         engineGroup.add(organs['engine'].glbContainer);
         internalOrgansGroup.add(engineGroup);
 
@@ -308,23 +371,62 @@ export default function RealisticCar3DView({
         turboGroup.add(organs['turbo'].glbContainer);
         internalOrgansGroup.add(turboGroup);
 
-        // 3. RĂCIRE (COOLING) — Y 0.42, Z 1.40 (strict în spatele măștii față)
+        // 3. RĂCIRE (COOLING) — Y 0.40, Z 1.36 (ansamblu radiator cu celule, ventilatoare si furtunuri)
         var coolingGroup = new THREE.Group();
-        var radMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7, roughness: 0.35 });
-        var radiator = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.32, 0.05), radMat);
-        radiator.position.set(0, 0.42, 1.40);
-        coolingGroup.add(radiator);
 
-        var fanMat = new THREE.MeshStandardMaterial({ color: 0x0F172A, roughness: 0.8 });
-        var fan1 = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.02, 16), fanMat);
-        fan1.position.set(-0.18, 0.42, 1.36);
-        fan1.rotation.x = Math.PI / 2;
-        var fan2 = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.02, 16), fanMat);
-        fan2.position.set(0.18, 0.42, 1.36);
-        fan2.rotation.x = Math.PI / 2;
-        coolingGroup.add(fan1);
-        coolingGroup.add(fan2);
-        organs['cooling'] = { group: coolingGroup, center: new THREE.Vector3(0, 0.42, 1.40), fans: [fan1, fan2], glbContainer: new THREE.Group() };
+        // Rama exterioara din aluminiu anodizat
+        var radFrameMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, metalness: 0.85, roughness: 0.3 });
+        var radFrame = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.28, 0.03), radFrameMat);
+        radFrame.position.set(0, 0.40, 1.36);
+        coolingGroup.add(radFrame);
+
+        // Miez de racire cu lamele dese din aluminiu
+        var radCoreMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.92, roughness: 0.25, wireframe: true });
+        var radCore = new THREE.Mesh(new THREE.PlaneGeometry(0.58, 0.24, 18, 10), radCoreMat);
+        radCore.position.set(0, 0.40, 1.376);
+        coolingGroup.add(radCore);
+
+        // Furtun superior radiator spre blocul motor
+        var hoseMat = new THREE.MeshStandardMaterial({ color: 0x090D16, roughness: 0.85 });
+        var upperHoseCurve = new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(-0.20, 0.48, 1.34),
+            new THREE.Vector3(-0.16, 0.54, 1.20),
+            new THREE.Vector3(-0.10, 0.52, 1.10)
+        );
+        var upperHose = new THREE.Mesh(new THREE.TubeGeometry(upperHoseCurve, 14, 0.02, 8, false), hoseMat);
+        coolingGroup.add(upperHose);
+
+        // Doua carcase cu ventilatoare electrice rotative
+        var fanShroudMat = new THREE.MeshStandardMaterial({ color: 0x0F172A, roughness: 0.7 });
+        var fanBladeMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.5, roughness: 0.4 });
+        var fanHousings = [-0.15, 0.15];
+        var fanRotors = [];
+        fanHousings.forEach(function(fx) {
+            var shroud = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.025, 24, 1, true), fanShroudMat);
+            shroud.position.set(fx, 0.40, 1.34);
+            shroud.rotation.x = Math.PI / 2;
+            coolingGroup.add(shroud);
+
+            var hub = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.03, 16), fanShroudMat);
+            hub.position.set(fx, 0.40, 1.34);
+            hub.rotation.x = Math.PI / 2;
+            coolingGroup.add(hub);
+
+            var fanBladesGroup = new THREE.Group();
+            fanBladesGroup.position.set(fx, 0.40, 1.34);
+            for (var b = 0; b < 5; b++) {
+                var blade = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.08, 0.004), fanBladeMat);
+                blade.position.set(0, 0.045, 0);
+                var bladeHolder = new THREE.Group();
+                bladeHolder.rotation.z = b * (Math.PI * 2 / 5);
+                bladeHolder.add(blade);
+                fanBladesGroup.add(bladeHolder);
+            }
+            coolingGroup.add(fanBladesGroup);
+            fanRotors.push(fanBladesGroup);
+        });
+
+        organs['cooling'] = { group: coolingGroup, center: new THREE.Vector3(0, 0.40, 1.36), fans: fanRotors, glbContainer: new THREE.Group() };
         coolingGroup.add(organs['cooling'].glbContainer);
         internalOrgansGroup.add(coolingGroup);
 
@@ -397,17 +499,66 @@ export default function RealisticCar3DView({
         brakesGroup.add(organs['brakes'].glbContainer);
         internalOrgansGroup.add(brakesGroup);
 
-        // 7. BATERIE & ECU (BATTERY) — Y 0.54, Z 0.98 (strict sub capotă)
+        // 7. BATERIE & ECU (BATTERY) — Y 0.50, Z 0.95 (carcasa baterie cu borne si modul ECU detaliat)
         var batteryGroup = new THREE.Group();
-        var batMat = new THREE.MeshStandardMaterial({ color: 0x0F172A, roughness: 0.6, metalness: 0.2 });
-        var batMesh = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.20), batMat);
-        batMesh.position.set(-0.30, 0.54, 0.98);
+
+        // Carcasa bateriei din polimer texturat
+        var batMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.65, metalness: 0.2 });
+        var batMesh = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.15, 0.16), batMat);
+        batMesh.position.set(-0.28, 0.50, 0.95);
         batteryGroup.add(batMesh);
 
-        var ecuMesh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.10, 0.06), new THREE.MeshStandardMaterial({ color: 0x00F0FF, metalness: 0.8, roughness: 0.2 }));
-        ecuMesh.position.set(-0.32, 0.46, 0.78);
+        // Capac superior baterie cu nervuri
+        var batTop = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.02, 0.17), batMat);
+        batTop.position.set(-0.28, 0.58, 0.95);
+        batteryGroup.add(batTop);
+
+        // Maner de transport pliabil
+        var handle = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.015, 0.015), batMat);
+        handle.position.set(-0.28, 0.595, 0.95);
+        batteryGroup.add(handle);
+
+        // Borna Pozitiva (+) Rosie cu cablu gros spre demaror
+        var posCapMat = new THREE.MeshStandardMaterial({ color: 0xDC2626, roughness: 0.3 });
+        var posPost = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.025, 12), posCapMat);
+        posPost.position.set(-0.34, 0.60, 0.90);
+        batteryGroup.add(posPost);
+
+        var posCableCurve = new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(-0.34, 0.60, 0.90),
+            new THREE.Vector3(-0.30, 0.52, 0.92),
+            new THREE.Vector3(-0.22, 0.44, 0.95)
+        );
+        var posCable = new THREE.Mesh(new THREE.TubeGeometry(posCableCurve, 12, 0.008, 8, false), posCapMat);
+        batteryGroup.add(posCable);
+
+        // Borna Negativa (-) Albastra/Neagra cu cablu de masa la sasiu
+        var negCapMat = new THREE.MeshStandardMaterial({ color: 0x1D4ED8, roughness: 0.3 });
+        var negPost = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.025, 12), negCapMat);
+        negPost.position.set(-0.22, 0.60, 0.90);
+        batteryGroup.add(negPost);
+
+        var groundStrapCurve = new THREE.QuadraticBezierCurve3(
+            new THREE.Vector3(-0.22, 0.60, 0.90),
+            new THREE.Vector3(-0.20, 0.55, 0.86),
+            new THREE.Vector3(-0.16, 0.48, 0.84)
+        );
+        var groundStrapMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
+        var groundStrap = new THREE.Mesh(new THREE.TubeGeometry(groundStrapCurve, 12, 0.007, 8, false), groundStrapMat);
+        batteryGroup.add(groundStrap);
+
+        // Modul Bosch ECU in aluminiu periat cu conector cablaj
+        var ecuMat = new THREE.MeshStandardMaterial({ color: 0x94A3B8, metalness: 0.9, roughness: 0.2 });
+        var ecuMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.04), ecuMat);
+        ecuMesh.position.set(-0.28, 0.48, 0.78);
         batteryGroup.add(ecuMesh);
-        organs['battery'] = { group: batteryGroup, center: new THREE.Vector3(-0.30, 0.54, 0.98), glbContainer: new THREE.Group() };
+
+        var connectorMat = new THREE.MeshStandardMaterial({ color: 0x0284C7, roughness: 0.5 });
+        var connector = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.03, 0.02), connectorMat);
+        connector.position.set(-0.28, 0.43, 0.78);
+        batteryGroup.add(connector);
+
+        organs['battery'] = { group: batteryGroup, center: new THREE.Vector3(-0.28, 0.50, 0.95), glbContainer: new THREE.Group() };
         batteryGroup.add(organs['battery'].glbContainer);
         internalOrgansGroup.add(batteryGroup);
 
@@ -472,7 +623,13 @@ export default function RealisticCar3DView({
                         var nodeName = (node.name || '').toLowerCase();
                         if (nodeName.indexOf('wheel') !== -1 || nodeName.indexOf('rim') !== -1 ||
                             nodeName.indexOf('tire') !== -1 || nodeName.indexOf('tyre') !== -1) {
-                            wheelMeshes.push(node);
+                            var bBox = new THREE.Box3().setFromObject(node);
+                            var bSize = bBox.getSize(new THREE.Vector3());
+                            // Adăugăm la rotație doar dacă este o roată individuală compactă (< 0.65m)
+                            // Evităm rotirea mesh-urilor globale unite ce conțin toate roțile (care ar orbita mașina)
+                            if (bSize.x < 0.65 && bSize.z < 0.65 && bSize.y < 0.85) {
+                                wheelMeshes.push(node);
+                            }
                         }
                         if (node.material) {
                             var mat = node.material.clone();
@@ -576,7 +733,10 @@ export default function RealisticCar3DView({
                 carModelRoot.visible = true;
                 internalOrgansGroup.visible = true;
                 pinsGroup.visible = true;
-                Object.keys(organs).forEach(function(k) { organs[k].group.visible = true; });
+                Object.keys(organs).forEach(function(k) {
+                    organs[k].group.visible = true;
+                    loadPartGlb(k);
+                });
                 carMaterials.forEach(function(item) {
                     var m = item.mesh;
                     var name = (m.name || '').toLowerCase();
@@ -728,6 +888,21 @@ export default function RealisticCar3DView({
                 }
             }
 
+            // Rotație dinamică ventilatoare radiator
+            if (organs['cooling'] && organs['cooling'].fans) {
+                for (var fn = 0; fn < organs['cooling'].fans.length; fn++) {
+                    organs['cooling'].fans[fn].rotation.z += delta * (telemetrySpeed > 0 ? 12 : 3);
+                }
+            }
+
+            // Animație reciprocă lină pistoane motor
+            if (pistons && pistons.length > 0) {
+                var pTime = Date.now() * 0.015;
+                for (var pi = 0; pi < pistons.length; pi++) {
+                    pistons[pi].position.y = 0.44 + Math.sin(pTime + pi * 1.57) * 0.035;
+                }
+            }
+
             // Lerp cameră dacă este activ un fly-to
             if (camTargetPos) {
                 camera.position.lerp(camTargetPos, 0.08);
@@ -872,17 +1047,22 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 6,
         zIndex: 10,
+        backgroundColor: 'rgba(6, 12, 24, 0.85)',
+        padding: 4,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
     },
     overlayBtn: {
         paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 4,
-        backgroundColor: 'rgba(6, 12, 22, 0.82)',
+        paddingVertical: 5,
+        borderRadius: 6,
+        backgroundColor: 'rgba(10, 20, 35, 0.65)',
         borderWidth: 1,
-        borderColor: 'rgba(0, 240, 255, 0.35)',
+        borderColor: 'rgba(56, 189, 248, 0.35)',
     },
     overlayBtnActive: {
-        backgroundColor: 'rgba(0, 240, 255, 0.28)',
+        backgroundColor: '#00F0FF',
         borderColor: '#00F0FF',
     },
     overlayBtnText: {
@@ -892,6 +1072,7 @@ const styles = StyleSheet.create({
         fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     },
     overlayBtnTextActive: {
-        color: '#00F0FF',
+        color: '#040812',
+        fontWeight: '900',
     },
 });

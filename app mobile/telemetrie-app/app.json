@@ -33,6 +33,12 @@
             "usesCleartextTraffic": true
           }
         }
+      ],
+      [
+        "expo-dev-client",
+        {
+          "toolsButton": false
+        }
       ]
     ],
     "extra": {

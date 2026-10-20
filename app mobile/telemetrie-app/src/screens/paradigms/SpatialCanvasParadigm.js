@@ -384,13 +384,22 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
                     </Text>
                     <View style={styles.sensorsGrid}>
                         {safeArr(sensors).map((s) => {
-                            const isWarn = s.status === 'WARN';
-                            const isAlert = s.status === 'ALERT';
-                            const statusColor = isAlert ? '#FF2A2A' : isWarn ? '#FFB800' : '#00FF66';
+                            const isAlert = s.status === 'CRIT' || s.status === 'ALERT';
+                            const isWarn = s.status === 'WARN' || s.status === 'warning';
+                            const statusColor = isAlert ? '#EF4444' : isWarn ? '#F59E0B' : '#10B981';
+                            const cardBg = isAlert ? 'rgba(239, 68, 68, 0.10)' : isWarn ? 'rgba(245, 158, 11, 0.08)' : 'rgba(10, 20, 35, 0.75)';
+                            const cardBorder = isAlert ? 'rgba(239, 68, 68, 0.65)' : isWarn ? 'rgba(245, 158, 11, 0.55)' : '#162B44';
+
                             return (
                                 <TouchableOpacity
                                     key={s.id}
-                                    style={[styles.spatialSensorCard, { borderColor: isAlert ? '#FF2A2A88' : '#162B44' }]}
+                                    style={[
+                                        styles.spatialSensorCard,
+                                        {
+                                            backgroundColor: cardBg,
+                                            borderColor: cardBorder,
+                                        }
+                                    ]}
                                     onPress={() => {
                                         hapticTap();
                                         onOpenMechanicGuide?.(s.id || s.label);
@@ -399,7 +408,17 @@ const StationSpatialXRay = React.memo(function StationSpatialXRay({
                                 >
                                     <View style={styles.sensorCardHeader}>
                                         <Text style={styles.spatialSensorLabel} numberOfLines={1}>{s.label}</Text>
-                                        <View style={[styles.spatialStatusDot, { backgroundColor: statusColor }]} />
+                                        <View
+                                            style={[
+                                                styles.spatialStatusDot,
+                                                {
+                                                    backgroundColor: statusColor,
+                                                    shadowColor: statusColor,
+                                                    shadowOpacity: isAlert ? 0.9 : isWarn ? 0.6 : 0,
+                                                    shadowRadius: isAlert ? 5 : 2,
+                                                }
+                                            ]}
+                                        />
                                     </View>
                                     <View style={styles.sensorCardFooter}>
                                         <Text style={[styles.spatialSensorVal, { color: statusColor }]}>{s.val}</Text>
@@ -1183,7 +1202,7 @@ export default function SpatialCanvasParadigm() {
             <View style={styles.topHudBar}>
                 <View style={styles.hudBrand}>
                     <View style={[styles.holoBadge, { backgroundColor: activeAccent.primary }]}>
-                        <Text style={styles.holoBadgeText}>3D DIGITAL TWIN</Text>
+                        <Text style={styles.holoBadgeText} numberOfLines={1}>3D TWIN</Text>
                     </View>
                     <View style={[styles.netDot, { backgroundColor: isConnected ? '#00FF66' : '#FF2A2A' }]} />
                     <Text style={styles.vinHud} numberOfLines={1}>
@@ -2048,6 +2067,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'baseline',
         gap: 6,
+        backgroundColor: 'rgba(4, 8, 18, 0.82)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
     },
     floatingSpeedNumber: {
         fontFamily: MONO,
@@ -2067,7 +2092,7 @@ const styles = StyleSheet.create({
     floatingRpmMeta: {
         fontFamily: MONO,
         fontSize: 8,
-        color: '#8CA0BA',
+        color: '#CBD5E1',
         fontVariant: ['tabular-nums'],
     },
     firingSequenceBadge: {

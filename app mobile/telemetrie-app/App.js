@@ -316,6 +316,14 @@ function AppRoot() {
     const { ready: vehicleReady, activeVin, switchVehicle } = useVehicle();
 
     useEffect(() => {
+        try {
+            const { requireOptionalNativeModule } = require('expo');
+            const DevMenuPreferences = requireOptionalNativeModule('DevMenuPreferences');
+            DevMenuPreferences?.setPreferencesAsync?.({
+                showFloatingActionButton: false,
+            });
+        } catch (_) {}
+
         AsyncStorage.getItem('@custom_server_url')
             .then(savedUrl => {
                 if (savedUrl) {
